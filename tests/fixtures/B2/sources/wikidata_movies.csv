@@ -1,0 +1,101 @@
+imdb_id,title,year,runtime_minutes,rating,genres
+tt2000000,The Matrix,1991,194,8.1,Comedy
+tt2000001,The Sixth Sense,1998,159,5.1,Animation
+tt2000002,Fight Club,1991,172,5.0,Mystery
+tt2000003,American Beauty,2002,180,9.4,Fantasy
+tt2000004,The Green Mile,2001,94,5.1,Documentary|Drama
+tt2000005,Magnolia,2002,81,4.6,Adventure|Sci-Fi
+tt2000006,Eyes Wide Shut,1990,87,8.9,Comedy|Romance
+tt2000007,The Insider,1987,154,6.1,Drama|Adventure
+tt2000008,Being John Malkovich,1986,196,7.8,Western|Fantasy
+tt2000009,Three Kings,1991,210,6.1,Western
+tt2000010,Office Space,1986,110,8.5,Fantasy|Mystery
+tt2000011,Election,1990,94,9.1,Romance
+tt2000012,Rushmore,1985,176,8.4,Crime|Mystery
+tt2000013,The Limey,2004,215,8.6,Drama|Western
+tt2000014,Go,2002,181,8.1,Mystery|Horror
+tt2000015,Run Lola Run,1998,93,5.0,Sci-Fi|Western
+tt2000016,Dark City,1989,205,9.1,Sci-Fi|Western
+tt2000017,Pleasantville,2004,130,8.4,Mystery|Animation
+tt2000018,Pi,1997,163,9.6,Adventure|Western
+tt2000019,Rounders,2003,163,9.7,Fantasy|Thriller   
+tt2000020,Lock Stock and Two Smoking Barrels,1995,103,6.4,Horror|Fantasy
+tt2000021,Blade,1994,172,8.3,Crime
+tt2000022,Buffalo 66,1994,105,6.4,Adventure
+tt2000023,The Truman Show,1997,93,8.1,Mystery
+tt2000024,Saving Private Ryan,1987,121,,Action|Adventure
+tt2000025,The Big Lebowski,2001,177,8.4,Crime|Comedy
+tt2000026,Happiness,1987,106,6.4,Thriller
+tt2000027,  Velvet Goldmine   ,1997,210,6.9,Mystery
+tt2000028,A Simple Plan,1987,168,8.1,Crime|Documentary
+tt2000029,The Negotiator,1991,86,7.7,Documentary
+tt2000030,Armageddon,2005,103,8.5,Animation|Drama
+tt2000031,Snake Eyes,2002,201,9.1,Comedy|Documentary
+tt2000032,Meet Joe Black,1986,83,7.3,Adventure
+tt2000033,Patch Adams,1993,90,8.3,Romance
+tt2000034,The Waterboy,2001,210,6.6,Romance|Comedy   
+tt2000035,You've Got Mail,2001,128,5.9,Romance|Adventure
+tt2000036,Ronin,1990,91,8.0,Thriller
+tt2000037,Enemy of the State,1998,190,,Adventure
+tt2000038,Deep Impact,2005,171,6.6,Documentary
+tt2000039,City of Angels,2004,189,5.5,Horror|Drama
+tt2000040,Sphere,1985,174,6.5,Mystery
+tt2000041,Lethal Weapon 4,1998,100,7.1,Fantasy
+tt2000042,,0,166,9.5,Sci-Fi
+,Blade Runner,2001,214,9.2,Animation|Crime
+tt2000044,Gattaca,1987,197,0.0,Animation
+tt2000045,Contact,1993,183,9.3,Sci-Fi|Comedy
+tt2000046,L.A. Confidential,1993,131,8.1,Romance|Documentary
+tt2000047,Boogie Nights,1999,132,9.3,Action|Crime
+tt2000048,Heat,1995,128,5.2,Action|Sci-Fi
+tt2000049,Se7en,1996,165,9.6,Animation|Fantasy
+tt2000050,Amélie,1993,126,6.0,Documentary|Romance
+tt2000051,Das Boot,1986,213,6.3,Comedy|Thriller
+tt2000052,La Dolce Vita,2003,209,8.6,Comedy|Drama
+tt2000053,8½,1990,138,5.4,Sci-Fi|Comedy
+tt2000054,Rashōmon,1999,158,9.6,Drama
+tt2000055,七人の侍,1987,195,9.0,Drama|Western
+tt2000056,Криминальное чтиво,1991,211,8.3,Adventure|Crime
+tt2000057,مدير المدرسة,2005,200,9.4,Animation|Comedy
+tt2000058,Spider–Man,2005,183,7.3,Drama
+tt2000059,Spider—Man,1995,90,5.0,Horror|Mystery
+tt2000060,  Spider-Man   ,1998,168,4.7,Documentary
+tt2000061,Avengers–Infinity War,1987,,5.6,Mystery|Romance
+tt2000062,Avengers—Infinity War,1988,89,4.9,Crime   
+tt2000063,Good Will Hunting,1996,117,0.0,Adventure
+tt2000064,As Good as It Gets,2003,,7.6,Adventure|Comedy
+tt2000065,The Full Monty,1987,159,8.9,Comedy|Documentary
+tt2000066,Donnie Brasco,2005,91,9.4,Mystery
+tt2000067,Fargo,2003,165,8.7,Romance|Action
+tt2000068,Trainspotting,2003,139,9.0,Mystery|Action
+tt2000069,Pulp Fiction,2005,127,9.5,Horror|Animation
+tt2000070,The Silence of the Lambs,1994,198,5.7,Crime
+tt2000071,Schindler's List,2002,182,5.0,Thriller|Action
+tt2000072,Jurassic Park,2003,92,6.8,Fantasy|Mystery
+tt2000073,Forrest Gump,1996,88,7.5,Western|Documentary   
+tt2000074,The Shawshank Redemption,1992,110,7.0,Adventure
+tt2000075,Goodfellas,1995,106,4.5,Crime
+tt2000076,,1992,155,6.6,Adventure|Western
+tt2000077,Casablanca,2005,94,5.3,Mystery|Crime
+tt2000078,Citizen Kane,2002,151,7.4,Crime|Action
+tt2000079,Vertigo,1992,104,9.6,Fantasy|Thriller
+,Rear Window,2002,165,7.9,Drama|Western
+tt2000081,North by Northwest,2004,178,7.7,Sci-Fi|Crime
+tt2000082,Psycho,0,186,4.7,Animation
+tt2000083,  2001: A Space Odyssey   ,1992,143,,Western|Action
+tt2000084,A Clockwork Orange,1998,161,5.8,Crime
+tt2000085,Dr. Strangelove,1997,99,8.7,Documentary
+tt2000086,The Shining,1992,201,8.1,Documentary
+tt2000087,Full Metal Jacket,1991,150,4.6,Sci-Fi|Thriller
+tt2000088,The Matrix,2003,87,7.4,Adventure|Western
+tt2000089,The Sixth Sense,1998,168,5.6,Crime|Horror
+tt2000090,Fight Club,2006,152,0.0,Western|Action
+tt2000091,American Beauty,1999,91,5.4,Animation|Crime
+tt2000092,The Green Mile,1988,148,9.3,Adventure
+tt2000093,Magnolia,2005,145,9.8,Documentary|Mystery
+tt2000094,Eyes Wide Shut,1992,108,6.1,Thriller|Adventure
+tt2000095,The Insider,2001,195,8.4,Fantasy|Documentary   
+tt2000096,Being John Malkovich,1985,168,8.1,Thriller|Mystery
+tt2000097,Three Kings,2002,196,9.3,Crime
+tt2000098,Office Space,1993,125,6.7,Horror|Drama
+tt2000099,Election,2003,119,4.8,Adventure|Romance

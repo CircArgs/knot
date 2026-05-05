@@ -1,0 +1,331 @@
+# C2 edge-case manifest — ALL categories from EDGE-CASES.md at rich ontology.
+# Inherits all B2 cases plus C2-specific additions.
+
+"1.1":
+  description: "Null values in optional slots"
+  seeded_in: imdb_movies, imdb_persons, tmdb_series
+  example_canonical_id: mov_tt4000003
+  slot: runtime_minutes
+  expected: normalized
+
+"1.2":
+  description: "Null values in required slots → fail validation"
+  seeded_in: imdb_movies
+  example_canonical_id: mov_tt4000012
+  slot: primary_title
+  expected: validation_error
+
+"1.3":
+  description: "Empty string vs null"
+  seeded_in: imdb_movies
+  example_canonical_id: mov_tt4000020
+  slot: rating
+  seeded_value: "0.0"
+  expected: normalized
+
+"1.4":
+  description: "Leading/trailing/internal whitespace"
+  seeded_in: imdb_movies
+  example_canonical_id: mov_tt4000008
+  slot: primary_title
+  expected: normalized
+
+"1.5":
+  description: "Mixed case enum values (DIRECTOR, Director, dIRECTOR)"
+  seeded_in: imdb_credits, tmdb_credits
+  example_canonical_id: cr_tmdb_credits_000020
+  slot: role
+  seeded_value: "DIRECTOR"
+  expected: normalized_to_director
+
+"1.6":
+  description: "Unicode names with diacritics"
+  seeded_in: imdb_persons, tmdb_persons, wikidata_persons
+  example_canonical_id: per_nm5000022
+  slot: name
+  seeded_value: "Alejandro González Iñárritu"
+  expected: normalized
+
+"1.7":
+  description: "Non-Latin scripts (CJK, Cyrillic, Arabic)"
+  seeded_in: imdb_persons, imdb_movies
+  example_canonical_ids:
+    - per_nm5000030  # CJK name
+    - per_nm5000032  # Cyrillic name
+    - mov_tt4000024  # CJK original_title
+  expected: normalized
+
+"1.8":
+  description: "Date format drift across sources"
+  seeded_in: imdb_persons (ISO), tmdb_persons (US), wikidata_persons (EU+named)
+  example_canonical_id: per_nm5000010
+  slot: birthdate
+  seeded_values: ["1943-07-14", "07/14/1943", "14 Jul 1943"]
+  expected: normalized_to_iso
+
+"1.9":
+  description: "Numeric edge values (year=0, runtime=0)"
+  seeded_in: imdb_movies
+  example_canonical_id: mov_tt4000018
+  slot: year
+  seeded_value: "0"
+  expected: normalized
+
+"1.10":
+  description: "Encoding variants (en-dash vs em-dash vs hyphen)"
+  seeded_in: wikidata_movies
+  example_canonical_id: mov_tt4000025
+  slot: primary_title
+  seeded_value: "Spider\u2013Man"
+  expected: normalized_to_hyphen
+
+"1.11":
+  description: "Trailing whitespace in CSV cells"
+  seeded_in: imdb_movies
+  example_canonical_id: mov_tt4000006
+  slot: genres
+  expected: normalized
+
+"1.12":
+  description: "Same identifier, conflicting payloads"
+  seeded_in: imdb_movies, tmdb_movies
+  example_canonical_id: mov_tt4000010
+  slot: year
+  expected: resolved_by_argmax_trust
+
+"1.13":
+  description: "Missing identifier → drop"
+  seeded_in: imdb_movies, imdb_persons
+  expected: drop
+
+"1.14":
+  description: "Discriminator-routed multi-class sources"
+  seeded_in: imdb_series (kind column routes to Movie or Series)
+  routed_to_movie: rows where kind=movie
+  routed_to_series: rows where kind=series
+  expected: correct_class_routing
+
+"1.15":
+  description: "Wildcard-drop rows"
+  seeded_in: wikidata_series, rawg_games
+  kind_value: exclude
+  expected: dropped
+
+"2.1":
+  description: "Known dupes across sources"
+  seeded_in: imdb_movies, tmdb_movies, wikidata_movies
+  example_canonical_ids: [mov_tt4000000, mov_tt4000001]
+  ground_truth: same_entity
+
+"2.2":
+  description: "Known non-dupes"
+  seeded_in: imdb_movies, tmdb_movies
+  example_canonical_ids: [mov_tt4000020, mov_tt4000021]
+  ground_truth: different_entity
+
+"2.3":
+  description: "Three-way dupes"
+  seeded_in: imdb_movies, tmdb_movies, wikidata_movies
+  example_canonical_id: mov_tt4000005
+  ground_truth: same_entity
+
+"2.4":
+  description: "Asymmetric coverage"
+  seeded_in: wikidata_movies (absence)
+  example_canonical_id: mov_tt4000015
+  expected: present_in_two_absent_in_third
+
+"2.5":
+  description: "Surfaced conflicts"
+  seeded_in: imdb_movies, tmdb_movies
+  slot: year
+  expected: surfaced_for_review
+
+"3.1":
+  description: "Full agreement (3 sources same value)"
+  example_canonical_id: mov_tt4000000
+  slot: primary_title
+  expected: degenerate_agree
+
+"3.2":
+  description: "2-vs-1 majority"
+  example_canonical_id: mov_tt4000010
+  slot: year
+  expected: mode_wins
+
+"3.3":
+  description: "3 distinct values → ARGMAX_TRUST tiebreak"
+  example_canonical_id: mov_tt4000011
+  slot: year
+  expected: argmax_trust_tiebreak
+
+"3.5":
+  description: "Source contributes null vs absent"
+  example_canonical_id: mov_tt4000003
+  slot: runtime_minutes
+  expected: null_vs_absent_distinct
+
+"3.6":
+  description: "UNIQUE_OR_FAIL violation"
+  example_canonical_id: per_nm5000050
+  slot: imdb_id
+  expected: UniqueOrFailError
+
+"3.7":
+  description: "MEDIAN_NUMERIC on integer slot"
+  example_canonical_id: mov_tt4000000
+  slot: runtime_minutes
+  expected: median_value
+
+"3.8":
+  description: "LATEST_WATERMARK with backdated asserted_at"
+  example_canonical_id: mov_tt4000020
+  slot: rating
+  expected: latest_watermark_wins
+
+"3.9":
+  description: "WEIGHTED_VOTE with high-trust outlier"
+  example_canonical_id: mov_tt4000025
+  slot: year
+  expected: weighted_vote_resolution
+
+"3.10":
+  description: "Each ResolutionPolicy exercised at least once"
+  slots:
+    ARGMAX_TRUST: movie.primary_title
+    MODE: movie.genres
+    MEDIAN_NUMERIC: movie.runtime_minutes
+    LATEST_WATERMARK: movie.rating
+    UNIQUE_OR_FAIL: person.imdb_id
+    WEIGHTED_VOTE: movie.year
+
+"4.1":
+  description: "Credit references existing Movie + Person"
+  example_canonical_id: cr_imdb_credits_000000
+  expected: fk_resolves
+
+"4.2":
+  description: "Reference through merged canonical_id"
+  expected: lineage_redirect
+
+"4.3":
+  description: "Orphan reference → loud failure"
+  seeded_in: tmdb_credits
+  example_canonical_id: cr_tmdb_credits_000010
+  slot: work_id
+  expected: OrphanReferenceError
+
+"4.4":
+  description: "Reference through Identifier polymorphic class"
+  seeded_in: imdb_identifiers, tmdb_identifiers
+  example_identifier_id: id_imdb_identifiers_00000
+  expected: polymorphic_fk_resolves
+
+"4.5":
+  description: "Cyclical references → compile error (mutation test)"
+  expected: mutation_test_only
+
+"5.1":
+  description: "Empty derivation result"
+  example_canonical_id: mov_tt4000029
+  derived_slot: director
+  expected: empty_list
+
+"5.2":
+  description: "Single-result derivation"
+  example_canonical_id: mov_tt4000000
+  derived_slot: director
+  expected: single_person_canonical_id
+
+"5.3":
+  description: "Multi-result derivation"
+  example_canonical_id: mov_tt4000000
+  derived_slot: actors
+  expected: list_of_person_canonical_ids
+
+"5.4":
+  description: "Deep derivation chain"
+  example_path: Episode.parent_series.creator.country.name
+  expected: string_country_name
+
+"5.6":
+  description: "Forward-chained at materialization"
+  expected: neo4j_DIRECTED_BY_edge_exists
+
+"6.8":
+  description: "Subclass hierarchy edit (Episode adds parent_series) — mutation"
+  expected: mutation_test_only
+
+"8.1":
+  description: "Identifier with multiple entity_class values"
+  seeded_in: imdb_identifiers
+  entity_classes: [Movie, Series, Episode, Game, Person]
+  expected: all_classes_represented
+
+"8.2":
+  description: "Polymorphic slot used as ER signal — must be explicitly declared"
+  seeded_in: imdb_identifiers, tmdb_identifiers
+  expected: cross_references_declared_in_er_credit
+
+"8.3":
+  description: "Subclass query semantics (Title returns Movie+Series+Episode+Game)"
+  expected: subclass_query_returns_all_four
+
+"8.4":
+  description: "Override slot in subclass"
+  subclass: Episode
+  override_slot: parent_series
+  expected: not_present_on_Movie_or_Series
+
+"8.5":
+  description: "is_a chain of depth >= 3 (Movie → Title → abstract)"
+  path: Movie.is_a=Title
+  depth: 1_direct_subclass_of_abstract_Title
+  expected: subclass_hierarchy_correct
+
+"8.6":
+  description: "Identifier merged across systems"
+  seeded_in: imdb_identifiers, wikidata_identifiers
+  expected: cross_system_identifier_merge
+
+"11.7":
+  description: "Multi-class primary — spec.classes variant"
+  impl: iceberg_publisher.py
+  expected: all_concrete_classes_written
+
+"11.8":
+  description: "DerivedSlot as primary → edge view"
+  impl: neo4j_publisher.py
+  expected: edge_views_emitted
+
+"12.8":
+  description: "Replay of compile hash produces byte-identical output"
+  expected: deterministic_replay
+
+"13.2":
+  description: "POST /runs/full (whole-pipeline trigger)"
+  expected: full_toposort_run_all_classes
+
+"14.2":
+  description: "Multi-class materialization"
+  impl: neo4j_publisher.py
+  expected: all_concrete_nodes_written
+
+"14.4":
+  description: "Derived-edge materialization"
+  impl: neo4j_publisher.py
+  expected: DIRECTED_BY_edge_exists
+
+"14.5":
+  description: "Materialization of subclass query"
+  impl: neo4j_publisher.py
+  expected: title_subclass_nodes_carry_Title_label
+
+"14.6":
+  description: "Materialization with Config.exclude_classes"
+  impl: neo4j_publisher.py
+  expected: excluded_class_absent
+
+"15.1":
+  description: "Audit walk-back: fact → run → compile_hash → spec_revs → source rows"
+  expected: full_audit_walk_including_subclass_polymorphic

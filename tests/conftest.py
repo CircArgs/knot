@@ -2,6 +2,8 @@ import pytest
 import psycopg
 from neo4j import GraphDatabase
 
+from tests.test_env import TestEnv
+
 
 @pytest.fixture(scope="session")
 def postgres_dsn():
@@ -25,3 +27,15 @@ def neo4j_driver(neo4j_uri):
     driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", "knottest"))
     yield driver
     driver.close()
+
+
+@pytest.fixture
+def lake_dir(tmp_path):
+    return tmp_path / "lake"
+
+
+@pytest.fixture
+def env(postgres_dsn, neo4j_uri, lake_dir, request):
+    e = TestEnv(postgres_dsn, neo4j_uri, ("neo4j", "knottest"), lake_dir)
+    yield e
+    e.teardown()

@@ -1,0 +1,81 @@
+imdb_id,name,birthdate,country,wikidata_id
+nm5000000,Tom Hanks,Jul 5 1973,CN,Q9000000
+nm5000001,Meryl Streep,Jun 26 1934,IT,Q9000001
+nm5000002,Jack Nicholson,May 21 1936,IT,
+nm5000003,Cate Blanchett,Aug 28 1958,IT,Q9000003
+nm5000004,Denzel Washington,Oct 11 1926,JP,
+nm5000005,Jodie Foster,Nov 1 1944,DE,Q9000005
+nm5000006,Robert De Niro,Apr 5 1964,JP,
+nm5000007,Natalie Portman,Mar 5 1979,CN,Q9000007
+nm5000008,Al Pacino,Oct 6 1960,US,Q9000008
+nm5000009,Kate Winslet,Dec 18 1976,IT,
+nm5000010,Dustin Hoffman,Dec 6 1954,MX,Q9000010
+nm5000011,Halle Berry,May 26 1938,CN,Q9000011
+nm5000012,Gene Hackman,Nov 7 1964,GB,Q9000012
+nm5000013,Charlize Theron,Jun 17 1942,FR,
+nm5000014,Clint Eastwood,Dec 19 1975,BR,Q9000014
+nm5000015,Julia Roberts,Jul 12 1960,IT,Q9000015
+nm5000016,Anthony Hopkins,Mar 24 1965,RU,Q9000016
+nm5000017,Hillary Swank,Jun 11 1954,GB,
+nm5000018,Morgan Freeman,Dec 11 1944,US,
+nm5000019,Reese Witherspoon,Oct 22 1922,CN,Q9000019
+nm5000020,Alejandro González Iñárritu,Jul 16 1928,DE,Q9000020
+nm5000021,Penélope Cruz,Mar 20 1933,GB,Q9000021
+nm5000022,Søren Kierkegaard,Dec 7 1927,JP,
+nm5000023,宮崎 駿,Feb 18 1968,MX,Q9000023
+nm5000024,Jean-Luc Godard,Aug 14 1961,IT,Q9000024
+nm5000025,Agnès Varda,Dec 4 1955,RU,Q9000025
+nm5000026,Björk Guðmundsdóttir,Nov 23 1968,FR,Q9000026
+nm5000027,Věra Chytilová,Apr 11 1963,MX,Q9000027
+nm5000028,Andrzej Wajda,Dec 24 1958,JP,
+nm5000029,Krzysztof Kieślowski,,US,
+nm5000030,Ingmar Bergman,Nov 14 1924,BR,Q9000030
+nm5000031,Андрей Тарковский,Sep 23 1972,FR,
+nm5000032,黒澤 明,May 9 1936,DE,Q9000032
+nm5000033,宮崎 駿,Sep 9 1943,RU,Q9000033
+nm5000034,Андрей Тарковский,Jul 24 1948,FR,
+nm5000035,Сергей Эйзенштейн,Oct 10 1940,CN,Q9000035
+nm5000036,عمر الشريف,Dec 5 1955,GB,Q9000036
+nm5000037,يوسف شاهين,,MX,
+nm5000038,Steven Spielberg,Aug 20 1936,US,Q9000038
+nm5000039,Martin Scorsese,Dec 15 1975,CN,Q9000039
+nm5000040,Francis Ford Coppola,Aug 10 1965,IT,
+nm5000041,Stanley Kubrick,Feb 11 1962,CN,Q9000041
+nm5000042,Alfred Hitchcock,Aug 23 1959,IT,Q9000042
+nm5000043,Billy Wilder,Jun 17 1957,IT,
+nm5000044,John Ford,Apr 1 1979,JP,Q9000044
+nm5000045,Howard Hawks,Apr 24 1925,BR,Q9000045
+nm5000046,Orson Welles,Jun 23 1956,RU,Q9000046
+nm5000047,Jean Renoir,Jun 26 1928,MX,Q9000047
+nm5000048,黒澤 明,Mar 11 1924,GB,
+nm5000049,Michelangelo Antonioni,,DE,
+nm5000050,Luchino Visconti,Oct 3 1943,IT,Q9000050
+nm5000051,Pier Paolo Pasolini,Feb 21 1925,US,Q9000051
+nm5000052,Werner Herzog,Dec 2 1943,MX,Q9000052
+nm5000053,宮崎 駿,Mar 6 1929,GB,Q9000053
+nm5000054,Wim Wenders,Dec 8 1932,DE,
+nm5000055,Akira Kurosawa,Dec 27 1929,MX,Q9000055
+nm5000056,Yasujirō Ozu,Mar 23 1920,IT,
+nm5000057,Kenji Mizoguchi,Dec 5 1962,BR,Q9000057
+nm5000058,Wong Kar-wai,Dec 17 1934,RU,Q9000058
+nm5000059,Zhang Yimou,Jul 17 1935,BR,Q9000059
+nm5000060,Chen Kaige,Jul 6 1951,FR,Q9000060
+nm5000061,Hou Hsiao-hsien,Jun 15 1972,JP,
+nm5000062,Abbas Kiarostami,Nov 1 1934,US,
+nm5000063,Mohsen Makhmalbaf,Dec 25 1926,CN,Q9000063
+nm5000064,Jafar Panahi,Nov 7 1980,JP,Q9000064
+nm5000065,Pedro Almodóvar,Jul 2 1962,BR,
+nm5000066,Carlos Saura,Dec 14 1960,JP,
+nm5000067,Víctor Erice,Feb 6 1962,GB,Q9000067
+nm5000068,Андрей Тарковский,Oct 10 1976,JP,Q9000068
+nm5000069,Lars von Trier,May 12 1923,DE,
+nm5000070,Thomas Vinterberg,,BR,Q9000070
+nm5000071,Joel Coen,Feb 8 1936,US,Q9000071
+nm5000072,Ethan Coen,Feb 18 1959,DE,Q9000072
+nm5000073,David Lynch,Jul 22 1975,DE,
+nm5000074,David Fincher,Feb 17 1925,JP,Q9000074
+nm5000075,Paul Thomas Anderson,Sep 11 1969,JP,
+nm5000076,Wes Anderson,Jun 14 1973,JP,Q9000076
+nm5000077,Sofia Coppola,Feb 4 1977,US,Q9000077
+nm5000078,Quentin Tarantino,Jun 15 1979,RU,Q9000078
+nm5000079,Christopher Nolan,Sep 26 1928,US,

@@ -1,0 +1,11 @@
+game_id,primary_title,original_title,release_year,platforms,publisher,kind
+game_rawg_games_0000,The Last of Us,The Last of Us,2016,PC,Warner Bros.,game
+game_rawg_games_0001,Red Dead Redemption 2,Red Dead Redemption 2,2024,Switch|PS5,Walt Disney Pictures,game
+game_rawg_games_0002,God of War,God of War,2019,PS4|Switch|Android|iOS,Universal Pictures,game
+game_rawg_games_0003,Hades,Hades,2018,Xbox Series X|Android|PC,Universal Pictures,game
+game_rawg_games_0004,Disco Elysium,Disco Elysium,2015,Xbox One|Xbox Series X|PS4,Warner Bros.,game
+game_rawg_games_0005,Outer Wilds,Outer Wilds,2023,Switch|PS5|Xbox Series X,Sony Pictures,exclude
+game_rawg_games_0006,Control,Control,2016,Xbox One,Warner Bros.,game
+game_rawg_games_0007,Death Stranding,Death Stranding,2022,Xbox Series X|Xbox One|Android|PS4,Universal Pictures,game
+game_rawg_games_0008,Sekiro,Sekiro,2023,PC|Xbox Series X|Android|PS5,Universal Pictures,exclude
+game_rawg_games_0009,Ghost of Tsushima,Ghost of Tsushima,2013,PS5|PS4|Android|PC,Paramount Pictures,game
