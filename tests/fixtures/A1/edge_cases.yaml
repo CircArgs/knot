@@ -1,131 +1,131 @@
 "1.1":
   description: "Null values in optional slots"
   cases:
-    - canonical_id: mov_imdb_tt1000014
-      row_index: 14
+    - canonical_id: mov_imdb_tt1000012
+      row_index: 12
+      slot: rating
+      seeded_value: null
+      expected: normalized
+    - canonical_id: mov_imdb_tt1000019
+      row_index: 19
+      slot: rating
+      seeded_value: null
+      expected: normalized
+    - canonical_id: mov_imdb_tt1000025
+      row_index: 25
       slot: runtime_minutes
       seeded_value: null
       expected: normalized
-    - canonical_id: mov_imdb_tt1000018
-      row_index: 18
-      slot: rating
-      seeded_value: null
-      expected: normalized
-    - canonical_id: mov_imdb_tt1000029
-      row_index: 29
-      slot: rating
-      seeded_value: null
-      expected: normalized
-    - canonical_id: mov_imdb_tt1000034
-      row_index: 34
+    - canonical_id: mov_imdb_tt1000038
+      row_index: 38
       slot: runtime_minutes
       seeded_value: null
       expected: normalized
-    - canonical_id: mov_imdb_tt1000046
-      row_index: 46
-      slot: rating
+    - canonical_id: mov_imdb_tt1000041
+      row_index: 41
+      slot: runtime_minutes
       seeded_value: null
       expected: normalized
 "1.11":
   description: "Trailing whitespace in CSV cells"
   cases:
-    - canonical_id: mov_imdb_tt1000008
-      row_index: 8
+    - canonical_id: mov_imdb_tt1000013
+      row_index: 13
       slot: genres
-      seeded_value: "Mystery|Documentary   "
+      seeded_value: "Comedy|Crime   "
       expected: normalized
-    - canonical_id: mov_imdb_tt1000023
-      row_index: 23
-      slot: genres
-      seeded_value: "Documentary|Mystery   "
-      expected: normalized
-    - canonical_id: mov_imdb_tt1000026
-      row_index: 26
+    - canonical_id: mov_imdb_tt1000018
+      row_index: 18
       slot: title
-      seeded_value: null
+      seeded_value: "Pi   "
+      expected: normalized
+    - canonical_id: mov_imdb_tt1000030
+      row_index: 30
+      slot: genres
+      seeded_value: "Crime   "
       expected: normalized
     - canonical_id: mov_imdb_tt1000038
       row_index: 38
-      slot: genres
-      seeded_value: "Mystery|Drama   "
+      slot: title
+      seeded_value: "Ronin   "
       expected: normalized
-    - canonical_id: mov_imdb_tt1000046
-      row_index: 46
-      slot: genres
-      seeded_value: "Drama   "
+    - canonical_id: mov_imdb_tt1000042
+      row_index: 42
+      slot: title
+      seeded_value: "Sphere   "
       expected: normalized
 "1.13":
   description: "Source rows with missing identifier → drop or fail per source spec"
   cases:
-    - canonical_id: mov_imdb_row0024
-      row_index: 24
+    - canonical_id: mov_imdb_row0026
+      row_index: 26
       slot: imdb_id
       seeded_value: null
       expected: drop
-    - canonical_id: mov_imdb_row0040
-      row_index: 40
+    - canonical_id: mov_imdb_row0034
+      row_index: 34
       slot: imdb_id
       seeded_value: null
       expected: drop
 "1.2":
   description: "Null values in required slots → fail validation"
   cases:
-    - canonical_id: mov_imdb_tt1000026
-      row_index: 26
+    - canonical_id: mov_imdb_tt1000031
+      row_index: 31
       slot: title
       seeded_value: null
       expected: validation_error
-    - canonical_id: mov_imdb_tt1000045
-      row_index: 45
+    - canonical_id: mov_imdb_tt1000041
+      row_index: 41
       slot: title
       seeded_value: null
       expected: validation_error
 "1.3":
   description: "Empty string vs null (semantically distinct)"
   cases:
-    - canonical_id: mov_imdb_tt1000020
-      row_index: 20
-      slot: rating
-      seeded_value: "0.0"
-      expected: normalized
-    - canonical_id: mov_imdb_tt1000029
-      row_index: 29
+    - canonical_id: mov_imdb_tt1000019
+      row_index: 19
       slot: rating
       seeded_value: null
       expected: normalized
-    - canonical_id: mov_imdb_tt1000037
-      row_index: 37
+    - canonical_id: mov_imdb_row0026
+      row_index: 26
       slot: rating
-      seeded_value: "5.5"
+      seeded_value: "0.0"
+      expected: normalized
+    - canonical_id: mov_imdb_tt1000042
+      row_index: 42
+      slot: rating
+      seeded_value: "0.0"
       expected: normalized
 "1.4":
   description: "Leading/trailing/internal multiple whitespace"
   cases:
-    - canonical_id: mov_imdb_tt1000015
-      row_index: 15
+    - canonical_id: mov_imdb_tt1000012
+      row_index: 12
       slot: title
-      seeded_value: "Run  Lola  Run"
+      seeded_value: "Rushmore  extra"
       expected: normalized
-    - canonical_id: mov_imdb_tt1000029
-      row_index: 29
+    - canonical_id: mov_imdb_tt1000032
+      row_index: 32
       slot: title
-      seeded_value: "  Velvet Goldmine"
+      seeded_value: "  Armageddon"
       expected: normalized
-    - canonical_id: mov_imdb_tt1000039
-      row_index: 39
+    - canonical_id: mov_imdb_tt1000036
+      row_index: 36
       slot: title
-      seeded_value: "Enemy  of  the  State"
+      seeded_value: "The  Waterboy"
       expected: normalized
 "1.9":
   description: "Numeric edge values (year=0, runtime=0)"
   cases:
-    - canonical_id: mov_imdb_tt1000030
-      row_index: 30
+    - canonical_id: mov_imdb_tt1000018
+      row_index: 18
       slot: runtime_minutes
       seeded_value: "0"
       expected: normalized
-    - canonical_id: mov_imdb_tt1000047
-      row_index: 47
-      slot: runtime_minutes
+    - canonical_id: mov_imdb_tt1000036
+      row_index: 36
+      slot: year
       seeded_value: "0"
       expected: normalized

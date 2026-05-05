@@ -2,60 +2,60 @@ movies:
   mov_imdb_tt1000000:
     title: "The Matrix"
     year: 1997
-    runtime_minutes: 187
-    rating: 6.5
-    genres: ["Romance", "Western"]
+    runtime_minutes: 176
+    rating: 8.5
+    genres: ["Sci-Fi"]
   mov_imdb_tt1000001:
     title: "The Sixth Sense"
-    year: 1992
-    runtime_minutes: 92
-    rating: 7.2
-    genres: ["Crime", "Horror"]
+    year: 2000
+    runtime_minutes: 198
+    rating: 7.9
+    genres: ["Drama", "Mystery"]
   mov_imdb_tt1000002:
     title: "Fight Club"
-    year: 1998
-    runtime_minutes: 110
-    rating: 8.2
-    genres: ["Romance", "Action"]
+    year: 1992
+    runtime_minutes: 106
+    rating: 8.6
+    genres: ["Crime", "Thriller"]
   mov_imdb_tt1000003:
     title: "American Beauty"
-    year: 2000
-    runtime_minutes: 134
-    rating: 9.4
-    genres: ["Thriller"]
+    year: 1992
+    runtime_minutes: 96
+    rating: 5.3
+    genres: ["Sci-Fi"]
   mov_imdb_tt1000004:
     title: "The Green Mile"
-    year: 1997
-    runtime_minutes: 103
-    rating: 7.8
-    genres: ["Romance"]
+    year: 2000
+    runtime_minutes: 156
+    rating: 5.2
+    genres: ["Mystery"]
   mov_imdb_tt1000005:
     title: "Magnolia"
-    year: 1997
-    runtime_minutes: 164
-    rating: 9.5
-    genres: ["Fantasy"]
+    year: 1996
+    runtime_minutes: 89
+    rating: 6.9
+    genres: ["Western", "Romance"]
   mov_imdb_tt1000006:
     title: "Eyes Wide Shut"
-    year: 1992
-    runtime_minutes: 131
-    rating: 5.8
-    genres: ["Action"]
+    year: 1990
+    runtime_minutes: 121
+    rating: 6.8
+    genres: ["Documentary", "Drama"]
   mov_imdb_tt1000007:
     title: "The Insider"
-    year: 1991
-    runtime_minutes: 121
-    rating: 9.1
-    genres: ["Crime", "Horror"]
+    year: 1996
+    runtime_minutes: 149
+    rating: 5.5
+    genres: ["Sci-Fi", "Documentary"]
   mov_imdb_tt1000008:
     title: "Being John Malkovich"
-    year: 1991
-    runtime_minutes: 145
-    rating: 7.2
-    genres: ["Mystery", "Documentary"]
+    year: 1997
+    runtime_minutes: 121
+    rating: 6.5
+    genres: ["Documentary", "Action"]
   mov_imdb_tt1000009:
     title: "Three Kings"
-    year: 1998
-    runtime_minutes: 122
-    rating: 7.3
-    genres: ["Mystery"]
+    year: 2000
+    runtime_minutes: 93
+    rating: 8.4
+    genres: ["Sci-Fi", "Drama"]
