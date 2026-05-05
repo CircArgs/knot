@@ -1,0 +1,16 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# OMC tooling state
+.omc/
+
+# mkdocs build output
+site/site/
+
+# OS
+.DS_Store
+Thumbs.db
