@@ -24,6 +24,10 @@ test = [
     "neo4j>=5.20",
     "pyyaml>=6.0",
 ]
+notebook = [
+    "marimo>=0.10",
+    "pandas>=2.0",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
