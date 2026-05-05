@@ -197,6 +197,36 @@ Synthetic data generators MUST seed cases from this catalog. "Synthetic" is not 
 
 ---
 
+## Category 16 — Ontology expansion (class additions)
+
+Tested as **mutations applied to B2 / C2** rather than new tier fixtures. Each mutation is a `SpecEdit.add_class(...)` / `add_source(...)` / `add_derivation(...)` exercised through the publish gate.
+
+| Case | Description | Tiers covering |
+|---|---|---|
+| 16.1 | Add new leaf class with no relations to existing classes (e.g., `Book`) | B2 / C2 (mutation) |
+| 16.2 | Add new subclass under existing abstract superclass (e.g., `Podcast → Title`) | C2 (mutation) |
+| 16.3 | Add new class with structural reference to existing (e.g., `Book.author → Person`) | B2 / C2 (mutation) |
+| 16.4 | Add new derivation rule referencing new class (e.g., `Person.books_authored` from `Book.author`) | B2 / C2 (mutation) |
+| 16.5 | Add new source feeding the new class | B2 / C2 (mutation) |
+| 16.6 | Discriminator-routed source updated to include new class (`imdb_titles` now routes Movie / Series / Game / Podcast) | C2 (mutation) |
+| 16.7 | Polymorphic `Identifier.entity_class` widened to point at new class | C2 (mutation) |
+| 16.8 | Existing `pipeline_runs` from before expansion still walk-back-correctly (backward compat) | B2 / C2 (mutation) |
+| 16.9 | Add parent-child class pair simultaneously (e.g., `Album` + `Track`, mirroring Series / Episode) | C2 (mutation) |
+| 16.10 | Add new class then immediately use it as ER signal (`cross_references` config edit on existing impl) | B2 / C2 (mutation) |
+
+## Category 17 — Ontology contraction (class removal / rename / restructure)
+
+| Case | Description | Tiers covering |
+|---|---|---|
+| 17.1 | Remove a leaf class with no inbound references → publish-gate accepts | B2 / C2 (mutation) |
+| 17.2 | Remove a class with inbound structural refs → publish-gate rejects | B2 / C2 (mutation) |
+| 17.3 | Rename a class → impact analysis surfaces; cross-class pinning hashes change | B2 / C2 (mutation) |
+| 17.4 | Move a class under a different superclass (e.g., `Game` from `Title` to a new `InteractiveWork` superclass) | C2 (mutation) |
+| 17.5 | Existing `pipeline_runs` from before contraction still walk-back-correctly | B2 / C2 (mutation) |
+| 17.6 | Subclass query on a removed-then-readded class (deprecation cycle) | C2 (mutation) |
+
+---
+
 ## Coverage matrix summary
 
 | Tier | Categories with seeded cases |
@@ -205,10 +235,10 @@ Synthetic data generators MUST seed cases from this catalog. "Synthetic" is not 
 | A2 | 1, 2, 3 (full multi-valued), 6.5, 9, 10 (subset), 12, 14, 15 |
 | A3 | 1, 3, 9 (many watermarks) |
 | B1 | 1, 2 (single-source), 4 (relations), 5 (derivations), 8, 9, 11, 12, 14, 15 |
-| **B2** | ALL CATEGORIES — kitchen sink default |
+| **B2** | ALL static + mutations 16/17 (subset) |
 | B3 | All of B2 + scale-stress on watermarks |
 | C1 | 1, 4 (relations), 5 (rich derivation web), 8 (subclass + polymorphic), 11 (deep), 14 (subclass), 15 |
-| **C2** | ALL CATEGORIES at richer ontology than B2 |
+| **C2** | ALL static + ALL mutations including 16/17 (full) |
 | C3 | All of C2 + scale-stress |
 
-The implemented set (A1 + B2 + C2) covers every category at least once. Template tiers exist for future expansion if specific categories need isolation.
+The implemented set (A1 + B2 + C2) covers every static category. Mutation categories 16 and 17 are exercised on B2 (basic expansion / contraction) and C2 (full polymorphic + subclass-aware expansion / contraction). Template tiers exist for future expansion if specific categories need isolation.

@@ -73,7 +73,16 @@ class SpecEdit(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     edit_type: Literal[
-        "rename_slot", "add_slot", "delete_slot", "change_resolution_policy"
+        "rename_slot",
+        "add_slot",
+        "delete_slot",
+        "change_resolution_policy",
+        "add_class",
+        "remove_class",
+        "rename_class",
+        "change_superclass",
+        "add_source",
+        "add_derivation",
     ]
     payload: dict[str, Any]
 
@@ -103,6 +112,87 @@ class SpecEdit(BaseModel):
         return cls(
             edit_type="change_resolution_policy",
             payload={"path": path, "new_policy": new_policy},
+        )
+
+    @classmethod
+    def add_class(
+        cls,
+        class_def: dict,
+        is_a: str | None = None,
+    ) -> "SpecEdit":
+        """Add a new OntologyClass to the spec.
+
+        class_def: dict matching staging/spec-model.md OntologyClass shape
+            (name, slots, abstract, description, etc.).
+        is_a: optional name of an existing class to subclass (cat 16.2).
+        """
+        return cls(
+            edit_type="add_class",
+            payload={"class_def": class_def, "is_a": is_a},
+        )
+
+    @classmethod
+    def remove_class(cls, class_name: str) -> "SpecEdit":
+        """Remove an existing OntologyClass.
+
+        Publish-gate rejects if the class still has inbound references (cat 17.2).
+        """
+        return cls(
+            edit_type="remove_class",
+            payload={"class_name": class_name},
+        )
+
+    @classmethod
+    def rename_class(cls, from_name: str, to_name: str) -> "SpecEdit":
+        """Rename an existing OntologyClass; impact analysis surfaces refs (cat 17.3)."""
+        return cls(
+            edit_type="rename_class",
+            payload={"from_name": from_name, "to_name": to_name},
+        )
+
+    @classmethod
+    def change_superclass(
+        cls, class_name: str, new_parent: str | None
+    ) -> "SpecEdit":
+        """Move a class under a different superclass (cat 17.4).
+
+        new_parent=None drops the is_a relationship entirely.
+        """
+        return cls(
+            edit_type="change_superclass",
+            payload={"class_name": class_name, "new_parent": new_parent},
+        )
+
+    @classmethod
+    def add_source(cls, source_def: dict) -> "SpecEdit":
+        """Add a new Source declaration (cat 16.5, 16.6).
+
+        source_def: dict matching the Source Pydantic shape
+            (name, entity_class, identifier_slot, optional discriminator).
+        """
+        return cls(
+            edit_type="add_source",
+            payload={"source_def": source_def},
+        )
+
+    @classmethod
+    def add_derivation(
+        cls,
+        class_name: str,
+        slot_name: str,
+        derivation: dict,
+    ) -> "SpecEdit":
+        """Add a derived slot to an existing class (cat 16.4).
+
+        derivation: dict matching DerivationExpr shape (real refs).
+        """
+        return cls(
+            edit_type="add_derivation",
+            payload={
+                "class_name": class_name,
+                "slot_name": slot_name,
+                "derivation": derivation,
+            },
         )
 
 
