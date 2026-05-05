@@ -1,0 +1,51 @@
+imdb_id,title,year,runtime_minutes,rating,genres
+tt1000000,The Matrix,1997,187,6.5,Romance|Western
+tt1000001,The Sixth Sense,1992,92,7.2,Crime|Horror
+tt1000002,Fight Club,1998,110,8.2,Romance|Action
+tt1000003,American Beauty,2000,134,9.4,Thriller
+tt1000004,The Green Mile,1997,103,7.8,Romance
+tt1000005,Magnolia,1997,164,9.5,Fantasy
+tt1000006,Eyes Wide Shut,1992,131,5.8,Action
+tt1000007,The Insider,1991,121,9.1,Crime|Horror
+tt1000008,Being John Malkovich,1991,145,7.2,Mystery|Documentary   
+tt1000009,Three Kings,1998,122,7.3,Mystery
+tt1000010,Office Space,1998,115,6.7,Thriller
+tt1000011,Election,2000,200,7.9,Sci-Fi|Thriller
+tt1000012,Rushmore,1994,170,5.0,Mystery|Horror
+tt1000013,The Limey,1991,179,7.0,Romance|Documentary
+tt1000014,Go,1998,,6.5,Western
+tt1000015,Run  Lola  Run,1991,121,7.9,Fantasy|Romance
+tt1000016,Dark City,1998,170,5.4,Fantasy
+tt1000017,Pleasantville,2000,114,5.0,Romance|Drama
+tt1000018,Pi,1992,107,,Horror
+tt1000019,Rounders,1997,111,9.0,Comedy|Mystery
+tt1000020,Lock Stock and Two Smoking Barrels,1994,119,0.0,Comedy|Sci-Fi
+tt1000021,Blade,1997,125,7.4,Horror
+tt1000022,Dark City,1990,191,6.4,Crime|Horror
+tt1000023,Buffalo 66,1997,170,8.2,Documentary|Mystery   
+,The Truman Show,1999,94,8.6,Sci-Fi|Thriller
+tt1000025,There's Something About Mary,1994,133,8.4,Documentary|Comedy
+tt1000026,,1996,97,5.6,Sci-Fi|Drama   
+tt1000027,The Big Lebowski,1995,141,7.2,Adventure|Fantasy
+tt1000028,Happiness,1990,165,5.2,Adventure|Drama
+tt1000029,  Velvet Goldmine,1995,0,,Thriller|Fantasy
+tt1000030,A Simple Plan,1991,0,7.2,Western|Horror
+tt1000031,The Negotiator,1995,139,9.3,Sci-Fi
+tt1000032,Armageddon,1997,155,6.3,Mystery|Adventure
+tt1000033,Snake Eyes,1998,106,6.3,Adventure|Action
+tt1000034,Meet Joe Black,1994,,8.0,Adventure|Thriller
+tt1000035,Patch Adams,1990,139,7.6,Documentary|Animation
+tt1000036,The Waterboy,1993,165,6.6,Romance
+tt1000037,You've Got Mail,2000,0,5.5,Drama|Thriller
+tt1000038,Ronin,1994,173,5.2,Mystery|Drama   
+tt1000039,Enemy  of  the  State,1994,90,8.0,Action
+,Deep Impact,1997,141,6.3,Mystery
+tt1000041,City of Angels,2000,116,7.9,Horror|Action
+tt1000042,Sphere,2000,193,7.3,Sci-Fi|Fantasy
+tt1000043,Lethal Weapon 4,1998,170,5.3,Adventure|Thriller
+tt1000044,The Mask of Zorro,1999,197,5.8,Animation|Action
+tt1000045,,1995,183,8.7,Thriller
+tt1000046,Gattaca,1999,180,,Drama   
+tt1000047,Contact,1998,0,5.3,Sci-Fi|Comedy
+tt1000048,L.A. Confidential,1997,111,8.4,Fantasy|Romance
+tt1000049,Boogie Nights,1993,102,7.8,Comedy|Romance

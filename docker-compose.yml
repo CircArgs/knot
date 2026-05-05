@@ -1,0 +1,29 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: knot-test-postgres
+    environment:
+      POSTGRES_USER: knot
+      POSTGRES_PASSWORD: knot
+      POSTGRES_DB: knot_control
+    ports: ["5432:5432"]
+    tmpfs: ["/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "knot", "-d", "knot_control"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  neo4j:
+    image: neo4j:5-community
+    container_name: knot-test-neo4j
+    environment:
+      NEO4J_AUTH: "neo4j/knottest"
+      NEO4J_PLUGINS: '["apoc"]'
+    ports: ["7474:7474", "7687:7687"]
+    tmpfs: ["/data", "/logs"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:7474 || exit 1"]
+      interval: 1s
+      timeout: 3s
+      retries: 30

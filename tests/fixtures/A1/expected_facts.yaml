@@ -1,0 +1,61 @@
+movies:
+  mov_imdb_tt1000000:
+    title: "The Matrix"
+    year: 1997
+    runtime_minutes: 187
+    rating: 6.5
+    genres: ["Romance", "Western"]
+  mov_imdb_tt1000001:
+    title: "The Sixth Sense"
+    year: 1992
+    runtime_minutes: 92
+    rating: 7.2
+    genres: ["Crime", "Horror"]
+  mov_imdb_tt1000002:
+    title: "Fight Club"
+    year: 1998
+    runtime_minutes: 110
+    rating: 8.2
+    genres: ["Romance", "Action"]
+  mov_imdb_tt1000003:
+    title: "American Beauty"
+    year: 2000
+    runtime_minutes: 134
+    rating: 9.4
+    genres: ["Thriller"]
+  mov_imdb_tt1000004:
+    title: "The Green Mile"
+    year: 1997
+    runtime_minutes: 103
+    rating: 7.8
+    genres: ["Romance"]
+  mov_imdb_tt1000005:
+    title: "Magnolia"
+    year: 1997
+    runtime_minutes: 164
+    rating: 9.5
+    genres: ["Fantasy"]
+  mov_imdb_tt1000006:
+    title: "Eyes Wide Shut"
+    year: 1992
+    runtime_minutes: 131
+    rating: 5.8
+    genres: ["Action"]
+  mov_imdb_tt1000007:
+    title: "The Insider"
+    year: 1991
+    runtime_minutes: 121
+    rating: 9.1
+    genres: ["Crime", "Horror"]
+  mov_imdb_tt1000008:
+    title: "Being John Malkovich"
+    year: 1991
+    runtime_minutes: 145
+    rating: 7.2
+    genres: ["Mystery", "Documentary"]
+  mov_imdb_tt1000009:
+    title: "Three Kings"
+    year: 1998
+    runtime_minutes: 122
+    rating: 7.3
+    genres: ["Mystery"]
