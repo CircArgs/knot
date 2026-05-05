@@ -13,6 +13,9 @@ __pycache__/
 # mkdocs build output
 site/site/
 
+# Marimo session state
+__marimo__/
+
 # OS
 .DS_Store
 Thumbs.db
