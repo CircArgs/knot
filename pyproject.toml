@@ -12,6 +12,7 @@ runtime = [
     "sqlglot>=23",
     "pyiceberg>=0.6",
     "duckdb>=1.0",
+    "jcs>=0.2",
 ]
 dev = [
     "mkdocs-material",

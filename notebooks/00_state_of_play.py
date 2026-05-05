@@ -23,22 +23,20 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        # knot — state of play
+    mo.md(r"""
+    # knot — state of play
 
-        **Repository:** [`CircArgs/knot`](https://github.com/CircArgs/knot) (private)
+    **Repository:** [`CircArgs/knot`](https://github.com/CircArgs/knot) (private)
 
-        **Classification:** a reflective ontology compiler — spec edits validate
-        against the running system that interprets them.
+    **Classification:** a reflective ontology compiler — spec edits validate
+    against the running system that interprets them.
 
-        **Posture:** single-team tool (no tenants). External users at three
-        narrow surfaces only: read published outputs, query via translator,
-        submit corrections via UI.
+    **Posture:** single-team tool (no tenants). External users at three
+    narrow surfaces only: read published outputs, query via translator,
+    submit corrections via UI.
 
-        Each section below is a live cell — re-runs when its inputs change.
-        """
-    )
+    Each section below is a live cell — re-runs when its inputs change.
+    """)
     return
 
 
@@ -308,34 +306,37 @@ def _(REPO, mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ---
+    mo.md(r"""
+    ---
 
-        ## Test infrastructure
+    ## Test infrastructure
 
-        - **Stack:** `docker compose up -d` brings up postgres:16 + neo4j:5-community (apoc plugin) with `tmpfs` for ephemeral state.
-        - **Smoke tests:** `pytest tests/test_smoke.py` — 3 tests verifying postgres, neo4j, apoc all reachable.
-        - **Integration smoke:** `pytest tests/integration/` — 3 working + 1 xfail-strict (placeholder for `run_full_pipeline` once knot core lands).
-        - **Helper scripts:** `scripts/up.sh`, `scripts/down.sh`, `scripts/wait-ready.sh`.
+    - **Stack:** `docker compose up -d` brings up postgres:16 + neo4j:5-community (apoc plugin) with `tmpfs` for ephemeral state.
+    - **Smoke tests:** `pytest tests/test_smoke.py` — 3 tests verifying postgres, neo4j, apoc all reachable.
+    - **Integration smoke:** `pytest tests/integration/` — 3 working + 1 xfail-strict (placeholder for `run_full_pipeline` once knot core lands).
+    - **Helper scripts:** `scripts/up.sh`, `scripts/down.sh`, `scripts/wait-ready.sh`.
 
-        Total: **6 passing + 1 xfail strict**, no warnings.
+    Total: **6 passing + 1 xfail strict**, no warnings.
 
-        ## Next implementation slices
+    ## Next implementation slices
 
-        Per the agent-week plan, in priority order:
+    Per the agent-week plan, in priority order:
 
-        1. **Pydantic spec models** (`src/knot/metaschema.py`) — OntologyClass, Slot (with `resolution_policy`), TypeDefinition, Source, ReferencePattern. Real refs throughout.
-        2. **Content-hashing** (`src/knot/canonical.py`) — `canonical_dump` (RFC 8785 JCS) + `compute_content_hash`.
-        3. **DataContext walk + impact analysis** — single-dispatch over the typed entity tree.
-        4. **SDK codegen** — generate `Movie`, `Movie.year`-style typed classes from spec.
-        5. **sqlglot AST machinery** — forward-chain (publish) + backward-chain (translator) + validation.
-        6. **Compiler** — spec + impls + configs + watermarks → WorkflowSpec.
-        7. **Per-stage cache key** — content-addressed skip-flag emission.
+    1. **Pydantic spec models** (`src/knot/metaschema.py`) — OntologyClass, Slot (with `resolution_policy`), TypeDefinition, Source, ReferencePattern. Real refs throughout.
+    2. **Content-hashing** (`src/knot/canonical.py`) — `canonical_dump` (RFC 8785 JCS) + `compute_content_hash`.
+    3. **DataContext walk + impact analysis** — single-dispatch over the typed entity tree.
+    4. **SDK codegen** — generate `Movie`, `Movie.year`-style typed classes from spec.
+    5. **sqlglot AST machinery** — forward-chain (publish) + backward-chain (translator) + validation.
+    6. **Compiler** — spec + impls + configs + watermarks → WorkflowSpec.
+    7. **Per-stage cache key** — content-addressed skip-flag emission.
 
-        Tests at every PR are gated by the docker-compose stack + B2/C2 fixtures.
-        """
-    )
+    Tests at every PR are gated by the docker-compose stack + B2/C2 fixtures.
+    """)
+    return
+
+
+@app.cell
+def _():
     return
 
 
