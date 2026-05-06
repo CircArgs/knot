@@ -24,20 +24,13 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        # 01 — control panel
+    mo.md(r"""
+    # 01 — control panel
 
-        Interactive widgets drive open decisions. Each widget below is wired:
-        change the selection and dependent cells re-render.
-        """
-    )
+    Interactive widgets drive open decisions. Each widget below is wired:
+    change the selection and dependent cells re-render.
+    """)
     return
-
-
-# ---------------------------------------------------------------------------
-# Status header — compact, top-of-page
-# ---------------------------------------------------------------------------
 
 
 @app.cell
@@ -70,64 +63,16 @@ def _(REPO, mo):
     return
 
 
-# ---------------------------------------------------------------------------
-# Library-deps decision panel
-# ---------------------------------------------------------------------------
-
-
 @app.cell
 def _(REPO, mo):
     _doc = (REPO / "design/staging/impl-dependencies.md").read_text()
-
-    # Crude parse: pull "### Model A: ..." -> "### Model B: ..." sections
-    _models = {}
-    _current = None
-    _buf: list[str] = []
-    for _line in _doc.splitlines():
-        if _line.startswith("### Model "):
-            if _current is not None:
-                _models[_current] = "\n".join(_buf).strip()
-            _current = _line.replace("### ", "").strip()
-            _buf = []
-        elif _current is not None:
-            _buf.append(_line)
-    if _current is not None and _buf:
-        _models[_current] = "\n".join(_buf).strip()
-
-    _options = list(_models.keys()) or ["(no models parsed from doc)"]
-
-    library_deps_pick = mo.ui.radio(
-        options=_options,
-        label="**Pick a library-deps model:**",
-        value=_options[0] if _options else None,
-    )
-    lib_deps_models = _models
-    return library_deps_pick, lib_deps_models
-
-
-@app.cell
-def _(library_deps_pick, lib_deps_models, mo):
-    _selected = library_deps_pick.value
-    _body = lib_deps_models.get(_selected, "*select a model above*")
-
     mo.vstack(
         [
-            mo.md("## Library-deps model picker"),
-            mo.md(
-                "Brainstorm at `design/staging/impl-dependencies.md`. Pick to "
-                "expand its full description below."
-            ),
-            library_deps_pick,
-            mo.md("---"),
-            mo.md(f"### {_selected}\n\n{_body}"),
+            mo.md("## Impl dependencies"),
+            mo.md(_doc),
         ]
     )
     return
-
-
-# ---------------------------------------------------------------------------
-# Spec class explorer
-# ---------------------------------------------------------------------------
 
 
 @app.cell
@@ -149,7 +94,7 @@ def _(REPO, mo):
 
 
 @app.cell
-def _(mo, pd, spec_class_pick, b2_spec):
+def _(b2_spec, mo, pd, spec_class_pick):
     _selected_name = spec_class_pick.value
     _cls = next(
         (c for c in b2_spec.spec.classes if c.name == _selected_name), None
@@ -199,11 +144,6 @@ def _(mo, pd, spec_class_pick, b2_spec):
         ]
     )
     return
-
-
-# ---------------------------------------------------------------------------
-# Trust resolution simulator
-# ---------------------------------------------------------------------------
 
 
 @app.cell
@@ -315,11 +255,6 @@ def _(contributions_input, mo, pd, policy_pick):
     return
 
 
-# ---------------------------------------------------------------------------
-# Edge-case browser
-# ---------------------------------------------------------------------------
-
-
 @app.cell
 def _(REPO, mo, yaml):
     _path = REPO / "tests/fixtures/B2/edge_cases.yaml"
@@ -336,7 +271,7 @@ def _(REPO, mo, yaml):
 
 
 @app.cell
-def _(edge_case_pick, mo, pd, edge_cases_data):
+def _(edge_case_pick, edge_cases_data, mo, pd):
     _selected = edge_case_pick.value
     _payload = (edge_cases_data or {}).get(_selected, {})
     _description = (
@@ -359,11 +294,6 @@ def _(edge_case_pick, mo, pd, edge_cases_data):
         ]
     )
     return
-
-
-# ---------------------------------------------------------------------------
-# Test runner button
-# ---------------------------------------------------------------------------
 
 
 @app.cell
@@ -414,28 +344,21 @@ def _(REPO, mo, run_unit_tests_btn):
     return
 
 
-# ---------------------------------------------------------------------------
-# Footer with what's pending
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ---
+    mo.md(r"""
+    ---
 
-        ## Pending your call
+    ## Pending your call
 
-        - **Library-deps model** — pick above; canonical-doc capture happens after you confirm
-        - **Add `Within` / `Between` / `RecursiveTraversal` AST nodes** — captured in `staging/query-language-rationale.md`, not yet implemented
-        - **Day 2 implementation slices** — DataContext walk + SDK codegen (depends on metaschema ✓ + protocols ✓; ready to dispatch)
+    - **Library-deps model** — pick above; canonical-doc capture happens after you confirm
+    - **Add `Within` / `Between` / `RecursiveTraversal` AST nodes** — captured in `staging/query-language-rationale.md`, not yet implemented
+    - **Day 2 implementation slices** — DataContext walk + SDK codegen (depends on metaschema ✓ + protocols ✓; ready to dispatch)
 
-        ## Companion notebooks
+    ## Companion notebooks
 
-        - `00_state_of_play.py` — broad project overview (commitments, fixture matrix, layer status)
-        """
-    )
+    - `00_state_of_play.py` — broad project overview (commitments, fixture matrix, layer status)
+    """)
     return
 
 
