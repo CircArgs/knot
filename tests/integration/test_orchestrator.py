@@ -323,13 +323,12 @@ def test_dispatch_invokes_bound_impl(tmp_path, postgres_dsn):
 
     # Minimal impl source that returns a known ERResult.
     impl_source = '''\
-from pathlib import Path
 from knot.protocols import ERProtocol, ERResult, ScoreColumnMap
 
 class test_er_impl(ERProtocol):
     def score(self, ctx, **datacontexts):
         return ERResult(
-            table=Path("/tmp/test_er_pairs.parquet"),
+            output_uri="/tmp/test_er_pairs.parquet",
             column_map=ScoreColumnMap(
                 a_canonical="a", b_canonical="b", score="score"
             ),
@@ -412,7 +411,7 @@ class test_er_impl(ERProtocol):
 
         assert len(results_captured) == 1
         assert isinstance(results_captured[0], ERResult)
-        assert str(results_captured[0].table) == "/tmp/test_er_pairs.parquet"
+        assert results_captured[0].output_uri == "/tmp/test_er_pairs.parquet"
 
     finally:
         with _psycopg.connect(postgres_dsn, autocommit=True) as conn:

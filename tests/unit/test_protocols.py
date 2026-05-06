@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 from pydantic import ValidationError
 
 from knot.metaschema import DerivedSlot, OntologyClass, TypeDefinition
 from knot.protocols import (
+    BindingInfo,
     ConstraintEvaluator,
     ConstraintResult,
     DataContext,
@@ -27,6 +26,7 @@ from knot.protocols import (
     MaterializeResult,
     Protocol,
     ProtocolKind,
+    RunContext,
     ScoreColumnMap,
     TranslateResult,
     TranslatorProtocol,
@@ -136,19 +136,19 @@ def test_dq_publish_runner_stance() -> None:
 
 def test_er_result_is_pydantic_extra_forbid() -> None:
     result = ERResult(
-        table=Path("/tmp/scores.parquet"),
+        output_uri="s3://bucket/scores.parquet",
         column_map=ScoreColumnMap(
             a_canonical="entity_a",
             b_canonical="entity_b",
             score="similarity_score",
         ),
     )
-    assert result.table == Path("/tmp/scores.parquet")
+    assert result.output_uri == "s3://bucket/scores.parquet"
     assert result.column_map.a_canonical == "entity_a"
 
     with pytest.raises(ValidationError):
         ERResult(
-            table=Path("/tmp/x"),
+            output_uri="/tmp/x",
             column_map=ScoreColumnMap(a_canonical="a", b_canonical="b", score="s"),
             unexpected="bad",  # type: ignore[call-arg]
         )
@@ -173,7 +173,7 @@ def test_dq_result_is_pydantic_extra_forbid() -> None:
         detail=None,
     )
     result = DqResult(
-        offenders_table=None,
+        offenders_uri=None,
         column_map=col_map,
         passed=True,
         summary={"total": 0},
@@ -191,14 +191,14 @@ def test_dq_result_is_pydantic_extra_forbid() -> None:
 
 def test_translate_result_is_pydantic_extra_forbid() -> None:
     result = TranslateResult(
-        result_table=Path("/tmp/out.parquet"),
+        result_uri="neo4j://graph/out",
         column_map={"year": "year_col"},
     )
     assert result.column_map["year"] == "year_col"
 
     with pytest.raises(ValidationError):
         TranslateResult(
-            result_table=Path("/tmp/x"),
+            result_uri="/tmp/x",
             column_map={},
             oops="y",  # type: ignore[call-arg]
         )
@@ -206,7 +206,7 @@ def test_translate_result_is_pydantic_extra_forbid() -> None:
 
 def test_constraint_result_is_pydantic_extra_forbid() -> None:
     result = ConstraintResult(passed=True, summary="all ok")
-    assert result.offenders_table is None
+    assert result.offenders_uri is None
 
     with pytest.raises(ValidationError):
         ConstraintResult(passed=True, summary="x", bad=1)  # type: ignore[call-arg]
@@ -214,14 +214,14 @@ def test_constraint_result_is_pydantic_extra_forbid() -> None:
 
 def test_derivation_result_is_pydantic_extra_forbid() -> None:
     result = DerivationResult(
-        output_table=Path("/tmp/derived.parquet"),
+        output_uri="/tmp/derived.parquet",
         column_map={"decade": "decade_col"},
     )
     assert result.column_map["decade"] == "decade_col"
 
     with pytest.raises(ValidationError):
         DerivationResult(
-            output_table=Path("/tmp/x"),
+            output_uri="/tmp/x",
             column_map={},
             extra="bad",  # type: ignore[call-arg]
         )

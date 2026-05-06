@@ -72,7 +72,7 @@ def test_check_passes_when_sources_agree(tmp_path: Path) -> None:
 
     assert result.passed is True
     assert result.summary["violations"] == 0
-    assert result.offenders_table is None
+    assert result.offenders_uri is None
 
 
 # ---------------------------------------------------------------------------
@@ -93,10 +93,10 @@ def test_check_fails_on_disagreement(tmp_path: Path) -> None:
 
     assert result.passed is False
     assert result.summary["violations"] == 1
-    assert result.offenders_table is not None
+    assert result.offenders_uri is not None
 
     import pyarrow.parquet as pq
-    offenders = pq.read_table(result.offenders_table)
+    offenders = pq.read_table(result.offenders_uri)
     assert offenders.num_rows == 1
     row = {c: offenders.column(c)[0].as_py() for c in offenders.schema.names}
     assert row["rule_id"] == "cross_source_agreement"
@@ -145,7 +145,7 @@ def test_check_column_map_shape(tmp_path: Path) -> None:
 
     # Every non-None field in the column_map must name a column in the offender table.
     import pyarrow.parquet as pq
-    offenders = pq.read_table(result.offenders_table)
+    offenders = pq.read_table(result.offenders_uri)
     col_names = set(offenders.schema.names)
 
     for field_value in [cm.rule_id, cm.class_name, cm.offending_pk, cm.severity]:

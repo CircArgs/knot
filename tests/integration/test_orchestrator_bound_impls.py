@@ -66,7 +66,6 @@ ALL_B2_WATERMARKS = {
 # ---------------------------------------------------------------------------
 
 ER_IMPL_SOURCE = '''\
-from pathlib import Path
 from knot.protocols import ERProtocol, ERResult, ScoreColumnMap
 
 class TinyERImpl(ERProtocol):
@@ -74,7 +73,7 @@ class TinyERImpl(ERProtocol):
 
     def score(self, ctx, **datacontexts):
         return ERResult(
-            table=Path("/tmp/knot_test_er_pairs.parquet"),
+            output_uri="/tmp/knot_test_er_pairs.parquet",
             column_map=ScoreColumnMap(
                 a_canonical="a_id",
                 b_canonical="b_id",
@@ -105,7 +104,7 @@ class TinyDqRunner(DqMergeRunner):
 
     def check(self, ctx, **datacontexts):
         return DqResult(
-            offenders_table=None,
+            offenders_uri=None,
             column_map=DqColumnMap(
                 rule_id="rule_id",
                 class_name="class_name",
@@ -120,7 +119,6 @@ class TinyDqRunner(DqMergeRunner):
 '''
 
 CONFIG_IMPL_SOURCE = '''\
-from pathlib import Path
 from knot.protocols import ERProtocol, ERResult, ScoreColumnMap
 
 class TinyConfigImpl(ERProtocol):
@@ -132,11 +130,12 @@ class TinyConfigImpl(ERProtocol):
             self.threshold = threshold
 
     def score(self, ctx, **datacontexts):
-        # Encode config values into the table path so the test can read them back.
-        min_year = getattr(ctx, "min_year", -1) if ctx else -1
-        threshold = getattr(ctx, "threshold", -1.0) if ctx else -1.0
+        # ctx is a RunContext; config is at ctx.config per the impl-contract.
+        cfg = getattr(ctx, "config", None) if ctx else None
+        min_year = getattr(cfg, "min_year", -1) if cfg else -1
+        threshold = getattr(cfg, "threshold", -1.0) if cfg else -1.0
         return ERResult(
-            table=Path(f"/tmp/knot_config_test_{min_year}_{threshold}.parquet"),
+            output_uri=f"/tmp/knot_config_test_{min_year}_{threshold}.parquet",
             column_map=ScoreColumnMap(
                 a_canonical="a",
                 b_canonical="b",
@@ -308,7 +307,7 @@ def test_dispatch_invokes_bound_er_impl(tmp_path, postgres_dsn):
 
         assert len(results) == 1
         assert isinstance(results[0], ERResult)
-        assert str(results[0].table) == "/tmp/knot_test_er_pairs.parquet"
+        assert results[0].output_uri == "/tmp/knot_test_er_pairs.parquet"
         assert results[0].column_map.a_canonical == "a_id"
 
     finally:
@@ -567,10 +566,10 @@ def test_dispatch_loads_config_snapshot(tmp_path, postgres_dsn):
 
         assert len(results) == 1
         assert isinstance(results[0], ERResult)
-        # The impl encodes config values into the table path.
-        table_path = str(results[0].table)
-        assert "1985" in table_path, f"Expected min_year=1985 in path, got: {table_path}"
-        assert "0.77" in table_path, f"Expected threshold=0.77 in path, got: {table_path}"
+        # The impl encodes config values into the output_uri.
+        output_uri = results[0].output_uri
+        assert "1985" in output_uri, f"Expected min_year=1985 in uri, got: {output_uri}"
+        assert "0.77" in output_uri, f"Expected threshold=0.77 in uri, got: {output_uri}"
 
     finally:
         with psycopg.connect(postgres_dsn, autocommit=True) as conn:

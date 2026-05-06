@@ -23,6 +23,7 @@ from knot.metaschema import OntologyClass, ResolutionPolicy
 from knot.protocols import DataContext, DqColumnMap, DqMergeRunner, DqResult
 
 
+
 class CrossSourceAgreementCheckConfig:
     """Config for the cross-source agreement check.
 
@@ -62,10 +63,11 @@ class CrossSourceAgreementCheck(DqMergeRunner):
 
         # Determine which classes to inspect.
         cfg_classes: list[OntologyClass] = getattr(cfg, "classes", []) or []
-        # datacontexts may carry pre-loaded tables keyed by class name; fall back
-        # to reading parquet from lake_dir when not supplied (normal pipeline path).
-        lake_dir = Path(getattr(ctx, "lake_dir", "/tmp"))
         run_id: str = getattr(ctx, "run_id", None) or uuid.uuid4().hex
+
+        # query_reader for ad-hoc reads; materializer for writing offender output.
+        query_reader = getattr(ctx, "query_reader", None)
+        materializer = getattr(ctx, "materializer", None)
 
         # Collect offender rows across all classes.
         offender_rows: list[dict] = []
@@ -83,10 +85,23 @@ class CrossSourceAgreementCheck(DqMergeRunner):
             # Tests may supply a pre-built pa.Table via datacontexts[cls_name].
             tbl: pa.Table | None = datacontexts.get(cls_name)
             if tbl is None:
-                facts_path = lake_dir / "per_source_facts" / f"{cls_name.lower()}.parquet"
-                if not facts_path.exists():
-                    continue
-                tbl = pq.read_table(facts_path)
+                if query_reader is not None:
+                    # Production path: read via the bound QueryReader.
+                    view_name = f"psf_{cls_name.lower()}"
+                    try:
+                        tbl = query_reader.read(
+                            ctx=ctx,
+                            sql=f"SELECT * FROM {view_name}",
+                        )
+                    except Exception:
+                        continue
+                else:
+                    # Fallback: read from lake_dir when no query_reader available.
+                    lake_dir = Path(getattr(ctx, "lake_dir", "/tmp"))
+                    facts_path = lake_dir / "per_source_facts" / f"{cls_name.lower()}.parquet"
+                    if not facts_path.exists():
+                        continue
+                    tbl = pq.read_table(facts_path)
 
             schema_names = set(tbl.schema.names)
             if "canonical_id" not in schema_names:
@@ -131,19 +146,30 @@ class CrossSourceAgreementCheck(DqMergeRunner):
             ("detail", pa.string()),
         ])
 
-        offenders_path: Path | None = None
+        offenders_uri: str | None = None
         if offender_rows:
-            out_dir = lake_dir / "dq_outputs"
-            out_dir.mkdir(parents=True, exist_ok=True)
-            offenders_path = out_dir / f"merge_{run_id}.parquet"
             out_table = pa.table(
                 {k: [r[k] for r in offender_rows] for k in out_schema.names},
                 schema=out_schema,
             )
-            pq.write_table(out_table, offenders_path)
+            target_rel = f"dq_outputs/merge_{run_id}.parquet"
+            if materializer is not None:
+                materializer._conn.register("_dq_merge_offenders_tmp", out_table)
+                mat_result = materializer.materialize(
+                    ctx=ctx,
+                    query_sql="SELECT * FROM _dq_merge_offenders_tmp",
+                    target_path=Path(target_rel),
+                )
+                offenders_uri = mat_result.target
+            else:
+                lake_dir = Path(getattr(ctx, "lake_dir", "/tmp"))
+                out_path = lake_dir / target_rel
+                out_path.parent.mkdir(parents=True, exist_ok=True)
+                pq.write_table(out_table, out_path)
+                offenders_uri = str(out_path)
 
         return DqResult(
-            offenders_table=offenders_path,
+            offenders_uri=offenders_uri,
             column_map=self._COLUMN_MAP,
             passed=len(offender_rows) == 0,
             summary={"violations": len(offender_rows)},

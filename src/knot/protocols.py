@@ -11,11 +11,7 @@ See design/staging/multi-valued-semantics.md and di-input-contract.md.
 from __future__ import annotations
 
 from enum import Enum
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, ClassVar, Literal
-
-if TYPE_CHECKING:
-    import pyarrow as pa
 
 from pydantic import ConfigDict
 
@@ -103,7 +99,7 @@ class ScoreColumnMap(SpecBase):
 class ERResult(SpecBase):
     """Return shape for ERProtocol.score()."""
 
-    table: Path
+    output_uri: str
     column_map: ScoreColumnMap
 
 
@@ -129,7 +125,7 @@ class DqColumnMap(SpecBase):
 class DqResult(SpecBase):
     """Return shape for all DqRunner.check() methods."""
 
-    offenders_table: Path | None = None
+    offenders_uri: str | None = None
     column_map: DqColumnMap
     passed: bool
     summary: dict[str, int]
@@ -138,7 +134,7 @@ class DqResult(SpecBase):
 class TranslateResult(SpecBase):
     """Return shape for TranslatorProtocol.translate()."""
 
-    result_table: Path
+    result_uri: str
     column_map: dict[str, str]
 
 
@@ -146,14 +142,14 @@ class ConstraintResult(SpecBase):
     """Return shape for ConstraintEvaluator.evaluate()."""
 
     passed: bool
-    offenders_table: Path | None = None
+    offenders_uri: str | None = None
     summary: str
 
 
 class DerivationResult(SpecBase):
     """Return shape for DerivationEvaluator.evaluate()."""
 
-    output_table: Path
+    output_uri: str
     column_map: dict[str, str]
 
 
@@ -256,11 +252,16 @@ class DqPublishRunner(DqRunnerBase):
 # ---------------------------------------------------------------------------
 
 class QueryReader(Protocol):
-    """Sync SELECT against the lake.  Returns Arrow Table.
+    """Sync SELECT against the lake.
 
     The sole execution seam for knot-generated SQL.  SQL is always produced
     by sql_gen.emit_sql(); this protocol only runs it.  Errors raise — never
     swallow (commitment 16 / query-executor.md).
+
+    The return type is intentionally opaque (Any): the bound implementation
+    decides the handoff format.  Arrow Table for DuckDB-on-fs, Iceberg
+    snapshot ref for S3+Trino, view name for Spark.  Concrete impls may
+    narrow the return type in their own class signatures — that is fine.
 
     disagreement_stance is RESOLVED: QueryReader runs after trust resolution
     CTEs are attached, so callers always receive winner-selected values.
@@ -268,18 +269,57 @@ class QueryReader(Protocol):
 
     disagreement_stance: ClassVar[ProtocolKind] = ProtocolKind.RESOLVED
 
-    def read(self, ctx: Any, sql: str) -> pa.Table:
-        """Execute sql and return the full result as a pyarrow Table.
+    def read(self, ctx: Any, sql: str) -> Any:
+        """Execute sql and return the result in a backend-appropriate format.
 
         Args:
             ctx: Per-run context object knot threads for logging/tracing.
             sql: SQL string from sql_gen.emit_sql().
 
         Returns:
-            pyarrow.Table with the complete result set.
+            Backend-specific handle: pyarrow.Table (DuckDB), Iceberg snapshot
+            ref (Trino/S3), view name (Spark), etc.
 
         Raises:
             Implementation-defined errors on connection failure, syntax
             error, timeout, or type mismatch.  Must never swallow.
         """
         raise NotImplementedError
+
+
+# ---------------------------------------------------------------------------
+# RunContext — typed per-run context object passed to bound impls
+# ---------------------------------------------------------------------------
+
+class BindingInfo(SpecBase):
+    """Identity of the bound impl being invoked."""
+
+    stage: str
+    class_name: str | None
+    impl_name: str
+    revision: int
+    config_revision: int | None = None
+
+
+class RunContext(SpecBase):
+    """Typed context object the orchestrator passes to bound impl protocol methods.
+
+    Exposed fields per impl-contract.md:
+    - config: the impl's hydrated Config snapshot (typed at the impl class level)
+    - run_id: current pipeline_runs row id
+    - compile_hash: content-addressed identity of the WorkflowSpec
+    - binding_info: identity of the bound impl (stage, class_name, impl_name, revision)
+    - upstream_results: stage_key -> Result from prior stages in this run
+    - query_reader: the bound QueryReader instance for ad-hoc reads
+    - materializer: the bound Materializer for writes
+
+    Not exposed: lake_dir, raw filesystem paths, postgres connection.
+    """
+
+    config: Any                        # impl's hydrated Config; typed at the impl class level
+    run_id: int
+    compile_hash: str
+    binding_info: BindingInfo
+    upstream_results: dict[str, Any]   # stage_key -> Result; populated from prior stages
+    query_reader: Any                  # bound QueryReader instance
+    materializer: Any                  # bound Materializer instance

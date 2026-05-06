@@ -84,7 +84,8 @@ class TestERMovie:
         assert result.column_map.a_canonical == "a_canonical_id"
         assert result.column_map.b_canonical == "b_canonical_id"
         assert result.column_map.score == "score"
-        assert result.table.exists()
+        assert result.output_uri.endswith("movie_scores.parquet")
+        assert Path(result.output_uri).exists()
 
     def test_parquet_on_disk_has_correct_columns(self, tmp_path):
         import pyarrow.parquet as pq
@@ -92,7 +93,7 @@ class TestERMovie:
         tmdb = _movie_table([{"canonical_id": "tmdb:tt001", "title": "Inception", "year": 2010}])
         ctx = _Ctx(tmp_path, ERMovieConfig())
         result = ERMovie().score(ctx, imdb, tmdb, None)
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert "a_canonical_id" in tbl.schema.names
         assert "b_canonical_id" in tbl.schema.names
         assert "score" in tbl.schema.names
@@ -106,7 +107,7 @@ class TestERMovie:
         ctx = _Ctx(tmp_path, cfg)
         result = ERMovie().score(ctx, imdb, tmdb, None)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows == 0
 
     def test_known_dupes_get_high_score(self, tmp_path):
@@ -116,7 +117,7 @@ class TestERMovie:
         ctx = _Ctx(tmp_path, ERMovieConfig())
         result = ERMovie().score(ctx, imdb, tmdb, None)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows >= 1
         scores = tbl.column("score").to_pylist()
         assert max(scores) >= 0.9
@@ -128,7 +129,7 @@ class TestERMovie:
         ctx = _Ctx(tmp_path, ERMovieConfig())
         result = ERMovie().score(ctx, imdb, tmdb, None)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows == 0
 
 
@@ -149,7 +150,7 @@ class TestERPerson:
         result = ERPerson().score(ctx, imdb, tmdb)
         assert isinstance(result, ERResult)
         assert isinstance(result.column_map, ScoreColumnMap)
-        assert result.table.exists()
+        assert Path(result.output_uri).exists()
 
     def test_wikidata_id_match_forces_score_one(self, tmp_path):
         """wikidata_id exact match => score == 1.0."""
@@ -162,7 +163,7 @@ class TestERPerson:
         ctx = _Ctx(tmp_path, ERPersonConfig())
         result = ERPerson().score(ctx, imdb, tmdb)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows >= 1
         assert 1.0 in tbl.column("score").to_pylist()
 
@@ -176,7 +177,7 @@ class TestERPerson:
         ctx = _Ctx(tmp_path, ERPersonConfig())
         result = ERPerson().score(ctx, imdb, tmdb)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows >= 1
 
     def test_different_name_no_match(self, tmp_path):
@@ -190,7 +191,7 @@ class TestERPerson:
         ctx = _Ctx(tmp_path, ERPersonConfig())
         result = ERPerson().score(ctx, imdb, tmdb)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows == 0
 
 
@@ -211,7 +212,7 @@ class TestERCredit:
         result = ERCredit().score(ctx, imdb, tmdb, None)
         assert isinstance(result, ERResult)
         assert isinstance(result.column_map, ScoreColumnMap)
-        assert result.table.exists()
+        assert Path(result.output_uri).exists()
 
     def test_exact_tuple_match_scores_one(self, tmp_path):
         """Same (person, work, role) across sources => score == 1.0."""
@@ -224,7 +225,7 @@ class TestERCredit:
         ctx = _Ctx(tmp_path, ERCreditConfig())
         result = ERCredit().score(ctx, imdb, tmdb, None)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows == 1
         assert tbl.column("score")[0].as_py() == 1.0
 
@@ -239,7 +240,7 @@ class TestERCredit:
         ctx = _Ctx(tmp_path, ERCreditConfig())
         result = ERCredit().score(ctx, imdb, tmdb, None)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows == 1
 
     def test_different_work_no_match(self, tmp_path):
@@ -253,5 +254,5 @@ class TestERCredit:
         ctx = _Ctx(tmp_path, ERCreditConfig())
         result = ERCredit().score(ctx, imdb, tmdb, None)
         import pyarrow.parquet as pq
-        tbl = pq.read_table(result.table)
+        tbl = pq.read_table(result.output_uri)
         assert tbl.num_rows == 0

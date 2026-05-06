@@ -76,7 +76,6 @@ class ERMovie(ERProtocol):
         Trust weights: imdb=0.91, tmdb=0.62, wikidata=0.48.
         """
         import itertools
-        from pathlib import Path
 
         import pyarrow as pa
         import pyarrow.parquet as pq
@@ -136,12 +135,29 @@ class ERMovie(ERProtocol):
             "score": pa.array(scores, type=pa.float64()),
         })
 
-        out_path = Path(ctx.lake_dir if hasattr(ctx, "lake_dir") else "/tmp") / "er_outputs" / "movie_scores.parquet"
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        pq.write_table(out_table, out_path)
+        target_rel = "er_outputs/movie_scores.parquet"
+        materializer = getattr(ctx, "materializer", None)
+        if materializer is not None:
+            # Production path: write through the bound Materializer.
+            # Register the in-memory table as a view, then materialize via SQL.
+            materializer._conn.register("_er_movie_scores_tmp", out_table)
+            mat_result = materializer.materialize(
+                ctx=ctx,
+                query_sql="SELECT * FROM _er_movie_scores_tmp",
+                target_path=__import__("pathlib").Path(target_rel),
+            )
+            output_uri = mat_result.target
+        else:
+            # Fallback for tests that pass a plain ctx without materializer.
+            from pathlib import Path as _Path
+            lake_dir = getattr(ctx, "lake_dir", _Path("/tmp"))
+            out_path = _Path(lake_dir) / target_rel
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            pq.write_table(out_table, out_path)
+            output_uri = str(out_path)
 
         return ERResult(
-            table=out_path,
+            output_uri=output_uri,
             column_map=ScoreColumnMap(
                 a_canonical="a_canonical_id",
                 b_canonical="b_canonical_id",

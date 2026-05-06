@@ -528,21 +528,38 @@ class ToyOrchestrator:
 
         instance = impl_cls()
 
-        # Bind Config snapshot if the impl declares a Config class.
-        # ctx passed to protocol methods carries the config for this run.
-        run_ctx: Any = None
+        # Hydrate the impl's Config snapshot.
+        hydrated_config: Any = None
         config_cls = getattr(impl_cls, "Config", None)
         if config_cls is not None and config_snapshot:
             try:
-                run_ctx = config_cls(**{
+                hydrated_config = config_cls(**{
                     k: v for k, v in config_snapshot.items()
                     if not k.startswith("_")
                 })
             except Exception as exc:
                 logger.warning(
-                    "stage=%s:%s impl=%s — Config hydration failed (%s); ctx=None",
+                    "stage=%s:%s impl=%s — Config hydration failed (%s); config=None",
                     kind, class_name, impl_name, exc,
                 )
+
+        # Build a typed RunContext — impls access query_reader/materializer from here.
+        from knot.protocols import BindingInfo, RunContext
+        run_ctx = RunContext(
+            config=hydrated_config,
+            run_id=ctx.run_id,
+            compile_hash=ctx.compile_hash_str,
+            binding_info=BindingInfo(
+                stage=kind,
+                class_name=class_name,
+                impl_name=impl_name,
+                revision=impl_revision,
+                config_revision=config_revision,
+            ),
+            upstream_results={},
+            query_reader=self._reader,
+            materializer=self._materializer,
+        )
 
         # Materialize DataContext views.
         datacontext_views = self._materialize_datacontexts(impl_cls, stage)
