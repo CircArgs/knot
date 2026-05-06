@@ -120,6 +120,92 @@ The doc that took too many rounds to land. Summary:
 - **`ctx`**: typed `RunContext` exposing `config`, `run_id`, `compile_hash`, `binding_info`, `upstream_results`, `query_reader`, `materializer`. Never `ctx.lake_dir`, raw paths, postgres connection.
 - **Impl writers**: declare Config + DataContext attrs; method receives ctx + DC views (whatever shape the bound QueryReader returns); write through `ctx.materializer`; return typed Result.
 
+## Current goings-on (READ THIS SECTION FIRST POST-COMPACTION)
+
+### Where we are right now
+
+Just finished:
+- **Round 3** (real ER + Neo4j publisher + DqMergeRunner + orchestrator bound-impl invocation) — landed, Nick-reviewed PASS-with-caveats
+- **Contract-fix worker** — applied all impl-contract.md corrections (Result types, RunContext, no `ctx.lake_dir` overreach)
+- **Drift audit** — completed; report at `/tmp/drift-audit.md`; high-severity items mostly absorbed by contract-fix
+- **STATE.md** — being expanded for handoff right now
+
+No background workers in flight as of this writing. Suite at **325 passed, 17 xfailed, 1 xpassed** on a clean stack.
+
+### What the user just asked for (HIGHEST PRIORITY)
+
+The user said:
+> "The notebooks better reveal the impls fully and walk through everything from source registration, ontology modelling, DI impls, consumption from lake and materialized sources, drafts, publishing, tracing of downstream effects from changes,... Everything"
+
+**Action**: build `notebooks/02_walkthrough.py` covering all 12 sections listed earlier in this doc. The user wants to put hands on real things — every cell must be live machinery, not status display. Verify it actually runs (`python notebooks/02_walkthrough.py` exit 0) before claiming done.
+
+User's notebook anti-patterns (caught in earlier rounds; do not repeat):
+- No git stats, commit counts, line-of-code deltas
+- No "what we did" walkthrough framing
+- No status pages
+- No raw SQL input — drive through SDK
+- Cells must use `_`-prefixed locals so they don't collide across cells; cross-cell names use unprefixed return values
+- Raw `pyarrow.Table` may not work for cycles in B2 spec → handle gracefully
+
+User's notebook affordance preferences (positive):
+- Type SDK expression → see Pydantic AST live
+- Type SDK expression → see emitted SQL live
+- Run real SQL via DuckDBReader against B2 fixture parquet → see Arrow Table results
+- Pick a class → see its slots / derivations / sources
+- Pick a `ProtocolKind` → see the lens-aware codegen output
+- Edit a Pydantic dict → see `extra="forbid"` rejection live
+- Pick a scope → see live `compile()` → WorkflowSpec stages table + content-addressed compile_hash
+- Edit contributions / policy → see resolved value live with reasoning
+
+### What's queued
+
+After comprehensive walkthrough notebook, in priority order:
+1. **Round 4**: Translator endpoint + correction overlay path
+   - `POST /query` endpoint takes ontology expression → sql_gen.emit_sql → DuckDBReader → results
+   - Trust-CTE attached when consumer-facing path; correction overlay JOINs `_user_corrections` postgres
+   - Translator impl per non-lake target (Cypher for Neo4j; defer Gremlin/SPARQL to future)
+   - Correction submission already exists at `POST /corrections`; needs to actually overlay at translator query time
+2. **Round 5**: Audit walk-back end-to-end integration test
+   - Pick a published canonical fact in Neo4j → walk back via `(:KnotRun)` audit node → compile_hash → spec_revs → contributing source rows
+   - Convert several xfail tests in `test_ontology_expansion.py` and `test_env_smoke.py` to passing
+3. **Architectural correction (post-Round 5 candidate)**: Orchestrator currently hardcodes DuckDB. Should accept bound QueryReader/Materializer impls via DI so the toy orchestrator can be swapped for Maestro at Netflix port-time. ~half-day slice.
+
+### Open design tensions (none blocking; flagged for awareness)
+
+- **Shape contract drift** between orchestrator (`dict[attr_name, pa.Table]`) and Neo4j publisher (`list[tuple[OntologyClass, pa.Table]]`). Worker resolved Pydantic-`__hash__`-on-OntologyClass missing via duck-typing on `.items()`. No integration test crosses orchestrator → bound publisher with multi-class primary; would explode at runtime. Fix: either add `__hash__` to OntologyClass or commit canonically to one shape.
+- **`dq_merge.py` lake path** in production reads via `ctx.query_reader.read()` (post-contract-fix); but the orchestrator's hive-partitioned `per_source_facts/<Class>/source=*/data.parquet` layout vs dq_merge's pre-fix `per_source_facts/<class>.parquet` flat layout — verify they match now. If they don't, dq_merge silently zero-rows on the live pipeline.
+- **Spec-loading from where**: knot's `api.py` loads B2 fixture spec at import time. Real deployments need to load from postgres-control or a config path. Open in `staging/spec-loading.md`. Decide before any "real" deployment.
+- **`ui-and-integrations.md` per-actor AuthProtocol**: drift audit flagged this as multi-tenant smell. Single-team posture says external users only enter at four narrow surfaces; per-actor identity inside knot's seam doesn't fit. Worth a single-pass cleanup of that staging doc.
+- **"reference impls" vocabulary**: drift audit flagged in `knot-as-compiler.md` and 2 other staging docs. Should be "team-owned bindings" or just "bindings" — Pattern 13 calls "reference impls" out as platform-language reflex.
+
+### User mood / pacing signals to honor
+
+- **Tolerance for drift is low**. The deps-management round-trip and the impl-contract clarification both wasted cycles. User said "It's sad we even had to discuss this. Worries me you've gone astray in other ways." The drift audit + contract-fix were the right response. Continue with that pattern: every round, check for drift before claiming done.
+- **Wants tangible**, not status. Notebooks must let user manipulate real machinery. Status pages are a smell.
+- **Pacing-sensitive**. 5-sentence answers are sometimes too long for them; prefer 2-3 sentences when answering questions, structure for picks.
+- **Honest about deferrals**. "Future work" / "TBD" / "v1" — Pattern 9 violation. Either committed or marked explicitly open.
+- **Verify on clean stack**. Always `down + up + tests`, never trust stale schema. Workers also can't be trusted to verify on clean stack — orchestrator (you) must verify.
+- **Multi-tenant smell rule** is non-negotiable. Top-of-prompt on every dispatch, verbatim.
+
+### Active worker dispatch (none right now)
+
+If you dispatch in a fresh session, remember:
+- Workers go silent post-completion (SendMessage often not called); check files + git status + tests instead of waiting on notification
+- Reviewer agents (role-playing Nick) write to `/tmp/nick-review-roundN.md`; check that file directly
+- For team coordination via TeamCreate, manually patch `~/.claude/teams/<name>/config.json` to remove stale members if SendMessage shutdown hangs
+
+### What to do FIRST after compaction
+
+1. Read this `Current goings-on` section
+2. Read `design/staging/impl-contract.md`
+3. Verify on clean stack: `down + up + wait-ready + pytest tests/` → 325 pass expected
+4. Verify the running marimo: `curl -sI http://localhost:2718/` → 200 OK; if not, restart per "Common workflows" section
+5. Build the comprehensive walkthrough notebook (`notebooks/02_walkthrough.py`) — this is what the user explicitly asked for
+6. Then Round 4 (translator + correction overlay)
+7. Then Round 5 (audit walk-back end-to-end)
+
+---
+
 ## Recently landed (contract corrections)
 
 Impl-contract worker completed — all corrections from `design/staging/impl-contract.md` applied:
