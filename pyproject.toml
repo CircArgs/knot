@@ -13,6 +13,8 @@ runtime = [
     "pyiceberg>=0.6",
     "duckdb>=1.0",
     "jcs>=0.2",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
 ]
 dev = [
     "mkdocs-material",

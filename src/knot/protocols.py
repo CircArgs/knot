@@ -12,7 +12,10 @@ from __future__ import annotations
 
 from enum import Enum
 from pathlib import Path
-from typing import Any, ClassVar, Literal
+from typing import TYPE_CHECKING, Any, ClassVar, Literal
+
+if TYPE_CHECKING:
+    import pyarrow as pa
 
 from pydantic import ConfigDict
 
@@ -246,3 +249,37 @@ class DqPublishRunner(DqRunnerBase):
     """Runs after publish.  Reads the published artifact directly."""
 
     disagreement_stance: ClassVar[ProtocolKind] = ProtocolKind.TARGET_DIRECT
+
+
+# ---------------------------------------------------------------------------
+# QueryReader — lake-side execution seam (commitment 12)
+# ---------------------------------------------------------------------------
+
+class QueryReader(Protocol):
+    """Sync SELECT against the lake.  Returns Arrow Table.
+
+    The sole execution seam for knot-generated SQL.  SQL is always produced
+    by sql_gen.emit_sql(); this protocol only runs it.  Errors raise — never
+    swallow (commitment 16 / query-executor.md).
+
+    disagreement_stance is RESOLVED: QueryReader runs after trust resolution
+    CTEs are attached, so callers always receive winner-selected values.
+    """
+
+    disagreement_stance: ClassVar[ProtocolKind] = ProtocolKind.RESOLVED
+
+    def read(self, ctx: Any, sql: str) -> pa.Table:
+        """Execute sql and return the full result as a pyarrow Table.
+
+        Args:
+            ctx: Per-run context object knot threads for logging/tracing.
+            sql: SQL string from sql_gen.emit_sql().
+
+        Returns:
+            pyarrow.Table with the complete result set.
+
+        Raises:
+            Implementation-defined errors on connection failure, syntax
+            error, timeout, or type mismatch.  Must never swallow.
+        """
+        raise NotImplementedError
