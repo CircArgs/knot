@@ -9,3 +9,11 @@ Bound impls are Python source the team submits via API (commitment 5). They `imp
 Replay determinism is bounded by runtime stability. "Same compile hash → same edges" holds for the lifetime of the deployed runtime. A deployment that changes deps is a new world; replay across that boundary is undefined and the team's release notes are the audit trail.
 
 This is the answer. There is no design question here.
+
+## Audit affordance only
+
+knot's `pipeline_runs` table records `runtime_image_identity` (opaque string)
+on each run when the orchestrator runner reports it. This is metadata only —
+not in the compile-hash input set, not joined to anything else. It exists so
+the team can answer "what env actually ran this run?" forensically without
+knot owning any deps mechanism.

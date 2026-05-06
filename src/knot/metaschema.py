@@ -8,7 +8,7 @@ object references throughout; no name-string lookups at the in-memory layer.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 from pydantic._internal._model_construction import ModelMetaclass
@@ -186,9 +186,9 @@ class Compare(SpecBase):
 
 
 class BoolExpr(SpecBase):
-    """Boolean combination of Compare / BoolExpr nodes."""
+    """Boolean combination of Compare / BoolExpr / Within / Between / Matches nodes."""
     op: BoolOp
-    operands: list[Compare | BoolExpr] = Field(default_factory=list)
+    operands: list[Compare | BoolExpr | Within | Between | Matches] = Field(default_factory=list)
 
     def __and__(self, other: Compare | BoolExpr) -> BoolExpr:
         return BoolExpr(op=BoolOp.AND, operands=[self, other])
@@ -210,6 +210,11 @@ class RelationRef(SpecBase):
     def primary_class(self) -> OntologyClass:
         return self.from_class
 
+    def transitive(self, *, until: BoolExpr | None = None, max_depth: int | None = None) -> RecursiveTraversal:
+        """Walk this relation recursively: `Person.knows.transitive(max_depth=3)`."""
+        step = SlotPath(from_class=self.from_class, slots=[self.slot])
+        return RecursiveTraversal(start=self, step=step, until=until, max_depth=max_depth)
+
 
 class FilteredRelation(SpecBase):
     """A relation with a row-level predicate."""
@@ -221,6 +226,20 @@ class RelationProject(SpecBase):
     """Surface a slot value from each row of the relation."""
     relation: RelationRef | FilteredRelation
     project: SlotPath
+
+    def select(self, *slots: Slot) -> list[RelationProject]:
+        """Multi-slot labeled projection: `rel.select(slot_a, slot_b)`.
+
+        Returns one RelationProject per slot, sharing the same relation.
+        Mirrors Gremlin's `select('a', 'b', 'c')` shape.
+        """
+        return [
+            RelationProject(
+                relation=self.relation,
+                project=SlotPath(from_class=self.project.from_class, slots=[s]),
+            )
+            for s in slots
+        ]
 
 
 class RelationCount(SpecBase):
@@ -257,6 +276,69 @@ class RelationFirst(SpecBase):
     project: SlotPath
     order_by: list[SlotPath] = Field(default_factory=list)
     assert_unique: bool = False
+
+
+class Within(SpecBase):
+    """Set-membership predicate: value ∈ {a, b, c, ...}. Emits SQL `IN (...)`."""
+    op: ClassVar[Literal["within"]] = "within"
+    left: SlotPath
+    values: list[Literal_]
+
+    def __and__(self, other: Compare | BoolExpr) -> BoolExpr:
+        return BoolExpr(op=BoolOp.AND, operands=[self, other])
+
+    def __or__(self, other: Compare | BoolExpr) -> BoolExpr:
+        return BoolExpr(op=BoolOp.OR, operands=[self, other])
+
+    def __invert__(self) -> BoolExpr:
+        return BoolExpr(op=BoolOp.NOT, operands=[self])
+
+
+class Between(SpecBase):
+    """Range predicate: lower ≤ value ≤ upper (inclusive=True) or strict bounds."""
+    op: ClassVar[Literal["between"]] = "between"
+    left: SlotPath
+    lower: Literal_
+    upper: Literal_
+    inclusive: bool = True
+
+    def __and__(self, other: Compare | BoolExpr) -> BoolExpr:
+        return BoolExpr(op=BoolOp.AND, operands=[self, other])
+
+    def __or__(self, other: Compare | BoolExpr) -> BoolExpr:
+        return BoolExpr(op=BoolOp.OR, operands=[self, other])
+
+    def __invert__(self) -> BoolExpr:
+        return BoolExpr(op=BoolOp.NOT, operands=[self])
+
+
+class Matches(SpecBase):
+    """String pattern predicate: LIKE / regex. Distinct from Compare for SQL emission."""
+    op: ClassVar[Literal["matches"]] = "matches"
+    left: SlotPath
+    pattern: str
+
+    def __and__(self, other: Compare | BoolExpr) -> BoolExpr:
+        return BoolExpr(op=BoolOp.AND, operands=[self, other])
+
+    def __or__(self, other: Compare | BoolExpr) -> BoolExpr:
+        return BoolExpr(op=BoolOp.OR, operands=[self, other])
+
+    def __invert__(self) -> BoolExpr:
+        return BoolExpr(op=BoolOp.NOT, operands=[self])
+
+
+class RecursiveTraversal(SpecBase):
+    """Walk a relation transitively until a stopping predicate.
+
+    Used for class hierarchies (Title → Movie / Series / Episode via is_a chains)
+    and recursive structural relations (Person.knows, etc.).
+    """
+    op: ClassVar[Literal["recursive"]] = "recursive"
+    start: RelationRef
+    step: SlotPath
+    until: BoolExpr | None = None
+    max_depth: int | None = None
 
 
 class ScalarDerivation(SpecBase):
@@ -356,6 +438,29 @@ class Slot(SpecBase):
         """Return an intermediate that supports .is_null() / .is_not_null() per source."""
         return _SourceFilteredSlot(self, source)
 
+    def within(self, values: list[Any]) -> Within:
+        """Set-membership predicate: `slot.within(["Action", "Sci-Fi"])`."""
+        path = SlotPath(from_class=_sentinel_class, slots=[self])
+        return Within(left=path, values=[Literal_(value=v) for v in values])
+
+    def between(self, lower: Any, upper: Any, *, inclusive: bool = True) -> Between:
+        """Range predicate: `slot.between(1990, 2000)` or `.between(1990, 2000, inclusive=False)`."""
+        path = SlotPath(from_class=_sentinel_class, slots=[self])
+        return Between(left=path, lower=Literal_(value=lower), upper=Literal_(value=upper), inclusive=inclusive)
+
+    def matches(self, pattern: str) -> Matches:
+        """Pattern predicate: `slot.matches(r"^tt\\d+")` — emits SQL LIKE / regex."""
+        path = SlotPath(from_class=_sentinel_class, slots=[self])
+        return Matches(left=path, pattern=pattern)
+
+    def starts_with(self, prefix: str) -> Matches:
+        """Convenience: `slot.starts_with("tt")` → `Matches(pattern="tt%")`."""
+        return self.matches(prefix + "%")
+
+    def ends_with(self, suffix: str) -> Matches:
+        """Convenience: `slot.ends_with(".jpg")` → `Matches(pattern="%.jpg")`."""
+        return self.matches("%" + suffix)
+
 
 # DerivedSlot — a Slot whose derivation field is non-None.  Used as an
 # annotation in multi-class DataContext primaries for derived-edge views.
@@ -404,6 +509,19 @@ class OntologyClass(SpecBase):
             queue.extend(current.mixins)
         return seen
 
+    def descendants(self, *, max_depth: int | None = None) -> RecursiveTraversal:
+        """Walk the is_a chain downward: `Title.descendants()`.
+
+        Produces a RecursiveTraversal over the is_a relation starting from this
+        class.  The step slot is a sentinel SlotPath representing the is_a link;
+        Translator impls resolve the concrete slot at emit time.
+        """
+        # Sentinel slot representing the is_a structural link.
+        is_a_slot = Slot(name="is_a", range=self)
+        start = RelationRef(from_class=self, slot=is_a_slot)
+        step = SlotPath(from_class=self, slots=[is_a_slot])
+        return RecursiveTraversal(start=start, step=step, max_depth=max_depth)
+
 
 # Sentinel used by Slot operator overloads — never stored in a real Spec.
 # SlotPath requires a from_class; when the class context is unknown at overload
@@ -443,6 +561,9 @@ DirectRef.model_rebuild()
 DiscriminatedRef.model_rebuild()
 SlotPath.model_rebuild()
 Compare.model_rebuild()
+Within.model_rebuild()
+Between.model_rebuild()
+Matches.model_rebuild()
 BoolExpr.model_rebuild()
 RelationRef.model_rebuild()
 FilteredRelation.model_rebuild()
@@ -452,6 +573,7 @@ RelationAggregate.model_rebuild()
 RelationAny.model_rebuild()
 RelationAll.model_rebuild()
 RelationFirst.model_rebuild()
+RecursiveTraversal.model_rebuild()
 ScalarDerivation.model_rebuild()
 FormatDerivation.model_rebuild()
 Slot.model_rebuild()

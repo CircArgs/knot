@@ -141,32 +141,18 @@ def test_impl_revision_has_pinned_spec_hash(pg_conn):
     assert row[1] == 64, f"Expected CHAR(64), got CHAR({row[1]})"
 
 
-def test_impl_revision_has_submitted_by(pg_conn):
-    """impl_revision has a nullable submitted_by VARCHAR(255) column."""
+def test_pipeline_runs_runtime_image_identity(pg_conn):
+    """pipeline_runs has a nullable TEXT runtime_image_identity column."""
     row = pg_conn.execute(
         """
         SELECT data_type, is_nullable
         FROM information_schema.columns
-        WHERE table_name = 'impl_revision' AND column_name = 'submitted_by'
+        WHERE table_name = 'pipeline_runs' AND column_name = 'runtime_image_identity'
         """
     ).fetchone()
-    assert row is not None, "submitted_by column missing from impl_revision"
-    assert row[0] == "character varying"
-    assert row[1] == "YES", "submitted_by should be nullable"
-
-
-def test_impl_config_has_submitted_by(pg_conn):
-    """impl_config has a nullable submitted_by VARCHAR(255) column."""
-    row = pg_conn.execute(
-        """
-        SELECT data_type, is_nullable
-        FROM information_schema.columns
-        WHERE table_name = 'impl_config' AND column_name = 'submitted_by'
-        """
-    ).fetchone()
-    assert row is not None, "submitted_by column missing from impl_config"
-    assert row[0] == "character varying"
-    assert row[1] == "YES", "submitted_by should be nullable"
+    assert row is not None, "runtime_image_identity column missing from pipeline_runs"
+    assert row[0] == "text", f"Expected text type, got {row[0]}"
+    assert row[1] == "YES", "runtime_image_identity should be nullable"
 
 
 def test_bound_impls_table_exists(pg_conn):

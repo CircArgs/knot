@@ -35,11 +35,15 @@ CREATE TABLE IF NOT EXISTS pipeline_runs (
     pinned_parent_runs JSONB        NOT NULL DEFAULT '{}'::jsonb,
     cache_keys         JSONB        NOT NULL DEFAULT '{}'::jsonb,   -- per-stage cache key
     cache_hit_stages   TEXT[]       NOT NULL DEFAULT ARRAY[]::TEXT[],
-    started_at         TIMESTAMPTZ  NOT NULL,
-    completed_at       TIMESTAMPTZ,
-    status             VARCHAR(32)  NOT NULL
-                           CHECK (status IN ('pending', 'running', 'succeeded', 'failed')),
-    error              TEXT
+    started_at              TIMESTAMPTZ  NOT NULL,
+    completed_at            TIMESTAMPTZ,
+    status                  VARCHAR(32)  NOT NULL
+                                CHECK (status IN ('pending', 'running', 'succeeded', 'failed')),
+    error                   TEXT,
+    runtime_image_identity  TEXT                   -- opaque content-addressed identifier
+                                                   -- (image digest, lockfile hash, whatever
+                                                   -- the team's runner reports). NULL if not provided.
+                                                   -- Audit affordance only; not a compile-hash input.
 );
 
 CREATE INDEX IF NOT EXISTS pipeline_runs_compile_hash_status
@@ -60,7 +64,6 @@ CREATE TABLE IF NOT EXISTS impl_revision (
     source_bytes     BYTEA        NOT NULL,
     content_hash     CHAR(64)     NOT NULL,
     pinned_spec_hash CHAR(64)     NOT NULL,
-    submitted_by     VARCHAR(255),
     created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     PRIMARY KEY (name, revision)
 );
@@ -75,7 +78,6 @@ CREATE TABLE IF NOT EXISTS impl_config (
     revision        INTEGER      NOT NULL,
     config_snapshot JSONB        NOT NULL,
     content_hash    CHAR(64)     NOT NULL,
-    submitted_by    VARCHAR(255),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     PRIMARY KEY (impl_name, revision)
 );
@@ -110,7 +112,6 @@ CREATE TABLE IF NOT EXISTS _user_corrections (
     canonical_id     VARCHAR(255) NOT NULL,
     slot_name        VARCHAR(255) NOT NULL,
     value            JSONB        NOT NULL,
-    submitted_by     VARCHAR(255),           -- operator identity; no auth enforcement
     submitted_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
     applied_to_lake  BOOLEAN      NOT NULL DEFAULT false,
     applied_at_run_id BIGINT      REFERENCES pipeline_runs (id)
@@ -131,7 +132,6 @@ CREATE TABLE IF NOT EXISTS _user_er_decisions (
                           CHECK (decision_type IN ('force_merge', 'force_split')),
     canonical_ids     TEXT[]       NOT NULL,
     reason            TEXT,
-    submitted_by      VARCHAR(255),
     submitted_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     applied_to_lake   BOOLEAN      NOT NULL DEFAULT false,
     applied_at_run_id BIGINT       REFERENCES pipeline_runs (id)
