@@ -11,13 +11,39 @@ from enum import Enum
 from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
+from pydantic._internal._model_construction import ModelMetaclass
 
 
 # ---------------------------------------------------------------------------
 # --- 1. SpecBase ---
 # ---------------------------------------------------------------------------
 
-class SpecBase(BaseModel):
+class _SpecMeta(ModelMetaclass):
+    """Metaclass that exposes Pydantic field defaults as class-level attributes.
+
+    Enables the ConfigRef pattern: `Config.threshold` in a DataContext
+    expression returns the field's default value (or a sentinel) rather than
+    raising AttributeError.  This is a stub for the full ConfigRef machinery
+    described in staging/datacontext-config-binding.md.
+    """
+
+    def __getattr__(cls, item: str) -> Any:
+        # Walk MRO manually to find __pydantic_fields__ without triggering
+        # __getattr__ recursion (model_fields property uses getattr internally).
+        from pydantic_core import PydanticUndefined
+        for klass in type.__getattribute__(cls, "__mro__"):
+            pf = klass.__dict__.get("__pydantic_fields__")
+            if pf and item in pf:
+                fi = pf[item]
+                if fi.default is not PydanticUndefined and fi.default is not None:
+                    return fi.default
+                if fi.default_factory is not None:
+                    return fi.default_factory()
+                return None
+        raise AttributeError(item)
+
+
+class SpecBase(BaseModel, metaclass=_SpecMeta):
     model_config = ConfigDict(
         extra="forbid",
         populate_by_name=True,
@@ -261,6 +287,22 @@ DerivationExpr = (
 # --- 8. Slot ---
 # ---------------------------------------------------------------------------
 
+class _SourceFilteredSlot:
+    """Intermediate returned by Slot.from_source() — allows .is_null() / .is_not_null()."""
+
+    def __init__(self, slot: Slot, source: Any) -> None:
+        self._slot = slot
+        self._source = source
+
+    def is_null(self) -> Compare:
+        path = SlotPath(from_class=_sentinel_class, slots=[self._slot])
+        return Compare(op=CompareOp.IS_NULL, left=path)
+
+    def is_not_null(self) -> Compare:
+        path = SlotPath(from_class=_sentinel_class, slots=[self._slot])
+        return Compare(op=CompareOp.IS_NOT_NULL, left=path)
+
+
 class Slot(SpecBase):
     name: str
     range: TypeDefinition | OntologyClass | None = None   # None only for derived slots before patch
@@ -310,6 +352,15 @@ class Slot(SpecBase):
     def __hash__(self) -> int:
         return id(self)
 
+    def from_source(self, source: Any) -> _SourceFilteredSlot:
+        """Return an intermediate that supports .is_null() / .is_not_null() per source."""
+        return _SourceFilteredSlot(self, source)
+
+
+# DerivedSlot — a Slot whose derivation field is non-None.  Used as an
+# annotation in multi-class DataContext primaries for derived-edge views.
+DerivedSlot = Slot
+
 
 # ---------------------------------------------------------------------------
 # --- 9. OntologyClass ---
@@ -323,6 +374,35 @@ class OntologyClass(SpecBase):
     abstract: bool = False
     identifier_pattern: IdentifierPattern | None = None
     description: str | None = None
+
+    def __getattr__(self, item: str) -> Slot:
+        """Allow slot access by name: Movie.imdb_id → the Slot named 'imdb_id'."""
+        # Walk own slots and inherited slots (is_a chain + mixins).
+        for cls in self._class_chain():
+            for slot in cls.model_fields_set and [] or []:
+                pass  # pydantic model_fields_set check not useful here
+            try:
+                slot_list = object.__getattribute__(cls, "slots")
+            except AttributeError:
+                continue
+            for slot in slot_list:
+                if slot.name == item:
+                    return slot
+        raise AttributeError(f"OntologyClass {self.name!r} has no slot {item!r}")
+
+    def _class_chain(self) -> list[OntologyClass]:
+        """Self + is_a ancestors, breadth-first (mixins included)."""
+        seen: list[OntologyClass] = []
+        queue: list[OntologyClass] = [self]
+        while queue:
+            current = queue.pop(0)
+            if current in seen:
+                continue
+            seen.append(current)
+            if current.is_a is not None:
+                queue.append(current.is_a)
+            queue.extend(current.mixins)
+        return seen
 
 
 # Sentinel used by Slot operator overloads — never stored in a real Spec.

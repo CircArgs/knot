@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, ERProtocol  # noqa: F401
+from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from tests.fixtures.C2.spec import Series, imdb_series, tmdb_series, wikidata_series
 
 
@@ -59,6 +59,6 @@ class ERSeries(ERProtocol):
         where=Series.imdb_id.from_source(wikidata_series).is_not_null(),
     )
 
-    def score(self, ctx: ERSeriesConfig, imdb, tmdb, wikidata) -> None:
+    def score(self, ctx: ERSeriesConfig, imdb, tmdb, wikidata) -> ERResult:
         """Score Series candidate pairs; title similarity primary signal."""
         ...

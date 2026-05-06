@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, MaterializerProtocol  # noqa: F401
+from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
 from knot.metaschema import DerivedSlot, OntologyClass, SpecBase  # noqa: F401
 from tests.fixtures.B2.spec import (
     Movie, Person, Credit,
@@ -66,7 +66,7 @@ class Neo4jPublisher(MaterializerProtocol):
         primary=Config.derived_edges,
     )
 
-    def materialize(self, ctx: Neo4jConfig, nodes, edges) -> None:
+    def materialize(self, ctx: Neo4jConfig, nodes, edges) -> MaterializeResult:
         """Write nodes then edges to Neo4j via bulk UNWIND.
 
         For each class in nodes: write (:ClassName {canonical_id, ...}) nodes.

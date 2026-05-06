@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, ERProtocol  # noqa: F401
+from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from tests.fixtures.B2.spec import Person, imdb_persons, tmdb_persons
 
 
@@ -57,7 +57,7 @@ class ERPerson(ERProtocol):
         where=Person.imdb_id.from_source(tmdb_persons).is_not_null(),
     )
 
-    def score(self, ctx: ERPersonConfig, imdb, tmdb) -> None:
+    def score(self, ctx: ERPersonConfig, imdb, tmdb) -> ERResult:
         """Score Person candidate pairs.
 
         Primary signal: wikidata_id exact match (forced merge when

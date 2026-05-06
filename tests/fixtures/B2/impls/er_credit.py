@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, ERProtocol  # noqa: F401
+from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from tests.fixtures.B2.spec import (
     Credit, Movie, Person,
     imdb_credits, tmdb_credits, wikidata_credits,
@@ -76,7 +76,7 @@ class ERCredit(ERProtocol):
         project=[Credit.credit_id, Credit.person, Credit.work, Credit.role],
     )
 
-    def score(self, ctx: ERCreditConfig, imdb, tmdb, wikidata) -> None:
+    def score(self, ctx: ERCreditConfig, imdb, tmdb, wikidata) -> ERResult:
         """Score Credit candidate pairs.
 
         Two credits merge when they share the same (person_canonical_id,

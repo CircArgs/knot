@@ -125,3 +125,130 @@ def test_compiled_workflows_hash_is_64_chars(pg_conn):
     ).fetchone()
     assert row is not None
     assert len(row[0].strip()) == 64
+
+
+def test_impl_revision_has_pinned_spec_hash(pg_conn):
+    """impl_revision has a pinned_spec_hash column declared CHAR(64)."""
+    row = pg_conn.execute(
+        """
+        SELECT data_type, character_maximum_length
+        FROM information_schema.columns
+        WHERE table_name = 'impl_revision' AND column_name = 'pinned_spec_hash'
+        """
+    ).fetchone()
+    assert row is not None, "pinned_spec_hash column missing from impl_revision"
+    assert row[0] == "character", f"Expected character type, got {row[0]}"
+    assert row[1] == 64, f"Expected CHAR(64), got CHAR({row[1]})"
+
+
+def test_impl_revision_has_submitted_by(pg_conn):
+    """impl_revision has a nullable submitted_by VARCHAR(255) column."""
+    row = pg_conn.execute(
+        """
+        SELECT data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'impl_revision' AND column_name = 'submitted_by'
+        """
+    ).fetchone()
+    assert row is not None, "submitted_by column missing from impl_revision"
+    assert row[0] == "character varying"
+    assert row[1] == "YES", "submitted_by should be nullable"
+
+
+def test_impl_config_has_submitted_by(pg_conn):
+    """impl_config has a nullable submitted_by VARCHAR(255) column."""
+    row = pg_conn.execute(
+        """
+        SELECT data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'impl_config' AND column_name = 'submitted_by'
+        """
+    ).fetchone()
+    assert row is not None, "submitted_by column missing from impl_config"
+    assert row[0] == "character varying"
+    assert row[1] == "YES", "submitted_by should be nullable"
+
+
+def test_bound_impls_table_exists(pg_conn):
+    """bound_impls table exists with expected columns and composite PK."""
+    rows = pg_conn.execute(
+        """
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'bound_impls'
+        ORDER BY ordinal_position
+        """
+    ).fetchall()
+    by_name = {r[0]: r for r in rows}
+
+    assert "stage" in by_name
+    assert "class_name" in by_name
+    assert "impl_name" in by_name
+    assert "current_revision" in by_name
+    assert "current_config_revision" in by_name
+    assert by_name["current_config_revision"][2] == "YES", "current_config_revision must be nullable"
+    assert "updated_at" in by_name
+
+    pk_cols = pg_conn.execute(
+        """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_name = kcu.table_name
+        WHERE tc.table_name = 'bound_impls' AND tc.constraint_type = 'PRIMARY KEY'
+        ORDER BY kcu.ordinal_position
+        """
+    ).fetchall()
+    pk_names = [r[0] for r in pk_cols]
+    assert pk_names == ["stage", "class_name"], f"Unexpected PK columns: {pk_names}"
+
+
+def test_bound_impls_fk_to_impl_revision(pg_conn):
+    """bound_impls has a FK constraint referencing impl_revision."""
+    rows = pg_conn.execute(
+        """
+        SELECT ccu.table_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_name = kcu.table_name
+        JOIN information_schema.constraint_column_usage ccu
+            ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.table_name = 'bound_impls'
+          AND tc.constraint_type = 'FOREIGN KEY'
+          AND ccu.table_name = 'impl_revision'
+        """
+    ).fetchall()
+    assert len(rows) >= 1, "Expected FK from bound_impls to impl_revision"
+
+
+def test_bound_impls_fk_to_impl_config_nullable(pg_conn):
+    """bound_impls.current_config_revision is nullable and has FK to impl_config."""
+    # Verify nullability.
+    row = pg_conn.execute(
+        """
+        SELECT is_nullable
+        FROM information_schema.columns
+        WHERE table_name = 'bound_impls' AND column_name = 'current_config_revision'
+        """
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "YES", "current_config_revision must be nullable for config-free impls"
+
+    # Verify FK exists to impl_config.
+    rows = pg_conn.execute(
+        """
+        SELECT ccu.table_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+            ON tc.constraint_name = kcu.constraint_name
+           AND tc.table_name = kcu.table_name
+        JOIN information_schema.constraint_column_usage ccu
+            ON tc.constraint_name = ccu.constraint_name
+        WHERE tc.table_name = 'bound_impls'
+          AND tc.constraint_type = 'FOREIGN KEY'
+          AND ccu.table_name = 'impl_config'
+        """
+    ).fetchall()
+    assert len(rows) >= 1, "Expected FK from bound_impls to impl_config"

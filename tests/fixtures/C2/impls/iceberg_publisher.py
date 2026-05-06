@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, MaterializerProtocol  # noqa: F401
+from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
 from tests.fixtures.C2.spec import spec
 
 
@@ -48,11 +48,11 @@ class IcebergPublisher(MaterializerProtocol):
         primary=[
             c for c in spec.classes
             if not getattr(c, "abstract", False)
-            and c not in Config.exclude_classes
+            and c not in IcebergConfig.exclude_classes
         ],
     )
 
-    def materialize(self, ctx: IcebergConfig, all_classes) -> None:
+    def materialize(self, ctx: IcebergConfig, all_classes) -> MaterializeResult:
         """Write each resolved-facts view to its Iceberg table.
 
         For each class in all_classes: write to

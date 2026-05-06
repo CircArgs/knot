@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, ERProtocol  # noqa: F401
+from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from tests.fixtures.C2.spec import Person, imdb_persons, tmdb_persons, wikidata_persons
 
 
@@ -61,7 +61,7 @@ class ERPerson(ERProtocol):
         where=Person.imdb_id.from_source(wikidata_persons).is_not_null(),
     )
 
-    def score(self, ctx: ERPersonConfig, imdb, tmdb, wikidata) -> None:
+    def score(self, ctx: ERPersonConfig, imdb, tmdb, wikidata) -> ERResult:
         """Score Person candidate pairs across three sources.
 
         Primary: wikidata_id exact match. Fallback: Unicode-aware

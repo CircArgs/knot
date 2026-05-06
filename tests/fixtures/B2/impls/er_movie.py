@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, ERProtocol  # noqa: F401
+from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from knot.metaschema import ResolutionPolicy  # noqa: F401
 from tests.fixtures.B2.spec import Movie, imdb_movies, tmdb_movies, wikidata_movies
 
@@ -68,7 +68,7 @@ class ERMovie(ERProtocol):
         where=Movie.imdb_id.from_source(wikidata_movies).is_not_null(),
     )
 
-    def score(self, ctx: ERMovieConfig, imdb, tmdb, wikidata) -> None:
+    def score(self, ctx: ERMovieConfig, imdb, tmdb, wikidata) -> ERResult:
         """Score candidate pairs for ER merging.
 
         Uses title similarity (weighted by Config.title_weight) and year

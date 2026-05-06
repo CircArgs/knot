@@ -49,17 +49,19 @@ CREATE INDEX IF NOT EXISTS pipeline_runs_scope_completed_at
     ON pipeline_runs (scope, completed_at DESC);
 
 -- ──────────────────────────────────────────────────────────────────────────────
--- impl_source
+-- impl_revision
 -- Python source for bound impls stored in knot (core-design § 5).
--- Revision is a monotonic counter per name; is_published = false means draft.
+-- Revision is a monotonic counter per name.
+-- pinned_spec_hash captures the spec hash that registration validated against.
 -- ──────────────────────────────────────────────────────────────────────────────
-CREATE TABLE IF NOT EXISTS impl_source (
-    name          VARCHAR(255) NOT NULL,
-    revision      INTEGER      NOT NULL,
-    source_bytes  BYTEA        NOT NULL,
-    content_hash  CHAR(64)     NOT NULL,
-    is_published  BOOLEAN      NOT NULL DEFAULT false,
-    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+CREATE TABLE IF NOT EXISTS impl_revision (
+    name             VARCHAR(255) NOT NULL,
+    revision         INTEGER      NOT NULL,
+    source_bytes     BYTEA        NOT NULL,
+    content_hash     CHAR(64)     NOT NULL,
+    pinned_spec_hash CHAR(64)     NOT NULL,
+    submitted_by     VARCHAR(255),
+    created_at       TIMESTAMPTZ  NOT NULL DEFAULT now(),
     PRIMARY KEY (name, revision)
 );
 
@@ -73,8 +75,26 @@ CREATE TABLE IF NOT EXISTS impl_config (
     revision        INTEGER      NOT NULL,
     config_snapshot JSONB        NOT NULL,
     content_hash    CHAR(64)     NOT NULL,
+    submitted_by    VARCHAR(255),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     PRIMARY KEY (impl_name, revision)
+);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- bound_impls
+-- One binding per (stage, class_name): the active impl + config revision.
+-- Satisfies commitment 6 (core-design § 5).
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS bound_impls (
+    stage                   VARCHAR(64)  NOT NULL,
+    class_name              VARCHAR(255) NOT NULL,
+    impl_name               VARCHAR(255) NOT NULL,
+    current_revision        INTEGER      NOT NULL,
+    current_config_revision INTEGER,
+    updated_at              TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    PRIMARY KEY (stage, class_name),
+    FOREIGN KEY (impl_name, current_revision) REFERENCES impl_revision(name, revision),
+    FOREIGN KEY (impl_name, current_config_revision) REFERENCES impl_config(impl_name, revision)
 );
 
 -- ──────────────────────────────────────────────────────────────────────────────

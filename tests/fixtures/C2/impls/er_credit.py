@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, ERProtocol  # noqa: F401
+from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from tests.fixtures.C2.spec import (
     Credit, Movie, Series, Episode, Game, Person,
     imdb_credits, tmdb_credits,
@@ -63,7 +63,7 @@ class ERCredit(ERProtocol):
         project=[Credit.credit_id, Credit.person, Credit.work, Credit.role],
     )
 
-    def score(self, ctx: ERCreditConfig, imdb, tmdb) -> None:
+    def score(self, ctx: ERCreditConfig, imdb, tmdb) -> ERResult:
         """Score Credit candidate pairs.
 
         Merge on (person_canonical_id, work_canonical_id, role) tuple.

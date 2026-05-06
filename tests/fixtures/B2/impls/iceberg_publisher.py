@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import ClassVar
 
-from knot.protocols import DataContext, MaterializerProtocol  # noqa: F401
+from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
 from tests.fixtures.B2.spec import Movie, Person, Credit, spec
 
 
@@ -42,7 +42,7 @@ class IcebergPublisher(MaterializerProtocol):
     # spec.classes covers Movie, Person, Credit — no Graph symbol (commitment 2)
     all_classes: DataContext = DataContext(primary=spec.classes)
 
-    def materialize(self, ctx: IcebergConfig, all_classes) -> None:
+    def materialize(self, ctx: IcebergConfig, all_classes) -> MaterializeResult:
         """Write each resolved-facts view to its Iceberg table.
 
         For each class in all_classes: write to
