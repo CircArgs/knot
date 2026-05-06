@@ -160,10 +160,13 @@ class ToyOrchestrator:
         if kind == "normalize":
             self._run_normalize(stage)
         elif kind == "merge":
-            self._run_merge(stage)
+            self._run_merge_passthrough(stage)
         elif kind == "validate":
             # Built-in structural validation via sql_gen — stubbed for Round 2.
-            logger.info("stage=validate:%s — structural validation not yet implemented; skipping", stage.class_name)
+            warnings.warn(
+                f"stage=validate:{stage.class_name} — structural validation not yet implemented; skipping.",
+                stacklevel=2,
+            )
         elif kind in ("resolve", "publish", "dq:normalize", "dq:resolve", "dq:merge", "dq:publish"):
             self._load_and_invoke_impl(stage, datacontext_views={})
         else:
@@ -209,17 +212,9 @@ class ToyOrchestrator:
             csv_path = sources_dir / f"{src_name}.csv"
 
             if parquet_path.exists():
-                self._reader.register_parquet_view(src_name, parquet_path)
-                self._materializer._conn.execute(
-                    f"CREATE OR REPLACE VIEW {src_name} AS "
-                    f"SELECT * FROM read_parquet('{parquet_path}')"
-                )
+                self._materializer.register_parquet_view(src_name, parquet_path)
             elif csv_path.exists():
-                self._reader.register_csv_view(src_name, csv_path)
-                self._materializer._conn.execute(
-                    f"CREATE OR REPLACE VIEW {src_name} AS "
-                    f"SELECT * FROM read_csv_auto('{csv_path}')"
-                )
+                self._materializer.register_csv_view(src_name, csv_path)
             else:
                 raise FileNotFoundError(
                     f"normalize:{class_name} — source file not found for "
@@ -231,11 +226,9 @@ class ToyOrchestrator:
                 f"per_source_facts/{class_name}/source={src_name}/data.parquet"
             )
 
-            # SELECT * adds a 'source' column carrying the source name so
-            # downstream merge can GROUP BY source without extra joins.
-            # Use sqlglot-safe approach: build the SQL as a projection from
-            # the registered view — no raw string concat of user data; source
-            # names come from trusted Source declarations in the spec.
+            # Add _knot_source so downstream merge can filter by source without
+            # extra joins.  Source names come from trusted Source declarations in
+            # the spec — no raw user input in the SQL string.
             select_sql = (
                 f"SELECT *, '{src_name}' AS _knot_source FROM {src_name}"
             )
@@ -254,14 +247,15 @@ class ToyOrchestrator:
     # merge
     # ------------------------------------------------------------------
 
-    def _run_merge(self, stage: StageSpec) -> None:
-        """GROUP BY over per_source_facts for class_name → resolved_facts.
+    def _run_merge_passthrough(self, stage: StageSpec) -> None:
+        """Round 2 placeholder: UNION ALL of per_source_facts → resolved_facts.
 
         Reads all per_source_facts/<ClassName>/source=*/data.parquet via a
         wildcard glob and writes resolved_facts/<ClassName>/data.parquet.
 
-        Round 2 merge is a simple UNION ALL of per-source contributions —
-        the full GROUP BY / trust-resolution CTE is a Round 3 concern.
+        This is a UNION ALL pass-through, not real merge.  Real merge applies
+        ER decisions and produces canonical rows; that requires trust-resolution
+        logic landing in a later round.
         """
         class_name = stage.class_name
         if class_name is None:
@@ -283,18 +277,14 @@ class ToyOrchestrator:
             )
             return
 
-        view_name = f"psf_{class_name.lower()}"
-        self._materializer._conn.execute(
-            f"CREATE OR REPLACE VIEW {view_name} AS "
-            f"SELECT * FROM read_parquet('{psf_glob}', union_by_name=true)"
-        )
-
         target_rel = Path(f"resolved_facts/{class_name}/data.parquet")
 
-        # Simple UNION ALL merge: retain every source contribution with its
-        # source label.  Trust resolution (ARGMAX_TRUST etc.) is query-time
+        # UNION ALL pass-through: read all per-source parquet files in one
+        # read_parquet call.  Trust resolution (ARGMAX_TRUST etc.) is query-time
         # per commitment 7; merge never writes a "winner" column.
-        merge_sql = f"SELECT * FROM {view_name}"
+        merge_sql = (
+            f"SELECT * FROM read_parquet('{psf_glob}', union_by_name=true)"
+        )
 
         self._materializer.materialize(
             ctx=None,

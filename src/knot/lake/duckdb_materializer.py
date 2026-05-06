@@ -109,6 +109,13 @@ class DuckDBMaterializer:
             f"SELECT * FROM read_csv_auto('{csv_path}')"
         )
 
+    def register_parquet_view(self, view_name: str, parquet_path: Path) -> None:
+        """Register a Parquet file or glob as a named DuckDB view for use in queries."""
+        self._conn.execute(
+            f"CREATE OR REPLACE VIEW {view_name} AS "
+            f"SELECT * FROM read_parquet('{parquet_path}')"
+        )
+
     def close(self) -> None:
         """Close the underlying DuckDB connection."""
         self._conn.close()
