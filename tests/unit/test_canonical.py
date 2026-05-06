@@ -66,7 +66,7 @@ class MockSpec(BaseModel):
 
 
 def test_canonical_dump_version_constant():
-    assert CANONICAL_DUMP_VERSION == 1
+    assert CANONICAL_DUMP_VERSION == 2
 
 
 def test_hash_format():
@@ -216,33 +216,92 @@ def test_non_default_values_are_preserved():
 
 
 # ---------------------------------------------------------------------------
-# B2/C2 fixture-based tests — xfail until metaschema slice lands
+# B2/C2 fixture-based tests
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(reason="awaiting metaschema slice", strict=False)
 def test_b2_fixture_stability():
-    from tests.fixtures.B2.spec import spec as b2_spec  # type: ignore[import]
+    from tests.fixtures.B2 import spec as b2_module
 
-    assert canonical_dump(b2_spec) == canonical_dump(b2_spec)
+    assert canonical_dump(b2_module.spec) == canonical_dump(b2_module.spec)
 
 
-@pytest.mark.xfail(reason="awaiting metaschema slice", strict=False)
+@pytest.mark.xfail(reason="awaiting C2 fixture", strict=False)
 def test_c2_fixture_stability():
     from tests.fixtures.C2.spec import spec as c2_spec  # type: ignore[import]
 
     assert canonical_dump(c2_spec) == canonical_dump(c2_spec)
 
 
-@pytest.mark.xfail(reason="awaiting metaschema slice", strict=False)
 def test_b2_runtime_exclusion():
     """Modifying description on a B2 OntologyClass must not change the hash."""
-    from tests.fixtures.B2.spec import spec as b2_spec  # type: ignore[import]
+    from tests.fixtures.B2 import spec as b2_module
 
-    h1 = compute_content_hash(b2_spec)
-    # Mutate description on first class
-    original = b2_spec.classes[0].description
-    b2_spec.classes[0].description = "totally different description"
-    h2 = compute_content_hash(b2_spec)
-    b2_spec.classes[0].description = original
+    h1 = compute_content_hash(b2_module.spec)
+    original = b2_module.spec.classes[0].description
+    b2_module.spec.classes[0].description = "totally different description"
+    h2 = compute_content_hash(b2_module.spec)
+    b2_module.spec.classes[0].description = original
     assert h1 == h2
+
+
+# ---------------------------------------------------------------------------
+# New cycle-handling tests (v2)
+# ---------------------------------------------------------------------------
+
+
+def test_canonical_dump_handles_cycles_b2():
+    """canonical_dump must succeed on the B2 spec (Movie/Person/Credit cycles)."""
+    from tests.fixtures.B2 import spec as b2_module
+
+    result = canonical_dump(b2_module.spec)
+    assert isinstance(result, bytes)
+    assert len(result) > 0
+
+
+def test_canonical_dump_cycle_uses_ref_by_name():
+    """Second visit to a named node emits {"$ref": "<name>"} not a full expansion."""
+    import json
+
+    from tests.fixtures.B2 import spec as b2_module
+
+    raw = json.loads(canonical_dump(b2_module.spec))
+
+    # Collect all "$ref" values in the dump
+    refs: list[str] = []
+
+    def _collect_refs(obj: Any) -> None:
+        if isinstance(obj, dict):
+            if "$ref" in obj:
+                refs.append(obj["$ref"])
+            for v in obj.values():
+                _collect_refs(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _collect_refs(item)
+
+    _collect_refs(raw)
+
+    # B2 has cycles: slot.range points to OntologyClass objects that have
+    # already been serialized as top-level class entries — those must appear
+    # as $ref nodes.
+    assert len(refs) > 0, "Expected at least one $ref in cyclic B2 dump"
+    # Person and Movie are referenced via slot.range on Credit slots and
+    # derived-slot ranges — at least one of them must appear as a $ref.
+    assert any(r in ("Person", "Movie", "Credit") for r in refs), (
+        f"Expected Person/Movie/Credit $ref; got refs={refs}"
+    )
+
+
+def test_canonical_dump_acyclic_spec_unchanged():
+    """An acyclic spec still dumps to valid deterministic bytes after v2 change."""
+    model = Inner(name="stable", tags=["x"])
+    b1 = canonical_dump(model)
+    b2 = canonical_dump(model)
+    assert b1 == b2
+    assert len(b1) > 0
+
+
+def test_canonical_dump_version_bumped():
+    """CANONICAL_DUMP_VERSION must be 2 (bumped for cycle-handling change)."""
+    assert CANONICAL_DUMP_VERSION == 2

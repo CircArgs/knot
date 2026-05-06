@@ -1,7 +1,7 @@
 """Canonical serialization and content hashing for knot Pydantic specs.
 
 Algorithm per design/staging/spec-versioning.md:
-  1. model_dump(mode="python", exclude_unset=False) → full dict
+  1. Walk the live Pydantic object graph with cycle detection
   2. Strip RUNTIME fields by (class_name, field_name)
   3. Recursively strip defaults (empty containers + explicit-default values)
   4. JCS encode (RFC 8785) via the `jcs` library
@@ -9,6 +9,13 @@ Algorithm per design/staging/spec-versioning.md:
 
 The intermediate is plain Python scalars/dicts/lists — Pydantic-independent —
 so Pydantic version bumps do not shift the bytes.
+
+Cycle handling (v2): named SpecBase nodes (OntologyClass, Slot, TypeDefinition,
+Source, etc. — any SpecBase subclass with a `name` field) are tracked by
+object id. The first visit emits the full canonical form; subsequent visits
+emit {"$ref": "<name>"} to break cycles without losing identity. This matches
+the persistence-boundary commitment: "real Python object references in-memory;
+references flatten to names for JSONB storage."
 """
 
 from __future__ import annotations
@@ -19,7 +26,7 @@ from typing import Any
 import jcs
 from pydantic import BaseModel
 
-CANONICAL_DUMP_VERSION: int = 1
+CANONICAL_DUMP_VERSION: int = 2
 
 # ---------------------------------------------------------------------------
 # RUNTIME field taxonomy — excluded from the canonical hash.
@@ -125,81 +132,54 @@ def _field_default(field_info: Any) -> Any:
     return _SENTINEL
 
 
-def _strip_runtime(
-    data: dict[str, Any],
-    class_name: str,
-) -> dict[str, Any]:
-    """Remove RUNTIME fields from *data* for the given *class_name*.
+def _get_node_name(obj: BaseModel) -> str | None:
+    """Return the .name field of a SpecBase-style node, or None if absent."""
+    try:
+        v = object.__getattribute__(obj, "__dict__").get("name") or getattr(obj, "name", None)
+        if isinstance(v, str):
+            return v
+    except Exception:
+        pass
+    return None
 
-    Only operates at the top-level dict for that class; recursion into nested
-    objects is handled by _build_intermediate.
+
+def _serialize_node(
+    obj: Any,
+    visited: dict[int, str],
+) -> Any:
+    """Recursively serialize a live Pydantic object graph to plain Python.
+
+    Named SpecBase instances (those with a `name: str` field) are tracked by
+    object id. First visit → full dict. Subsequent visits → {"$ref": "<name>"}.
+    This breaks cycles introduced by slot.range and cross-class references.
     """
-    return {
-        k: v
-        for k, v in data.items()
-        if (class_name, k) not in _RUNTIME_FIELDS
-    }
+    if isinstance(obj, BaseModel):
+        oid = id(obj)
+        node_name = _get_node_name(obj)
 
+        if node_name is not None:
+            # Named node — cycle / de-dup guard.
+            if oid in visited:
+                return {"$ref": visited[oid]}
+            visited[oid] = node_name
 
-def _build_intermediate(obj: Any, model_class: type[BaseModel] | None) -> Any:
-    """Recursively convert a model_dump output into a Pydantic-independent
-    intermediate of plain Python scalars, dicts, and lists.
-
-    This is also where RUNTIME-field stripping happens: whenever we encounter
-    a dict that came from a known BaseModel subclass, we strip its RUNTIME fields
-    before recursing into children.
-    """
-    if isinstance(obj, dict):
-        # Strip RUNTIME fields for known class
-        class_name = model_class.__name__ if model_class is not None else ""
-        if class_name:
-            obj = _strip_runtime(obj, class_name)
-
+        class_name = type(obj).__name__
         result: dict[str, Any] = {}
-        for key, value in obj.items():
-            child_class: type[BaseModel] | None = None
-            if model_class is not None:
-                field_info = model_class.model_fields.get(key)
-                if field_info is not None:
-                    ann = field_info.annotation
-                    # Unwrap Optional[X] → X
-                    ann = _unwrap_optional(ann)
-                    if isinstance(ann, type) and issubclass(ann, BaseModel):
-                        child_class = ann
-            result[key] = _build_intermediate(value, child_class)
+        for field_name, field_info in type(obj).model_fields.items():
+            if (class_name, field_name) in _RUNTIME_FIELDS:
+                continue
+            value = getattr(obj, field_name)
+            result[field_name] = _serialize_node(value, visited)
         return result
 
     if isinstance(obj, list):
-        return [_build_intermediate(item, None) for item in obj]
+        return [_serialize_node(item, visited) for item in obj]
 
-    if isinstance(obj, set | frozenset):
-        return sorted(_build_intermediate(item, None) for item in obj)
+    if isinstance(obj, (set, frozenset)):
+        return sorted(_serialize_node(item, visited) for item in obj)
 
-    # Scalars: str, int, float, bool, None pass through.
-    # Non-JSON-serialisable types (date, datetime, Decimal, enum, …) are
-    # converted to their string or numeric representation by model_dump
-    # mode="python" — they arrive here already as native Python types.
+    # Scalars — pass through as-is.
     return obj
-
-
-def _unwrap_optional(ann: Any) -> Any:
-    """Unwrap Optional[X] (= Union[X, None]) to X; return ann unchanged otherwise."""
-    import types as _types
-    import typing
-
-    origin = getattr(ann, "__origin__", None)
-    # Handle `X | None` (Python 3.10+ union types)
-    if isinstance(ann, _types.UnionType):
-        args = [a for a in ann.__args__ if a is not type(None)]
-        if len(args) == 1:
-            return args[0]
-        return ann
-    # Handle typing.Optional / typing.Union
-    if origin is typing.Union:
-        args = [a for a in ann.__args__ if a is not type(None)]
-        if len(args) == 1:
-            return args[0]
-    return ann
 
 
 # ---------------------------------------------------------------------------
@@ -212,9 +192,13 @@ def canonical_dump(spec: BaseModel) -> bytes:
 
     Returns RFC 8785-compliant UTF-8 bytes. The intermediate is
     Pydantic-independent; Pydantic minor-version bumps do not shift the bytes.
+
+    Cycle handling: named SpecBase nodes (OntologyClass, Slot, TypeDefinition,
+    Source, etc.) that are visited more than once emit {"$ref": "<name>"} on
+    subsequent visits, breaking cycles from cross-class slot.range references.
     """
-    raw: dict[str, Any] = spec.model_dump(mode="python", exclude_unset=False)
-    intermediate = _build_intermediate(raw, type(spec))
+    visited: dict[int, str] = {}
+    intermediate = _serialize_node(spec, visited)
     cleaned = _strip_defaults(intermediate, type(spec))
     return jcs.canonicalize(cleaned)
 
