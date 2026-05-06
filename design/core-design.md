@@ -52,7 +52,7 @@ Bound impls are Python source the team submits to knot via API. Knot stores the 
 
 There is **no separate Python service to deploy.** Iteration is browser → save → validate → live for next compile. At workflow runtime, knot ships the source to the orchestrator's runner.
 
-**Trust posture: knot has no tenants.** The team that operates knot also owns every impl, every spec edit, and everything outside knot's seams that impls touch (lake infra, graph stores, model files, secrets). Spec / impl authors are members of the operating team — not external contributors. **No sandbox. No restricted Python. No multi-tenant defenses.** External users only enter at three narrow surfaces (per `goals.md` § "Who uses knot"): reading published outputs, querying via the translator, submitting corrections through the UI — none of which involve writing Python or editing the spec.
+**Trust posture: knot has no tenants.** The team that operates knot also owns every impl, every spec edit, and everything outside knot's seams that impls touch (lake infra, graph stores, model files, secrets). Spec / impl authors are members of the operating team — not external contributors. **No sandbox. No restricted Python. No multi-tenant defenses.** External users only enter at four narrow surfaces (per `goals.md` § "Who uses knot"): reading published outputs, lake queries via the built-in query endpoint, materialized-target queries via Translator impls, submitting corrections through the UI — none of which involve writing Python or editing the spec.
 
 Implication: hostile-author scenarios are out of scope. Comparative arguments framed as "every team would reinvent X" don't apply (there's no every-team). Iteration cycles are dominated by spec edits and config edits, not Python deploys.
 
@@ -66,7 +66,7 @@ Implication: switching strategies = swapping impls. Re-registering an impl with 
 
 At the canonical layer every property is **implicitly multi-valued** — one contribution per source. `Movie.year` for a canonical entity is a set: `[{source, value, asserted_at}, ...]`. The merge stage does **not** write a "winner" column. Default-value selection happens at query time via a trust-resolution CTE knot rewrites pre-execution, using the `resolution_policy` declared on each `Slot` (default: `ARGMAX_TRUST`).
 
-Which SDK type a slot reference receives depends on the protocol's `disagreement_stance`. Under `RESOLVED` protocols (Materializer, Translator, ConstraintEvaluator, DerivationEvaluator), slots are `Resolved[T]` — comparison operators work, bare `Movie.year > 1900` compiles, knot attaches the trust-resolution CTE. Under `DISAGREEMENT_AWARE` protocols (ERProtocol, DqRunner), slots are `MultiValued[T]` — bare comparison is a type error; callers spell their reduction explicitly (`from_source(...)`, `all_()`, `winner()`). Escape hatches on `Resolved[T]` (`from_source`, `all_`, `contributions`) remain available. Full protocol-by-protocol assignment and the `ResolutionPolicy` enum are in `staging/multi-valued-semantics.md`.
+Which SDK type a slot reference receives depends on the protocol's `disagreement_stance`. Under `RESOLVED` protocols (Materializer, Translator, ConstraintEvaluator, DerivationEvaluator), slots are `Resolved[T]` — comparison operators work, bare `Movie.year > 1900` compiles, knot attaches the trust-resolution CTE. Under `DISAGREEMENT_AWARE` protocols (ERProtocol, DqNormalizeRunner), slots are `MultiValued[T]` — bare comparison is a type error; callers spell their reduction explicitly (`from_source(...)`, `all_()`, `winner()`). Escape hatches on `Resolved[T]` (`from_source`, `all_`, `contributions`) remain available. Full protocol-by-protocol assignment and the `ResolutionPolicy` enum are in `staging/multi-valued-semantics.md`.
 
 Implication: trust adjustments don't require re-running merge. Lineage lives in the data; no separate `AuditChain` table. Audit walk-back is queryable as data. ER and DQ cannot silently compare trust-winners where they should compare source bags.
 
@@ -108,13 +108,20 @@ Implication: knot core is dialect-agnostic; bound impls translate. Knot's own ma
 
 ## 13. In-flight corrections via dedicated source.
 
-User corrections (and additions) live in postgres-control briefly, then migrate into the lake at the next pipeline run via a dedicated `_user_corrections` source. From migration onward they're regular lake data treated as a high-trust source by the trust model. The translator overlays postgres on top of lake at query time **only** for consumer-facing reads — closing the T1→T2 gap so consumers see fresh values immediately. **Pipeline impls never see this overlay.** DataContext views are pure lake reads at the pinned moment. Reproducible by construction.
+User corrections (and additions) live in postgres-control briefly, then migrate into the lake at the next pipeline run via a dedicated `_user_corrections` source. From migration onward they're regular lake data treated as a high-trust source by the trust model. Knot's built-in lake query path (SQL-gen + `QueryReader`) overlays postgres on top of lake at query time **only** for consumer-facing reads — closing the T1→T2 gap so consumers see fresh values immediately. Bound `Translator` impls earn their place only for materialized targets that don't speak lake-SQL (Neo4j, Neptune, vector stores, or SQL targets with materially different schema layouts); lake queries need no bound impl. **Pipeline impls never see this overlay.** DataContext views are pure lake reads at the pinned moment. Reproducible by construction.
 
-## 14. Two-layer DQ: built-in bundle + custom DqRunner.
+## 14. Two-layer DQ: built-in bundle + DqRunner protocol family.
 
 Knot ships a configurable bundle of common DQ check types (freshness, drift, cluster-size outliers, cross-source agreement, cycle detection, null-rate trends, source-coverage drop). Each is a typed Pydantic check definition with sensible defaults; runtime-editable per deployment / per class. Knot generates SQL; the bound `QueryReader` runs it.
 
-Custom domain-specific or ML-based checks bind via the `DqRunner` protocol — same DI pattern, declared DataContexts, impl-defined Config. Failures from both surface in a uniform `(rule_id, class_name, slot_name, offending_pk, detail, severity)` shape. Built-ins are opt-out per check; custom impls compose alongside or replace.
+Custom domain-specific or ML-based checks bind via the `DqRunner` protocol family — same DI pattern, declared DataContexts, impl-defined Config. DQ runs at multiple pipeline stages, and each stage has a different lens and different upstream tables, so the family is one subprotocol per stage:
+
+- `DqNormalizeRunner` — `DISAGREEMENT_AWARE`; reads `per_source_facts` (after normalize).
+- `DqResolveRunner` — ER-decision lens; reads `entity_bindings` + `canonical_id_lineage` (after resolve).
+- `DqMergeRunner` — `RESOLVED`; reads `resolved_facts` with trust-CTE applied (after merge).
+- `DqPublishRunner` — target-direct; reads the published artifact (Neo4j, Iceberg, etc.) (after publish).
+
+Each subprotocol pins its lens. Built-in check bundle ships per stage; teams add custom DQ via the appropriate subprotocol. Failures from both layers surface in a uniform `(rule_id, class_name, slot_name, offending_pk, detail, severity)` shape. Built-ins are opt-out per check; custom impls compose alongside or replace. See `staging/dq-design.md`.
 
 ## 15. Free-form materialization.
 
@@ -146,4 +153,4 @@ JSON Schema export falls out of Pydantic for free.
 - Reproducibility comes from content-addressing (item 3) + cross-class pinning (item 8) + SCD2 bindings + canonical-id lineage. Replay of a hash is deterministic modulo the impl's own determinism.
 - Impact analysis is single-dispatch visitor functions over the typed entity tree. There is no separate "meta-graph" object; the typed graph IS the graph (item 2 + 4).
 - Most production iteration is config edits (runtime, no redeploy); algorithmic changes require re-registration (which is itself a runtime API call). Iteration friction is small (item 5).
-- Knot is engineered for the **single-team data-platform use case**: one team operates the deployment, owns every impl, owns the ontology spec, and owns the infrastructure outside knot's seams. Trusted authors. Full Python power available. **No tenants.** External users only enter at three narrow surfaces (read published outputs, query via translator, submit corrections via UI) per `goals.md` § "Who uses knot."
+- Knot is engineered for the **single-team data-platform use case**: one team operates the deployment, owns every impl, owns the ontology spec, and owns the infrastructure outside knot's seams. Trusted authors. Full Python power available. **No tenants.** External users only enter at four narrow surfaces (read published outputs, lake query via built-in endpoint, materialized-target query via Translator impl, submit corrections via UI) per `goals.md` § "Who uses knot."

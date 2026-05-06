@@ -32,8 +32,9 @@ Every Protocol declares a `disagreement_stance`. The SDK type generator reads it
 
 ```python
 class ProtocolKind(str, Enum):
-    DISAGREEMENT_AWARE = "disagreement_aware"  # ER, DqRunner: source bag is the input
-    RESOLVED = "resolved"                      # Materializer, Translator, ConstraintEval, DerivationEval: single curated answer
+    DISAGREEMENT_AWARE = "disagreement_aware"  # ER, DqNormalizeRunner: source bag is the input
+    RESOLVED = "resolved"                      # Materializer, Translator (non-lake), ConstraintEval, DerivationEval, DqMergeRunner: single curated answer
+    # DqResolveRunner and DqPublishRunner use stage-specific lenses; see the table below.
 ```
 
 Per-protocol assignment:
@@ -41,9 +42,12 @@ Per-protocol assignment:
 | Protocol | Stance | Why |
 |---|---|---|
 | `ERProtocol` | `DISAGREEMENT_AWARE` | ER's input IS source disagreement |
-| `DqRunner` | `DISAGREEMENT_AWARE` | Cross-source agreement is half the built-in checks |
+| `DqNormalizeRunner` | `DISAGREEMENT_AWARE` | Reads `per_source_facts`; cross-source disagreement is the signal |
+| `DqResolveRunner` | ER-decision lens | Reads `entity_bindings` + `canonical_id_lineage`; neither raw facts nor merged facts |
+| `DqMergeRunner` | `RESOLVED` | Reads `resolved_facts`; trust-CTE applies; checks canonical state |
+| `DqPublishRunner` | target-direct | Reads the published artifact; lens is whatever the target exposes |
 | `Materializer` | `RESOLVED` | Targets store one value per canonical entity |
-| `Translator` | `RESOLVED` | Consumer queries don't model sources |
+| `Translator` (bound impl — non-lake targets only) | `RESOLVED` | Consumer queries against materialized targets don't model sources; lake queries handled by knot's built-in query endpoint |
 | `ConstraintEvaluator` (knot-internal) | `RESOLVED` | Constraints reason about canonical state |
 | `DerivationEvaluator` (knot-internal) | `RESOLVED` | A derived `decade = year // 10 * 10` wants one year |
 

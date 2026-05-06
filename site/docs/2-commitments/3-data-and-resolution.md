@@ -206,7 +206,7 @@ dbt's `ref()` macro is the closest neighbor on the cross-table dependency axis b
 
 ## Commitment 13 — In-flight corrections via dedicated source.
 
-User corrections (and additions) live in postgres-control briefly, then migrate into the lake at the next pipeline run via a dedicated `_user_corrections` source. From migration onward they're regular lake data treated as a high-trust source by the trust model. The translator overlays postgres on top of lake at query time **only** for consumer-facing reads — closing the T1→T2 gap so consumers see fresh values immediately. **Pipeline impls never see this overlay.** DataContext views are pure lake reads at the pinned moment. Reproducible by construction.
+User corrections (and additions) live in postgres-control briefly, then migrate into the lake at the next pipeline run via a dedicated `_user_corrections` source. From migration onward they're regular lake data treated as a high-trust source by the trust model. Knot's built-in lake query endpoint overlays postgres on top of lake at query time **only** for consumer-facing reads — closing the T1→T2 gap so consumers see fresh values immediately. Bound `Translator` impls apply the same overlay for materialized non-lake targets (Neo4j, Neptune, vector stores, etc.) that can't be queried via knot's built-in lake SQL path. **Pipeline impls never see this overlay.** DataContext views are pure lake reads at the pinned moment. Reproducible by construction.
 
 ### Rationale
 

@@ -7,7 +7,10 @@ cells re-run on dependency changes. Updated as work progresses.
 import marimo
 
 __generated_with = "0.23.5"
-app = marimo.App(width="medium")
+app = marimo.App(
+    width="medium",
+    layout_file="layouts/00_state_of_play.slides.json",
+)
 
 
 @app.cell

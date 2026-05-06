@@ -18,23 +18,26 @@ The orchestrator drives the toposort and stage skipping (per `incremental-execut
 team-side ingestion        (out of scope per source-layer-contract — sources land in lake however)
         ↓
 [normalize]                source-shape → ontology-shape per source
-        ↓
+        ↓ [DqNormalizeRunner — if configured]
                            per_source_facts (wide per (class, source))
         ↓
 [resolve / ER]             per ontology class — produces canonical entity IDs
-        ↓
+        ↓ [DqResolveRunner — if configured]
                            entity_bindings (source, src_key) → canonical_id  +  decision audit
         ↓
 [merge]                    per canonical entity — joins per-source-facts to canonical_ids; updates trust state
-        ↓
+        ↓ [DqMergeRunner — if configured]
                            resolved_facts (canonical_id-keyed, multi-valued — all source contributions retained)
         ↓
-[validate]                 structural validation (SQL from spec) + DqRunner — fail-loud on violations
+[validate]                 structural validation (SQL from spec) — fail-loud on violations
         ↓
 [publish / materialize]    fork:
+        ↓ [DqPublishRunner — if configured]
                            ├─→ graph-store consumers — forward-chained derived edges
-                           └─→ lake analysts via translator — backward-chained query expansion
+                           └─→ lake analysts via knot's built-in query endpoint (or Translator impl for non-lake targets)
 ```
+
+Each DQ stage is optional and configured independently. When present, the appropriate `DqRunner` subprotocol runs after its stage and before the next stage proceeds. See `dq-design.md` for the full family definition and per-stage built-in check assignments.
 
 **Relation classes (Credit, Identifier, ActedIn, etc.):** at compile time — *before* the stages above run — knot's compiler resolves the parent classes' run hashes and pins them into the workflow spec (`pinned_parent_runs`). The relation class's resolve/merge/validate/publish stages then read parent canonical_ids "as of" those pinned runs, never "current." See [`cross-class-pinning.md`](cross-class-pinning.md).
 
@@ -45,7 +48,7 @@ Each stage's bound DI implementation interacts with knot via the protocol+contex
 - **Normalize.** One task per source. Applies the source's mapping (source spec → ontology class), validates projected rows against the ontology class constraints (SQL queries from knot's structural validator), drops non-conforming. Output: per-source-facts in ontology-class shape. (Knot vs. team responsibility for normalize is still open.)
 - **Resolve (ER).** Per ontology class. The bound ER impl returns pairwise equivalence edges with confidence (impl declares its inputs via DataContexts on the impl class; knot materializes them and dispatches per `di-input-contract.md`). Knot then applies threshold + transitivity to form connected components, reconciles against existing canonical_ids, mints deterministic canonical_ids for new entities, and persists bindings + decision audit. Base/row-level knot IDs are never overwritten. **For relation classes**, parent canonical_ids are read at the pinned parent run hashes (see `cross-class-pinning.md`). (See `er-and-storage.md`.)
 - **Merge.** Per canonical entity. Joins per-source-facts to canonical_ids (from ER) to produce the multi-valued canonical view (`resolved_facts` — every source's contribution retained, none discarded). Updates trust state from new evidence per the Beta-Bernoulli bandit. **Default-value selection happens at query time inside knot's SDK, not at this stage** — merge does not write a "winner" column. (See `trust-and-merge.md` and `auto-generated-sdk.md`.)
-- **Validate.** Knot emits structural-validation SQL from the ontology class constraints (cardinality, types, ranges, patterns) and runs them against resolved data. Bound `DqRunner` (team-owned, per handoff Decision 4) runs domain DQ checks. How failures propagate is not yet designed.
+- **Validate.** Knot emits structural-validation SQL from the ontology class constraints (cardinality, types, ranges, patterns) and runs them against resolved data. Domain DQ checks run via the `DqRunner` protocol family (per `dq-design.md`): `DqNormalizeRunner` after normalize, `DqResolveRunner` after resolve, `DqMergeRunner` after merge, `DqPublishRunner` after publish. Each subprotocol pins its lens to the appropriate upstream tables. How failures propagate is not yet designed.
 - **Publish / materialize.** Free-form DI impls (per `di-input-contract.md`); see "Materialization" below.
 
 ## Materialization

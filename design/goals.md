@@ -19,11 +19,12 @@ knot is a **tool for one team** to manage and evolve their knowledge graph. Ther
 - All bound DI implementations (ER, materialization, custom DQ, query execution backends, translator).
 - Everything outside knot's seams that the impls touch (lake infrastructure, graph stores, model files, secrets, etc.).
 
-**External users come into the picture only at three surfaces, all narrow:**
+**External users come into the picture only at four surfaces, all narrow:**
 
 1. **Reading from finished outputs** — apps / services / analysts hitting the materialized graph (Neo4j, Iceberg, vector store, parquet) that the team's bound materialization impls produce.
-2. **Reading via the translator** — consumer-facing query expansion against `resolved_facts`.
-3. **Submitting corrections via the UI** — corrections land in postgres-control briefly and migrate to the lake at the next pipeline run via the `_user_corrections` source (high-trust). Constrained surface; users don't author impls or edit the spec.
+2. **Lake query via knot's built-in query endpoint** — knot's SQL-gen (forward + backward chain, trust-CTE, correction overlay, ConfigRef substitution) + `QueryReader` handle ontology-shaped consumer queries against the lake. No bound impl required.
+3. **Materialized-target query via Translator impl** — for targets that don't speak lake-SQL (Neo4j Cypher, Neptune Gremlin, vector-store similarity API, or SQL targets with materially different schema layouts). Bound `Translator` impls earn their place only here.
+4. **Submitting corrections via the UI** — corrections land in postgres-control briefly and migrate to the lake at the next pipeline run via the `_user_corrections` source (high-trust). Constrained surface; users don't author impls or edit the spec.
 
 **Implications:**
 

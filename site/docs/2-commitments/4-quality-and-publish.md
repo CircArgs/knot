@@ -6,11 +6,11 @@ The shared theme: **knot ships logical defaults plus the seam to extend them; fa
 
 ---
 
-## Commitment 14 — Two-layer DQ: built-in bundle + custom DqRunner.
+## Commitment 14 — Two-layer DQ: built-in bundle + DqRunner protocol family.
 
 Knot ships a configurable bundle of common DQ check types (freshness, drift, cluster-size outliers, cross-source agreement, cycle detection, null-rate trends, source-coverage drop). Each is a typed Pydantic check definition with sensible defaults; runtime-editable per deployment / per class. Knot generates SQL; the bound `QueryReader` runs it.
 
-Custom domain-specific or ML-based checks bind via the `DqRunner` protocol — same DI pattern, declared DataContexts, impl-defined Config. Failures from both surface in a uniform `(rule_id, class_name, slot_name, offending_pk, detail, severity)` shape. Built-ins are opt-out per check; custom impls compose alongside or replace.
+Custom domain-specific or ML-based checks bind via the `DqRunner` **protocol family** — same DI pattern, declared DataContexts, impl-defined Config. DQ runs at multiple pipeline stages, each with a different lens and different upstream tables, so the family is one subprotocol per stage: `DqNormalizeRunner` (after normalize, `DISAGREEMENT_AWARE`, reads `per_source_facts`), `DqResolveRunner` (after resolve, ER-decision lens, reads `entity_bindings` + `canonical_id_lineage`), `DqMergeRunner` (after merge, `RESOLVED`, reads `resolved_facts`), `DqPublishRunner` (after publish, target-direct). Each subprotocol pins its lens; built-in check bundle ships per stage. Failures from both layers surface in a uniform `(rule_id, class_name, slot_name, offending_pk, detail, severity)` shape. Built-ins are opt-out per check; custom impls compose alongside or replace. Full family definition in [`design/staging/dq-design.md`](../../../design/staging/dq-design.md).
 
 ### Rationale
 
@@ -80,17 +80,17 @@ Great Expectations and Soda are the closest neighbors on the structural axis. db
     3. Arrow result rows are interpreted as failure records in the uniform `(rule_id, class_name, slot_name, offending_pk, detail, severity)` shape.
     4. Failures aggregated into the run's validation report; recorded in `pipeline_runs`.
 
-    Custom DqRunner (same DI pattern as ER, Materialization):
+    Custom DqRunner family (same DI pattern as ER, Materialization). One subprotocol per pipeline stage, each pinning its lens:
 
     ```python
-    class DqRunner(ProtocolBase):
-        candidates: ClassVar[DataContext[...]] = ...
-
-        class Config(BaseModel):
-            ...
-
-        def check(self, ctx, candidates) -> list[DqFailure]:
-            ...
+    class DqNormalizeRunner(DqRunnerBase):  # DISAGREEMENT_AWARE; per_source_facts
+        ...
+    class DqResolveRunner(DqRunnerBase):    # ER-decision lens; entity_bindings + canonical_id_lineage
+        ...
+    class DqMergeRunner(DqRunnerBase):      # RESOLVED; resolved_facts
+        ...
+    class DqPublishRunner(DqRunnerBase):    # target-direct; published artifact
+        ...
 
     class DqFailure(BaseModel):
         rule_id: str
@@ -101,7 +101,7 @@ Great Expectations and Soda are the closest neighbors on the structural axis. db
         severity: Severity
     ```
 
-    Composition: built-ins and custom DqRunners run sequentially during the validate stage. Failures unified into one report. Each carries its own `rule_id` for routing.
+    Composition: built-ins and custom DqRunner impls run at each configured pipeline stage. Failures unified into one report per run. Each carries its own `rule_id` for routing. See [`design/staging/dq-design.md`](../../../design/staging/dq-design.md) for the full family definition.
 
     Failures and alerting:
 

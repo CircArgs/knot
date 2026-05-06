@@ -1,8 +1,10 @@
-# Data quality — built-in checks + custom DqRunner
+# Data quality — built-in checks + DqRunner protocol family
 
 **Status:** staging — captured for review, not yet integrated into authoritative docs.
 
-Two-layer DQ. knot ships a bundle of common check types out-of-the-box (configurable, opt-out per check); teams supplement or replace via bound `DqRunner` impls. **Both layers run via `QueryReader`** (per `query-executor.md`) — knot generates the SQL, the executor runs it, failures surface uniformly.
+Two-layer DQ. knot ships a bundle of common check types out-of-the-box (configurable, opt-out per check); teams supplement or replace via bound `DqRunner` subprotocol impls. **Both layers run via `QueryReader`** (per `query-executor.md`) — knot generates the SQL, the executor runs it, failures surface uniformly.
+
+DQ runs at multiple pipeline stages (after normalize, resolve, merge, publish). Each stage has a different lens and reads different upstream tables, so the custom DQ seam is a **protocol family** — one subprotocol per stage — rather than a single `DqRunner`. See "Layer 2" below.
 
 ## Why this shape
 
@@ -10,8 +12,9 @@ The two-layer model dissolves the "knot reinvents the wheel" concern:
 
 - **knot doesn't run SQL itself.** It generates SQL (or fragments) and dispatches via the bound `QueryReader`. Same pattern as everything else in knot.
 - **knot ships logical defaults.** Out of the box, deployments get freshness, drift, cluster-size outlier detection, etc., without writing any DQ code. Hit the ground running.
-- **Custom DqRunners remain available.** For domain-specific checks (anomaly detection on the graph, ML-based drift, business rules), the bound DI pattern is right there. Composable with built-ins.
+- **Custom DqRunner subprotocols remain available.** For domain-specific checks (anomaly detection on the graph, ML-based drift, business rules), the bound DI pattern is right there. Composable with built-ins.
 - **Built-ins are opt-out.** Any deployment that wants to fully replace a built-in with a custom impl can just disable the built-in.
+- **Each stage pins its own lens.** A single protocol can't carry the lens-pinning invariant across four stages with different upstream tables; the family encodes it statically.
 
 ## Layer 1: built-in DQ
 
@@ -92,22 +95,47 @@ Each enabled built-in check participates in the validate stage (per `pipeline-st
 
 Same dispatch pattern as the structural validation SQL emitted from spec slot constraints (year range, required, etc., per `sql-generator.md` SQL5). Built-in DQ checks are just additional generated SQL with their own check definitions.
 
-## Layer 2: custom DqRunner
+## Layer 2: DqRunner protocol family
 
-Bound impl, same DI pattern as ER and Materialization (per `di-input-contract.md`).
+Bound impls, same universal DI pattern as ER and Materialization (per `di-input-contract.md`). Because DQ runs at four pipeline stages — each with a different lens and different upstream tables — the seam is a **family of subprotocols** rather than one `DqRunner`. Each subprotocol pins its lens via the same `disagreement_stance` mechanism the rest of the DI seam uses. See `staging/multi-valued-semantics.md` for the lens machinery.
 
 ```python
-class DqRunner(ProtocolBase):
-    """Custom DQ check. Returns failures in the uniform shape."""
-
-    candidates: ClassVar[DataContext[...]] = ...        # what data the impl reads
+class DqRunnerBase(ProtocolBase):
+    """Common category marker for all DQ impls. Returns failures in the uniform shape."""
 
     class Config(BaseModel):
-        # impl-specific knobs — whatever this DQ check needs
+        # impl-specific knobs
         ...
 
-    def check(self, ctx, candidates) -> list[DqFailure]:
-        ...
+    # Each subprotocol declares its own DataContext(s) and check method signature.
+
+class DqNormalizeRunner(DqRunnerBase):
+    """Runs after normalize. Reads per_source_facts. Stance: DISAGREEMENT_AWARE."""
+    # disagreement_stance = DISAGREEMENT_AWARE → slots are MultiValued[T]
+    candidates: ClassVar[DataContext[...]] = ...   # per_source_facts/<Class>
+
+    def check(self, ctx, candidates) -> list[DqFailure]: ...
+
+class DqResolveRunner(DqRunnerBase):
+    """Runs after resolve. Reads entity_bindings + canonical_id_lineage. ER-decision lens."""
+    # Reads ER decision tables, not raw facts or merged facts.
+    bindings: ClassVar[DataContext[...]] = ...     # entity_bindings
+    lineage: ClassVar[DataContext[...]] = ...      # canonical_id_lineage
+
+    def check(self, ctx, bindings, lineage) -> list[DqFailure]: ...
+
+class DqMergeRunner(DqRunnerBase):
+    """Runs after merge. Reads resolved_facts. Stance: RESOLVED (trust-CTE applies)."""
+    # disagreement_stance = RESOLVED → slots are Resolved[T]
+    candidates: ClassVar[DataContext[...]] = ...   # resolved_facts/<Class>
+
+    def check(self, ctx, candidates) -> list[DqFailure]: ...
+
+class DqPublishRunner(DqRunnerBase):
+    """Runs after publish. Reads the published artifact (Neo4j, Iceberg, etc.). Target-direct."""
+    candidates: ClassVar[DataContext[...]] = ...   # published artifact
+
+    def check(self, ctx, candidates) -> list[DqFailure]: ...
 
 class DqFailure(BaseModel):
     rule_id: str
@@ -127,36 +155,58 @@ The impl can:
 
 Knot stores the failures in the same shape as built-ins, so they aggregate uniformly.
 
+**Built-in bundle per stage.** The built-in checks slot into the appropriate stage:
+
+| Stage | Built-in checks that run here |
+|---|---|
+| After normalize | Freshness, source-coverage drop, null-rate trend |
+| After resolve | Cluster-size outlier, degree outlier |
+| After merge | Cross-source agreement, validation failure rate trend |
+| After publish | Cardinality checks on the published artifact |
+
+Cycle detection runs at normalize or merge depending on where the cycle-forming slot is populated.
+
+**This generalizes:** any stage that reads stage-specific tables gets its own protocol. ER and Materializer live at single stages so they're single protocols; DQ lives at four stages so it's a family of four.
+
 ## Composition
 
-Built-ins and custom DqRunners run sequentially during the validate stage. Their failures are unified into one report. Each carries its own `rule_id` so consumers can route alerts per rule.
+Built-ins and custom DqRunner impls run sequentially at each pipeline stage they're configured for. Their failures are unified into one report per run. Each carries its own `rule_id` so consumers can route alerts per rule.
 
 ```yaml
 builtin_dq:
-  freshness:
-    enabled: true
-    default_threshold_days: 30
-    per_class:
-      Movie: 90
-      Person: 365
-    severity: warning
-  cluster_size:
-    enabled: true
-    z_score_threshold: 3.0
-    severity: error
-  cycle_detection:
-    enabled: true
-    slots: [Movie.prequel]
-    severity: error
-  cross_source_agreement:
-    enabled: false                       # disabled — handled by a custom impl below
+  normalize:
+    freshness:
+      enabled: true
+      default_threshold_days: 30
+      per_class:
+        Movie: 90
+        Person: 365
+      severity: warning
+    source_coverage_drop:
+      enabled: true
+      severity: error
+  resolve:
+    cluster_size:
+      enabled: true
+      z_score_threshold: 3.0
+      severity: error
+  merge:
+    cross_source_agreement:
+      enabled: false                     # disabled — handled by a custom impl below
+    cycle_detection:
+      enabled: true
+      slots: [Movie.prequel]
+      severity: error
 
 dq_runner_impls:
-  - movie_release_date_consistency       # bound impl: domain-specific
-  - imdb_tmdb_runtime_diff_outlier       # bound impl: cross-source numeric outlier
+  normalize:
+    - movie_source_completeness          # DqNormalizeRunner: per-source field coverage
+  merge:
+    - movie_release_date_consistency     # DqMergeRunner: domain-specific cross-source check
+    - imdb_tmdb_runtime_diff_outlier     # DqMergeRunner: cross-source numeric outlier
 ```
 
-Built-ins handle the obvious; custom impls handle domain-specific. A team can disable specific built-ins to take over with a richer custom impl.
+Built-ins handle the obvious at each stage; custom impls handle domain-specific. A team can disable specific built-ins to take over with a richer custom impl at the same stage.
 
 ## Failure handling and alerting
 
@@ -190,8 +240,9 @@ Graph-engine-based checks are not in the built-in bundle — knot ships no graph
 
 ## Cross-references
 
-- `query-executor.md` — `QueryReader` executes all DQ SQL; built-ins and custom DqRunners both rely on it.
-- `pipeline-stages.md` — the validate stage where DQ runs.
+- `query-executor.md` — `QueryReader` executes all DQ SQL; built-ins and custom DqRunner subprotocols both rely on it.
+- `pipeline-stages.md` — the pipeline stages where each DQ subprotocol runs.
+- `multi-valued-semantics.md` — the lens machinery (`disagreement_stance`, `DISAGREEMENT_AWARE` vs `RESOLVED`) that each subprotocol pins.
 - `spec-model.md` — `Constraint` nodes (per-row + cross-row invariants from the spec) run alongside built-in DQ; same uniform failure shape.
-- `di-input-contract.md` — the bound impl pattern DqRunner follows.
+- `di-input-contract.md` — the universal bound impl pattern the DqRunner family follows.
 - `sql-generator.md` — SQL5 (uniform validation SQL shape).

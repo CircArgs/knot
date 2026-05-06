@@ -16,7 +16,7 @@ A single page that shows what knot is made of and how the pieces fit. Read this 
 | <span style="background:#D3D3D3;padding:2px 8px">**grey**</span> | Knot-internal machinery (control plane) | compiler, publish gate, registration, postgres-control |
 | <span style="background:#F5DEB3;padding:2px 8px">**tan**</span> | Lake storage | per_source_facts, resolved_facts, entity_bindings |
 | <span style="background:#AFEEEE;padding:2px 8px">**teal**</span> | Publish targets (downstream of materialization) | Neo4j, Iceberg, vector store, parquet exports |
-| <span style="background:#FFFFE0;padding:2px 8px">**pale yellow**</span> | External users (three narrow surfaces) | apps, analysts, correctors |
+| <span style="background:#FFFFE0;padding:2px 8px">**pale yellow**</span> | External users (four narrow surfaces) | apps, analysts, lake-query consumers, correctors |
 | <span style="background:#FFB6C1;padding:2px 8px">**pink**</span> | Audit chain (lineage back through pinned revisions) | compiled_workflows, pipeline_runs |
 
 ---
@@ -95,7 +95,7 @@ flowchart LR
         team_jobs[Batch jobs / Kafka / scrapers]
     end
 
-    subgraph external_users[External users — three narrow surfaces]
+    subgraph external_users[External users — four narrow surfaces]
         apps[Apps / services]
         analysts[Analysts]
         correctors[Correctors via UI]
@@ -245,10 +245,9 @@ flowchart LR
 ```
 
 - `ERProtocol` reads **raw multi-source rows** because that's what ER scores against. Its `disagreement_stance` is `DISAGREEMENT_AWARE` — slots are `MultiValued[T]` and bare `Movie.year > 1900` is a type error; the impl must spell its reduction.
-- `DqRunner` is likewise `DISAGREEMENT_AWARE` — cross-source agreement is half the built-in checks; silent trust-winner comparison would hide the disagreement the check exists to detect.
-- `Translator` reads **trust-resolved + correction-overlaid** because consumers want fresh single values. Its `disagreement_stance` is `RESOLVED` — slots are `Resolved[T]`, bare comparisons compile.
+- The `DqRunner` **protocol family** spans four pipeline stages, each pinning its own lens: `DqNormalizeRunner` (`DISAGREEMENT_AWARE`, reads `per_source_facts`); `DqResolveRunner` (ER-decision lens, reads `entity_bindings` + `canonical_id_lineage`); `DqMergeRunner` (`RESOLVED`, reads `resolved_facts`); `DqPublishRunner` (target-direct, reads the published artifact). See [`design/staging/dq-design.md`](../../design/staging/dq-design.md).
+- `Translator` (bound impl) applies to **materialized non-lake targets** (Neo4j Cypher, Neptune Gremlin, vector-store similarity API, etc.) that don't speak lake-SQL. It reads trust-resolved + correction-overlaid data; `disagreement_stance` is `RESOLVED`. **Lake queries are handled by knot's built-in query endpoint** (SQL-gen + `QueryReader`); no bound `Translator` impl is needed for them.
 - Materialization impls read **post-merge canonical entities + derivations** because publish writes the single canonical view to a downstream target. `RESOLVED`; no overlay.
-- Custom `DqRunner` reads at the protocol's natural lens (`DISAGREEMENT_AWARE`).
 
 The trust-CTE rewrite and correction overlay apply **only** at the consumer-facing translator path. Pipeline impls (ER, merge, validate, materialize) never see the overlay; their DataContext views are pure lake reads at the pinned moment, so replay stays deterministic. Under `RESOLVED` protocols, bare `Movie.year > 1900` compiles to a `Compare` node over the trust-resolved view; under `DISAGREEMENT_AWARE` protocols it does not.
 
@@ -306,7 +305,7 @@ For a minimal team-owned deployment:
 | `Introspector` | If a binding can't infer column metadata for itself; otherwise inferred. |
 | Custom `DqRunner` | If built-in DQ doesn't cover a domain check the team needs. |
 | `Notifier` | If the orchestrator's native alerting isn't enough. |
-| `Translator` | If consumers query the ontology via knot's API rather than reading materialized targets directly. |
+| `Translator` (bound impl) | Only for non-lake targets (Neo4j, Neptune, vector stores, SQL targets with different schema layout). Lake queries are always available via knot's built-in query endpoint — no impl needed. |
 
 ---
 

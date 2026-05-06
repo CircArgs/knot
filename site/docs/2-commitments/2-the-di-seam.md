@@ -51,9 +51,12 @@ The same SDK expression — `Movie.year > 1900` — resolves to **different back
 | Protocol | `disagreement_stance` | Backing lens | Slot type | Bare `Movie.year > 1900` |
 |---|---|---|---|---|
 | `ERProtocol` (resolve) | `DISAGREEMENT_AWARE` | `per_source_facts/Movie` | `MultiValued[T]` | Type error — must spell reduction |
-| `DqRunner` (custom DQ) | `DISAGREEMENT_AWARE` | Per declared DataContext | `MultiValued[T]` | Type error — must spell reduction |
+| `DqNormalizeRunner` (after normalize) | `DISAGREEMENT_AWARE` | `per_source_facts/Movie` | `MultiValued[T]` | Type error — must spell reduction |
+| `DqResolveRunner` (after resolve) | ER-decision lens | `entity_bindings` + `canonical_id_lineage` | stage-specific | N/A — reads ER decision tables |
+| `DqMergeRunner` (after merge) | `RESOLVED` | `resolved_facts/Movie` | `Resolved[T]` | Compiles; trust-CTE attached |
+| `DqPublishRunner` (after publish) | target-direct | published artifact | target-specific | N/A — reads published artifact |
 | Materialization impl (publish) | `RESOLVED` | `resolved_facts/Movie` + derivations | `Resolved[T]` | Compiles; trust-CTE attached |
-| `Translator` (consumer query) | `RESOLVED` | `resolved_facts/Movie` + overlay | `Resolved[T]` | Compiles; trust-CTE + overlay |
+| `Translator` (bound impl — non-lake targets only) | `RESOLVED` | materialized target | `Resolved[T]` | Compiles; trust-CTE + overlay. Lake queries handled by knot's built-in query endpoint; no bound impl needed. |
 
 **The impl writer does not choose the lens or the slot type.** The protocol determines both. Under `RESOLVED`, bare `Movie.year > 1900` compiles and knot attaches the trust-resolution CTE (per the slot's `resolution_policy`). Under `DISAGREEMENT_AWARE`, it is a mypy type error — the impl must spell its reduction (`from_source(...)`, `all_()`, `winner()`). The canonical per-protocol assignment is in [`design/staging/multi-valued-semantics.md`](../../../design/staging/multi-valued-semantics.md).
 
