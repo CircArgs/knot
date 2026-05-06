@@ -64,4 +64,87 @@ class ERPerson(ERProtocol):
         Config.use_wikidata_id=True). Fallback: fuzzy name similarity
         above Config.name_similarity_threshold + birthdate within 1 year.
         """
-        ...
+        import itertools
+        from pathlib import Path
+
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        from rapidfuzz import fuzz
+
+        cfg = ctx if isinstance(ctx, ERPersonConfig) else ERPersonConfig()
+
+        def _rows(table: pa.Table, source: str) -> list[dict]:
+            out = []
+            cols = table.schema.names
+            for i in range(table.num_rows):
+                row = {c: table.column(c)[i].as_py() for c in cols}
+                row["_source"] = source
+                if "canonical_id" not in row:
+                    id_col = cols[0]
+                    row["canonical_id"] = f"{source}:{row[id_col]}"
+                out.append(row)
+            return out
+
+        all_rows: list[dict] = []
+        for tbl, src in ((imdb, "imdb"), (tmdb, "tmdb")):
+            if tbl is not None and tbl.num_rows > 0:
+                all_rows.extend(_rows(tbl, src))
+
+        a_ids, b_ids, scores = [], [], []
+        for r_a, r_b in itertools.combinations(all_rows, 2):
+            if r_a["_source"] == r_b["_source"]:
+                continue
+
+            # Primary: wikidata_id exact match forces score=1.0.
+            wid_a = r_a.get("wikidata_id")
+            wid_b = r_b.get("wikidata_id")
+            if cfg.use_wikidata_id and wid_a and wid_b and wid_a == wid_b:
+                a_ids.append(r_a["canonical_id"])
+                b_ids.append(r_b["canonical_id"])
+                scores.append(1.0)
+                continue
+
+            name_a = str(r_a.get("name") or "")
+            name_b = str(r_b.get("name") or "")
+            # Cheap prefix blocker: first 3 chars must match.
+            if name_a[:3].lower() != name_b[:3].lower():
+                continue
+
+            name_score = fuzz.token_sort_ratio(name_a, name_b) / 100.0
+            if name_score < cfg.name_similarity_threshold:
+                continue
+
+            # Birthdate year window ±1.
+            bd_a = r_a.get("birthdate")
+            bd_b = r_b.get("birthdate")
+            if bd_a is not None and bd_b is not None:
+                try:
+                    yr_a = int(str(bd_a)[:4])
+                    yr_b = int(str(bd_b)[:4])
+                    if abs(yr_a - yr_b) > 1:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+
+            a_ids.append(r_a["canonical_id"])
+            b_ids.append(r_b["canonical_id"])
+            scores.append(float(name_score))
+
+        out_table = pa.table({
+            "a_canonical_id": pa.array(a_ids, type=pa.string()),
+            "b_canonical_id": pa.array(b_ids, type=pa.string()),
+            "score": pa.array(scores, type=pa.float64()),
+        })
+
+        out_path = Path(ctx.lake_dir if hasattr(ctx, "lake_dir") else "/tmp") / "er_outputs" / "person_scores.parquet"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(out_table, out_path)
+
+        return ERResult(
+            table=out_path,
+            column_map=ScoreColumnMap(
+                a_canonical="a_canonical_id",
+                b_canonical="b_canonical_id",
+                score="score",
+            ),
+        )

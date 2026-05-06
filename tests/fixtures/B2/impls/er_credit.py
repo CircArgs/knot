@@ -83,4 +83,59 @@ class ERCredit(ERProtocol):
         work_canonical_id, role) tuple. role comparison is case-insensitive
         to handle mixed-case variants (cat 1.5).
         """
-        ...
+        import itertools
+        from pathlib import Path
+
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+
+        def _rows(table: pa.Table, source: str) -> list[dict]:
+            out = []
+            cols = table.schema.names
+            for i in range(table.num_rows):
+                row = {c: table.column(c)[i].as_py() for c in cols}
+                row["_source"] = source
+                if "canonical_id" not in row:
+                    id_col = cols[0]
+                    row["canonical_id"] = f"{source}:{row[id_col]}"
+                out.append(row)
+            return out
+
+        all_rows: list[dict] = []
+        for tbl, src in ((imdb, "imdb"), (tmdb, "tmdb"), (wikidata, "wikidata")):
+            if tbl is not None and tbl.num_rows > 0:
+                all_rows.extend(_rows(tbl, src))
+
+        a_ids, b_ids, scores = [], [], []
+        for r_a, r_b in itertools.combinations(all_rows, 2):
+            if r_a["_source"] == r_b["_source"]:
+                continue
+            person_a = str(r_a.get("person") or "")
+            person_b = str(r_b.get("person") or "")
+            work_a = str(r_a.get("work") or "")
+            work_b = str(r_b.get("work") or "")
+            role_a = str(r_a.get("role") or "").lower().strip()
+            role_b = str(r_b.get("role") or "").lower().strip()
+            if person_a == person_b and work_a == work_b and role_a == role_b:
+                a_ids.append(r_a["canonical_id"])
+                b_ids.append(r_b["canonical_id"])
+                scores.append(1.0)
+
+        out_table = pa.table({
+            "a_canonical_id": pa.array(a_ids, type=pa.string()),
+            "b_canonical_id": pa.array(b_ids, type=pa.string()),
+            "score": pa.array(scores, type=pa.float64()),
+        })
+
+        out_path = Path(ctx.lake_dir if hasattr(ctx, "lake_dir") else "/tmp") / "er_outputs" / "credit_scores.parquet"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(out_table, out_path)
+
+        return ERResult(
+            table=out_path,
+            column_map=ScoreColumnMap(
+                a_canonical="a_canonical_id",
+                b_canonical="b_canonical_id",
+                score="score",
+            ),
+        )

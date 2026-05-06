@@ -312,12 +312,17 @@ def test_dispatch_records_failed_status(tmp_path, postgres_dsn):
 
 
 def test_dispatch_invokes_bound_impl(tmp_path, postgres_dsn):
-    """bind a tiny test impl that returns a known ERResult; orchestrator calls it."""
+    """bind a tiny test impl that returns a known ERResult; orchestrator calls it.
+
+    Round 3: impl source + binding are registered in postgres; the orchestrator
+    loads them from DB, exec()s the source, and calls score().
+    """
+    import psycopg as _psycopg
     from knot.protocols import ERResult, ScoreColumnMap
     from knot.impact import BoundImpl
 
     # Minimal impl source that returns a known ERResult.
-    impl_source = '''
+    impl_source = '''\
 from pathlib import Path
 from knot.protocols import ERProtocol, ERResult, ScoreColumnMap
 
@@ -331,57 +336,86 @@ class test_er_impl(ERProtocol):
         )
 '''
 
-    results_captured: list = []
-
-    def loader(impl_name: str, revision: int | None) -> str | None:
-        if impl_name == "test_er_impl":
-            return impl_source
-        return None
-
-    lake = _make_lake(tmp_path)
-
-    binding = BoundImpl(
-        impl_class=object,  # placeholder — orchestrator exec()s source directly
-        impl_name="test_er_impl",
-        workflow="Movie",
-    )
-    workflow = knot_compile(
-        spec=b2_spec,
-        bound_impls=[binding],
-        impl_configs={"test_er_impl": {"_revision": 1, "_impl_revision": 1}},
-        source_watermarks=ALL_B2_WATERMARKS,
-        scope="Movie",
-    )
-
-    orch = ToyOrchestrator(
-        ToyOrchestratorConfig(
-            lake_dir=lake,
-            postgres_dsn=postgres_dsn,
-            sources=ALL_B2_SOURCES,
-            impl_source_loader=loader,
+    # Register impl source + bound_impls row in postgres.
+    with _psycopg.connect(postgres_dsn, autocommit=True) as conn:
+        rev_row = conn.execute(
+            "SELECT COALESCE(MAX(revision), 0) FROM impl_revision WHERE name = %s",
+            ("test_er_impl",),
+        ).fetchone()
+        impl_rev = (rev_row[0] if rev_row else 0) + 1
+        conn.execute(
+            """
+            INSERT INTO impl_revision (name, revision, source_bytes, content_hash, pinned_spec_hash)
+            VALUES (%s, %s, %s, %s, %s)
+            """,
+            ("test_er_impl", impl_rev, impl_source.encode(), "hash_test_er", "spec_test"),
         )
-    )
+        conn.execute(
+            """
+            INSERT INTO bound_impls
+                (stage, class_name, impl_name, current_revision, current_config_revision)
+            VALUES (%s, %s, %s, %s, %s)
+            ON CONFLICT (stage, class_name) DO UPDATE SET
+                impl_name = EXCLUDED.impl_name,
+                current_revision = EXCLUDED.current_revision,
+                current_config_revision = EXCLUDED.current_config_revision,
+                updated_at = now()
+            """,
+            ("resolve", "Movie", "test_er_impl", impl_rev, None),
+        )
 
-    # Patch _load_and_invoke_impl to capture result.
-    original = orch._load_and_invoke_impl
+    try:
+        results_captured: list = []
 
-    def capturing_invoke(stage, datacontext_views):
-        result = original(stage, datacontext_views)
-        if result is not None:
-            results_captured.append(result)
-        return result
+        lake = _make_lake(tmp_path)
 
-    orch._load_and_invoke_impl = capturing_invoke
+        binding = BoundImpl(
+            impl_class=object,  # placeholder — orchestrator exec()s source directly
+            impl_name="test_er_impl",
+            workflow="Movie",
+        )
+        workflow = knot_compile(
+            spec=b2_spec,
+            bound_impls=[binding],
+            impl_configs={"test_er_impl": {"_revision": impl_rev, "_impl_revision": impl_rev}},
+            source_watermarks=ALL_B2_WATERMARKS,
+            scope="Movie",
+        )
 
-    from knot.workflow_spec import WorkflowSpec
-    resolve_only = WorkflowSpec(
-        spec_revision_ids=workflow.spec_revision_ids,
-        stages=[s for s in workflow.stages if s.kind == "resolve" and s.class_name == "Movie"],
-    )
+        orch = ToyOrchestrator(
+            ToyOrchestratorConfig(
+                lake_dir=lake,
+                postgres_dsn=postgres_dsn,
+                sources=ALL_B2_SOURCES,
+            )
+        )
 
-    run_id = orch.insert_run(resolve_only, scope="Movie")
-    orch.dispatch(resolve_only, run_id)
+        # Patch _load_and_invoke_impl to capture result.
+        original = orch._load_and_invoke_impl
 
-    assert len(results_captured) == 1
-    assert isinstance(results_captured[0], ERResult)
-    assert str(results_captured[0].table) == "/tmp/test_er_pairs.parquet"
+        def capturing_invoke(stage, ctx):
+            result = original(stage, ctx)
+            if result is not None:
+                results_captured.append(result)
+            return result
+
+        orch._load_and_invoke_impl = capturing_invoke
+
+        from knot.workflow_spec import WorkflowSpec
+        resolve_only = WorkflowSpec(
+            spec_revision_ids=workflow.spec_revision_ids,
+            stages=[s for s in workflow.stages if s.kind == "resolve" and s.class_name == "Movie"],
+        )
+
+        run_id = orch.insert_run(resolve_only, scope="Movie")
+        orch.dispatch(resolve_only, run_id)
+
+        assert len(results_captured) == 1
+        assert isinstance(results_captured[0], ERResult)
+        assert str(results_captured[0].table) == "/tmp/test_er_pairs.parquet"
+
+    finally:
+        with _psycopg.connect(postgres_dsn, autocommit=True) as conn:
+            conn.execute(
+                "DELETE FROM bound_impls WHERE stage = 'resolve' AND class_name = 'Movie'"
+            )

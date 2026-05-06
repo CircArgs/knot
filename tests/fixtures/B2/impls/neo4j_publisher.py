@@ -10,7 +10,12 @@ Covers: cat 14.2 (multi-class materialization), 14.3 (multi-target),
 
 from __future__ import annotations
 
+import math
+from datetime import datetime, timezone
 from typing import ClassVar
+
+import pyarrow as pa
+from neo4j import GraphDatabase
 
 from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
 from knot.metaschema import DerivedSlot, OntologyClass, SpecBase  # noqa: F401
@@ -75,4 +80,67 @@ class Neo4jPublisher(MaterializerProtocol):
         Audit trail: each run writes a :KnotRun node with compile_hash,
         enabling walk-back (cat 15.1, 15.3, 15.4).
         """
-        ...
+        started_at = datetime.now(timezone.utc).isoformat()
+        driver = GraphDatabase.driver(ctx.uri, auth=("neo4j", "knottest"))
+
+        try:
+            # Write nodes: one label per OntologyClass
+            # nodes is iterable of (OntologyClass, pa.Table) pairs
+            node_pairs = nodes.items() if hasattr(nodes, "items") else nodes
+            for cls, table in node_pairs:
+                label = cls.name
+                cypher = (
+                    f"UNWIND $rows AS row "
+                    f"MERGE (n:{label} {{canonical_id: row.canonical_id}}) "
+                    f"SET n += row"
+                )
+                self._write_batches(driver, ctx, cypher, table)
+
+            # Write edges: one rel type per DerivedSlot
+            # edges is iterable of (DerivedSlot, pa.Table) pairs
+            edge_pairs = edges.items() if hasattr(edges, "items") else edges
+            for slot, table in edge_pairs:
+                rel_type = slot.name.upper()
+                # src label: the OntologyClass that owns this derived slot
+                # Match by name — Pydantic copies objects at instantiation so
+                # identity (is) is unreliable across config instances.
+                src_label = next(
+                    cls.name
+                    for cls in ctx.classes
+                    if any(s.name == slot.name for s in cls.slots)
+                )
+                # dst label: slot.range is the destination OntologyClass
+                dst_label = slot.range.name
+                cypher = (
+                    f"UNWIND $rows AS row "
+                    f"MATCH (src:{src_label} {{canonical_id: row.src_id}}) "
+                    f"MATCH (dst:{dst_label} {{canonical_id: row.dst_id}}) "
+                    f"MERGE (src)-[:{rel_type}]->(dst)"
+                )
+                self._write_batches(driver, ctx, cypher, table)
+
+            # Audit node — CREATE per run; started_at is always unique
+            completed_at = datetime.now(timezone.utc).isoformat()
+            compile_hash = getattr(ctx, "compile_hash", None)
+            with driver.session(database=ctx.database) as session:
+                session.run(
+                    "CREATE (r:KnotRun {compile_hash: $compile_hash, "
+                    "started_at: $started_at, completed_at: $completed_at})",
+                    compile_hash=compile_hash,
+                    started_at=started_at,
+                    completed_at=completed_at,
+                )
+        finally:
+            driver.close()
+
+        return MaterializeResult(target=ctx.database, status="succeeded", watermark=None)
+
+    @staticmethod
+    def _write_batches(driver, ctx: Neo4jConfig, cypher: str, table: pa.Table) -> None:
+        """UNWIND rows in batches of ctx.batch_size."""
+        rows = table.to_pylist()
+        num_batches = max(1, math.ceil(len(rows) / ctx.batch_size))
+        for i in range(num_batches):
+            batch = rows[i * ctx.batch_size : (i + 1) * ctx.batch_size]
+            with driver.session(database=ctx.database) as session:
+                session.run(cypher, rows=batch)

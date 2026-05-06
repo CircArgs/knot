@@ -75,4 +75,76 @@ class ERMovie(ERProtocol):
         proximity (within Config.year_tolerance) for blocking + scoring.
         Trust weights: imdb=0.91, tmdb=0.62, wikidata=0.48.
         """
-        ...
+        import itertools
+        from pathlib import Path
+
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+        from rapidfuzz import fuzz
+
+        cfg = ctx if isinstance(ctx, ERMovieConfig) else ERMovieConfig()
+
+        # Collect rows from all source tables into a unified list.
+        def _rows(table: pa.Table, source: str) -> list[dict]:
+            out = []
+            cols = table.schema.names
+            for i in range(table.num_rows):
+                row = {c: table.column(c)[i].as_py() for c in cols}
+                row["_source"] = source
+                # canonical_id is the row's own identifier (first column treated as id)
+                if "canonical_id" not in row:
+                    id_col = cols[0]
+                    row["canonical_id"] = f"{source}:{row[id_col]}"
+                out.append(row)
+            return out
+
+        all_rows: list[dict] = []
+        for tbl, src in ((imdb, "imdb"), (tmdb, "tmdb"), (wikidata, "wikidata")):
+            if tbl is not None and tbl.num_rows > 0:
+                all_rows.extend(_rows(tbl, src))
+
+        # BLOCK + SCORE: compare rows from different sources only.
+        a_ids, b_ids, scores = [], [], []
+        for r_a, r_b in itertools.combinations(all_rows, 2):
+            if r_a["_source"] == r_b["_source"]:
+                continue
+            title_a = str(r_a.get("title") or "")
+            title_b = str(r_b.get("title") or "")
+            year_a = r_a.get("year")
+            year_b = r_b.get("year")
+            # Cheap prefix blocker: first 5 chars must match.
+            if title_a[:5].lower() != title_b[:5].lower():
+                continue
+            # Year window blocker.
+            if year_a is not None and year_b is not None:
+                if abs(int(year_a) - int(year_b)) > cfg.year_tolerance:
+                    continue
+            # Score: title similarity + year proximity bonus.
+            title_score = fuzz.token_sort_ratio(title_a, title_b) / 100.0
+            year_bonus = 0.0
+            if year_a is not None and year_b is not None:
+                diff = abs(int(year_a) - int(year_b))
+                year_bonus = (1.0 - diff / max(cfg.year_tolerance, 1)) * (1.0 - cfg.title_weight)
+            score = title_score * cfg.title_weight + year_bonus
+            a_ids.append(r_a["canonical_id"])
+            b_ids.append(r_b["canonical_id"])
+            scores.append(float(score))
+
+        out_table = pa.table({
+            "a_canonical_id": pa.array(a_ids, type=pa.string()),
+            "b_canonical_id": pa.array(b_ids, type=pa.string()),
+            "score": pa.array(scores, type=pa.float64()),
+        })
+
+        out_path = Path(ctx.lake_dir if hasattr(ctx, "lake_dir") else "/tmp") / "er_outputs" / "movie_scores.parquet"
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        pq.write_table(out_table, out_path)
+
+        return ERResult(
+            table=out_path,
+            column_map=ScoreColumnMap(
+                a_canonical="a_canonical_id",
+                b_canonical="b_canonical_id",
+                score="score",
+            ),
+        )

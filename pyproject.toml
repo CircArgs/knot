@@ -15,6 +15,7 @@ runtime = [
     "jcs>=0.2",
     "fastapi>=0.110",
     "uvicorn>=0.29",
+    "rapidfuzz>=3.0",
 ]
 dev = [
     "mkdocs-material",
