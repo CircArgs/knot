@@ -29,7 +29,7 @@ def _():
     import pandas as pd
     import yaml
 
-    return mo, pd
+    return REPO, mo, pd
 
 
 @app.cell(hide_code=True)
@@ -235,23 +235,98 @@ def _(b2_spec, mo):
 
 @app.cell
 def _(mo):
+    sql_dialect_pick = mo.ui.dropdown(
+        options=["duckdb", "trino", "spark"],
+        label="SQL dialect:",
+        value="duckdb",
+    )
+    return (sql_dialect_pick,)
+
+
+@app.cell
+def _(REPO, b2_spec, expr_input, mo, sql_dialect_pick):
+    from knot.sql_gen import emit_sql
+
+    _names = {c.name: c for c in b2_spec.spec.classes}
+    _names.update({s.name: s for s in b2_spec.spec.types})
+    _ns = dict(_names)
+
+    try:
+        _tree = eval(expr_input.value.strip(), {"__builtins__": {}}, _ns)
+        _sql = emit_sql(_tree, dialect=sql_dialect_pick.value)
+        _emit_ok = True
+        _emit_err = None
+    except Exception as _e:
+        _sql = None
+        _emit_ok = False
+        _emit_err = f"{type(_e).__name__}: {_e}"
+
+    if _emit_ok and _sql:
+        try:
+            from knot.lake.duckdb_reader import DuckDBReader, DuckDBReaderConfig
+
+            _b2_dir = REPO / "tests/fixtures/B2/sources"
+            _reader = DuckDBReader(DuckDBReaderConfig(lake_dir=_b2_dir))
+            _reader.register_csv_view("movie", _b2_dir / "imdb_movies.csv")
+            _reader.register_csv_view("person", _b2_dir / "imdb_persons.csv")
+            _reader.register_csv_view("credit", _b2_dir / "imdb_credits.csv")
+            _wrapped_sql = (
+                f"SELECT * FROM movie WHERE EXISTS (SELECT 1 WHERE {_sql})"
+                if not _sql.lower().lstrip().startswith("select")
+                else _sql
+            )
+            _arrow = _reader.read(None, _wrapped_sql)
+            _df = _arrow.to_pandas()
+            _run_ok = True
+            _run_err = None
+        except Exception as _e:
+            _df = None
+            _run_ok = False
+            _run_err = f"{type(_e).__name__}: {_e}"
+    else:
+        _df = None
+        _run_ok = False
+        _run_err = "SQL emission failed; can't run"
+
+    _sql_block = (
+        mo.md(f"```sql\n{_sql}\n```")
+        if _emit_ok
+        else mo.callout(mo.md(f"**emit_sql failed:** `{_emit_err}`"), kind="danger")
+    )
+
+    if _run_ok:
+        _result_block = mo.vstack(
+            [
+                mo.md(f"**{len(_df)} rows** matched in `imdb_movies.csv`:"),
+                mo.ui.table(_df.head(50), page_size=20, selection=None),
+            ]
+        )
+    elif _emit_ok:
+        _result_block = mo.callout(
+            mo.md(
+                f"**Couldn't run against B2 fixture:** `{_run_err}`\n\n"
+                "(Some predicates need a `WHERE`-shaped wrap or table refs that "
+                "aren't registered. SQL above is what `sql_gen` emits.)"
+            ),
+            kind="warn",
+        )
+    else:
+        _result_block = mo.md("")
+
     mo.vstack(
         [
-            mo.md("## 4 · SDK → SQL emission (pending)"),
-            mo.callout(
-                mo.md(
-                    "The SQL emitter (`src/knot/sql_gen.py` per "
-                    "`design/staging/sql-generation.md` — sqlglot AST builder "
-                    "for forward + backward chain + trust-CTE rewrite per "
-                    "policy) is the next implementation slice. Once it lands, "
-                    "this cell becomes: type an SDK expression in section 2 → "
-                    "see the SQL knot would emit → optionally run against the "
-                    "B2 fixture lake to see results.\n\n"
-                    "Raw SQL access bypasses the SDK and isn't what knot's "
-                    "user-facing surface should look like."
-                ),
-                kind="warn",
+            mo.md("## 4 · SDK → SQL → run against B2 fixtures"),
+            mo.md(
+                "Type an SDK expression in section 2 above. This cell calls "
+                "`sql_gen.emit_sql(tree, dialect)` for what knot would generate, "
+                "then runs it via `DuckDBReader` against the B2 fixture CSVs "
+                "(registered as views: `movie`, `person`, `credit`). Real bytes."
             ),
+            sql_dialect_pick,
+            mo.md("**Generated SQL:**"),
+            _sql_block,
+            mo.md("**Result on B2 fixture:**"),
+            _result_block,
         ]
     )
     return
