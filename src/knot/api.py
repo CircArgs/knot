@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from datetime import datetime, timezone
 from typing import Any
 
@@ -47,7 +48,9 @@ from knot.api_models import (
 # App + startup
 # ---------------------------------------------------------------------------
 
-DSN = "postgresql://knot:knot@localhost:5432/knot_control"
+# KNOT_CONTROL_DSN — postgres DSN for the knot control database.
+# Default targets the local dev stack (docker-compose).
+DSN = os.environ.get("KNOT_CONTROL_DSN", "postgresql://knot:knot@localhost:5432/knot_control")
 
 app = FastAPI(title="knot", description="Knowledge graph + ontology compiler")
 
@@ -66,18 +69,16 @@ def _spec_hash() -> str:
 
 
 # ---------------------------------------------------------------------------
-# Helper: exec impl source into a fresh namespace, return the first class found
-# that has DataContext attributes (or any class if no DataContext attrs).
+# Helper: exec impl source into a fresh namespace, return the class named by
+# impl_name (exact match required).
 # Per core-design.md commitment 5: trusted authors, no sandboxing.
 # ---------------------------------------------------------------------------
 
 def _load_impl_class(source: str, impl_name: str) -> type:
-    """exec() source into a fresh dict; return the impl class.
+    """exec() source into a fresh dict; return the class named impl_name.
 
     Trusted-author exec per commitment 5: no sandbox, no restricted Python.
-    The class selected is the first non-builtin class defined in the module
-    whose name matches impl_name (case-insensitive) or, failing that, the
-    first class that subclasses a known protocol base.
+    Exact name match required — raises HTTPException(400) if not found.
     """
     ns: dict[str, Any] = {}
     try:
@@ -85,17 +86,15 @@ def _load_impl_class(source: str, impl_name: str) -> type:
     except Exception as exc:
         raise ValueError(f"Source failed to execute: {exc}") from exc
 
-    # Try exact name match first.
     candidate = ns.get(impl_name)
     if isinstance(candidate, type):
         return candidate
 
-    # Fall back: first class defined in the namespace.
-    for obj in ns.values():
-        if isinstance(obj, type) and obj.__module__ not in ("builtins",):
-            return obj
-
-    raise ValueError(f"No class found in impl source for {impl_name!r}")
+    raise HTTPException(
+        status_code=400,
+        detail=f"Source defines no class named {impl_name!r}. "
+               f"Ensure the class name exactly matches the impl name.",
+    )
 
 
 def _content_hash_bytes(data: bytes) -> str:

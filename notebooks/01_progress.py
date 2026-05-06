@@ -126,17 +126,17 @@ def _(b2_spec, expr_input, mo):
         _type_name = type(node).__name__
         if depth >= max_depth:
             return f"{_indent}{_type_name}(...)"
-        if not hasattr(node, "model_fields"):
+        if not hasattr(type(node), "model_fields"):
             if isinstance(node, (str, int, float, bool, type(None))):
                 return f"{_indent}{node!r}"
             return f"{_indent}{type(node).__name__}({node!r})"
         _parts = [f"{_indent}{_type_name}("]
-        for _fname in node.model_fields:
+        for _fname in type(node).model_fields:
             try:
                 _fval = getattr(node, _fname)
             except Exception:
                 continue
-            if hasattr(_fval, "model_fields"):
+            if hasattr(type(_fval), "model_fields"):
                 _parts.append(f"{_indent}  {_fname}=")
                 _parts.append(_summarize(_fval, depth + 1, max_depth))
             elif isinstance(_fval, list):
@@ -209,14 +209,8 @@ def _(b2_spec, mo):
         )
     else:
         _content = mo.callout(
-            mo.md(
-                f"**`canonical_dump` failed on B2 spec.** "
-                f"Likely a known cycle-handling gap in `src/knot/canonical.py` "
-                f"when applied to specs with circular slot.range references "
-                f"(B2 has Movie ↔ Person via Credit). \n\n"
-                f"Error: `{_err}`"
-            ),
-            kind="warn",
+            mo.md(f"**`canonical_dump` raised:** `{_err}`"),
+            kind="danger",
         )
 
     mo.vstack(
@@ -468,9 +462,21 @@ def _(contributions_input, mo, pd, policy_pick):
 
     mo.vstack(
         [
-            mo.md("## 6 · Trust resolution simulator"),
             mo.md(
-                "Mirrors knot's CTE-rewrite logic per `multi-valued-semantics.md`. "
+                "## 6 · Trust resolution simulator "
+                "(parallel Python — for educational mapping only; "
+                "knot's runtime emits SQL via `sql_gen.emit_trust_resolved_cte`)"
+            ),
+            mo.callout(
+                mo.md(
+                    "**Note:** this cell reimplements resolution policies in pure Python "
+                    "for interactive exploration. It is **not** what knot executes at "
+                    "runtime. knot generates SQL CTEs via "
+                    "`sql_gen.emit_trust_resolved_cte` — see the cell below."
+                ),
+                kind="warn",
+            ),
+            mo.md(
                 "Edit contributions, swap policy, see resolved value live."
             ),
             mo.hstack([contributions_input, policy_pick]),
@@ -478,6 +484,39 @@ def _(contributions_input, mo, pd, policy_pick):
             mo.callout(
                 mo.md(f"**Resolved:** `{_resolved}`\n\n_{_why}_"),
                 kind="success" if _resolved is not None else "danger",
+            ),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(b2_spec, mo):
+    from knot.sql_gen import emit_trust_resolved_cte
+
+    _cls = next((c for c in b2_spec.spec.classes if c.name == "Movie"), None)
+    if _cls is not None:
+        try:
+            _cte_expr = emit_trust_resolved_cte(_cls)
+            _cte_sql = _cte_expr.sql(dialect="duckdb", pretty=True)
+            _cte_ok = True
+        except Exception as _e:
+            _cte_sql = f"{type(_e).__name__}: {_e}"
+            _cte_ok = False
+    else:
+        _cte_sql = "(Movie class not found in spec)"
+        _cte_ok = False
+
+    mo.vstack(
+        [
+            mo.md("### 6b · Actual CTE knot would emit (via `sql_gen.emit_trust_resolved_cte`)"),
+            mo.md(
+                "This is what knot's runtime generates for `Movie`. "
+                "The Python simulator above maps to these SQL semantics."
+            ),
+            mo.callout(
+                mo.md(f"```sql\n{_cte_sql}\n```"),
+                kind="info" if _cte_ok else "danger",
             ),
         ]
     )
@@ -522,6 +561,87 @@ def _(b2_spec, codegen_lens_pick, mo):
             ),
             codegen_lens_pick,
             mo.md(f"```python\n{_preview}\n```") if _ok else mo.callout(mo.md(_src), kind="danger"),
+        ]
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    compile_scope_pick = mo.ui.dropdown(
+        options=["Movie", "Person", "Credit", "full"],
+        label="Scope to compile:",
+        value="Movie",
+    )
+    return (compile_scope_pick,)
+
+
+@app.cell
+def _(b2_spec, compile_scope_pick, mo, pd):
+    from knot.compiler import compile as knot_compile, compile_hash
+
+    try:
+        _workflow = knot_compile(
+            spec=b2_spec.spec,
+            bound_impls=[],
+            impl_configs={},
+            source_watermarks={
+                "imdb_movies": "0",
+                "tmdb_movies": "0",
+                "wikidata_movies": "0",
+                "imdb_persons": "0",
+                "tmdb_persons": "0",
+                "imdb_credits": "0",
+                "tmdb_credits": "0",
+                "wikidata_credits": "0",
+            },
+            scope=compile_scope_pick.value,
+        )
+        _hash = compile_hash(_workflow)
+        _stages_df = pd.DataFrame(
+            [
+                {
+                    "kind": _s.kind,
+                    "class_name": _s.class_name or "—",
+                    "impl_name": _s.impl_name or "—",
+                    "cache_key": _s.cache_key[:12] + "...",
+                    "pinned_parents": str(_s.pinned_parent_runs) if _s.pinned_parent_runs else "—",
+                }
+                for _s in _workflow.stages
+            ]
+        )
+        _ok = True
+        _err = None
+    except Exception as _e:
+        _hash = None
+        _stages_df = pd.DataFrame()
+        _ok = False
+        _err = f"{type(_e).__name__}: {_e}"
+
+    if _ok:
+        _content = mo.vstack(
+            [
+                mo.callout(
+                    mo.md(f"**compile_hash:** `{_hash}`\n\n**stages:** {len(_stages_df)}"),
+                    kind="success",
+                ),
+                mo.ui.table(_stages_df, page_size=20, selection=None),
+            ]
+        )
+    else:
+        _content = mo.callout(mo.md(f"**compile failed:** `{_err}`"), kind="danger")
+
+    mo.vstack(
+        [
+            mo.md("## 8 · Live compile → WorkflowSpec"),
+            mo.md(
+                "Pick a scope; `knot.compiler.compile(...)` emits a typed "
+                "`WorkflowSpec` with toposorted stages, per-stage cache keys, "
+                "and (for relation classes) pinned parent run hashes. The "
+                "compile_hash is the run identity per commitment 3."
+            ),
+            compile_scope_pick,
+            _content,
         ]
     )
     return
