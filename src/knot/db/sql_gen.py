@@ -21,7 +21,7 @@ from typing import Any
 
 from sqlglot import exp
 
-from knot.metaschema import (
+from knot.ontology.metaschema import (
     AggFunc,
     Between,
     BoolExpr,

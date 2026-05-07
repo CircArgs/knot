@@ -32,8 +32,8 @@ from typing import Any
 import psycopg
 from pydantic import BaseModel
 
-from knot.canonical import compute_content_hash
-from knot.metaschema import (
+from knot.ontology.canonical import compute_content_hash
+from knot.ontology.metaschema import (
     BoolExpr,
     BoolOpKind,
     Compare,
@@ -170,7 +170,7 @@ def spec_to_dict(spec: Spec) -> dict[str, Any]:
 # ---------------------------------------------------------------------------
 
 # Lookup: $kind class name → metaschema class
-from knot.metaschema import Between as _Between  # noqa: E402
+from knot.ontology.metaschema import Between as _Between  # noqa: E402
 
 _KIND_REGISTRY: dict[str, type] = {
     "TypeDefinition": TypeDefinition,
@@ -559,8 +559,17 @@ def update_draft(conn: psycopg.Connection, draft_id: int, spec: Spec) -> None:
     )
 
 
+def get_published_revision(conn: psycopg.Connection) -> int | None:
+    """Revision number of the currently-published spec, or None."""
+    row = conn.execute(
+        "SELECT revision FROM spec_revisions WHERE published = TRUE",
+    ).fetchone()
+    return row[0] if row else None
+
+
 def publish_draft(conn: psycopg.Connection, draft_id: int) -> int:
-    """Run the publish gate; on pass, atomically flip this draft to published.
+    """Run the publish gate; on pass, atomically flip this draft to published
+    and bring the data-plane schema in line with the new spec.
 
     Returns the revision number of the now-published draft.  Raises
     `PublishGateError` on validation failure (draft remains a draft).
@@ -580,6 +589,13 @@ def publish_draft(conn: psycopg.Connection, draft_id: int) -> int:
         """,
         (draft_id, draft_id, _now(), draft_id),
     )
+
+    # Bring data-plane schema in line. First-publish path only today
+    # (idempotent CREATE TABLE IF NOT EXISTS); diff-driven ALTER paths
+    # are open and will replace this when the spec-diff visitor lands.
+    from knot.db.migration import apply_initial_schema
+    apply_initial_schema(conn, spec)
+
     return draft_id
 
 
@@ -598,31 +614,3 @@ def discard_draft(conn: psycopg.Connection, draft_id: int) -> None:
     conn.execute("DELETE FROM spec_revisions WHERE revision = %s", (draft_id,))
 
 
-def seed_from_fixture(conn: psycopg.Connection) -> int:
-    """Seed an initial published revision from the B2 fixture spec.
-
-    Used at first boot to give the system something to read; idempotent
-    enough that callers can no-op if a published row already exists.
-    """
-    if get_published(conn) is not None:
-        # Already seeded.  Return the published revision number.
-        row = conn.execute(
-            "SELECT revision FROM spec_revisions WHERE published = TRUE",
-        ).fetchone()
-        return row[0]
-
-    from knot_demo_b2.spec import spec as _fixture_spec
-
-    payload = spec_to_dict(_fixture_spec)
-    content_hash = compute_content_hash(_fixture_spec)
-    now = _now()
-    row = conn.execute(
-        """
-        INSERT INTO spec_revisions
-            (spec, content_hash, published, label, created_at, published_at)
-        VALUES (%s, %s, TRUE, %s, %s, %s)
-        RETURNING revision
-        """,
-        (json.dumps(payload), content_hash, "seed:B2", now, now),
-    ).fetchone()
-    return row[0]

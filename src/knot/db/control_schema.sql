@@ -1,10 +1,13 @@
 -- knot control-plane schema (spec router scope)
 -- Idempotent: CREATE TABLE IF NOT EXISTS / CREATE INDEX IF NOT EXISTS.
 --
--- Only the spec_revisions table lives here.  Modeling-router tables
--- (compiled_workflows, pipeline_runs, bound_impls, impl_revision,
--- impl_config, _user_corrections, _user_er_decisions) belong to the
--- modeling router and land separately.
+-- Two postgres schemas in play:
+--   public     — control plane (spec_revisions; what knot knows)
+--   knot_data  — data plane (per-class fact tables; what knot stores).
+--                Per-class tables are created/altered by the migration
+--                emitter (knot.migration) at publish time.
+
+CREATE SCHEMA IF NOT EXISTS knot_data;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- spec_revisions

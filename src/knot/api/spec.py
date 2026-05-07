@@ -15,13 +15,12 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-import psycopg
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
-from knot import spec_store
-from knot.canonical import compute_content_hash
-from knot.metaschema import (
+from knot import db
+from knot.db import spec_store
+from knot.ontology import (
     OntologyClass,
     PermissibleValue,
     ResolutionPolicy,
@@ -29,24 +28,8 @@ from knot.metaschema import (
     Source,
     Spec,
     TypeDefinition,
+    compute_content_hash,
 )
-
-
-# ---------------------------------------------------------------------------
-# DSN injection — main.py overrides this when wiring the app
-# ---------------------------------------------------------------------------
-
-_DSN = "postgresql://knot:knot@localhost:5432/knot_control"
-
-
-def set_dsn(dsn: str) -> None:
-    """Override the postgres DSN at app-construction time."""
-    global _DSN
-    _DSN = dsn
-
-
-def _conn() -> psycopg.Connection:
-    return psycopg.connect(_DSN, autocommit=True)
 
 
 # ---------------------------------------------------------------------------
@@ -273,7 +256,7 @@ router = APIRouter(prefix="/spec", tags=["spec"])
 
 @router.get("/published", summary="Full currently-published spec (cycle-safe JSON)")
 def get_published_spec() -> dict[str, Any]:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
@@ -282,7 +265,7 @@ def get_published_spec() -> dict[str, Any]:
 
 @router.get("/published/classes", response_model=list[ClassSummary])
 def list_published_classes() -> list[ClassSummary]:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_published(conn)
     if spec is None:
         return []
@@ -291,7 +274,7 @@ def list_published_classes() -> list[ClassSummary]:
 
 @router.get("/published/classes/{name}", response_model=ClassSummary)
 def get_published_class(name: str) -> ClassSummary:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
@@ -300,7 +283,7 @@ def get_published_class(name: str) -> ClassSummary:
 
 @router.get("/published/slots", response_model=list[SlotSummary])
 def list_published_slots() -> list[SlotSummary]:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_published(conn)
     if spec is None:
         return []
@@ -309,7 +292,7 @@ def list_published_slots() -> list[SlotSummary]:
 
 @router.get("/published/types", response_model=list[TypeSummary])
 def list_published_types() -> list[TypeSummary]:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_published(conn)
     if spec is None:
         return []
@@ -318,7 +301,7 @@ def list_published_types() -> list[TypeSummary]:
 
 @router.get("/published/sources", response_model=list[SourceSummary])
 def list_published_sources() -> list[SourceSummary]:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_published(conn)
     if spec is None:
         return []
@@ -330,14 +313,14 @@ def list_published_sources() -> list[SourceSummary]:
 @router.get("/revisions", response_model=list[RevisionSummary])
 def list_revisions() -> list[RevisionSummary]:
     """All published revisions, newest first (immortal audit chain)."""
-    with _conn() as conn:
+    with db.connect() as conn:
         rows = spec_store.list_published(conn)
     return [RevisionSummary(**r) for r in rows]
 
 
 @router.get("/revisions/{revision}")
 def get_revision_spec(revision: int) -> dict[str, Any]:
-    with _conn() as conn:
+    with db.connect() as conn:
         try:
             spec = spec_store.get_revision(conn, revision)
         except spec_store.DraftNotFoundError as exc:
@@ -349,14 +332,14 @@ def get_revision_spec(revision: int) -> dict[str, Any]:
 
 @router.get("/drafts", response_model=list[DraftSummary])
 def list_drafts_endpoint() -> list[DraftSummary]:
-    with _conn() as conn:
+    with db.connect() as conn:
         rows = spec_store.list_drafts(conn)
     return [DraftSummary(**r) for r in rows]
 
 
 @router.post("/drafts", response_model=DraftSummary)
 def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
-    with _conn() as conn:
+    with db.connect() as conn:
         try:
             new_id = spec_store.create_draft(
                 conn, parent_revision=body.parent_revision, label=body.label,
@@ -370,7 +353,7 @@ def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
 
 @router.get("/drafts/{draft_id}")
 def get_draft(draft_id: int) -> dict[str, Any]:
-    with _conn() as conn:
+    with db.connect() as conn:
         try:
             spec = spec_store.get_revision(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:
@@ -380,7 +363,7 @@ def get_draft(draft_id: int) -> dict[str, Any]:
 
 @router.delete("/drafts/{draft_id}")
 def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
-    with _conn() as conn:
+    with db.connect() as conn:
         try:
             spec_store.discard_draft(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:
@@ -394,7 +377,7 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 
 @router.post("/drafts/{draft_id}/types", response_model=MutationResponse)
 def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
         if any(t.name == body.name for t in spec.types):
             raise HTTPException(409, f"TypeDefinition {body.name!r} already exists.")
@@ -409,7 +392,7 @@ def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
 
 @router.post("/drafts/{draft_id}/slots", response_model=MutationResponse)
 def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
         if any(s.name == body.name for s in spec.slots):
             raise HTTPException(409, f"Slot {body.name!r} already exists.")
@@ -448,7 +431,7 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
 
 @router.post("/drafts/{draft_id}/classes", response_model=MutationResponse)
 def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
         if any(c.name == body.name for c in spec.classes):
             raise HTTPException(409, f"OntologyClass {body.name!r} already exists.")
@@ -470,7 +453,7 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
 
 @router.patch("/drafts/{draft_id}/classes/{name}", response_model=MutationResponse)
 def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
         cls = _find_class(spec, name)
 
@@ -490,7 +473,7 @@ def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationRespons
 
 @router.post("/drafts/{draft_id}/sources", response_model=MutationResponse)
 def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
-    with _conn() as conn:
+    with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
         if any(s.name == body.name for s in spec.sources):
             raise HTTPException(409, f"Source {body.name!r} already exists.")
@@ -517,7 +500,7 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
 @router.post("/drafts/{draft_id}/publish", response_model=PublishResponse)
 def publish(draft_id: int) -> PublishResponse:
     """Run the publish gate; on pass, atomically promote this draft to published."""
-    with _conn() as conn:
+    with db.connect() as conn:
         try:
             spec_store.publish_draft(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:

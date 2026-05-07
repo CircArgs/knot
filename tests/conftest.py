@@ -3,18 +3,19 @@ import psycopg
 from neo4j import GraphDatabase
 
 from tests.test_env import TestEnv
-from knot.control_db import apply_schema
+from knot import db
+from knot.config import get_dsn
 
 
 @pytest.fixture(scope="session")
 def postgres_dsn():
-    return "postgresql://knot:knot@localhost:5432/knot_control"
+    return get_dsn()
 
 
 @pytest.fixture(scope="session", autouse=True)
 def _apply_control_schema(postgres_dsn):
     """Ensure the control-plane schema exists before any test that touches postgres."""
-    apply_schema(postgres_dsn)
+    db.apply_schema()
 
 
 @pytest.fixture(scope="session")
