@@ -50,3 +50,22 @@ CREATE TABLE IF NOT EXISTS trust_config (
                  CHECK (trust_score >= 0.0 AND trust_score <= 1.0),
     updated_at   TIMESTAMPTZ      NOT NULL DEFAULT now()
 );
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- trust_posteriors
+-- Per-(source, slot) Beta posterior driving bandit-style resolution
+-- (THOMPSON_SAMPLING / UCB1). alpha and beta initialise at the uniform
+-- prior (1, 1); each Bernoulli observation increments alpha (success) or
+-- beta (failure). Mean = alpha / (alpha + beta); observation count =
+-- alpha + beta - 2.
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS trust_posteriors (
+    source_name  TEXT             NOT NULL,
+    slot_name    TEXT             NOT NULL,
+    alpha        DOUBLE PRECISION NOT NULL DEFAULT 1.0
+                 CHECK (alpha > 0),
+    beta         DOUBLE PRECISION NOT NULL DEFAULT 1.0
+                 CHECK (beta > 0),
+    updated_at   TIMESTAMPTZ      NOT NULL DEFAULT now(),
+    PRIMARY KEY (source_name, slot_name)
+);

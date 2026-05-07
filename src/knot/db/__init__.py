@@ -6,8 +6,10 @@ What's inside:
   - ``spec_store``                                   — spec_revisions CRUD
   - ``migration``                                    — spec → per-class table DDL
   - ``graph_store``                                  — per-class table INSERT/SELECT
-  - ``trust_config``                                 — per-source trust scores
+  - ``trust_config``                                 — per-source scalar trust
+  - ``trust_posteriors``                             — per-(source, slot) Beta posterior
   - ``resolve``                                      — trust-resolved record builder
+                                                       (ARGMAX_TRUST / THOMPSON / UCB1)
   - ``sql_gen``                                      — expression tree → SQL strings
 
 Centralization rule: only modules under ``knot/db/`` import ``psycopg`` and
@@ -32,12 +34,13 @@ from knot.db import (
     spec_store,
     sql_gen,
     trust_config,
+    trust_posteriors,
 )
 
 __all__ = [
     "connect", "apply_schema",
     "spec_store", "migration", "graph_store",
-    "trust_config", "resolve", "sql_gen",
+    "trust_config", "trust_posteriors", "resolve", "sql_gen",
 ]
 
 

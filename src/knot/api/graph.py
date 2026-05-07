@@ -29,8 +29,8 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from knot import db
-from knot.db import graph_store, resolve, spec_store, trust_config
-from knot.ontology import OntologyClass, Spec
+from knot.db import graph_store, resolve, spec_store, trust_config, trust_posteriors
+from knot.ontology import OntologyClass, Slot, Spec
 from knot.ontology.row_models import build_row_model
 
 
@@ -79,6 +79,21 @@ class TrustScore(_StrictBase):
 
 class TrustUpdate(_StrictBase):
     trust_score: float = Field(..., ge=0.0, le=1.0)
+
+
+class PosteriorView(_StrictBase):
+    source: str
+    slot: str
+    alpha: float
+    beta: float
+    mean: float
+    observations: float
+
+
+class FeedbackBody(_StrictBase):
+    source: str
+    slot: str
+    success: bool
 
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -251,6 +266,21 @@ def get_resolved_entity(
     )
 
 
+def _posterior_view(p: trust_posteriors.Posterior) -> PosteriorView:
+    return PosteriorView(
+        source=p.source,
+        slot=p.slot,
+        alpha=p.alpha,
+        beta=p.beta,
+        mean=p.mean,
+        observations=p.observations,
+    )
+
+
+# NOTE: literal-path routes are declared BEFORE `{source_name}` so FastAPI
+# matches /trust/posteriors and /trust/feedback exactly rather than
+# treating them as source names.
+
 @router.get("/trust", response_model=list[TrustScore])
 def list_trust_scores() -> list[TrustScore]:
     """All configured per-source trust scores. Sources without an entry
@@ -259,6 +289,53 @@ def list_trust_scores() -> list[TrustScore]:
         scores = trust_config.list_scores(conn)
     return [TrustScore(source=s, trust_score=v) for s, v in scores.items()]
 
+
+@router.get("/trust/posteriors", response_model=list[PosteriorView])
+def list_posteriors() -> list[PosteriorView]:
+    """All Beta posteriors recorded so far. Pairs without a row use the
+    uniform prior (Beta(1, 1))."""
+    with db.connect() as conn:
+        return [_posterior_view(p) for p in trust_posteriors.list_posteriors(conn)]
+
+
+@router.get(
+    "/trust/posteriors/{source_name}/{slot_name}",
+    response_model=PosteriorView,
+)
+def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
+    with db.connect() as conn:
+        spec = _published_or_404(conn)
+        if not any(s.name == source_name for s in spec.sources):
+            raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
+        if not any(s.name == slot_name for s in spec.slots):
+            raise HTTPException(404, f"Slot {slot_name!r} not on the published spec.")
+        return _posterior_view(trust_posteriors.get_posterior(conn, source_name, slot_name))
+
+
+@router.delete("/trust/posteriors/{source_name}/{slot_name}")
+def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
+    """Drop the per-(source, slot) posterior, reverting it to the uniform prior."""
+    with db.connect() as conn:
+        existed = trust_posteriors.reset_posterior(conn, source_name, slot_name)
+    return {"reset": existed, "source": source_name, "slot": slot_name}
+
+
+@router.post("/trust/feedback", response_model=PosteriorView)
+def submit_feedback(body: FeedbackBody) -> PosteriorView:
+    """Record one Bernoulli observation (source, slot, success) — increments
+    α on success, β on failure. Source and slot must be on the published spec."""
+    with db.connect() as conn:
+        spec = _published_or_404(conn)
+        if not any(s.name == body.source for s in spec.sources):
+            raise HTTPException(404, f"Source {body.source!r} not on the published spec.")
+        if not any(s.name == body.slot for s in spec.slots):
+            raise HTTPException(404, f"Slot {body.slot!r} not on the published spec.")
+        post = trust_posteriors.record_feedback(conn, body.source, body.slot, body.success)
+    return _posterior_view(post)
+
+
+# Parameterized `/trust/{source_name}` routes go LAST so the literal-path
+# routes above (/trust/posteriors, /trust/feedback) take precedence.
 
 @router.get("/trust/{source_name}", response_model=TrustScore)
 def get_trust_score(source_name: str) -> TrustScore:
