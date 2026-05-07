@@ -26,7 +26,6 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _():
-    import json
     import requests
     import sqlalchemy
 
@@ -45,12 +44,7 @@ def _():
         r.raise_for_status()
         return r.json()
 
-    def put(path, body):
-        r = requests.put(f"{API}{path}", json=body)
-        r.raise_for_status()
-        return r.json()
-
-    return API, control_db, get, json, post, put
+    return control_db, get, post
 
 
 @app.cell(hide_code=True)
@@ -67,18 +61,22 @@ def _(mo):
     return
 
 
-@app.cell
-def _(control_db, mo):
-    _ = mo.sql(
-        """
-        TRUNCATE spec_revisions RESTART IDENTITY CASCADE;
-        DROP SCHEMA IF EXISTS knot_data CASCADE;
-        DROP TABLE IF EXISTS trust_config;
-        DROP TABLE IF EXISTS trust_posteriors;
-        DROP TABLE IF EXISTS _user_corrections;
-        """,
-        engine=control_db,
-    )
+@app.cell(hide_code=True)
+def _(control_db):
+    # Use sqlalchemy directly for the multi-DDL setup; mo.sql parses
+    # bare table names as variable refs which trips on TRUNCATE / DROP
+    # scripts.
+    from sqlalchemy import text
+    with control_db.begin() as _conn:
+        for _stmt in (
+            "TRUNCATE spec_revisions RESTART IDENTITY CASCADE",
+            "DROP SCHEMA IF EXISTS knot_data CASCADE",
+            "DROP TABLE IF EXISTS trust_config",
+            "DROP TABLE IF EXISTS trust_posteriors",
+            "DROP TABLE IF EXISTS _user_corrections",
+        ):
+            _conn.execute(text(_stmt))
+    "wiped"
     return
 
 
@@ -173,19 +171,19 @@ def _(mo):
 
 @app.cell
 def _(draft_id, post):
-    publish_resp = post(f"/spec/drafts/{draft_id}/publish")
-    publish_resp
+    _publish_resp = post(f"/spec/drafts/{draft_id}/publish")
+    _publish_resp
     return
 
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    slots_summary = [
+    _slots_summary = [
         f"- `{s['name']}` — {s['range_name']}, policy={s['resolution_policy']}"
         for s in get("/spec/published/slots")
     ]
     mo.md(
-        "**Published slot summary**\n\n" + "\n".join(slots_summary)
+        "**Published slot summary**\n\n" + "\n".join(_slots_summary)
     )
     return
 
@@ -223,15 +221,15 @@ def _(post):
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    rows = get("/graph/classes/Movie/tt0111161")["contributions"]
-    body = "\n".join(
-        f"| `{r['_source']}` | {r['title']} | {r['year']} |" for r in rows
+    _rows = get("/graph/classes/Movie/tt0111161")["contributions"]
+    _body = "\n".join(
+        f"| `{r['_source']}` | {r['title']} | {r['year']} |" for r in _rows
     )
     mo.md(
         "### Raw contributions (multi-source bag)\n\n"
         "| source | title | year |\n"
         "|---|---|---|\n"
-        f"{body}\n\n"
+        f"{_body}\n\n"
         "Same `_canonical_id`, two rows. Knot doesn't pick a winner at "
         "write time — multi-valued canonical, query-time resolution."
     )
@@ -255,17 +253,19 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    draws = []
+    _draws = []
     for _ in range(5):
-        r = get("/graph/classes/Movie/tt0111161/resolved")["resolved"]
-        draws.append((r["title"], r["year"]))
-    body = "\n".join(f"| {i+1} | {t} | {y} |" for i, (t, y) in enumerate(draws))
+        _r = get("/graph/classes/Movie/tt0111161/resolved")["resolved"]
+        _draws.append((_r["title"], _r["year"]))
+    _body = "\n".join(
+        f"| {i+1} | {t} | {y} |" for i, (t, y) in enumerate(_draws)
+    )
     mo.md(
         "### Five resolution draws (uniform priors)\n\n"
         "| # | title | year |\n"
         "|---|---|---|\n"
-        f"{body}\n\n"
-        "Year flips between 1994 and 1995 (Thompson stochasticity); "
+        f"{_body}\n\n"
+        "Year is stochastic across draws (Thompson with uniform priors); "
         "title is stable (ARGMAX_TRUST tie → alphabetical)."
     )
     return
@@ -296,7 +296,7 @@ def _(mo):
 
 @app.cell
 def _(post):
-    correction_response = post(
+    _correction_response = post(
         "/graph/corrections",
         {"type": "property",
          "class_name": "Movie",
@@ -305,22 +305,23 @@ def _(post):
          "value": 1994,
          "applied_by": "demo"},
     )
-    correction_response
+    _correction_response
     return
 
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    posteriors = get("/graph/trust/posteriors")
-    body = "\n".join(
-        f"| `{p['source']}` | `{p['slot']}` | {p['alpha']:.0f} | {p['beta']:.0f} | {p['mean']:.3f} |"
-        for p in posteriors
+    _posteriors = get("/graph/trust/posteriors")
+    _body = "\n".join(
+        f"| `{p['source']}` | `{p['slot']}` | {p['alpha']:.0f} | "
+        f"{p['beta']:.0f} | {p['mean']:.3f} |"
+        for p in _posteriors
     )
     mo.md(
         "### Posteriors after the correction\n\n"
         "| source | slot | α | β | mean |\n"
         "|---|---|---|---|---|\n"
-        f"{body}\n\n"
+        f"{_body}\n\n"
         "IMDB's `year` posterior shifted toward 1; TMDB's toward 0."
     )
     return
@@ -341,15 +342,15 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    draws = []
+    _draws = []
     for _ in range(10):
-        r = get("/graph/classes/Movie/tt0111161/resolved")["resolved"]
-        draws.append(r["year"])
-    counts = {1994: draws.count(1994), 1995: draws.count(1995)}
+        _r = get("/graph/classes/Movie/tt0111161/resolved")["resolved"]
+        _draws.append(_r["year"])
+    _counts = {1994: _draws.count(1994), 1995: _draws.count(1995)}
     mo.md(
         "### Ten Thompson draws (post-feedback)\n\n"
-        f"- year = **1994** : {counts[1994]} draws\n"
-        f"- year = **1995** : {counts[1995]} draws\n\n"
+        f"- year = **1994** : {_counts[1994]} draws\n"
+        f"- year = **1995** : {_counts[1995]} draws\n\n"
         "Year resolution converged on the corrected value because "
         "Thompson now samples from posteriors that prefer IMDB over TMDB "
         "for this slot."
@@ -373,25 +374,25 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    audit = get("/graph/corrections")
-    contribs = get("/graph/classes/Movie/tt0111161")["contributions"]
-    audit_md = "\n".join(
+    _audit = get("/graph/corrections")
+    _contribs = get("/graph/classes/Movie/tt0111161")["contributions"]
+    _audit_md = "\n".join(
         f"- correction #{a['id']} ({a['correction_type']}) — "
         f"applied_by `{a['applied_by']}`, "
         f"applied_revision `{a['applied_revision']}`, "
         f"`{a['payload']['slot']} = {a['payload']['value']}`"
-        for a in audit
+        for a in _audit
     )
-    contribs_md = "\n".join(
+    _contribs_md = "\n".join(
         f"- `{c['_source']}` ingested at rev `{c['_spec_revision']}` "
         f"({c['_ingest_at']})"
-        for c in contribs
+        for c in _contribs
     )
     mo.md(
         "### Audit log\n\n"
-        f"{audit_md}\n\n"
+        f"{_audit_md}\n\n"
         "### Per-row provenance\n\n"
-        f"{contribs_md}"
+        f"{_contribs_md}"
     )
     return
 
