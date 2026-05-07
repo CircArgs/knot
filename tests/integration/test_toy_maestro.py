@@ -28,7 +28,7 @@ from knot.orchestrator.toy_maestro.workflow_models import (
 # Paths
 # ---------------------------------------------------------------------------
 
-_FIXTURES = os.path.join(os.path.dirname(__file__), "..", "fixtures", "B2", "sources")
+_FIXTURES = os.path.join(os.path.dirname(__file__), "..", "..", "data", "B2", "sources")
 _IMDB_CSV = os.path.join(_FIXTURES, "imdb_movies.csv")
 _TMDB_CSV = os.path.join(_FIXTURES, "tmdb_movies.csv")
 

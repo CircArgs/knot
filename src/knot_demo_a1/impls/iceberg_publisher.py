@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING, ClassVar
 from knot.protocols import DataContext, MaterializerProtocol  # noqa: F401
 
 if TYPE_CHECKING:
-    from tests.fixtures.A1.spec import Movie
+    from knot_demo_a1.spec import Movie
 
 
 class IcebergPublisherConfig:

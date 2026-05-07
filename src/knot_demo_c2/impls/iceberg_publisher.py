@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
-from tests.fixtures.C2.spec import spec
+from knot_demo_c2.spec import spec
 
 
 class IcebergConfig:

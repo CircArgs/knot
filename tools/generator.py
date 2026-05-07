@@ -19,7 +19,7 @@ def _stable_hash(s: str) -> int:
     """Deterministic hash for seed derivation — immune to PYTHONHASHSEED."""
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:8], "little")
 
-from tests.fixtures.tier_configs import TierConfig
+from tools.tier_configs import TierConfig
 
 
 # ---------------------------------------------------------------------------
@@ -2095,7 +2095,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        cfg = getattr(importlib.import_module("tests.fixtures.tier_configs"), args.tier)
+        cfg = getattr(importlib.import_module("tools.tier_configs"), args.tier)
     except AttributeError:
         print(f"Unknown tier: {args.tier}", file=sys.stderr)
         sys.exit(1)

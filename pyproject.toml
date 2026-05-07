@@ -42,4 +42,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/knot"]
+packages = [
+    "src/knot",
+    "src/knot_demo_a1",
+    "src/knot_demo_b2",
+    "src/knot_demo_c2",
+]

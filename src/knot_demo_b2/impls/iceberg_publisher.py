@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
-from tests.fixtures.B2.spec import Movie, Person, Credit, spec
+from knot_demo_b2.spec import Movie, Person, Credit, spec
 
 
 class IcebergConfig:

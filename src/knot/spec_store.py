@@ -100,31 +100,58 @@ def _is_named(obj: Any) -> bool:
     return isinstance(obj, _NAMED_CLASSES) and isinstance(getattr(obj, "name", None), str)
 
 
-def _ser(obj: Any, visited: dict[int, str]) -> Any:
-    """Serialize a Pydantic graph to plain Python.  Named nodes cycle via $ref."""
+class _SerCtx:
+    """Per-serialize state.  Tracks named-entity object identity by counter UID
+    so two entities with the same name (e.g. `Movie.imdb_id` vs `Person.imdb_id`)
+    serialize / deserialize as distinct objects.
+    """
+
+    def __init__(self) -> None:
+        self.id_to_uid: dict[int, int] = {}
+        self.next_uid: int = 0
+
+    def assign(self, oid: int) -> int:
+        uid = self.next_uid
+        self.id_to_uid[oid] = uid
+        self.next_uid += 1
+        return uid
+
+
+def _ser(obj: Any, ctx: _SerCtx) -> Any:
+    """Serialize a Pydantic graph to plain Python.
+
+    Named SpecBase nodes carry a per-object `$uid` (counter) on first visit;
+    repeat visits emit `{"$ref": <uid>, "$kind": "<class>"}`.  Names live in the
+    payload alongside but never key the cycle table — collisions across classes
+    (Movie.imdb_id vs Person.imdb_id) are handled correctly.
+    """
     if isinstance(obj, BaseModel):
         oid = id(obj)
         if _is_named(obj):
-            if oid in visited:
-                return {"$ref": visited[oid], "$kind": type(obj).__name__}
-            visited[oid] = obj.name  # type: ignore[attr-defined]
+            if oid in ctx.id_to_uid:
+                return {"$ref": ctx.id_to_uid[oid], "$kind": type(obj).__name__}
+            uid = ctx.assign(oid)
+        else:
+            uid = None
 
         result: dict[str, Any] = {"$kind": type(obj).__name__}
+        if uid is not None:
+            result["$uid"] = uid
         for fname in type(obj).model_fields:
             value = getattr(obj, fname)
-            result[fname] = _ser(value, visited)
+            result[fname] = _ser(value, ctx)
         return result
 
     if isinstance(obj, list):
-        return [_ser(item, visited) for item in obj]
+        return [_ser(item, ctx) for item in obj]
     if isinstance(obj, tuple):
-        return [_ser(item, visited) for item in obj]
+        return [_ser(item, ctx) for item in obj]
     if isinstance(obj, dict):
-        return {k: _ser(v, visited) for k, v in obj.items()}
+        return {k: _ser(v, ctx) for k, v in obj.items()}
     if isinstance(obj, (set, frozenset)):
-        return sorted(_ser(item, visited) for item in obj)
+        return sorted(_ser(item, ctx) for item in obj)
 
-    # Enums → their .value (str)
+    # Enums → their .value
     val = getattr(obj, "value", None)
     if val is not None and hasattr(obj, "name") and not isinstance(obj, BaseModel):
         if isinstance(val, (str, int, float, bool)):
@@ -135,7 +162,7 @@ def _ser(obj: Any, visited: dict[int, str]) -> Any:
 
 def spec_to_dict(spec: Spec) -> dict[str, Any]:
     """Full-fidelity serialize a Spec.  Round-trips via `spec_from_dict`."""
-    return _ser(spec, visited={})
+    return _ser(spec, _SerCtx())
 
 
 # ---------------------------------------------------------------------------
@@ -180,37 +207,32 @@ _KIND_REGISTRY: dict[str, type] = {
 
 
 class _Index:
-    """Pass-1 build → name-keyed dictionaries by entity kind."""
+    """Pass-1 build → UID-keyed dictionary of placeholder Pydantic objects."""
 
     def __init__(self) -> None:
-        self.types: dict[str, TypeDefinition] = {}
-        self.slots: dict[str, Slot] = {}
-        self.classes: dict[str, OntologyClass] = {}
-        self.sources: dict[str, Source] = {}
-        self.constraints: dict[str, Constraint] = {}
+        self.by_uid: dict[int, Any] = {}
 
-    def by_name(self, kind: str, name: str) -> Any:
-        bucket = {
-            "TypeDefinition": self.types,
-            "Slot": self.slots,
-            "OntologyClass": self.classes,
-            "Source": self.sources,
-            "Constraint": self.constraints,
-        }.get(kind)
-        if bucket is None or name not in bucket:
-            raise KeyError(f"$ref → {kind}({name!r}) not found in pass-1 index")
-        return bucket[name]
+    def get(self, uid: int) -> Any:
+        if uid not in self.by_uid:
+            raise KeyError(f"$ref → uid={uid} not found in pass-1 index")
+        return self.by_uid[uid]
 
 
-_NAMED_KINDS = {"TypeDefinition", "Slot", "OntologyClass"}
+_PLACEHOLDER_KINDS = {
+    "TypeDefinition": TypeDefinition,
+    "Slot": Slot,
+    "OntologyClass": OntologyClass,
+    "Source": Source,
+    "Constraint": Constraint,
+}
 
 
 def _pass1_build(d: Any, index: _Index) -> None:
-    """Recursively walk the JSON tree; create placeholders for every named
-    entity at first encounter (regardless of nesting depth).
-
-    Sources and Constraints are built in pass 2 because their fields
-    (entity_class, identifier_slot, primary, body) are all cross-refs.
+    """Recursively walk the JSON tree; for each named entity that carries a
+    `$uid`, create a name-only placeholder keyed by uid.  Source and
+    Constraint placeholders are built later in pass 2 because their
+    cross-refs (entity_class, identifier_slot, primary, body) need to
+    resolve through the uid index.
     """
     if isinstance(d, list):
         for item in d:
@@ -219,17 +241,20 @@ def _pass1_build(d: Any, index: _Index) -> None:
     if not isinstance(d, dict):
         return
     if "$ref" in d:
-        return  # ref to an entity that should appear unhinged elsewhere
+        return
 
     kind = d.get("$kind")
+    uid = d.get("$uid")
     name = d.get("name")
-    if kind in _NAMED_KINDS and isinstance(name, str):
-        if kind == "TypeDefinition" and name not in index.types:
-            index.types[name] = TypeDefinition(name=name)
-        elif kind == "Slot" and name not in index.slots:
-            index.slots[name] = Slot(name=name)
-        elif kind == "OntologyClass" and name not in index.classes:
-            index.classes[name] = OntologyClass(name=name)
+    placeholder_cls = _PLACEHOLDER_KINDS.get(kind)
+
+    if (
+        placeholder_cls in (TypeDefinition, Slot, OntologyClass)
+        and isinstance(uid, int)
+        and isinstance(name, str)
+        and uid not in index.by_uid
+    ):
+        index.by_uid[uid] = placeholder_cls(name=name)
 
     for value in d.values():
         _pass1_build(value, index)
@@ -240,16 +265,19 @@ def _is_ref(d: Any) -> bool:
 
 
 def _resolve(d: Any, index: _Index) -> Any:
-    """Pass-2: walk a JSON value and produce the real Pydantic object graph.
+    """Pass-2: walk JSON → real Pydantic object graph.
 
-    Recursion handles nested dicts (with $kind), lists, scalars, and $ref tokens.
+    `$ref` tokens look up the placeholder in the uid index.
+    Inline definitions with `$uid` patch the corresponding placeholder
+    (preserving identity); inline definitions without `$uid` (Sources,
+    Constraints, expression-tree nodes) construct fresh.
     """
     if isinstance(d, list):
         return [_resolve(item, index) for item in d]
     if not isinstance(d, dict):
         return d
     if "$ref" in d:
-        return index.by_name(d.get("$kind", "OntologyClass"), d["$ref"])
+        return index.get(d["$ref"])
 
     kind = d.get("$kind")
     if kind is None:
@@ -260,30 +288,31 @@ def _resolve(d: Any, index: _Index) -> Any:
     if cls is None:
         raise PublishGateError(f"Unknown $kind during rehydration: {kind!r}")
 
-    # Build kwargs from non-$kind fields, recursing.
     kwargs: dict[str, Any] = {}
     for fname, raw in d.items():
         if fname.startswith("$"):
             continue
         kwargs[fname] = _resolve(raw, index)
 
-    # For named entities, fill the existing pass-1 placeholder rather than
-    # constructing a new instance — preserves real-ref identity.
-    name = kwargs.get("name")
-    if isinstance(name, str) and kind in ("TypeDefinition", "Slot", "OntologyClass"):
-        existing = {
-            "TypeDefinition": index.types,
-            "Slot": index.slots,
-            "OntologyClass": index.classes,
-        }[kind].get(name)
-        if existing is not None:
+    # For named entities with a uid, patch the existing pass-1 placeholder
+    # so cross-refs share Python object identity.
+    uid = d.get("$uid")
+    if isinstance(uid, int) and uid in index.by_uid:
+        existing = index.by_uid[uid]
+        if isinstance(existing, (TypeDefinition, Slot, OntologyClass)):
             for k, v in kwargs.items():
                 if k != "name":
                     setattr(existing, k, v)
             return existing
 
-    # ResolutionPolicy / Severity / enum coercion handled by Pydantic on construct.
-    return cls(**kwargs)
+    obj = cls(**kwargs)
+
+    # Source and Constraint placeholders aren't pre-built; index them by
+    # uid here so any subsequent $ref lands cleanly.
+    if isinstance(uid, int) and uid not in index.by_uid:
+        index.by_uid[uid] = obj
+
+    return obj
 
 
 def spec_from_dict(d: dict[str, Any]) -> Spec:
@@ -297,12 +326,9 @@ def spec_from_dict(d: dict[str, Any]) -> Spec:
     types_resolved = [_resolve(td, index) for td in d.get("types", [])]
     slots_resolved = [_resolve(sd, index) for sd in d.get("slots", [])]
     classes_resolved = [_resolve(cd, index) for cd in d.get("classes", [])]
-    # Build sources by constructing fresh — they're ref-rich.
+    # Sources and constraints construct fresh; their cross-refs to types/
+    # slots/classes resolve through the uid index built above.
     sources_resolved = [_resolve(s, index) for s in d.get("sources", [])]
-    # Index fresh sources by name in case constraints reference them later.
-    for s in sources_resolved:
-        if isinstance(s, Source):
-            index.sources[s.name] = s
     constraints_resolved = [_resolve(c, index) for c in d.get("constraints", [])]
 
     return Spec(
@@ -585,7 +611,7 @@ def seed_from_fixture(conn: psycopg.Connection) -> int:
         ).fetchone()
         return row[0]
 
-    from tests.fixtures.B2.spec import spec as _fixture_spec
+    from knot_demo_b2.spec import spec as _fixture_spec
 
     payload = spec_to_dict(_fixture_spec)
     content_hash = compute_content_hash(_fixture_spec)

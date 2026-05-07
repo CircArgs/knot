@@ -13,7 +13,7 @@ from typing import ClassVar
 
 from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
 from knot.metaschema import ResolutionPolicy  # noqa: F401
-from tests.fixtures.B2.spec import Movie, imdb_movies, tmdb_movies, wikidata_movies
+from knot_demo_b2.spec import Movie, imdb_movies, tmdb_movies, wikidata_movies
 
 
 class ERMovieConfig:

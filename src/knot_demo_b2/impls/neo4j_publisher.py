@@ -19,7 +19,7 @@ from neo4j import GraphDatabase
 
 from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
 from knot.metaschema import DerivedSlot, OntologyClass, SpecBase  # noqa: F401
-from tests.fixtures.B2.spec import (
+from knot_demo_b2.spec import (
     Movie, Person, Credit,
     movie_director, movie_actors, movie_writers, movie_producers,
     spec,

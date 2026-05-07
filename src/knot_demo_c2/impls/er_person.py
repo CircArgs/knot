@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
-from tests.fixtures.C2.spec import Person, imdb_persons, tmdb_persons, wikidata_persons
+from knot_demo_c2.spec import Person, imdb_persons, tmdb_persons, wikidata_persons
 
 
 class ERPersonConfig:

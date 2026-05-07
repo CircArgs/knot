@@ -14,7 +14,7 @@ from typing import ClassVar
 
 from knot.protocols import DataContext, MaterializerProtocol, MaterializeResult  # noqa: F401
 from knot.metaschema import DerivedSlot, OntologyClass, SpecBase  # noqa: F401
-from tests.fixtures.C2.spec import (
+from knot_demo_c2.spec import (
     Title, Movie, Series, Episode, Game,
     Person, Credit, Identifier, Studio, Award, Country,
     movie_director, movie_actors, movie_writers, movie_producers,

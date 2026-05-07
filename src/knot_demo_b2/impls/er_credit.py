@@ -18,7 +18,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from knot.protocols import DataContext, ERProtocol, ERResult, ScoreColumnMap  # noqa: F401
-from tests.fixtures.B2.spec import (
+from knot_demo_b2.spec import (
     Credit, Movie, Person,
     imdb_credits, tmdb_credits, wikidata_credits,
 )
