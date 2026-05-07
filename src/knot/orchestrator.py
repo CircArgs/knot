@@ -191,71 +191,62 @@ class ToyOrchestrator:
     # ------------------------------------------------------------------
 
     def _run_normalize(self, stage: StageSpec) -> None:
-        """Read source CSV from lake_dir/sources/<name>.csv, write per_source_facts.
+        """Read source CSV from lake_dir/sources/<source_name>.csv, write per_source_facts.
 
-        Discovers all sources whose entity_class matches stage.class_name.
-        For each source, registers a DuckDB view and writes a parquet file at:
-            per_source_facts/<ClassName>/source=<source_name>/data.parquet
-
-        The materializer uses a fresh DuckDB connection seeded with the source
-        view.  No SQL string concatenation — table name comes from the source
-        view registered against the source file path.
+        Each normalize stage processes exactly ONE source (per-source fan-out
+        from the compiler).  Reads stage.source_name and writes:
+            per_source_facts/<class_name>/source=<source_name>/data.parquet
         """
         class_name = stage.class_name
         if class_name is None:
             raise ValueError("normalize stage missing class_name")
 
-        # Find all sources for this class.
-        class_sources = [
-            s for s in self._config.sources
-            if s.entity_class.name == class_name
-        ]
-        if not class_sources:
-            logger.warning(
-                "normalize:%s — no sources declared; writing empty output",
-                class_name,
+        src_name = stage.source_name
+        if src_name is None:
+            raise ValueError(
+                f"normalize:{class_name} stage is missing source_name; "
+                "compile() should fan out one normalize stage per source."
             )
-            return
+
+        source = self._source_by_name.get(src_name)
+        if source is None:
+            raise ValueError(
+                f"normalize:{class_name} source={src_name!r} is not declared "
+                f"in the orchestrator's sources config"
+            )
 
         sources_dir = self._config.lake_dir / "sources"
+        parquet_path = sources_dir / f"{src_name}.parquet"
+        csv_path = sources_dir / f"{src_name}.csv"
 
-        for source in class_sources:
-            src_name = source.name
-            # Locate source file — prefer parquet, fall back to CSV.
-            parquet_path = sources_dir / f"{src_name}.parquet"
-            csv_path = sources_dir / f"{src_name}.csv"
-
-            if parquet_path.exists():
-                self._materializer.register_parquet_view(src_name, parquet_path)
-            elif csv_path.exists():
-                self._materializer.register_csv_view(src_name, csv_path)
-            else:
-                raise FileNotFoundError(
-                    f"normalize:{class_name} — source file not found for "
-                    f"{src_name!r} (looked in {sources_dir})"
-                )
-
-            # Target path relative to lake_dir (materializer joins lake_dir).
-            target_rel = Path(
-                f"per_source_facts/{class_name}/source={src_name}/data.parquet"
+        if parquet_path.exists():
+            self._materializer.register_parquet_view(src_name, parquet_path)
+        elif csv_path.exists():
+            self._materializer.register_csv_view(src_name, csv_path)
+        else:
+            raise FileNotFoundError(
+                f"normalize:{class_name} — source file not found for "
+                f"{src_name!r} (looked in {sources_dir})"
             )
 
-            # Add _knot_source so downstream merge can filter by source without
-            # extra joins.  Source names come from trusted Source declarations in
-            # the spec — no raw user input in the SQL string.
-            select_sql = (
-                f"SELECT *, '{src_name}' AS _knot_source FROM {src_name}"
-            )
+        target_rel = Path(
+            f"per_source_facts/{class_name}/source={src_name}/data.parquet"
+        )
 
-            self._materializer.materialize(
-                ctx=None,
-                query_sql=select_sql,
-                target_path=target_rel,
-            )
-            logger.info(
-                "normalize:%s source=%s → %s",
-                class_name, src_name, target_rel,
-            )
+        # Add _knot_source so downstream merge can filter by source without
+        # extra joins.  Source names come from trusted Source declarations in
+        # the spec — no raw user input in the SQL string.
+        select_sql = f"SELECT *, '{src_name}' AS _knot_source FROM {src_name}"
+
+        self._materializer.materialize(
+            ctx=None,
+            query_sql=select_sql,
+            target_path=target_rel,
+        )
+        logger.info(
+            "normalize:%s source=%s → %s",
+            class_name, src_name, target_rel,
+        )
 
     # ------------------------------------------------------------------
     # merge

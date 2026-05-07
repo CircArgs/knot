@@ -26,6 +26,7 @@ class StageSpec(SpecBase):
         "dq:publish",
     ]
     class_name: str | None = None       # null for non-class-scoped stages (e.g. normalize)
+    source_name: str | None = None      # for normalize stages: which Source this stage processes
     impl_name: str | None = None        # bound impl, if any
     impl_revision: int | None = None
     config_revision: int | None = None

@@ -17,6 +17,7 @@ from knot.metaschema import (
     OntologyClass,
     Slot,
     SlotPath,
+    Source,
     Spec,
     TypeDefinition,
 )
@@ -50,8 +51,20 @@ def _slot(name: str, range_=None, range_cls: OntologyClass | None = None) -> Slo
     return Slot(name=name, range=r)
 
 
-def _spec(*classes: OntologyClass) -> Spec:
-    return Spec(id="test", version="0.1.0", classes=list(classes))
+def _spec(*classes: OntologyClass, sources: list[Source] | None = None) -> Spec:
+    return Spec(
+        id="test", version="0.1.0",
+        classes=list(classes),
+        sources=sources or [],
+    )
+
+
+def _src(name: str, cls: OntologyClass, id_slot: Slot | None = None) -> Source:
+    """Construct a Source with an auto-added identifier slot if not provided."""
+    if id_slot is None:
+        id_slot = Slot(name="id", range=string_t, identifier=True)
+        cls.slots = list(cls.slots) + [id_slot]
+    return Source(name=name, entity_class=cls, identifier_slot=id_slot)
 
 
 def _binding(cls_name: str, impl_name: str | None = None) -> BoundImpl:
@@ -69,9 +82,9 @@ def _binding(cls_name: str, impl_name: str | None = None) -> BoundImpl:
 # ---------------------------------------------------------------------------
 
 def test_compile_simple_class() -> None:
-    """Single class, no impls, scope='Movie' → WorkflowSpec with 5 stages."""
+    """Single class with one source → WorkflowSpec with normalize+resolve+merge+validate+publish."""
     Movie = _cls("Movie", slots=[_slot("title"), _slot("year", int_t)])
-    spec = _spec(Movie)
+    spec = _spec(Movie, sources=[_src("imdb_movies", Movie)])
 
     wf = compile(
         spec=spec,
@@ -91,6 +104,10 @@ def test_compile_simple_class() -> None:
     # All stages are for Movie
     for stage in wf.stages:
         assert stage.class_name == "Movie"
+    # The normalize stage carries the source name (per-source fan-out).
+    norm_stages = [s for s in wf.stages if s.kind == "normalize"]
+    assert len(norm_stages) == 1
+    assert norm_stages[0].source_name == "imdb_movies"
     # spec_revision_ids includes Movie
     assert "Movie" in wf.spec_revision_ids
 
@@ -138,47 +155,32 @@ def test_compile_full_pipeline() -> None:
 # ---------------------------------------------------------------------------
 
 def test_compile_cache_keys_deterministic() -> None:
-    """Same inputs → same cache keys; watermark change → only that stage's key changes."""
+    """Same inputs → same cache keys; watermark change → that source's normalize key changes."""
     Movie = _cls("Movie")
-    spec = _spec(Movie)
+    spec = _spec(Movie, sources=[_src("imdb_movies", Movie)])
     watermarks = {"imdb_movies": "wm_v1"}
 
-    wf1 = compile(
-        spec=spec,
-        bound_impls=[],
-        impl_configs={},
-        source_watermarks=watermarks,
-        scope="Movie",
-    )
-    wf2 = compile(
-        spec=spec,
-        bound_impls=[],
-        impl_configs={},
-        source_watermarks=watermarks,
-        scope="Movie",
-    )
+    wf1 = compile(spec=spec, bound_impls=[], impl_configs={},
+                  source_watermarks=watermarks, scope="Movie")
+    wf2 = compile(spec=spec, bound_impls=[], impl_configs={},
+                  source_watermarks=watermarks, scope="Movie")
 
-    # Same inputs → identical cache keys across all stages
-    keys1 = {s.kind: s.cache_key for s in wf1.stages}
-    keys2 = {s.kind: s.cache_key for s in wf2.stages}
+    # Same inputs → identical stage list (cache keys are deterministic).
+    keys1 = [(s.kind, s.source_name, s.cache_key) for s in wf1.stages]
+    keys2 = [(s.kind, s.source_name, s.cache_key) for s in wf2.stages]
     assert keys1 == keys2
 
     # Move the watermark
-    watermarks2 = {"imdb_movies": "wm_v2"}
-    wf3 = compile(
-        spec=spec,
-        bound_impls=[],
-        impl_configs={},
-        source_watermarks=watermarks2,
-        scope="Movie",
-    )
-    keys3 = {s.kind: s.cache_key for s in wf3.stages}
+    wf3 = compile(spec=spec, bound_impls=[], impl_configs={},
+                  source_watermarks={"imdb_movies": "wm_v2"}, scope="Movie")
 
-    # normalize stage cache key changes (it ingests the watermark)
-    assert keys3["normalize"] != keys1["normalize"]
-    # resolve/merge/validate/publish downstream cache keys also change because
-    # they include spec_revisions which are part of the input set
-    # (the watermark change propagates via a fresh compile producing a different key)
+    norm1 = next(s for s in wf1.stages if s.kind == "normalize")
+    norm3 = next(s for s in wf3.stages if s.kind == "normalize")
+
+    # normalize cache key for imdb_movies changes (it ingests the watermark)
+    assert norm3.cache_key != norm1.cache_key
+    # downstream stages don't see the per-source watermark (yet — Round-incremental
+    # work would propagate via pinned upstream run hashes); their cache keys are stable.
 
 
 # ---------------------------------------------------------------------------
@@ -328,9 +330,13 @@ def test_compile_canonical_hash() -> None:
 
 
 def test_compile_canonical_hash_changes_on_input_change() -> None:
-    """One input change (watermark) → different compile_hash."""
+    """One input change (source watermark) → different compile_hash.
+
+    The source must exist on the spec for its watermark to flow into the
+    normalize stage's cache_key (and thus into the workflow hash).
+    """
     Movie = _cls("Movie")
-    spec = _spec(Movie)
+    spec = _spec(Movie, sources=[_src("src", Movie)])
 
     wf1 = compile(
         spec=spec, bound_impls=[], impl_configs={},

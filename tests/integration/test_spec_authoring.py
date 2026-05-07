@@ -216,30 +216,40 @@ def test_get_spec_includes_added_source(client):
     assert "another_test_source" in source_names
 
 
-def test_post_runs_after_post_source_uses_new_active_spec(client, pg):
-    """POST /sources then POST /runs — compile must read the new active spec.
+def test_post_source_changes_compile_hash(client, pg):
+    """POST /sources changes the compiled workflow hash for the affected class.
 
-    We can't easily inspect the compiled WorkflowSpec for the new source's
-    normalize stage (the compiler doesn't enumerate Sources today), but we
-    CAN verify the run reads the *current* spec by checking compile_hash
-    differs after a spec change.
+    The compiler now enumerates spec.sources (filtered by entity_class) and
+    emits one normalize stage per source.  Adding a source for "Movie" must
+    add a normalize:Movie stage with the new source_name, which produces a
+    different WorkflowSpec — and therefore a different compile_hash.
     """
     r1 = client.post("/runs", json={"scope": "Movie"})
     assert r1.status_code == 200
     hash_a = r1.json()["compile_hash"]
+    movie_normalize_a = [
+        s for s in r1.json()["workflow_spec"]["stages"]
+        if s["kind"] == "normalize" and s["class_name"] == "Movie"
+    ]
+    # B2 seed has 3 Movie sources (imdb, tmdb, wikidata) → 3 normalize stages.
+    assert len(movie_normalize_a) == 3
 
-    # Add a source — this writes a new spec_revisions row.
+    # Add a fourth source for Movie.
     add = client.post("/sources", json={
-        "name": "compile_uses_active_spec_src",
+        "name": "fourth_movie_source",
         "entity_class": "Movie",
         "identifier_slot": "imdb_id",
     })
     assert add.status_code == 200
 
-    # Compile again — same scope but the spec is different.  Today knot's
-    # compile hash depends on spec_revision_ids which are synthetic (=1)
-    # for every class, so the compile_hash will be the same.  This test
-    # therefore only asserts the run records dispatch successfully — a stronger
-    # assertion is open until per-source-watermark inputs flow into cache_key.
     r2 = client.post("/runs", json={"scope": "Movie"})
     assert r2.status_code == 200
+    hash_b = r2.json()["compile_hash"]
+    movie_normalize_b = [
+        s for s in r2.json()["workflow_spec"]["stages"]
+        if s["kind"] == "normalize" and s["class_name"] == "Movie"
+    ]
+
+    assert hash_a != hash_b
+    assert len(movie_normalize_b) == 4
+    assert "fourth_movie_source" in {s["source_name"] for s in movie_normalize_b}

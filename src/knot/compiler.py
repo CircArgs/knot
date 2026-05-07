@@ -363,19 +363,19 @@ def _impl_for(
 
 
 def _sources_for_class(spec: Spec, cls: OntologyClass) -> list[str]:
-    """Return source names whose entity_class is cls."""
-    sources = []
-    for slot in spec.slots:
-        pass  # slots don't carry source info; sources are on Spec directly
-    # Spec doesn't have a sources list in the metaschema as defined — only classes/slots/types.
-    # Sources are defined in fixture specs but not stored on the Spec root model.
-    # We return empty here; the compiler integrates source watermarks via the watermarks dict.
-    return sources
+    """Return source names whose entity_class is cls (via real-ref identity).
+
+    Per spec-loading.md (closed): sources live on `spec.sources` since Round
+    spec-authoring.  The compiler enumerates them here for normalize-stage
+    emission.
+    """
+    return [s.name for s in spec.sources if s.entity_class is cls]
 
 
 def _build_stages_for_class(
     cls: OntologyClass,
     sorted_classes: list[OntologyClass],
+    class_source_names: list[str],
     bound_impls: list[BoundImpl],
     impl_configs: dict[str, dict],
     source_watermarks: dict[str, str],
@@ -384,7 +384,11 @@ def _build_stages_for_class(
     # cache_key_store: callable that returns prior artifact path (None = miss)
     prior_cache_keys: dict[str, str] | None,
 ) -> list[StageSpec]:
-    """Build StageSpec list for one class across all pipeline stages."""
+    """Build StageSpec list for one class across all pipeline stages.
+
+    Normalize fans out to one stage per Source (per spec.sources filtered by
+    entity_class).  Other stages remain one-per-class.
+    """
     stages: list[StageSpec] = []
 
     # Determine if this is a relation class (has slots whose range is another class).
@@ -392,72 +396,79 @@ def _build_stages_for_class(
     is_relation_class = bool(parent_class_names)
 
     # Resolve pinned parent runs.
-    # Default: use parents_override if provided, else empty (caller supplies via prior runs).
     pinned: dict[str, str] = {}
     if is_relation_class:
         for parent_name in parent_class_names:
             if parents_override and parent_name in parents_override:
                 pinned[parent_name] = parents_override[parent_name]
-            # If no override and no prior run hash available, leave absent.
-            # The orchestrator resolves "latest succeeded" at dispatch time.
 
     # Find bound impl for this class.
     impl = _impl_for(cls.name, cls.name, bound_impls)
     impl_name = impl.impl_name if impl else None
     impl_revision: int | None = None
     config_revision: int | None = None
-    impl_config: dict = {}
     if impl_name:
         cfg = impl_configs.get(impl_name, {})
-        impl_config = cfg
         config_revision = cfg.get("_revision")
         impl_revision = cfg.get("_impl_revision")
 
-    # Collect source watermarks relevant to this class.
-    # Any source whose name contains or matches the class name (heuristic),
-    # or all watermarks (conservative: include everything for the cache key).
-    cls_watermarks = {
-        src: wm
-        for src, wm in source_watermarks.items()
-        # Include sources with class name fragment; also include if no class prefix
-        if cls.name.lower() in src.lower() or "_" not in src
+    requires_classes = [cls.name] + parent_class_names
+    spec_rev_subset = {
+        name: rev
+        for name, rev in spec_revision_ids.items()
+        if name in requires_classes
     }
 
-    requires_classes = [cls.name] + parent_class_names
-
-    for stage_kind in _CLASS_STAGES:
-        # Build input dict for cache key computation.
+    # ── normalize: one stage per source for this class ────────────────────
+    for src_name in class_source_names:
+        src_wm = source_watermarks.get(src_name, "")
         inputs: dict[str, Any] = {
-            "spec_revisions": {
-                name: rev
-                for name, rev in spec_revision_ids.items()
-                if name in requires_classes
-            },
+            "spec_revisions": spec_rev_subset,
+            "impl_revision": impl_revision,
+            "config_revision": config_revision,
+            "source_name": src_name,
+            "source_watermark": src_wm,
+        }
+        ck = cache_key("normalize", cls.name, inputs)
+        hit = prior_cache_keys.get(ck) if prior_cache_keys else None
+        stages.append(StageSpec(
+            kind="normalize",
+            class_name=cls.name,
+            source_name=src_name,
+            impl_name=None,
+            impl_revision=None,
+            config_revision=None,
+            cache_key=ck,
+            cache_hit_artifact=hit,
+            pinned_parent_runs={},
+            source_watermarks={src_name: src_wm},
+            requires_classes=requires_classes,
+        ))
+
+    # ── resolve / merge / validate / publish: one stage per class ─────────
+    for stage_kind in ("resolve", "merge", "validate", "publish"):
+        inputs = {
+            "spec_revisions": spec_rev_subset,
             "impl_revision": impl_revision,
             "config_revision": config_revision,
         }
-
-        if stage_kind == "normalize":
-            inputs["source_watermarks"] = cls_watermarks
-        elif stage_kind in ("resolve", "merge", "validate", "publish"):
-            if is_relation_class:
-                inputs["pinned_parent_runs"] = pinned
+        if is_relation_class:
+            inputs["pinned_parent_runs"] = pinned
 
         ck = cache_key(stage_kind, cls.name, inputs)
-
-        # Determine cache hit artifact (None = miss; orchestrator fills in real lookup).
-        hit_artifact = prior_cache_keys.get(ck) if prior_cache_keys else None
+        hit = prior_cache_keys.get(ck) if prior_cache_keys else None
 
         stages.append(StageSpec(
             kind=stage_kind,  # type: ignore[arg-type]
             class_name=cls.name,
-            impl_name=impl_name if stage_kind in ("resolve",) else None,
-            impl_revision=impl_revision if stage_kind in ("resolve",) else None,
-            config_revision=config_revision if stage_kind in ("resolve",) else None,
+            source_name=None,
+            impl_name=impl_name if stage_kind == "resolve" else None,
+            impl_revision=impl_revision if stage_kind == "resolve" else None,
+            config_revision=config_revision if stage_kind == "resolve" else None,
             cache_key=ck,
-            cache_hit_artifact=hit_artifact,
+            cache_hit_artifact=hit,
             pinned_parent_runs=pinned if is_relation_class else {},
-            source_watermarks=cls_watermarks if stage_kind == "normalize" else {},
+            source_watermarks={},
             requires_classes=requires_classes,
         ))
 
@@ -517,6 +528,7 @@ def compile(  # noqa: A001  (shadowing built-in is intentional: this IS the knot
         cls_stages = _build_stages_for_class(
             cls=cls,
             sorted_classes=sorted_classes,
+            class_source_names=_sources_for_class(spec, cls),
             bound_impls=bound_impls,
             impl_configs=impl_configs,
             source_watermarks=source_watermarks,
