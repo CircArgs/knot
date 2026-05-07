@@ -36,3 +36,17 @@ CREATE INDEX IF NOT EXISTS spec_revisions_published_at
 
 CREATE INDEX IF NOT EXISTS spec_revisions_parent
     ON spec_revisions (parent_revision);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- trust_config
+-- Per-source trust scores. Runtime-editable, NOT draft → publish; affects
+-- query-time resolution (see knot.db.resolve). Source name is FK by name to
+-- the currently-published spec's Source entities (validated at the API layer).
+-- Default 0.5 means "unconfigured = neutral."
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS trust_config (
+    source_name  TEXT             PRIMARY KEY,
+    trust_score  DOUBLE PRECISION NOT NULL DEFAULT 0.5
+                 CHECK (trust_score >= 0.0 AND trust_score <= 1.0),
+    updated_at   TIMESTAMPTZ      NOT NULL DEFAULT now()
+);

@@ -17,12 +17,22 @@ Identifiers are quoted via ``psycopg.sql.Identifier`` (class + slot names
 come from the API and must be safe). Postgres types come from a fixed
 whitelist; type names from the spec are never spliced raw.
 
-Today this module handles **first-publish only** (idempotent
-``CREATE TABLE IF NOT EXISTS``). The diff visitor for ALTER paths on
-subsequent publishes is open and lands as the next slice.
+Diffing:
+  - ``diff_specs(prev, candidate) → list[Change]`` — typed dataclasses, one
+    per change between two specs (or first-publish when prev is None).
+  - ``emit_ddl(change, conn)`` — single-dispatch over the typed Change
+    tree; the same machinery as impact analysis (no parallel meta-structure).
+  - ``apply_migration(conn, prev, candidate)`` — runs the diff + applies.
+
+Open today (gaps that surface as postgres errors at apply time): type
+widening with non-trivial cast (USING clause), scalar↔array switch,
+required toggle on populated tables, drop-column confirmation gate.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import singledispatch
 
 import psycopg
 from psycopg import sql
@@ -99,9 +109,182 @@ def _create_table_sql(cls: OntologyClass) -> sql.Composable:
     )
 
 
-def apply_initial_schema(conn: psycopg.Connection, spec: Spec) -> None:
-    """Apply first-publish DDL (CREATE TABLE IF NOT EXISTS per concrete class)."""
-    for c in spec.classes:
-        if c.abstract:
-            continue
-        conn.execute(_create_table_sql(c))
+# ─── Change events ──────────────────────────────────────────────────────────
+
+
+@dataclass
+class Change:
+    """Marker base for typed migration events. Subclasses dispatch via emit_ddl."""
+
+
+@dataclass
+class AddClass(Change):
+    cls: OntologyClass
+
+
+@dataclass
+class DropClass(Change):
+    class_name: str
+
+
+@dataclass
+class AddSlot(Change):
+    cls: OntologyClass
+    slot: Slot
+
+
+@dataclass
+class DropSlot(Change):
+    cls: OntologyClass
+    slot_name: str
+
+
+@dataclass
+class ChangeSlotType(Change):
+    """Slot's postgres column type changed (range or multivalued flip)."""
+    cls: OntologyClass
+    slot: Slot
+    prev_pg_type: str
+    new_pg_type: str
+
+
+@dataclass
+class ChangeSlotRequired(Change):
+    cls: OntologyClass
+    slot_name: str
+    new_required: bool
+
+
+# ─── Diff visitor ───────────────────────────────────────────────────────────
+
+
+def _stored_slots_by_name(cls: OntologyClass) -> dict[str, Slot]:
+    return {s.name: s for s in cls.slots if _is_stored(s)}
+
+
+def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
+    """Walk both typed trees, emit a list of Change events.
+
+    First-publish (``prev is None``) yields one ``AddClass`` per concrete
+    class. Subsequent publishes diff class-by-class and slot-by-slot.
+    """
+    changes: list[Change] = []
+    prev_classes = {c.name: c for c in (prev.classes if prev else [])}
+    cand_classes = {c.name: c for c in candidate.classes}
+
+    for name in cand_classes.keys() - prev_classes.keys():
+        c = cand_classes[name]
+        if not c.abstract:
+            changes.append(AddClass(cls=c))
+
+    for name in prev_classes.keys() - cand_classes.keys():
+        c = prev_classes[name]
+        if not c.abstract:
+            changes.append(DropClass(class_name=name))
+
+    for name in cand_classes.keys() & prev_classes.keys():
+        prev_cls, cand_cls = prev_classes[name], cand_classes[name]
+        if cand_cls.abstract or prev_cls.abstract:
+            continue  # abstract→concrete or concrete→abstract: skip for now
+        prev_slots = _stored_slots_by_name(prev_cls)
+        cand_slots = _stored_slots_by_name(cand_cls)
+
+        for s_name in cand_slots.keys() - prev_slots.keys():
+            changes.append(AddSlot(cls=cand_cls, slot=cand_slots[s_name]))
+
+        for s_name in prev_slots.keys() - cand_slots.keys():
+            changes.append(DropSlot(cls=cand_cls, slot_name=s_name))
+
+        for s_name in cand_slots.keys() & prev_slots.keys():
+            ps, cs = prev_slots[s_name], cand_slots[s_name]
+            prev_t = _slot_pg_type(ps)
+            new_t = _slot_pg_type(cs)
+            if prev_t != new_t:
+                changes.append(
+                    ChangeSlotType(cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t)
+                )
+            if ps.required != cs.required:
+                changes.append(
+                    ChangeSlotRequired(cls=cand_cls, slot_name=s_name, new_required=cs.required)
+                )
+    return changes
+
+
+# ─── DDL emission (single-dispatch) ─────────────────────────────────────────
+
+
+@singledispatch
+def emit_ddl(change: Change, conn: psycopg.Connection) -> None:
+    raise TypeError(f"No DDL emitter registered for {type(change).__name__}")
+
+
+@emit_ddl.register
+def _(change: AddClass, conn: psycopg.Connection) -> None:
+    conn.execute(_create_table_sql(change.cls))
+
+
+@emit_ddl.register
+def _(change: DropClass, conn: psycopg.Connection) -> None:
+    stmt = sql.SQL("DROP TABLE IF EXISTS {table} CASCADE").format(
+        table=sql.Identifier(_SCHEMA, change.class_name.lower()),
+    )
+    conn.execute(stmt)
+
+
+@emit_ddl.register
+def _(change: AddSlot, conn: psycopg.Connection) -> None:
+    nullable = sql.SQL("NOT NULL") if change.slot.required else sql.SQL("NULL")
+    stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN {col} {pgtype} {nullable}").format(
+        table=_table_id(change.cls),
+        col=sql.Identifier(change.slot.name),
+        pgtype=sql.SQL(_slot_pg_type(change.slot)),
+        nullable=nullable,
+    )
+    conn.execute(stmt)
+
+
+@emit_ddl.register
+def _(change: DropSlot, conn: psycopg.Connection) -> None:
+    stmt = sql.SQL("ALTER TABLE {table} DROP COLUMN {col}").format(
+        table=_table_id(change.cls),
+        col=sql.Identifier(change.slot_name),
+    )
+    conn.execute(stmt)
+
+
+@emit_ddl.register
+def _(change: ChangeSlotType, conn: psycopg.Connection) -> None:
+    # Postgres ALTER COLUMN TYPE attempts an implicit cast; non-trivial
+    # casts (text → int) error here, which is correct (loud failure).
+    stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype}").format(
+        table=_table_id(change.cls),
+        col=sql.Identifier(change.slot.name),
+        pgtype=sql.SQL(change.new_pg_type),
+    )
+    conn.execute(stmt)
+
+
+@emit_ddl.register
+def _(change: ChangeSlotRequired, conn: psycopg.Connection) -> None:
+    op = sql.SQL("SET NOT NULL") if change.new_required else sql.SQL("DROP NOT NULL")
+    stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} {op}").format(
+        table=_table_id(change.cls),
+        col=sql.Identifier(change.slot_name),
+        op=op,
+    )
+    conn.execute(stmt)
+
+
+# ─── Apply ──────────────────────────────────────────────────────────────────
+
+
+def apply_migration(
+    conn: psycopg.Connection,
+    prev: Spec | None,
+    candidate: Spec,
+) -> list[Change]:
+    """Diff the two specs and apply the resulting DDL. Returns the changes run."""
+    changes = diff_specs(prev, candidate)
+    for change in changes:
+        emit_ddl(change, conn)
+    return changes

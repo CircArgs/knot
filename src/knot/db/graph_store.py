@@ -23,6 +23,7 @@ from typing import Any
 
 import psycopg
 from psycopg import sql
+from psycopg.rows import dict_row
 
 from knot.ontology import OntologyClass, Source
 
@@ -37,6 +38,17 @@ def _table_id(cls: OntologyClass) -> sql.Identifier:
 
 def _stored_slot_names(cls: OntologyClass) -> list[str]:
     return [s.name for s in cls.slots if getattr(s, "derivation", None) is None]
+
+
+def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
+    """Coerce postgres-native types (datetime) to JSON-serializable shapes."""
+    out: dict[str, Any] = {}
+    for k, v in row.items():
+        if hasattr(v, "isoformat"):
+            out[k] = v.isoformat()
+        else:
+            out[k] = v
+    return out
 
 
 def insert_rows(
@@ -85,3 +97,69 @@ def insert_rows(
         conn.execute(stmt, values)
         count += 1
     return count
+
+
+def list_rows(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    limit: int = 100,
+    offset: int = 0,
+    as_of: int | None = None,
+) -> list[dict[str, Any]]:
+    """List rows for a class, ordered by ``(_canonical_id, _source)``.
+
+    ``as_of`` filters rows ingested under spec_revision ≤ N (revision pin).
+    """
+    where = sql.SQL("WHERE _spec_revision <= %s") if as_of is not None else sql.SQL("")
+    stmt = sql.SQL(
+        "SELECT * FROM {table} {where} "
+        "ORDER BY _canonical_id, _source LIMIT %s OFFSET %s"
+    ).format(table=_table_id(cls), where=where)
+    params: list[Any] = []
+    if as_of is not None:
+        params.append(as_of)
+    params.extend([limit, offset])
+    cur = conn.cursor(row_factory=dict_row)
+    cur.execute(stmt, params)
+    return [_serialize_row(r) for r in cur.fetchall()]
+
+
+def get_canonical_contributions(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    as_of: int | None = None,
+) -> list[dict[str, Any]]:
+    """All per-source rows that share a ``_canonical_id`` (the multi-valued bag).
+
+    Empty list if the canonical_id is unknown.
+    """
+    where_extra = sql.SQL(" AND _spec_revision <= %s") if as_of is not None else sql.SQL("")
+    stmt = sql.SQL(
+        "SELECT * FROM {table} WHERE _canonical_id = %s{where_extra} "
+        "ORDER BY _source"
+    ).format(table=_table_id(cls), where_extra=where_extra)
+    params: list[Any] = [canonical_id]
+    if as_of is not None:
+        params.append(as_of)
+    cur = conn.cursor(row_factory=dict_row)
+    cur.execute(stmt, params)
+    return [_serialize_row(r) for r in cur.fetchall()]
+
+
+def count_rows(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    as_of: int | None = None,
+) -> int:
+    where = sql.SQL("WHERE _spec_revision <= %s") if as_of is not None else sql.SQL("")
+    stmt = sql.SQL("SELECT count(*) FROM {table} {where}").format(
+        table=_table_id(cls), where=where,
+    )
+    params: list[Any] = []
+    if as_of is not None:
+        params.append(as_of)
+    return conn.execute(stmt, params).fetchone()[0]

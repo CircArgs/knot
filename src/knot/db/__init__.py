@@ -6,6 +6,8 @@ What's inside:
   - ``spec_store``                                   — spec_revisions CRUD
   - ``migration``                                    — spec → per-class table DDL
   - ``graph_store``                                  — per-class table INSERT/SELECT
+  - ``trust_config``                                 — per-source trust scores
+  - ``resolve``                                      — trust-resolved record builder
   - ``sql_gen``                                      — expression tree → SQL strings
 
 Centralization rule: only modules under ``knot/db/`` import ``psycopg`` and
@@ -23,11 +25,19 @@ from pathlib import Path
 import psycopg
 
 from knot.config import get_dsn
-from knot.db import migration, spec_store, sql_gen, graph_store
+from knot.db import (
+    graph_store,
+    migration,
+    resolve,
+    spec_store,
+    sql_gen,
+    trust_config,
+)
 
 __all__ = [
     "connect", "apply_schema",
-    "spec_store", "migration", "graph_store", "sql_gen",
+    "spec_store", "migration", "graph_store",
+    "trust_config", "resolve", "sql_gen",
 ]
 
 

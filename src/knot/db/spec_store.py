@@ -574,27 +574,29 @@ def publish_draft(conn: psycopg.Connection, draft_id: int) -> int:
     Returns the revision number of the now-published draft.  Raises
     `PublishGateError` on validation failure (draft remains a draft).
     """
-    spec = get_revision(conn, draft_id)
-    publish_gate(spec)  # raises on failure
+    candidate = get_revision(conn, draft_id)
+    publish_gate(candidate)  # raises on failure
+    prev = get_published(conn)
 
-    # Flip atomically in a single statement so the partial unique index
-    # `(published) WHERE published = TRUE` sees only one TRUE row at commit.
-    conn.execute(
-        """
-        UPDATE spec_revisions
-        SET
-            published    = (revision = %s),
-            published_at = CASE WHEN revision = %s THEN %s ELSE published_at END
-        WHERE revision = %s OR published = TRUE
-        """,
-        (draft_id, draft_id, _now(), draft_id),
-    )
-
-    # Bring data-plane schema in line. First-publish path only today
-    # (idempotent CREATE TABLE IF NOT EXISTS); diff-driven ALTER paths
-    # are open and will replace this when the spec-diff visitor lands.
-    from knot.db.migration import apply_initial_schema
-    apply_initial_schema(conn, spec)
+    # The partial unique index `(published) WHERE published = TRUE` is
+    # validated per-row, not per-statement, so a single combined UPDATE
+    # is racy (postgres may transiently see two TRUE rows depending on
+    # row order). Split into demote → promote inside an explicit
+    # transaction so the publish flag flip + migration are atomic and
+    # the index never sees two TRUE rows simultaneously.
+    from knot.db.migration import apply_migration
+    with conn.transaction():
+        conn.execute(
+            "UPDATE spec_revisions SET published = FALSE "
+            "WHERE published = TRUE AND revision <> %s",
+            (draft_id,),
+        )
+        conn.execute(
+            "UPDATE spec_revisions SET published = TRUE, published_at = %s "
+            "WHERE revision = %s",
+            (_now(), draft_id),
+        )
+        apply_migration(conn, prev, candidate)
 
     return draft_id
 
