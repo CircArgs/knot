@@ -29,6 +29,7 @@ from knot.api_models import (
     BoundImplListItem,
     BoundImplRequest,
     BoundImplResponse,
+    CompiledWorkflowListItem,
     CompiledWorkflowResponse,
     ConfigRevisionRequest,
     ConfigRevisionResponse,
@@ -438,6 +439,42 @@ def get_run(run_id: int) -> RunStatusResponse:
         error=row[6],
         workflow_spec=spec_data,
     )
+
+
+# ---------------------------------------------------------------------------
+# GET /compiled_workflows
+# ---------------------------------------------------------------------------
+
+@app.get("/compiled_workflows", response_model=list[CompiledWorkflowListItem])
+def list_compiled_workflows(limit: int = 100) -> list[CompiledWorkflowListItem]:
+    """List compiled workflows newest-first.  Per-row run_count + stage_count
+    let callers see at-a-glance which compile_hashes have been dispatched."""
+    with _get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT cw.hash,
+                   cw.canonicalizer_version,
+                   cw.created_at,
+                   COUNT(pr.id)                        AS run_count,
+                   COALESCE(jsonb_array_length(cw.spec -> 'stages'), 0) AS stage_count
+            FROM compiled_workflows cw
+            LEFT JOIN pipeline_runs pr ON pr.compile_hash = cw.hash
+            GROUP BY cw.hash, cw.canonicalizer_version, cw.created_at, cw.spec
+            ORDER BY cw.created_at DESC
+            LIMIT %s
+            """,
+            (limit,),
+        ).fetchall()
+    return [
+        CompiledWorkflowListItem(
+            hash=r[0].strip(),
+            canonicalizer_version=r[1],
+            created_at=r[2].isoformat(),
+            run_count=r[3],
+            stage_count=r[4],
+        )
+        for r in rows
+    ]
 
 
 # ---------------------------------------------------------------------------

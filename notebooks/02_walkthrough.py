@@ -6,10 +6,6 @@ __generated_with = "0.23.5"
 app = marimo.App(width="medium")
 
 
-# ===========================================================================
-# Bootstrap
-# ===========================================================================
-
 @app.cell
 def _():
     import sys as _sys
@@ -27,7 +23,6 @@ def _():
     NEO4J_URI = "bolt://localhost:7687"
     NEO4J_AUTH = ("neo4j", "knottest")
     NEO4J_DB = "neo4j"
-
     return DSN, LAKE, NEO4J_AUTH, NEO4J_DB, NEO4J_URI, REPO, mo, pd
 
 
@@ -56,10 +51,6 @@ def _(mo):
     """)
     return
 
-
-# ===========================================================================
-# Section 1 — Source registration
-# ===========================================================================
 
 @app.cell
 def _(mo, pd):
@@ -104,10 +95,6 @@ def _(mo, pd):
     ])
     return (b2_spec,)
 
-
-# ===========================================================================
-# Section 2 — Ontology modelling
-# ===========================================================================
 
 @app.cell
 def _(b2_spec, mo, pd):
@@ -191,10 +178,6 @@ def _(b2_spec, mo, slot_pick):
     return
 
 
-# ===========================================================================
-# Section 3 — Spec edit + impact tracing
-# ===========================================================================
-
 @app.cell
 def _(mo):
     edit_pick = mo.ui.dropdown(
@@ -276,10 +259,6 @@ def _(edit_pick, mo):
     return
 
 
-# ===========================================================================
-# Section 4 — Draft impl + DataContext validation
-# ===========================================================================
-
 @app.cell
 def _(mo):
     impl_source = mo.ui.text_area(
@@ -359,10 +338,6 @@ def _(b2_spec, impl_source, mo):
     return
 
 
-# ===========================================================================
-# Section 5 — Bind impl (postgres bound_impls)
-# ===========================================================================
-
 @app.cell
 def _(DSN, mo, pd):
     import psycopg as _pg
@@ -399,10 +374,6 @@ def _(DSN, mo, pd):
     ])
     return
 
-
-# ===========================================================================
-# Section 6 — Live compile → WorkflowSpec
-# ===========================================================================
 
 @app.cell
 def _(mo):
@@ -474,10 +445,6 @@ def _(b2_spec, mo, pd, scope_pick):
     ])
     return
 
-
-# ===========================================================================
-# Section 7 — Dispatch via toy orchestrator
-# ===========================================================================
 
 @app.cell
 def _(mo):
@@ -656,12 +623,8 @@ def _(DSN, LAKE, REPO, b2_spec, mo, pd, run_pipeline_btn):
     return
 
 
-# ===========================================================================
-# Section 8 — Lake consumption
-# ===========================================================================
-
 @app.cell
-def _(LAKE, mo, pd):
+def _(LAKE, mo):
     _resolved = LAKE / "resolved_facts" / "Movie" / "data.parquet"
 
     if not _resolved.exists():
@@ -706,10 +669,6 @@ def _(LAKE, mo, pd):
     ])
     return
 
-
-# ===========================================================================
-# Section 9 — Materialized-target consumption (live Cypher)
-# ===========================================================================
 
 @app.cell
 def _(mo):
@@ -824,10 +783,6 @@ def _(DSN, LAKE, NEO4J_AUTH, NEO4J_DB, NEO4J_URI, mo, pd, publish_btn):
     return
 
 
-# ===========================================================================
-# Section 10 — Audit walk-back
-# ===========================================================================
-
 @app.cell
 def _(DSN, NEO4J_AUTH, NEO4J_DB, NEO4J_URI, mo, pd):
     import json as _json
@@ -917,10 +872,6 @@ def _(DSN, NEO4J_AUTH, NEO4J_DB, NEO4J_URI, mo, pd):
     ])
     return
 
-
-# ===========================================================================
-# Section 11 — Multi-revision drafts
-# ===========================================================================
 
 @app.cell
 def _(mo):
@@ -1045,10 +996,6 @@ def _(DSN, REPO, b2_spec, mo, new_rev_btn, pd):
     ])
     return
 
-
-# ===========================================================================
-# Section 12 — Corrections overlay (OPEN)
-# ===========================================================================
 
 @app.cell
 def _(mo):

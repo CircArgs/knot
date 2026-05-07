@@ -110,6 +110,18 @@ class CompiledWorkflowResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# GET /compiled_workflows
+# ---------------------------------------------------------------------------
+
+class CompiledWorkflowListItem(BaseModel):
+    hash: str
+    canonicalizer_version: int
+    created_at: str
+    run_count: int
+    stage_count: int
+
+
+# ---------------------------------------------------------------------------
 # GET /bound_impls
 # ---------------------------------------------------------------------------
 
