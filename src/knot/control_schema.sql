@@ -121,6 +121,24 @@ CREATE INDEX IF NOT EXISTS user_corrections_class_applied
     ON _user_corrections (class_name, applied_to_lake);
 
 -- ──────────────────────────────────────────────────────────────────────────────
+-- spec_revisions — postgres-backed ontology spec storage
+-- One row per spec revision; exactly one row at a time has active=TRUE.
+-- The active row is the spec the API uses for compilation, validation, etc.
+-- Per spec-loading.md (option 1, single-team posture).
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS spec_revisions (
+    revision      SERIAL      PRIMARY KEY,
+    spec          JSONB       NOT NULL,
+    content_hash  CHAR(64)    NOT NULL,
+    active        BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Only one row may be active at a time.
+CREATE UNIQUE INDEX IF NOT EXISTS spec_revisions_one_active
+    ON spec_revisions (active) WHERE active = TRUE;
+
+-- ──────────────────────────────────────────────────────────────────────────────
 -- _user_er_decisions
 -- Operator-submitted force-merge / force-split decisions.
 -- canonical_ids is the set of entity ids the decision covers.

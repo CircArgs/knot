@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 
 # ---------------------------------------------------------------------------
@@ -170,3 +170,37 @@ class ERDecisionResponse(BaseModel):
     decision_type: str
     canonical_ids: list[str]
     submitted_at: str
+
+
+# ---------------------------------------------------------------------------
+# GET /sources
+# ---------------------------------------------------------------------------
+
+class SourceListItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    entity_class: str
+    identifier_slot: str
+    description: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# POST /sources
+# ---------------------------------------------------------------------------
+
+class SourceCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    entity_class: str        # name of an existing OntologyClass on the spec
+    identifier_slot: str     # name of an existing Slot on that class
+    description: str | None = None
+
+
+class SourceCreateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    spec_revision: int
+    spec_content_hash: str
+    source: SourceListItem

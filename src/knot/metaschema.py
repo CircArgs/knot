@@ -550,6 +550,7 @@ class Spec(SpecBase):
     classes: list[OntologyClass] = Field(default_factory=list)
     slots: list[Slot] = Field(default_factory=list)
     types: list[TypeDefinition] = Field(default_factory=list)
+    sources: list[Source] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------

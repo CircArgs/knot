@@ -1,7 +1,8 @@
 """knot FastAPI surface — compiler + control schema over HTTP.
 
-Spec source: loaded from tests.fixtures.B2 at startup.
-TODO: replace with "load spec from postgres" when that slice is built.
+Spec source: loaded from the active spec_revisions row in postgres.
+On first boot with no active revision, seeds from the B2 fixture.
+Per spec-loading.md option 1 (postgres-backed, single-team posture).
 
 Single-team posture per core-design.md commitment 5.
 No auth, no rate limiting, no multi-tenant defenses.
@@ -23,7 +24,9 @@ from knot.canonical import canonical_dump, compute_content_hash
 from knot.compiler import compile as knot_compile, compile_hash
 from knot.control_db import apply_schema
 from knot.impact import BoundImpl
+from knot.metaschema import Source, Spec
 from knot.registration import DataContextValidationError, validate_datacontexts
+from knot import spec_store
 
 from knot.api_models import (
     BoundImplListItem,
@@ -43,6 +46,9 @@ from knot.api_models import (
     RunRequest,
     RunResponse,
     RunStatusResponse,
+    SourceCreate,
+    SourceCreateResponse,
+    SourceListItem,
 )
 
 # ---------------------------------------------------------------------------
@@ -60,13 +66,24 @@ def _get_conn() -> psycopg.Connection:
     return psycopg.connect(DSN, autocommit=True)
 
 
-# Load spec at import time from B2 fixture.
-# TODO: replace with postgres-backed spec loading in a future slice.
-from tests.fixtures.B2.spec import spec as _SPEC  # noqa: E402
+def _get_spec() -> Spec:
+    """Return the currently active spec (postgres-backed).
+
+    On first call with no active revision, seeds from the B2 fixture.
+    Per spec-loading.md option 1.
+    """
+    with _get_conn() as conn:
+        active = spec_store.load_active(conn)
+    if active is None:
+        with _get_conn() as conn:
+            spec_store.seed_from_fixture(conn)
+        with _get_conn() as conn:
+            active = spec_store.load_active(conn)
+    return active  # type: ignore[return-value]
 
 
 def _spec_hash() -> str:
-    return compute_content_hash(_SPEC)
+    return compute_content_hash(_get_spec())
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +151,7 @@ def post_impl_revision(name: str, body: ImplRevisionRequest) -> ImplRevisionResp
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     try:
-        validate_datacontexts(impl_class, _SPEC)
+        validate_datacontexts(impl_class, _get_spec())
     except DataContextValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -356,7 +373,7 @@ def post_run(body: RunRequest) -> RunResponse:
 
         try:
             workflow = knot_compile(
-                spec=_SPEC,
+                spec=_get_spec(),
                 bound_impls=bound_impls,
                 impl_configs=impl_configs,
                 source_watermarks=source_watermarks,
@@ -507,7 +524,92 @@ def get_compiled_workflow(hash: str) -> CompiledWorkflowResponse:
 @app.get("/spec")
 def get_spec() -> dict:
     """Return the current loaded spec as canonical-dump JSON."""
-    return json.loads(canonical_dump(_SPEC))
+    return json.loads(canonical_dump(_get_spec()))
+
+
+# ---------------------------------------------------------------------------
+# GET /sources
+# ---------------------------------------------------------------------------
+
+@app.get("/sources", response_model=list[SourceListItem])
+def list_sources() -> list[SourceListItem]:
+    """List all sources on the active spec."""
+    spec = _get_spec()
+    return [
+        SourceListItem(
+            name=s.name,
+            entity_class=s.entity_class.name,
+            identifier_slot=s.identifier_slot.name,
+            description=s.description,
+        )
+        for s in spec.sources
+    ]
+
+
+# ---------------------------------------------------------------------------
+# POST /sources
+# ---------------------------------------------------------------------------
+
+@app.post("/sources", response_model=SourceCreateResponse)
+def post_source(body: SourceCreate) -> SourceCreateResponse:
+    """Add a source to the active spec; writes a new spec revision."""
+    spec = _get_spec()
+
+    # Resolve entity_class name to real ref.
+    cls = next((c for c in spec.classes if c.name == body.entity_class), None)
+    if cls is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"OntologyClass {body.entity_class!r} not found on active spec",
+        )
+
+    # Resolve identifier_slot name — must be one of cls.slots.
+    slot = next((s for s in cls.slots if s.name == body.identifier_slot), None)
+    if slot is None:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Slot {body.identifier_slot!r} not on class {cls.name!r}",
+        )
+
+    # Reject duplicate source name.
+    if any(s.name == body.name for s in spec.sources):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Source {body.name!r} already exists on active spec",
+        )
+
+    new_source = Source(
+        name=body.name,
+        entity_class=cls,
+        identifier_slot=slot,
+        description=body.description,
+    )
+
+    # Build new Spec with the appended source (avoids mutating shared state).
+    updated_spec = Spec(
+        id=spec.id,
+        version=spec.version,
+        classes=list(spec.classes),
+        slots=list(spec.slots),
+        types=list(spec.types),
+        sources=list(spec.sources) + [new_source],
+    )
+
+    with _get_conn() as conn:
+        new_rev = spec_store.save_revision(conn, updated_spec)
+
+    content_hash = compute_content_hash(updated_spec)
+    source_item = SourceListItem(
+        name=new_source.name,
+        entity_class=new_source.entity_class.name,
+        identifier_slot=new_source.identifier_slot.name,
+        description=new_source.description,
+    )
+    return SourceCreateResponse(
+        spec_revision=new_rev,
+        spec_content_hash=content_hash,
+        source=source_item,
+    )
 
 
 # ---------------------------------------------------------------------------

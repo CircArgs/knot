@@ -394,4 +394,9 @@ spec = Spec(
         credit_id, credit_person, credit_work, credit_role,
     ],
     types=[string_t, integer_t, float_t, date_t],
+    sources=[
+        imdb_movies, tmdb_movies, wikidata_movies,
+        imdb_persons, tmdb_persons,
+        imdb_credits, tmdb_credits, wikidata_credits,
+    ],
 )
