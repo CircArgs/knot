@@ -9,16 +9,22 @@ Beta posterior).
 Pure logic: no SQL strings, no postgres imports — calls db primitives
 for data and computes the resolution in Python.
 
+**Deterministic by design.** Knot queries are about surfacing the best
+current estimate, not exploring an action space — so policies are
+argmax-style, never sampling. Beta posteriors capture state; corrections
+update them; queries are deterministic given that state.
+
 Resolution policies implemented today:
-  - ``ARGMAX_TRUST``     — highest-trust non-null contribution per slot,
-                           tie-break by source name. Uses scalar
-                           trust_config.
-  - ``THOMPSON_SAMPLING`` — sample θ ~ Beta(α, β) per (source, slot) and
-                           pick the contribution whose source drew highest.
-                           Uses trust_posteriors.
-  - ``UCB1``             — pick by upper-confidence bound on the
-                           per-(source, slot) Beta mean (μ + c√(ln N / n)).
-                           Uses trust_posteriors.
+  - ``ARGMAX_TRUST``    — highest-trust non-null contribution per slot,
+                          tie-break by source name. Uses scalar
+                          trust_config (human-set, doesn't learn).
+  - ``POSTERIOR_MEAN``  — argmax over α/(α+β) per (source, slot).
+                          Uses trust_posteriors; learns from corrections;
+                          deterministic and monotone in observations.
+  - ``LCB``             — argmax over (mean − k·stddev) per (source, slot).
+                          Conservative variant: penalises sources with
+                          high uncertainty (low observation count). Same
+                          state as POSTERIOR_MEAN, different optimum.
 
 Other policies declared on Slot.resolution_policy raise
 ``NotImplementedError``: ``MODE``, ``WEIGHTED_VOTE``, ``MEDIAN_NUMERIC``,
@@ -31,8 +37,7 @@ regardless of policy — multi-valued canonical is the bag of contributions.
 from __future__ import annotations
 
 import math
-import random
-from typing import Any, Optional
+from typing import Any
 
 import psycopg
 
@@ -41,7 +46,7 @@ from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA, Posterior
 from knot.ontology import OntologyClass, ResolutionPolicy, Slot
 
 
-UCB_EXPLORATION = 1.0
+LCB_K = 1.0  # stddev multiplier for the Lower Confidence Bound penalty
 
 
 def resolve_entity(
@@ -50,7 +55,6 @@ def resolve_entity(
     cls: OntologyClass,
     canonical_id: str,
     as_of: int | None = None,
-    rng: Optional[random.Random] = None,
 ) -> dict[str, Any] | None:
     """Build one resolved record for a canonical_id, applying per-slot policy.
 
@@ -66,7 +70,6 @@ def resolve_entity(
     posteriors = {
         (p.source, p.slot): p for p in trust_posteriors.list_posteriors(conn)
     }
-    rng = rng or random
 
     resolved: dict[str, Any] = {"_canonical_id": canonical_id}
     for slot in cls.slots:
@@ -76,7 +79,7 @@ def resolve_entity(
             resolved[slot.name] = _union_multivalued(slot, contribs)
         else:
             resolved[slot.name] = _resolve_scalar(
-                slot, contribs, scalar_trust, posteriors, rng,
+                slot, contribs, scalar_trust, posteriors,
             )
     return resolved
 
@@ -86,7 +89,6 @@ def _resolve_scalar(
     contribs: list[dict[str, Any]],
     scalar_trust: dict[str, float],
     posteriors: dict[tuple[str, str], Posterior],
-    rng: random.Random,
 ) -> Any:
     non_null = [
         (c["_source"], c[slot.name])
@@ -99,10 +101,10 @@ def _resolve_scalar(
     policy = slot.resolution_policy
     if policy == ResolutionPolicy.ARGMAX_TRUST:
         return _argmax_trust(non_null, scalar_trust)
-    if policy == ResolutionPolicy.THOMPSON_SAMPLING:
-        return _thompson(slot, non_null, posteriors, rng)
-    if policy == ResolutionPolicy.UCB1:
-        return _ucb1(slot, non_null, posteriors)
+    if policy == ResolutionPolicy.POSTERIOR_MEAN:
+        return _posterior_mean(slot, non_null, posteriors)
+    if policy == ResolutionPolicy.LCB:
+        return _lcb(slot, non_null, posteriors)
     raise NotImplementedError(
         f"Resolution policy {policy.value!r} for slot {slot.name!r} not implemented yet"
     )
@@ -130,34 +132,35 @@ def _post_for(
     )
 
 
-def _thompson(
+def _posterior_mean(
     slot: Slot,
     non_null: list[tuple[str, Any]],
     posteriors: dict[tuple[str, str], Posterior],
-    rng: random.Random,
 ) -> Any:
-    samples: list[tuple[float, str, Any]] = []
+    """Argmax over per-(source, slot) Beta posterior mean. Deterministic;
+    same state → same answer."""
+    scored = [
+        (_post_for(posteriors, source, slot.name).mean, source, value)
+        for source, value in non_null
+    ]
+    scored.sort(key=lambda t: (-t[0], t[1]))
+    return scored[0][2]
+
+
+def _lcb(
+    slot: Slot,
+    non_null: list[tuple[str, Any]],
+    posteriors: dict[tuple[str, str], Posterior],
+) -> Any:
+    """Argmax over (mean − k·stddev) per (source, slot). Penalises sources
+    with high uncertainty (low observation count); deterministic."""
+    scored: list[tuple[float, str, Any]] = []
     for source, value in non_null:
         post = _post_for(posteriors, source, slot.name)
-        theta = rng.betavariate(post.alpha, post.beta)
-        samples.append((theta, source, value))
-    samples.sort(key=lambda t: (-t[0], t[1]))
-    return samples[0][2]
-
-
-def _ucb1(
-    slot: Slot,
-    non_null: list[tuple[str, Any]],
-    posteriors: dict[tuple[str, str], Posterior],
-) -> Any:
-    posts = [_post_for(posteriors, source, slot.name) for source, _ in non_null]
-    total_obs = sum(p.observations for p in posts)
-    N = max(total_obs, 1.0)
-    scored: list[tuple[float, str, Any]] = []
-    for (source, value), post in zip(non_null, posts):
-        n = max(post.observations, 1.0)
-        bonus = UCB_EXPLORATION * math.sqrt(math.log(N + 1) / n)
-        scored.append((post.mean + bonus, source, value))
+        a, b = post.alpha, post.beta
+        var = (a * b) / ((a + b) ** 2 * (a + b + 1.0))
+        stddev = math.sqrt(var)
+        scored.append((post.mean - LCB_K * stddev, source, value))
     scored.sort(key=lambda t: (-t[0], t[1]))
     return scored[0][2]
 

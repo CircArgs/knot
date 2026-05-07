@@ -7,20 +7,19 @@ app = marimo.App(width="medium")
 @app.cell(hide_code=True)
 def _():
     import marimo as mo
+
     return (mo,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        # knot — end-to-end
+    mo.md("""
+    # knot — end-to-end
 
-        From an empty database to multi-source disagreement, user
-        corrections, and **bandit-learned trust** — driven entirely
-        through the API.
-        """
-    )
+    From an empty database to multi-source disagreement, user
+    corrections, and **bandit-learned trust** — driven entirely
+    through the API.
+    """)
     return
 
 
@@ -49,15 +48,13 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 1 — Clean slate
+    mo.md("""
+    ## Step 1 — Clean slate
 
-        Truncate spec_revisions, drop the data-plane schema, drop trust
-        + correction state. Idempotent schema bootstrap recreates the
-        control plane.
-        """
-    )
+    Truncate spec_revisions, drop the data-plane schema, drop trust
+    + correction state. Idempotent schema bootstrap recreates the
+    control plane.
+    """)
     return
 
 
@@ -90,20 +87,19 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 2 — Author the ontology
+    mo.md("""
+    ## Step 2 — Author the ontology
 
-        Spec authoring is API-driven. Every change goes through a draft
-        → publish lifecycle so the spec graph is validated before it
-        ships. We're modelling **Movie** with three slots: an
-        identifier, a title, and a year.
+    Spec authoring is API-driven. Every change goes through a draft
+    → publish lifecycle so the spec graph is validated before it
+    ships. We're modelling **Movie** with three slots: an
+    identifier, a title, and a year.
 
-        The interesting bit: `year` is wired to **THOMPSON_SAMPLING** as
-        its resolution policy. Disagreement on `year` will be resolved
-        by sampling each source's per-slot Beta posterior.
-        """
-    )
+    The interesting bit: `year` is wired to **POSTERIOR_MEAN** as
+    its resolution policy. Disagreement on `year` will be resolved by
+    picking the source with the highest posterior mean — deterministic,
+    learns from corrections, no dice rolls.
+    """)
     return
 
 
@@ -130,7 +126,7 @@ def _(draft_id, post):
     post(
         f"/spec/drafts/{draft_id}/slots",
         {"name": "year", "range_kind": "type", "range_name": "integer",
-         "resolution_policy": "thompson_sampling"},
+         "resolution_policy": "posterior_mean"},
     )
     return
 
@@ -156,16 +152,14 @@ def _(draft_id, post):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 3 — Publish
+    mo.md("""
+    ## Step 3 — Publish
 
-        The publish gate validates the spec graph. On pass, the data-
-        plane migration runs **in the same transaction** as the
-        published-flag flip — so `knot_data.movie` materializes
-        atomically with the spec going live.
-        """
-    )
+    The publish gate validates the spec graph. On pass, the data-
+    plane migration runs **in the same transaction** as the
+    published-flag flip — so `knot_data.movie` materializes
+    atomically with the spec going live.
+    """)
     return
 
 
@@ -190,31 +184,32 @@ def _(get, mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 4 — Two sources disagree
+    mo.md("""
+    ## Step 4 — Two sources disagree
 
-        IMDB and TMDB both contribute `Movie` rows. They agree on the
-        identifier (`tt0111161`) but **disagree on the year** — a real
-        provenance scenario, no toy data.
-        """
-    )
+    IMDB and TMDB both contribute `Movie` rows. They agree on the
+    identifier (`tt0111161`) but **disagree on the year** — a real
+    provenance scenario, no toy data.
+    """)
     return
 
 
 @app.cell
 def _(post):
+    # imdb gets `year` wrong on purpose (1995); tmdb has it right (1994).
+    # imdb is alphabetically first, so under uniform priors the wrong
+    # value wins the tiebreak — until the user correction lands.
     post(
         "/graph/ingest/imdb",
         {"rows": [{"imdb_id": "tt0111161",
                    "title": "Shawshank",
-                   "year": 1994}]},
+                   "year": 1995}]},
     )
     post(
         "/graph/ingest/tmdb",
         {"rows": [{"imdb_id": "tt0111161",
                    "title": "The Shawshank Redemption",
-                   "year": 1995}]},
+                   "year": 1994}]},
     )
     return
 
@@ -238,16 +233,14 @@ def _(get, mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 5 — Resolve with default (uniform) priors
+    mo.md("""
+    ## Step 5 — Resolve with default (uniform) priors
 
-        Every slot has a Beta(1, 1) prior per (source, slot). Thompson
-        sampling on `year` with no observations yet is a coin flip;
-        ARGMAX_TRUST on `title` falls back to the alphabetically-first
-        source.
-        """
-    )
+    Every slot has a Beta(1, 1) prior per (source, slot). With equal
+    means, POSTERIOR_MEAN ties on `year` → alphabetical tie-break (imdb).
+    ARGMAX_TRUST on `title` ties on default trust → alphabetical too.
+    Resolution is deterministic.
+    """)
     return
 
 
@@ -261,36 +254,34 @@ def _(get, mo):
         f"| {i+1} | {t} | {y} |" for i, (t, y) in enumerate(_draws)
     )
     mo.md(
-        "### Five resolution draws (uniform priors)\n\n"
+        "### Five resolutions (uniform priors)\n\n"
         "| # | title | year |\n"
         "|---|---|---|\n"
         f"{_body}\n\n"
-        "Year is stochastic across draws (Thompson with uniform priors); "
-        "title is stable (ARGMAX_TRUST tie → alphabetical)."
+        "Both stable — every query under the same posterior state returns "
+        "the same answer."
     )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 6 — A user submits a correction
+    mo.md("""
+    ## Step 6 — A user submits a correction
 
-        A user knows the year is **1994**. They POST a typed
-        `PropertyCorrection`. Knot does three things atomically:
+    A user knows the year is **1994**. They POST a typed
+    `PropertyCorrection`. Knot does three things atomically:
 
-        1. Logs the correction in the immortal `_user_corrections`
-           audit table.
-        2. Upserts a `_source = '_user_corrections'` row in the data
-           table.
-        3. Emits **bandit feedback**: every disagreeing source's
-           `(source, slot)` Beta posterior is updated. IMDB matched →
-           α += 1; TMDB didn't → β += 1.
+    1. Logs the correction in the immortal `_user_corrections`
+       audit table.
+    2. Upserts a `_source = '_user_corrections'` row in the data
+       table.
+    3. Emits **feedback**: every disagreeing source's
+       `(source, slot)` Beta posterior is updated. TMDB matched →
+       α += 1; IMDB didn't → β += 1.
 
-        No manual `/trust/feedback` calls. The correction closes the loop.
-        """
-    )
+    No manual `/trust/feedback` calls. The correction closes the loop.
+    """)
     return
 
 
@@ -322,53 +313,46 @@ def _(get, mo):
         "| source | slot | α | β | mean |\n"
         "|---|---|---|---|---|\n"
         f"{_body}\n\n"
-        "IMDB's `year` posterior shifted toward 1; TMDB's toward 0."
+        "TMDB's `year` posterior shifted toward 1; IMDB's toward 0."
     )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 7 — Resolution reflects learned trust
+    mo.md("""
+    ## Step 7 — Resolution reflects learned trust
 
-        Same query as before — but now the bandit knows IMDB has been
-        getting `year` right.
-        """
-    )
+    Same query as before. The posteriors moved → POSTERIOR_MEAN's
+    argmax flips from imdb to tmdb → resolved year goes from 1995 → 1994.
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(get, mo):
-    _draws = []
-    for _ in range(10):
-        _r = get("/graph/classes/Movie/tt0111161/resolved")["resolved"]
-        _draws.append(_r["year"])
-    _counts = {1994: _draws.count(1994), 1995: _draws.count(1995)}
+    _r = get("/graph/classes/Movie/tt0111161/resolved")["resolved"]
     mo.md(
-        "### Ten Thompson draws (post-feedback)\n\n"
-        f"- year = **1994** : {_counts[1994]} draws\n"
-        f"- year = **1995** : {_counts[1995]} draws\n\n"
-        "Year resolution converged on the corrected value because "
-        "Thompson now samples from posteriors that prefer IMDB over TMDB "
-        "for this slot."
+        "### Resolved (post-feedback)\n\n"
+        f"- title : **{_r['title']}**\n"
+        f"- year  : **{_r['year']}**\n\n"
+        "Year resolution flipped to the corrected value because TMDB's "
+        "posterior mean for `year` now exceeds IMDB's. Deterministic — "
+        "every subsequent query returns the same answer until new "
+        "feedback arrives."
     )
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## Step 8 — Audit walk-back
+    mo.md("""
+    ## Step 8 — Audit walk-back
 
-        Every fact carries `_spec_revision`; every correction carries
-        `applied_revision`. The lineage is mechanical: contribution →
-        spec_revision → published spec.
-        """
-    )
+    Every fact carries `_spec_revision`; every correction carries
+    `applied_revision`. The lineage is mechanical: contribution →
+    spec_revision → published spec.
+    """)
     return
 
 
@@ -399,25 +383,23 @@ def _(get, mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        """
-        ## What just happened
+    mo.md("""
+    ## What just happened
 
-        - Built a 3-slot ontology + 2 sources via the API, draft → publish.
-        - Migration ran in the publish transaction → `knot_data.movie`
-          materialised.
-        - Ingested **disagreeing** rows from imdb + tmdb.
-        - Resolved with uniform priors (stochastic on `year`).
-        - Submitted one user correction; **bandit posteriors updated
-          themselves**.
-        - Re-resolved; `year` converged on the corrected value.
-        - Every fact + every correction is pinned to a spec revision.
+    - Built a 3-slot ontology + 2 sources via the API, draft → publish.
+    - Migration ran in the publish transaction → `knot_data.movie`
+      materialised.
+    - Ingested **disagreeing** rows from imdb + tmdb.
+    - Resolved with uniform priors (stochastic on `year`).
+    - Submitted one user correction; **bandit posteriors updated
+      themselves**.
+    - Re-resolved; `year` converged on the corrected value.
+    - Every fact + every correction is pinned to a spec revision.
 
-        All through `/spec/*` and `/graph/*`. No external orchestrator,
-        no DI impls, no lake — postgres is the source of truth and the
-        API is the only seam.
-        """
-    )
+    All through `/spec/*` and `/graph/*`. No external orchestrator,
+    no DI impls, no lake — postgres is the source of truth and the
+    API is the only seam.
+    """)
     return
 
 
