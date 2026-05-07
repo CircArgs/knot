@@ -1,14 +1,4 @@
-"""knot — interactive sandbox.
-
-Real machinery the user can poke. No git stats, no commit counts, no walkthrough.
-- Spec class explorer (browse B2 ontology classes + slots)
-- Expression-tree builder (type SDK expression, see Pydantic AST + canonical hash)
-- Canonical-dump preview (see RFC 8785 JCS bytes for any spec)
-- DuckDB SQL sandbox over B2 fixture CSVs (write SQL, see results)
-- Pydantic validation playground (paste a broken spec dict, see the error)
-- Trust resolution simulator (live policy comparisons over multi-source contributions)
-- SDK codegen output viewer (see the generated typed classes for B2 spec under each lens)
-"""
+"""knot interactive sandbox — poke the real machinery."""
 
 import marimo
 

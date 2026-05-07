@@ -1,16 +1,4 @@
-"""knot — end-to-end walkthrough.
-
-Twelve sections cover the full lifecycle: source registration → ontology
-modelling → spec edit + impact tracing → draft impl + DataContext validation
-→ bind → compile → dispatch via toy orchestrator → lake consumption →
-materialized-target consumption → audit walk-back → multi-revision drafts
-→ corrections overlay (OPEN until Round 4).
-
-Every cell pokes real machinery — no status pages, no commit counts.
-
-Stack: postgres + neo4j up via `bash scripts/up.sh`.
-Lake: /tmp/knot_walkthrough_lake (created on first run of section 7).
-"""
+"""knot end-to-end walkthrough — 12 sections of live machinery."""
 
 import marimo
 
