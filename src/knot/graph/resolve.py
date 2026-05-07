@@ -2,8 +2,12 @@
 
 Per commitment 7 (multi-valued canonical, query-time trust resolution),
 resolution happens at *query time*, not write time. Each Slot declares a
-``resolution_policy``; trust state lives in ``trust_config`` (scalar
-per-source) and ``trust_posteriors`` (per-(source, slot) Beta posterior).
+``resolution_policy``; trust state lives in ``knot.db.trust_config``
+(scalar per-source) and ``knot.db.trust_posteriors`` (per-(source, slot)
+Beta posterior).
+
+Pure logic: no SQL strings, no postgres imports — calls db primitives
+for data and computes the resolution in Python.
 
 Resolution policies implemented today:
   - ``ARGMAX_TRUST``     — highest-trust non-null contribution per slot,
@@ -136,8 +140,6 @@ def _thompson(
     for source, value in non_null:
         post = _post_for(posteriors, source, slot.name)
         theta = rng.betavariate(post.alpha, post.beta)
-        # Tie-break by negative source name so higher source name loses
-        # ties; same shape as ARGMAX_TRUST.
         samples.append((theta, source, value))
     samples.sort(key=lambda t: (-t[0], t[1]))
     return samples[0][2]

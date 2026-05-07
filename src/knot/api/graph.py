@@ -11,8 +11,10 @@ Endpoint groups under ``/graph``:
   - /graph/classes/{class_name}/{canonical_id}/resolved  trust-resolved single record
   - /graph/trust                                         list per-source trust scores
   - /graph/trust/{source_name}                           get/set per-source trust score
+  - /graph/trust/posteriors[/{source}/{slot}]            bandit Beta posteriors
+  - /graph/trust/feedback                                raw Bernoulli observation
+  - /graph/corrections                                   user corrections (Property today)
   - /graph/query                                         ontology-shaped queries (later)
-  - /graph/corrections                                   user corrections (later)
 
 Storage shape (locked, see ``knot.db.migration``): per-class postgres
 tables; columns mirror stored slots; primary key
@@ -23,14 +25,16 @@ and ``_spec_revision`` (FK into spec_revisions for audit walk-back).
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Annotated, Any, Literal, Optional, Union
 
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from knot import db
-from knot.db import graph_store, resolve, spec_store, trust_config, trust_posteriors
-from knot.ontology import OntologyClass, Slot, Spec
+from knot.db import graph_store, spec_store, trust_config, trust_posteriors
+from knot.graph import corrections as graph_corrections
+from knot.graph import resolve
+from knot.ontology import OntologyClass, Slot, Spec, TypeDefinition
 from knot.ontology.row_models import build_row_model
 
 
@@ -94,6 +98,33 @@ class FeedbackBody(_StrictBase):
     source: str
     slot: str
     success: bool
+
+
+# ─── Corrections (typed discriminated union; expand as more types land) ─────
+
+
+class PropertyCorrection(_StrictBase):
+    type: Literal["property"] = "property"
+    class_name: str
+    canonical_id: str
+    slot: str
+    value: Any
+    applied_by: Optional[str] = None
+
+
+# Future: Merge, Split, Add, Tombstone, RejectContribution. The Annotated
+# discriminator enables Pydantic to dispatch on the type field at parse
+# time (Pattern 1: real types, no string-keyed lookups in the handler).
+Correction = Annotated[
+    Union[PropertyCorrection],
+    Field(discriminator="type"),
+]
+
+
+class CorrectionResponse(_StrictBase):
+    id: int
+    correction_type: str
+    applied_revision: int
 
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -355,3 +386,80 @@ def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
             raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
         trust_config.set_score(conn, source_name, body.trust_score)
     return TrustScore(source=source_name, trust_score=body.trust_score)
+
+
+# ─── Corrections ─────────────────────────────────────────────────────────────
+
+
+def _validate_property_value(slot: Slot, value: Any) -> Any:
+    """Validate the corrected value's type matches the slot's range using a
+    one-field Pydantic model. Raises HTTPException(422) on mismatch."""
+    one_field = build_row_model_for_slot(slot)
+    try:
+        return one_field.model_validate({slot.name: value}).model_dump()[slot.name]
+    except ValidationError as exc:
+        errors = [{**e, "loc": ("body", "value", *e["loc"])} for e in exc.errors()]
+        raise HTTPException(422, detail=errors)
+
+
+def build_row_model_for_slot(slot: Slot):
+    """Build a single-field Pydantic model from one Slot for value validation."""
+    from pydantic import create_model
+    from knot.ontology.row_models import _slot_python_type
+    py_type = _slot_python_type(slot)
+    if slot.multivalued:
+        py_type = list[py_type]
+    return create_model(
+        f"{slot.name}_value",
+        __config__=ConfigDict(extra="forbid"),
+        **{slot.name: (py_type, ...)},
+    )
+
+
+@router.post("/corrections", response_model=CorrectionResponse)
+def submit_correction(body: Correction) -> CorrectionResponse:
+    """Submit a typed correction. Auto-applies in one transaction:
+    audit row + per-class data mutation + bandit feedback against
+    disagreeing sources. 422 on payload type mismatch; 404 on unknown
+    class/slot/canonical_id."""
+    with db.connect() as conn:
+        spec = _published_or_404(conn)
+
+        # Today only PropertyCorrection is implemented.
+        if isinstance(body, PropertyCorrection):
+            cls = _resolve_class(spec, body.class_name)
+            slot = next((s for s in cls.slots if s.name == body.slot), None)
+            if slot is None:
+                raise HTTPException(
+                    404, f"Slot {body.slot!r} not on class {cls.name!r}"
+                )
+            value = _validate_property_value(slot, body.value)
+            spec_revision = spec_store.get_published_revision(conn)
+            correction_id = graph_corrections.apply_property_correction(
+                conn,
+                cls=cls,
+                canonical_id=body.canonical_id,
+                slot_name=body.slot,
+                value=value,
+                spec_revision=spec_revision,
+                applied_by=body.applied_by,
+                payload_for_log=body.model_dump(),
+            )
+            return CorrectionResponse(
+                id=correction_id,
+                correction_type="property",
+                applied_revision=spec_revision,
+            )
+
+        # Should be unreachable while the discriminated union has only
+        # PropertyCorrection, but explicit-or-open per Pattern 14.
+        raise HTTPException(
+            501,
+            f"Correction type {body.type!r} not implemented yet (open).",
+        )
+
+
+@router.get("/corrections")
+def list_corrections(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, Any]]:
+    with db.connect() as conn:
+        return db.corrections.list_audit_log(conn, limit=limit)

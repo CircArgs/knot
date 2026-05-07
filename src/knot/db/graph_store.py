@@ -31,6 +31,11 @@ from knot.ontology import OntologyClass, Source
 _SCHEMA = "knot_data"
 _SYSTEM_COLS = ("_canonical_id", "_source", "_source_row_id", "_spec_revision")
 
+# Reserved synthetic source name for user-correction rows. The data-plane
+# row attributed to this source carries only the corrected slot value
+# (other slots NULL on first insert; preserved on subsequent corrections).
+USER_CORRECTIONS_SOURCE = "_user_corrections"
+
 
 def _table_id(cls: OntologyClass) -> sql.Identifier:
     return sql.Identifier(_SCHEMA, cls.name.lower())
@@ -147,6 +152,63 @@ def get_canonical_contributions(
     cur = conn.cursor(row_factory=dict_row)
     cur.execute(stmt, params)
     return [_serialize_row(r) for r in cur.fetchall()]
+
+
+def upsert_user_correction_row(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    slot_name: str,
+    value: Any,
+    spec_revision: int,
+) -> None:
+    """Upsert the (canonical_id, _source=USER_CORRECTIONS_SOURCE) row,
+    setting only the corrected slot. Other slots remain NULL on first
+    insert and unchanged on subsequent corrections."""
+    slot_names = _stored_slot_names(cls)
+    col_names = [*_SYSTEM_COLS, *slot_names]
+    values: list[Any] = [
+        canonical_id,
+        USER_CORRECTIONS_SOURCE,
+        canonical_id,
+        spec_revision,
+    ]
+    for sn in slot_names:
+        values.append(value if sn == slot_name else None)
+
+    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in col_names)
+    placeholders = sql.SQL(", ").join(sql.Placeholder() * len(col_names))
+    upsert_set = sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(slot_name))
+    stmt = sql.SQL(
+        "INSERT INTO {table} ({cols}) VALUES ({ph}) "
+        "ON CONFLICT (_source, _source_row_id) DO UPDATE "
+        "SET {upsert_set}, _spec_revision = EXCLUDED._spec_revision, "
+        "_ingest_at = now()"
+    ).format(
+        table=_table_id(cls),
+        cols=cols_sql,
+        ph=placeholders,
+        upsert_set=upsert_set,
+    )
+    conn.execute(stmt, values)
+
+
+def get_disagreeing_contributions(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    slot_name: str,
+) -> list[tuple[str, Any]]:
+    """For bandit-feedback emission: per-source non-null values for one
+    slot of one canonical entity, excluding the user-corrections row."""
+    stmt = sql.SQL(
+        "SELECT _source, {col} FROM {table} "
+        "WHERE _canonical_id = %s AND _source <> %s AND {col} IS NOT NULL"
+    ).format(table=_table_id(cls), col=sql.Identifier(slot_name))
+    rows = conn.execute(stmt, (canonical_id, USER_CORRECTIONS_SOURCE)).fetchall()
+    return [(r[0], r[1]) for r in rows]
 
 
 def count_rows(

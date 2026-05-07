@@ -1,23 +1,24 @@
 """Data plane — every SQL string and every postgres call lives under ``knot.db``.
 
-What's inside:
+What's inside (pure persistence; no orchestration logic):
   - ``connect()`` / ``apply_schema()`` (this file)   — connection lifecycle
   - ``control_schema.sql``                           — control-plane DDL
-  - ``spec_store``                                   — spec_revisions CRUD
+  - ``spec_store``                                   — spec_revisions CRUD + drafts
   - ``migration``                                    — spec → per-class table DDL
+                                                       (typed Change events + emit_ddl)
   - ``graph_store``                                  — per-class table INSERT/SELECT
-  - ``trust_config``                                 — per-source scalar trust
-  - ``trust_posteriors``                             — per-(source, slot) Beta posterior
-  - ``resolve``                                      — trust-resolved record builder
-                                                       (ARGMAX_TRUST / THOMPSON / UCB1)
-  - ``sql_gen``                                      — expression tree → SQL strings
+                                                       + user-correction row upsert
+  - ``corrections``                                  — _user_corrections audit-log CRUD
+  - ``trust_config``                                 — per-source scalar trust CRUD
+  - ``trust_posteriors``                             — per-(source, slot) Beta posterior CRUD
 
-Centralization rule: only modules under ``knot/db/`` import ``psycopg`` and
-only modules here contain SQL strings. Everything else imports ``db`` and
-calls into named functions.
+Centralization rule: only modules under ``knot/db/`` import ``psycopg``
+and only modules here contain SQL strings. Composition / orchestration
+(trust resolution math, correction orchestration, spec diff walks)
+lives outside — typically under ``knot.graph`` or ``knot.ontology``.
 
-DSN is read from ``knot.config.get_dsn``; no DSN parameters thread through
-the rest of the codebase.
+DSN is read from ``knot.config.get_dsn``; no DSN parameters thread
+through the rest of the codebase.
 """
 
 from __future__ import annotations
@@ -28,19 +29,18 @@ import psycopg
 
 from knot.config import get_dsn
 from knot.db import (
+    corrections,
     graph_store,
     migration,
-    resolve,
     spec_store,
-    sql_gen,
     trust_config,
     trust_posteriors,
 )
 
 __all__ = [
     "connect", "apply_schema",
-    "spec_store", "migration", "graph_store",
-    "trust_config", "trust_posteriors", "resolve", "sql_gen",
+    "spec_store", "migration", "graph_store", "corrections",
+    "trust_config", "trust_posteriors",
 ]
 
 

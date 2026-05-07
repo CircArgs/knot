@@ -69,3 +69,26 @@ CREATE TABLE IF NOT EXISTS trust_posteriors (
     updated_at   TIMESTAMPTZ      NOT NULL DEFAULT now(),
     PRIMARY KEY (source_name, slot_name)
 );
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- _user_corrections
+-- Immortal audit log of user-submitted corrections. ``correction_type`` is
+-- a real Pydantic-class discriminator (Pattern 1); ``payload`` is the
+-- typed model dump. ``applied_revision`` pins the spec revision active
+-- when the correction landed, so audit walk-back is mechanical.
+--
+-- The data-plane effect (mutation of knot_data.<class>) lives in the
+-- per-class table tagged with ``_source = '_user_corrections'``; this
+-- log is the source of truth for "what was submitted, when, by whom."
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS _user_corrections (
+    id                SERIAL       PRIMARY KEY,
+    correction_type   TEXT         NOT NULL,
+    payload           JSONB        NOT NULL,
+    applied_by        TEXT,
+    applied_revision  INTEGER      NOT NULL REFERENCES spec_revisions(revision),
+    created_at        TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS user_corrections_type
+    ON _user_corrections (correction_type);

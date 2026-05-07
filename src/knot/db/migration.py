@@ -91,16 +91,18 @@ _SYSTEM_COLUMNS_SQL = sql.SQL(
 
 
 def _create_table_sql(cls: OntologyClass) -> sql.Composable:
+    # Slot columns are always nullable at the DB level; ``required`` is
+    # enforced at the API ingest layer (knot.api.graph.ingest), because
+    # user-correction rows in the same table are partial — only the
+    # corrected slot has a value, the rest are NULL.
     user_cols: list[sql.Composable] = []
     for slot in cls.slots:
         if not _is_stored(slot):
             continue
-        nullable_kw = sql.SQL("NOT NULL") if slot.required else sql.SQL("NULL")
         user_cols.append(
-            sql.SQL("{name} {pgtype} {nullable}").format(
+            sql.SQL("{name} {pgtype} NULL").format(
                 name=sql.Identifier(slot.name),
                 pgtype=sql.SQL(_slot_pg_type(slot)),
-                nullable=nullable_kw,
             )
         )
     body = sql.SQL(", ").join([_SYSTEM_COLUMNS_SQL, *user_cols])
@@ -148,6 +150,9 @@ class ChangeSlotType(Change):
     new_pg_type: str
 
 
+# Slot.required is API-enforced now (not DB-enforced), so changes to
+# the required flag don't emit DDL. Kept on the change-event surface
+# for impact-analysis completeness, but the emit_ddl handler is a no-op.
 @dataclass
 class ChangeSlotRequired(Change):
     cls: OntologyClass
@@ -233,12 +238,12 @@ def _(change: DropClass, conn: psycopg.Connection) -> None:
 
 @emit_ddl.register
 def _(change: AddSlot, conn: psycopg.Connection) -> None:
-    nullable = sql.SQL("NOT NULL") if change.slot.required else sql.SQL("NULL")
-    stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN {col} {pgtype} {nullable}").format(
+    # See _create_table_sql — slot columns are nullable; required-ness
+    # is API-enforced because user-correction rows are partial.
+    stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN {col} {pgtype} NULL").format(
         table=_table_id(change.cls),
         col=sql.Identifier(change.slot.name),
         pgtype=sql.SQL(_slot_pg_type(change.slot)),
-        nullable=nullable,
     )
     conn.execute(stmt)
 
@@ -266,13 +271,8 @@ def _(change: ChangeSlotType, conn: psycopg.Connection) -> None:
 
 @emit_ddl.register
 def _(change: ChangeSlotRequired, conn: psycopg.Connection) -> None:
-    op = sql.SQL("SET NOT NULL") if change.new_required else sql.SQL("DROP NOT NULL")
-    stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} {op}").format(
-        table=_table_id(change.cls),
-        col=sql.Identifier(change.slot_name),
-        op=op,
-    )
-    conn.execute(stmt)
+    # No-op: required-ness is API-enforced, not in DB schema.
+    return
 
 
 # ─── Apply ──────────────────────────────────────────────────────────────────
