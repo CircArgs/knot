@@ -368,13 +368,23 @@ class ToyOrchestrator:
 
         results: dict[str, pa.Table] = {}
 
+        # Discover DataContexts both on Pydantic models (via model_fields,
+        # since dir() misses v2 model fields) and on plain classes (via dir).
+        datacontexts: dict[str, DataContext] = {}
+        if hasattr(impl_class, "model_fields"):
+            for fname, field_info in impl_class.model_fields.items():
+                default = field_info.default
+                if isinstance(default, DataContext):
+                    datacontexts[fname] = default
         for attr_name in dir(impl_class):
             try:
                 val = getattr(impl_class, attr_name)
             except Exception:
                 continue
-            if not isinstance(val, DataContext):
-                continue
+            if isinstance(val, DataContext) and attr_name not in datacontexts:
+                datacontexts[attr_name] = val
+
+        for attr_name, val in datacontexts.items():
 
             if parquet_glob is None:
                 # Stage kind has no standard lake path; return empty table.
@@ -532,11 +542,26 @@ class ToyOrchestrator:
         hydrated_config: Any = None
         config_cls = getattr(impl_cls, "Config", None)
         if config_cls is not None and config_snapshot:
+            filtered = {
+                k: v for k, v in config_snapshot.items()
+                if not k.startswith("_")
+            }
             try:
-                hydrated_config = config_cls(**{
-                    k: v for k, v in config_snapshot.items()
-                    if not k.startswith("_")
-                })
+                # Pydantic models / classes with kwarg __init__ accept this directly.
+                hydrated_config = config_cls(**filtered)
+            except TypeError:
+                # Plain Python class with class-level attribute defaults: construct
+                # the instance with no args, then setattr the snapshot fields.
+                try:
+                    inst = config_cls()
+                    for k, v in filtered.items():
+                        setattr(inst, k, v)
+                    hydrated_config = inst
+                except Exception as exc:
+                    logger.warning(
+                        "stage=%s:%s impl=%s — Config hydration failed (%s); config=None",
+                        kind, class_name, impl_name, exc,
+                    )
             except Exception as exc:
                 logger.warning(
                     "stage=%s:%s impl=%s — Config hydration failed (%s); config=None",
