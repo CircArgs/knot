@@ -6,6 +6,12 @@ compile_predicate(node, ctx) -> sql.Composable
     Compile one expression-tree node.  Side-effects: pushes positional params
     onto ``ctx.params``.  Read ctx.params after the call for the full list.
 
+compile_value(node, ctx) -> sql.Composable
+    Alias for compile_predicate; clarifies that the result is a value
+    expression (scalar or array), not a boolean predicate.  Used when
+    compiling Slot.derivation nodes (RelationProject / RelationCount /
+    RelationAggregate) as computed columns in a SELECT.
+
 compile_constraint(constraint, cls) -> (sql.Composable, list[Any])
     Emit a SELECT returning offending rows in the uniform violation shape:
         (rule_id, class_name, slot_name, offending_pk, detail)
@@ -117,10 +123,16 @@ def compile_constraint(
     return stmt, params
 
 
+# compile_value is an alias for compile_predicate in value-expression contexts.
+# The same dispatch works for both boolean predicates and scalar/array values.
+compile_value = compile_predicate
+
+
 __all__ = [
     "CompileContext",
     "CompilerError",
     "compile_predicate",
+    "compile_value",
     "compile_constraint",
     "compile_order_by",
 ]

@@ -111,6 +111,7 @@ class SlotCreate(_StrictBase):
     maximum_value: float | None = None
     permissible_values: list[str] | None = None
     description: str | None = None
+    derivation: "ExprJson | None" = None
 
 
 class ClassCreate(_StrictBase):
@@ -451,6 +452,14 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
         if body.permissible_values is not None:
             permissible = [PermissibleValue(text=t) for t in body.permissible_values]
 
+        derivation = None
+        if body.derivation is not None:
+            # Use a placeholder primary class for translation; the derivation
+            # expression references classes/slots by name and is resolved against
+            # the full spec graph at compile time (not at slot-authoring time).
+            placeholder_primary = OntologyClass(name="__derivation_ctx__")
+            derivation = translate_expr(body.derivation, spec, placeholder_primary)
+
         spec.slots.append(Slot(
             name=body.name,
             range=range_obj,
@@ -463,6 +472,7 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
             maximum_value=body.maximum_value,
             permissible_values=permissible,
             description=body.description,
+            derivation=derivation,
         ))
         return _persist(conn, draft_id, spec)
 

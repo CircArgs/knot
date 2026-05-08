@@ -257,7 +257,7 @@ class RelationRef(SpecBase):
 class FilteredRelation(SpecBase):
     """A relation with a row-level predicate."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
     filter: Any  # Compare | BoolExpr | Within | Between | Matches
 
     def where(self, predicate: Any) -> "FilteredRelation":
@@ -270,21 +270,21 @@ class FilteredRelation(SpecBase):
 class RelationProject(SpecBase):
     """Surface a slot value from each row of the relation."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
     project: "SlotPath"
 
 
 class RelationCount(SpecBase):
     """Count rows in the relation."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
     distinct: bool = False
 
 
 class RelationAggregate(SpecBase):
     """Aggregate over rows in the relation (SUM, AVG, COLLECT, etc.)."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
     func: AggFunc
     operand: Optional["SlotPath"] = None
     distinct: bool = False

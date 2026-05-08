@@ -24,16 +24,22 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from knot.ontology.metaschema import (
+    AggFunc,
     Between,
     BoolExpr,
     BoolOpKind,
     Compare,
     CompareOp,
+    FilteredRelation,
     Literal_,
     Matches,
     OntologyClass,
+    RelationAggregate,
     RelationAll,
     RelationAny,
+    RelationCount,
+    RelationProject,
+    RelationRef,
     ReverseRelation,
     Slot,
     SlotPath,
@@ -120,6 +126,62 @@ class _ReverseRelationJson(_JsonBase):
     fk_slot_name: str
 
 
+class _RelationRefJson(_JsonBase):
+    """Forward relation traversal: follow a slot whose range is another class.
+
+    ``from_class_name`` — name of the source class (e.g. "Movie").
+    ``slot_name``       — name of the FK slot on the source class (e.g. "director").
+    """
+
+    kind: Literal["relation_ref"]
+    from_class_name: str
+    slot_name: str
+
+
+class _FilteredRelationJson(_JsonBase):
+    """A relation with a row-level filter predicate applied."""
+
+    kind: Literal["filtered_relation"]
+    relation: "ExprJson"
+    predicate: "ExprJson"
+
+
+class _RelationProjectJson(_JsonBase):
+    """Project a slot value from each row of the relation → array.
+
+    ``relation``  — the relation to traverse (RelationRef, ReverseRelation,
+                    or FilteredRelation wrapping one of those).
+    ``slot_name`` — the slot on the target class to project.
+    """
+
+    kind: Literal["relation_project"]
+    relation: "ExprJson"
+    slot_name: str
+
+
+class _RelationCountJson(_JsonBase):
+    """Count rows in the relation → integer scalar."""
+
+    kind: Literal["relation_count"]
+    relation: "ExprJson"
+    distinct: bool = False
+
+
+class _RelationAggregateJson(_JsonBase):
+    """Aggregate a slot over rows in the relation.
+
+    ``func``      — aggregation function (AggFunc enum value as string).
+    ``slot_name`` — slot on target class to aggregate (required for all funcs
+                    except COUNT).
+    """
+
+    kind: Literal["relation_aggregate"]
+    relation: "ExprJson"
+    func: AggFunc
+    slot_name: str | None = None
+    distinct: bool = False
+
+
 # Annotated union — Pydantic dispatches on the ``kind`` field automatically.
 ExprJson = Annotated[
     Union[
@@ -133,6 +195,11 @@ ExprJson = Annotated[
         _RelationAllJson,
         _RelationAnyJson,
         _ReverseRelationJson,
+        _RelationRefJson,
+        _FilteredRelationJson,
+        _RelationProjectJson,
+        _RelationCountJson,
+        _RelationAggregateJson,
     ],
     Field(discriminator="kind"),
 ]
@@ -142,6 +209,10 @@ _CompareJson.model_rebuild()
 _BoolExprJson.model_rebuild()
 _RelationAllJson.model_rebuild()
 _RelationAnyJson.model_rebuild()
+_FilteredRelationJson.model_rebuild()
+_RelationProjectJson.model_rebuild()
+_RelationCountJson.model_rebuild()
+_RelationAggregateJson.model_rebuild()
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +236,30 @@ def _find_class(spec: Spec, name: str) -> OntologyClass:
 def _sentinel_from_class(spec: Spec, primary_class: OntologyClass) -> OntologyClass:
     """Return the primary class object from the spec (for SlotPath.from_class)."""
     return primary_class
+
+
+def _relation_target_class(relation: Any, spec: Spec) -> OntologyClass:
+    """Extract the target OntologyClass from a resolved relation node.
+
+    Used to build ``SlotPath.from_class`` for project/aggregate operands.
+    """
+    if isinstance(relation, ReverseRelation):
+        return relation.target_class
+    if isinstance(relation, FilteredRelation):
+        return _relation_target_class(relation.relation, spec)
+    if isinstance(relation, RelationRef):
+        slot = relation.slot
+        if isinstance(slot.range, OntologyClass):
+            return slot.range
+        raise HTTPException(
+            400,
+            f"RelationRef slot {slot.name!r} has no OntologyClass range; "
+            "cannot infer target class for projection."
+        )
+    raise HTTPException(
+        400,
+        f"Cannot determine target class from relation type {type(relation).__name__!r}."
+    )
 
 
 def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass) -> Any:
@@ -229,6 +324,43 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
         target_cls = _find_class(spec, node_json.target_class_name)
         fk_slot = _find_slot(spec, node_json.fk_slot_name)
         return ReverseRelation(target_class=target_cls, fk_slot=fk_slot)
+
+    if isinstance(node_json, _RelationRefJson):
+        from_cls = _find_class(spec, node_json.from_class_name)
+        slot = _find_slot(spec, node_json.slot_name)
+        return RelationRef(from_class=from_cls, slot=slot)
+
+    if isinstance(node_json, _FilteredRelationJson):
+        relation = translate_expr(node_json.relation, spec, primary_class)
+        predicate = translate_expr(node_json.predicate, spec, primary_class)
+        return FilteredRelation(relation=relation, filter=predicate)
+
+    if isinstance(node_json, _RelationProjectJson):
+        relation = translate_expr(node_json.relation, spec, primary_class)
+        # Resolve the projected slot against the target class of the relation.
+        proj_slot = _find_slot(spec, node_json.slot_name)
+        # Determine the target class for SlotPath.from_class.
+        target_cls = _relation_target_class(relation, spec)
+        project = SlotPath(from_class=target_cls, slots=[proj_slot])
+        return RelationProject(relation=relation, project=project)
+
+    if isinstance(node_json, _RelationCountJson):
+        relation = translate_expr(node_json.relation, spec, primary_class)
+        return RelationCount(relation=relation, distinct=node_json.distinct)
+
+    if isinstance(node_json, _RelationAggregateJson):
+        relation = translate_expr(node_json.relation, spec, primary_class)
+        operand = None
+        if node_json.slot_name is not None:
+            agg_slot = _find_slot(spec, node_json.slot_name)
+            target_cls = _relation_target_class(relation, spec)
+            operand = SlotPath(from_class=target_cls, slots=[agg_slot])
+        return RelationAggregate(
+            relation=relation,
+            func=node_json.func,
+            operand=operand,
+            distinct=node_json.distinct,
+        )
 
     # Unreachable — discriminator exhausts all variants.
     raise HTTPException(400, f"Unsupported expression kind: {type(node_json).__name__}")

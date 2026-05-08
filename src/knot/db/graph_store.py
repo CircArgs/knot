@@ -36,6 +36,7 @@ from psycopg.rows import dict_row
 from knot.db._naming import (
     USER_CORRECTIONS_SOURCE,
     bindings_table_id as _bindings_id,
+    is_stored as _is_stored,
     stored_slot_names as _stored_slot_names,
     table_id as _table_id,
 )
@@ -227,6 +228,77 @@ def _select_with_binding(cls: OntologyClass) -> sql.Composable:
     ).format(source=_table_id(cls), bindings=_bindings_id(cls))
 
 
+def _derived_column_exprs(
+    cls: OntologyClass,
+) -> tuple[list[sql.Composable], list[Any]]:
+    """Build a list of ``(<subquery>) AS <slot_name>`` fragments for derived slots,
+    plus the accumulated positional parameters for those subqueries.
+
+    Returns ``([], [])`` when the class has no derived slots (the common case).
+    The outer alias used when building the subquery context is ``"s"`` — the
+    same alias emitted by ``_select_with_binding`` for the source-row table.
+
+    Parameters must be prepended to the outer query's parameter list because
+    the derived columns appear in the SELECT clause before any WHERE params.
+    """
+    from knot.db.sql_compiler import CompileContext, compile_value
+
+    derived_cols: list[sql.Composable] = []
+    derived_params: list[Any] = []
+    for slot in cls.slots:
+        if _is_stored(slot):
+            continue
+        derivation = getattr(slot, "derivation", None)
+        if derivation is None:
+            continue
+        ctx = CompileContext(primary_class=cls, alias="s")
+        expr_sql = compile_value(derivation, ctx)
+        derived_cols.append(
+            sql.SQL("({expr}) AS {col}").format(
+                expr=expr_sql,
+                col=sql.Identifier(slot.name),
+            )
+        )
+        derived_params.extend(ctx.params)
+    return derived_cols, derived_params
+
+
+def _select_with_derivations(
+    cls: OntologyClass,
+) -> tuple[sql.Composable, list[Any]]:
+    """Same as ``_select_with_binding`` but appends a computed column per
+    derived slot, compiled via the SQL compiler.
+
+    Returns ``(sql_composable, derived_params)`` where ``derived_params`` are
+    the positional parameters for the derived-column subqueries.  The caller
+    must prepend these to the outer query's parameter list (SELECT params come
+    before WHERE params in psycopg positional binding).
+
+    When there are no derived slots the result is ``(_select_with_binding(cls), [])``.
+    """
+    base = _select_with_binding(cls)
+    derived_cols, derived_params = _derived_column_exprs(cls)
+    if not derived_cols:
+        return base, []
+    extra = sql.SQL(", ").join(derived_cols)
+    if _is_defined_class(cls):
+        stmt = sql.SQL(
+            "SELECT s.*, {extra} FROM {view} s"
+        ).format(extra=extra, view=_table_id(cls))
+    else:
+        stmt = sql.SQL(
+            "SELECT s.*, b.canonical_id AS _canonical_id, {extra} "
+            "FROM {source} s "
+            "JOIN {bindings} b "
+            "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL"
+        ).format(
+            extra=extra,
+            source=_table_id(cls),
+            bindings=_bindings_id(cls),
+        )
+    return stmt, derived_params
+
+
 def list_rows(
     conn: psycopg.Connection,
     *,
@@ -270,11 +342,14 @@ def query_rows(
     keyword) as a sql.Composable. When None, defaults to
     ``b.canonical_id ASC, s._source ASC`` for deterministic output.
 
-    Reads JOIN source × current bindings (valid_to IS NULL).
+    Reads JOIN source × current bindings (valid_to IS NULL).  Derived slots
+    are computed as correlated subqueries appended to the SELECT list.
     """
-    base = _select_with_binding(cls)
+    base, derived_params = _select_with_derivations(cls)
     clauses: list[sql.Composable] = []
-    params: list[Any] = []
+    # derived_params must come first: they bind placeholders in the SELECT list,
+    # which appears before any WHERE clause in the emitted SQL.
+    params: list[Any] = list(derived_params)
 
     if as_of is not None:
         clauses.append(sql.SQL("s._spec_revision <= %s"))
@@ -334,12 +409,13 @@ def get_canonical_contributions(
         cur.execute(stmt, params)
         return [_serialize_row(r) for r in cur.fetchall()]
 
-    base = _select_with_binding(cls)
+    base, derived_params = _select_with_derivations(cls)
     where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
         "{base} WHERE b.canonical_id = %s{where_extra} ORDER BY s._source"
     ).format(base=base, where_extra=where_extra)
-    params = [canonical_id]
+    # derived_params bind SELECT subqueries; canonical_id + as_of bind WHERE.
+    params: list[Any] = list(derived_params) + [canonical_id]
     if as_of is not None:
         params.append(as_of)
     cur = conn.cursor(row_factory=dict_row)

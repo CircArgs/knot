@@ -145,13 +145,19 @@ def _make_slot_where_type(slot: Slot, class_name: str) -> type:
 
 
 def _make_class_where_type(oc: OntologyClass) -> type:
-    """Build the top-level WhereInput for a class (one field per slot).
+    """Build the top-level WhereInput for a class (one field per stored slot).
+
+    Derived slots are excluded: filtering on a derived column requires
+    evaluating its subquery in the WHERE clause, which is not yet supported.
+    Only stored slots (derivation is None) appear in WhereInput.
 
     For defined classes (is_a set + definition), walks the is_a chain to
-    collect all inherited slots so the GraphQL surface matches actual columns.
+    collect all inherited stored slots so the GraphQL surface matches actual
+    columns.
     """
     type_name = f"WhereInput_{oc.name}"
-    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in _all_slots(oc)}
+    stored_slots = [s for s in _all_slots(oc) if getattr(s, "derivation", None) is None]
+    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in stored_slots}
     annotations: dict[str, Any] = {
         name: Optional[t] for name, t in slot_types.items()
     }
@@ -297,8 +303,10 @@ def build_predicate_sql(
     if getattr(oc, "definition", None) is not None and oc.is_a is not None:
         storage_class = oc.is_a
 
+    # Only stored slots appear in WhereInput (derived slots excluded from filtering).
+    stored_slots = [s for s in _all_slots(oc) if getattr(s, "derivation", None) is None]
     all_predicates: list[Any] = []
-    for slot in _all_slots(oc):
+    for slot in stored_slots:
         slot_where = getattr(where_input, slot.name, strawberry.UNSET)
         if slot_where is strawberry.UNSET or slot_where is None:
             continue
