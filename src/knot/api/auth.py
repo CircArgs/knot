@@ -16,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
-from knot.auth import Principal, require_admin, require_user
+from knot.security import Principal, require_admin, require_user
 from knot.db import users
 
 

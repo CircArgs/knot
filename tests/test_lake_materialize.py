@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 
 from knot import db
 from knot.api.main import app
-from knot.auth import Principal, require_user
+from knot.security import Principal, require_user
 from knot.db import spec_store
 from knot.db.spec_store import (
     create_draft,

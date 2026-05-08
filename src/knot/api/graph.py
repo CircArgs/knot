@@ -31,13 +31,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from knot import db
-from knot.auth import Principal, require_user
+from knot.security import Principal, require_user
 from knot.db import dq, graph_store, spec_store, trust_config, trust_posteriors
 from knot.middleware import get_request_id
 from knot.graph import corrections as graph_corrections
 from knot.graph import resolve
 from knot.ontology import OntologyClass, Slot, Spec, TypeDefinition
-from knot.ontology.row_models import build_row_model, build_row_model_for_class, build_value_model_for_slot
+from knot.api.row_models import build_row_model, build_row_model_for_class, build_value_model_for_slot
 
 
 class _StrictBase(BaseModel):
@@ -803,7 +803,7 @@ def graphql_query(body: GraphQLBody) -> dict[str, Any]:
     Traversal (relation joins) and projection (field selection in SQL) are
     out of scope for this slice; full rows are returned for matching entities.
     """
-    from knot.api._graphql_schema import get_or_build_schema
+    from knot.api.graphql_schema import get_or_build_schema
     from knot.db import spec_store
 
     with db.connect() as conn:

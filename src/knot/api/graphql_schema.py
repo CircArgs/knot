@@ -679,7 +679,7 @@ def _build_schema(spec: Spec) -> Schema:
         agg_result_types[oc.name], agg_fields_map[oc.name] = _make_aggregate_result_type(oc)
 
     # Build a synthetic module for Strawberry's type resolution.
-    mod_name = f"knot.api._graphql_schema._dynamic_{id(spec)}"
+    mod_name = f"knot.api.graphql_schema._dynamic_{id(spec)}"
     mod = types.ModuleType(mod_name)
     mod.__dict__["Optional"] = Optional
     mod.__dict__["int"] = int

@@ -19,7 +19,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.auth import Principal, require_user
+from knot.security import Principal, require_user
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition

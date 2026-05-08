@@ -668,7 +668,7 @@ def test_derived_slot_present_in_where_input():
     """The WhereInput type for a class with derived slots should have a field
     for the derived slot — filtering compiles the derivation as a subquery
     in the WHERE clause."""
-    from knot.api._graphql_schema import _make_class_where_type
+    from knot.api.graphql_schema import _make_class_where_type
 
     (spec, movie_cls, *_) = _build_full_spec()
     where_type = _make_class_where_type(movie_cls)

@@ -132,7 +132,7 @@ def test_mixin_slot_is_queryable_via_graphql(pg_conn):
         spec_revision=rev,
     )
 
-    from knot.api._graphql_schema import get_or_build_schema
+    from knot.api.graphql_schema import get_or_build_schema
     from knot.ontology.canonical import compute_content_hash
 
     published = spec_store.get_published(pg_conn)

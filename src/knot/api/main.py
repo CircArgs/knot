@@ -38,7 +38,7 @@ from knot.api import dq as dq_router_mod
 from knot.api import graph as graph_router_mod
 from knot.api import lake as lake_router_mod
 from knot.api import spec as spec_router_mod
-from knot.auth import bootstrap_admin_from_env
+from knot.security import bootstrap_admin_from_env
 from knot.logging_config import configure_logging
 from knot.middleware import RequestIDMiddleware
 

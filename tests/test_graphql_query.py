@@ -122,7 +122,7 @@ def _post(client: TestClient, query: str, variables: dict | None = None) -> dict
 
 def test_schema_cache_changes_on_new_publish(gql_db):
     """Content hash changes after a new publish → schema cache miss → new schema."""
-    from knot.api._graphql_schema import _schema_cache, get_or_build_schema
+    from knot.api.graphql_schema import _schema_cache, get_or_build_schema
 
     conn, spec, src, rev = gql_db
 
@@ -280,7 +280,7 @@ def test_query_like_filter(gql_client):
 def test_graphql_no_auth_returns_401_when_enforced():
     """Without KNOT_AUTH_DEV_MODE=1, missing token → 401."""
     from knot.api.main import app
-    from knot.auth import require_user as _require_user, Principal as _Principal, _strip_bearer
+    from knot.security import require_user as _require_user, Principal as _Principal, _strip_bearer
     from knot.db import users
     from fastapi import HTTPException, Header
 
@@ -307,7 +307,7 @@ def test_graphql_no_auth_returns_401_when_enforced():
 def test_graphql_wrong_token_returns_403_when_enforced():
     """Wrong token → 403."""
     from knot.api.main import app
-    from knot.auth import require_user as _require_user, Principal as _Principal, _strip_bearer
+    from knot.security import require_user as _require_user, Principal as _Principal, _strip_bearer
     from knot.db import users
     from fastapi import HTTPException, Header
 

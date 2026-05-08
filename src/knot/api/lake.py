@@ -12,8 +12,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from knot import db
-from knot.auth import require_user
-from knot.db import lake_sql, spec_store
+from knot.security import require_user
+from knot.db import lake, spec_store
 
 
 router = APIRouter(prefix="/lake", tags=["lake"])
@@ -54,7 +54,7 @@ def materialize(
             raise HTTPException(409, "No spec is published yet.")
         revision = spec_store.get_published_revision(conn) or 0
 
-        classes = [c for c in spec.classes if lake_sql.is_materializable(c)]
+        classes = [c for c in spec.classes if lake.is_materializable(c)]
         if class_name is not None:
             classes = [c for c in classes if c.name == class_name]
             if not classes:
@@ -69,8 +69,8 @@ def materialize(
         classes=[
             ClassMaterialization(
                 name=c.name,
-                current=lake_sql.materialize_current(c),
-                history=lake_sql.materialize_history(c),
+                current=lake.materialize_current(c),
+                history=lake.materialize_history(c),
             )
             for c in classes
         ],

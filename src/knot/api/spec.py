@@ -20,8 +20,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
-from knot.auth import require_user
-from knot.api._constraint_translator import ExprJson, translate_expr
+from knot.security import require_user
+from knot.api.constraint_translator import ExprJson, translate_expr
 from knot.db import spec_store
 from knot.ontology import (
     OntologyClass,

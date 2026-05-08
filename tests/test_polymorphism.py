@@ -213,7 +213,7 @@ def test_add_identifier_rows_and_query_by_discriminator(poly_db):
 
     # Query via GraphQL.
     from knot.api.main import app
-    from knot.api._graphql_schema import get_or_build_schema
+    from knot.api.graphql_schema import get_or_build_schema
     from knot.ontology.canonical import compute_content_hash
 
     published = spec_store.get_published(conn)
@@ -243,7 +243,7 @@ def test_add_identifier_rows_and_query_by_discriminator(poly_db):
 def test_by_discriminator_unknown_returns_null(poly_db):
     conn, movie, identifier, rev = poly_db
 
-    from knot.api._graphql_schema import get_or_build_schema
+    from knot.api.graphql_schema import get_or_build_schema
 
     published = spec_store.get_published(conn)
     content_hash = spec_store.get_published_content_hash(conn)
@@ -270,7 +270,7 @@ def test_schema_fields_polymorphic_vs_normal(poly_db):
     """
     conn, movie, identifier, rev = poly_db
 
-    from knot.api._graphql_schema import get_or_build_schema
+    from knot.api.graphql_schema import get_or_build_schema
 
     published = spec_store.get_published(conn)
     content_hash = spec_store.get_published_content_hash(conn)
