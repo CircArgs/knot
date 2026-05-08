@@ -256,13 +256,12 @@ def test_director_page_returns_only_directors(dc_db, dc_client):
         {"credit_id": "c3", "person": "p3", "role": "director"},
     ])
 
-    result = _post(dc_client, "{ director { rows total } }")
+    result = _post(dc_client, "{ director { personId } directorCount }")
     assert "errors" not in result, result.get("errors")
-    page = result["data"]["director"]
-    rows = [json.loads(r) for r in page["rows"]]
-    person_ids = {r["person_id"] for r in rows}
+    rows = result["data"]["director"]
+    person_ids = {r["personId"] for r in rows}
     assert person_ids == {"p1", "p3"}, f"unexpected directors: {person_ids}"
-    assert page["total"] == 2
+    assert result["data"]["directorCount"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -280,9 +279,9 @@ def test_person_page_returns_all_persons(dc_db, dc_client):
         {"credit_id": "c1", "person": "p1", "role": "director"},
     ])
 
-    result = _post(dc_client, "{ person { rows total } }")
-    page = result["data"]["person"]
-    assert page["total"] == 2
+    result = _post(dc_client, "{ person { personId } personCount }")
+    assert len(result["data"]["person"]) == 2
+    assert result["data"]["personCount"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -301,12 +300,11 @@ def test_director_by_canonical_id_found(dc_db, dc_client):
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ])
 
-    result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p1") }')
+    result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p1") { personId name } }')
     assert "errors" not in result, result.get("errors")
-    raw = result["data"]["directorByCanonicalId"]
-    assert raw is not None
-    row = json.loads(raw)
-    assert row["person_id"] == "p1"
+    row = result["data"]["directorByCanonicalId"]
+    assert row is not None
+    assert row["personId"] == "p1"
     assert row["name"] == "Alice"
 
 
@@ -326,7 +324,7 @@ def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ])
 
-    result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p2") }')
+    result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p2") { personId } }')
     assert "errors" not in result, result.get("errors")
     assert result["data"]["directorByCanonicalId"] is None
 
@@ -346,8 +344,8 @@ def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
         {"credit_id": "c1", "person": "p1", "role": "director"},
     ])
 
-    result = _post(dc_client, "{ director { total } }")
-    assert result["data"]["director"]["total"] == 1
+    result = _post(dc_client, "{ directorCount }")
+    assert result["data"]["directorCount"] == 1
 
     # Re-ingest with role changed to actor
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
@@ -355,8 +353,8 @@ def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
     ])
 
     # View recomputes at query time — Alice is no longer a director
-    result = _post(dc_client, "{ director { total } }")
-    assert result["data"]["director"]["total"] == 0
+    result = _post(dc_client, "{ directorCount }")
+    assert result["data"]["directorCount"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -624,12 +622,11 @@ def test_director_resolved_found(dc_db, dc_client):
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ])
 
-    result = _post(dc_client, '{ directorResolved(canonicalId: "p1") }')
+    result = _post(dc_client, '{ directorResolved(canonicalId: "p1") { personId name canonicalId } }')
     assert "errors" not in result, result.get("errors")
-    raw = result["data"]["directorResolved"]
-    assert raw is not None
-    row = json.loads(raw)
-    assert row["_canonical_id"] == "p1"
+    row = result["data"]["directorResolved"]
+    assert row is not None
+    assert row["canonicalId"] == "p1"
     assert row["name"] == "Alice"
 
 
@@ -649,7 +646,7 @@ def test_director_resolved_non_director_is_null(dc_db, dc_client):
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ])
 
-    result = _post(dc_client, '{ directorResolved(canonicalId: "p2") }')
+    result = _post(dc_client, '{ directorResolved(canonicalId: "p2") { personId } }')
     assert "errors" not in result, result.get("errors")
     assert result["data"]["directorResolved"] is None
 
@@ -673,13 +670,16 @@ def test_director_page_with_name_filter(dc_db, dc_client):
     ])
 
     # Filter directors by name = 'Alice'
-    result = _post(dc_client, '{ director(where: { name: { eq: "Alice" } }) { rows total } }')
+    result = _post(
+        dc_client,
+        '{ director(where: { name: { eq: "Alice" } }) { name } '
+        '  directorCount(where: { name: { eq: "Alice" } }) }',
+    )
     assert "errors" not in result, result.get("errors")
-    page = result["data"]["director"]
-    rows = [json.loads(r) for r in page["rows"]]
+    rows = result["data"]["director"]
     assert len(rows) == 1
     assert rows[0]["name"] == "Alice"
-    assert page["total"] == 1
+    assert result["data"]["directorCount"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -691,8 +691,8 @@ def test_both_classes_in_schema(dc_db, dc_client):
     result = _post(dc_client, "{ __typename }")
     assert result["data"]["__typename"] == "Query"
     # Check that director fields exist via a trivial query
-    r1 = _post(dc_client, "{ director { total } }")
-    r2 = _post(dc_client, "{ person { total } }")
+    r1 = _post(dc_client, "{ directorCount }")
+    r2 = _post(dc_client, "{ personCount }")
     assert "errors" not in r1
     assert "errors" not in r2
 
@@ -840,9 +840,9 @@ def test_person_count_unchanged_after_director_view(dc_db, dc_client):
         {"credit_id": "c1", "person": "p1", "role": "director"},
     ])
 
-    result = _post(dc_client, "{ person { total } }")
-    assert result["data"]["person"]["total"] == 3
+    result = _post(dc_client, "{ personCount }")
+    assert result["data"]["personCount"] == 3
 
     # Director view only shows 1 (Alice)
-    result = _post(dc_client, "{ director { total } }")
-    assert result["data"]["director"]["total"] == 1
+    result = _post(dc_client, "{ directorCount }")
+    assert result["data"]["directorCount"] == 1

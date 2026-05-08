@@ -488,14 +488,13 @@ def test_derived_slot_is_not_stored():
 
 # 14. GraphQL moviePage rows include directors array
 def test_graphql_derived_directors_in_rows(gql_client_full):
-    query = "{ movie { rows total } }"
+    query = "{ movie { imdbId directors } movieCount }"
     result = _post(gql_client_full, query)
     assert "errors" not in result, result.get("errors")
-    page = result["data"]["movie"]
-    assert page["total"] == 2
-    rows = [json.loads(r) for r in page["rows"]]
-    film_a = next(r for r in rows if r["imdb_id"] == "tt0000001")
-    film_b = next(r for r in rows if r["imdb_id"] == "tt0000002")
+    assert result["data"]["movieCount"] == 2
+    rows = result["data"]["movie"]
+    film_a = next(r for r in rows if r["imdbId"] == "tt0000001")
+    film_b = next(r for r in rows if r["imdbId"] == "tt0000002")
 
     # Film A has directors Alice and Bob (role='director')
     directors_a = film_a.get("directors")
@@ -509,26 +508,25 @@ def test_graphql_derived_directors_in_rows(gql_client_full):
 
 # 15. credit_count derived slot returns correct integer
 def test_graphql_derived_credit_count(gql_client_full):
-    query = "{ movie { rows } }"
+    query = "{ movie { imdbId creditCount } }"
     result = _post(gql_client_full, query)
     assert "errors" not in result, result.get("errors")
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
-    film_a = next(r for r in rows if r["imdb_id"] == "tt0000001")
-    film_b = next(r for r in rows if r["imdb_id"] == "tt0000002")
+    rows = result["data"]["movie"]
+    film_a = next(r for r in rows if r["imdbId"] == "tt0000001")
+    film_b = next(r for r in rows if r["imdbId"] == "tt0000002")
     # Film A has 3 credits (2 directors + 1 actor)
-    assert film_a.get("credit_count") == 3, f"expected 3, got {film_a.get('credit_count')}"
+    assert film_a.get("creditCount") == 3, f"expected 3, got {film_a.get('creditCount')}"
     # Film B has 0 credits → count(*) returns 0
-    assert film_b.get("credit_count") == 0, f"expected 0, got {film_b.get('credit_count')}"
+    assert film_b.get("creditCount") == 0, f"expected 0, got {film_b.get('creditCount')}"
 
 
 # 16. movieByCanonicalId returns derived slot value
 def test_graphql_by_canonical_id_includes_derived(gql_client_full):
-    query = '{ movieByCanonicalId(canonicalId: "tt0000001") }'
+    query = '{ movieByCanonicalId(canonicalId: "tt0000001") { imdbId directors creditCount } }'
     result = _post(gql_client_full, query)
     assert "errors" not in result, result.get("errors")
-    raw = result["data"]["movieByCanonicalId"]
-    assert raw is not None
-    row = json.loads(raw)
+    row = result["data"]["movieByCanonicalId"]
+    assert row is not None
     directors = row.get("directors")
     assert directors is not None
     assert set(directors) == {"Alice", "Bob"}

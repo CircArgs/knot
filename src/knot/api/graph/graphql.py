@@ -1,10 +1,18 @@
-"""POST /graph/query — Strawberry GraphQL over the published spec."""
+"""GET/POST /graph/query — Strawberry GraphQL over the published spec.
+
+GET serves the GraphiQL IDE HTML (Strawberry's bundled static file) so
+operators can poke at the schema in a browser. The page POSTs to its
+own URL, so the same path serves both the IDE and the executor.
+"""
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends
+from fastapi.responses import HTMLResponse
+from pydantic import ConfigDict, Field
 
 from knot import db
 from knot.api.graph._common import StrictBase, published_or_409
@@ -14,10 +22,34 @@ from knot.security import require_user
 router = APIRouter()
 
 
+_GRAPHIQL_HTML: str | None = None
+
+
+def _graphiql_html() -> str:
+    """Lazy-load Strawberry's bundled GraphiQL HTML."""
+    global _GRAPHIQL_HTML
+    if _GRAPHIQL_HTML is None:
+        import strawberry
+        path = Path(strawberry.__file__).parent / "static" / "graphiql.html"
+        _GRAPHIQL_HTML = path.read_text(encoding="utf-8")
+    return _GRAPHIQL_HTML
+
+
+@router.get("/query", include_in_schema=False)
+def graphiql_ui() -> HTMLResponse:
+    """Serve GraphiQL IDE — POSTs back to this same URL via JS."""
+    return HTMLResponse(_graphiql_html())
+
+
 class GraphQLBody(StrictBase):
+    # GraphiQL and most clients send `operationName` per the GraphQL spec —
+    # accept both that and the snake_case alias so notebooks calling with
+    # ``operation_name=`` keep working.
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
+
     query: str
     variables: dict[str, Any] | None = None
-    operation_name: str | None = None
+    operation_name: str | None = Field(default=None, alias="operationName")
 
 
 @router.post("/query", dependencies=[Depends(require_user)], tags=["graph"])

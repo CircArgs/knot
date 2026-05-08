@@ -139,12 +139,12 @@ def test_mixin_slot_is_queryable_via_graphql(pg_conn):
     schema = get_or_build_schema(published, compute_content_hash(published))
 
     result = schema.execute_sync(
-        "{ movie { rows } }",
+        "{ movie { imdbId title createdAt } }",
         context_value={"conn": pg_conn},
     )
     assert result.errors is None, result.errors
-    rows = result.data["movie"]["rows"]
-    assert any("created_at" in r for r in rows)
+    rows = result.data["movie"]
+    assert any(r.get("createdAt") is not None for r in rows)
 
 
 # ---------------------------------------------------------------------------

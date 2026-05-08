@@ -149,16 +149,12 @@ def test_schema_cache_changes_on_new_publish(gql_db):
 # ---------------------------------------------------------------------------
 
 def test_query_no_filter_returns_all_rows(gql_client):
-    result = _post(gql_client, "{ movie { rows total limit offset } }")
+    result = _post(gql_client, "{ movie { imdbId title year canonicalId } movieCount }")
     assert "data" in result
-    page = result["data"]["movie"]
-    assert page["total"] == 5
-    assert len(page["rows"]) == 5
-    assert page["limit"] == 100
-    assert page["offset"] == 0
-    # Each row is a JSON string with the expected keys.
-    first = json.loads(page["rows"][0])
-    assert "imdb_id" in first or "_canonical_id" in first
+    rows = result["data"]["movie"]
+    assert result["data"]["movieCount"] == 5
+    assert len(rows) == 5
+    assert "imdbId" in rows[0] or "canonicalId" in rows[0]
 
 
 # ---------------------------------------------------------------------------
@@ -166,14 +162,16 @@ def test_query_no_filter_returns_all_rows(gql_client):
 # ---------------------------------------------------------------------------
 
 def test_query_filter_year_gte(gql_client):
-    query = "{ movie(where: { year: { gte: 1990 } }) { rows total } }"
+    query = (
+        "{ movie(where: { year: { gte: 1990 } }) { imdbId title year } "
+        "  movieCount(where: { year: { gte: 1990 } }) }"
+    )
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    rows = [json.loads(r) for r in page["rows"]]
+    rows = result["data"]["movie"]
     years = [r["year"] for r in rows]
     assert all(y >= 1990 for y in years), f"unexpected years: {years}"
     assert len(rows) == 3  # 1994, 1993, 2003
-    assert page["total"] == 3
+    assert result["data"]["movieCount"] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -181,14 +179,16 @@ def test_query_filter_year_gte(gql_client):
 # ---------------------------------------------------------------------------
 
 def test_query_filter_year_range(gql_client):
-    query = "{ movie(where: { year: { gte: 1990, lte: 2000 } }) { rows total } }"
+    query = (
+        "{ movie(where: { year: { gte: 1990, lte: 2000 } }) { imdbId title year } "
+        "  movieCount(where: { year: { gte: 1990, lte: 2000 } }) }"
+    )
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    rows = [json.loads(r) for r in page["rows"]]
+    rows = result["data"]["movie"]
     years = [r["year"] for r in rows]
     assert all(1990 <= y <= 2000 for y in years)
     assert len(rows) == 2  # 1994, 1993
-    assert page["total"] == 2
+    assert result["data"]["movieCount"] == 2
 
 
 # ---------------------------------------------------------------------------
@@ -196,27 +196,21 @@ def test_query_filter_year_range(gql_client):
 # ---------------------------------------------------------------------------
 
 def test_query_limit(gql_client):
-    query = "{ movie(limit: 2) { rows total limit offset } }"
+    query = "{ movie(limit: 2) { imdbId title year } movieCount }"
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert len(page["rows"]) == 2
-    assert page["total"] == 5  # total is unfiltered count
-    assert page["limit"] == 2
-    assert page["offset"] == 0
+    assert len(result["data"]["movie"]) == 2
+    assert result["data"]["movieCount"] == 5  # unfiltered total
 
 
 def test_query_offset(gql_client):
-    all_result = _post(gql_client, "{ movie { rows } }")
-    all_rows = [json.loads(r) for r in all_result["data"]["movie"]["rows"]]
+    all_result = _post(gql_client, "{ movie { imdbId title year } }")
+    all_rows = all_result["data"]["movie"]
 
-    offset_result = _post(gql_client, "{ movie(limit: 10, offset: 2) { rows offset } }")
-    offset_page = offset_result["data"]["movie"]
-    offset_rows = [json.loads(r) for r in offset_page["rows"]]
+    offset_result = _post(gql_client, "{ movie(limit: 10, offset: 2) { imdbId title year } }")
+    offset_rows = offset_result["data"]["movie"]
 
-    # Offset skips first 2 rows; results should be the tail of all rows.
     assert len(offset_rows) == 3
-    assert offset_page["offset"] == 2
-    assert [r["imdb_id"] for r in offset_rows] == [r["imdb_id"] for r in all_rows[2:]]
+    assert [r["imdbId"] for r in offset_rows] == [r["imdbId"] for r in all_rows[2:]]
 
 
 # ---------------------------------------------------------------------------
@@ -224,26 +218,20 @@ def test_query_offset(gql_client):
 # ---------------------------------------------------------------------------
 
 def test_query_as_of_past_revision_returns_empty(gql_db, gql_client):
-    """as_of=0 (before any rows were inserted) should return no rows.
-    Rows were inserted at spec_revision=rev; as_of=rev-1 returns nothing.
-    """
+    """Rows inserted at spec_revision=rev; as_of=rev-1 returns nothing."""
     conn, spec, src, rev = gql_db
-    # rev is the current published revision (rows have _spec_revision = rev).
-    # as_of = rev - 1 → no rows visible.
-    query = f"{{ movie(asOf: {rev - 1}) {{ rows total }} }}"
+    query = f"{{ movie(asOf: {rev - 1}) {{ imdbId }} movieCount(asOf: {rev - 1}) }}"
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert page["rows"] == [], f"expected empty, got {page['rows']}"
-    assert page["total"] == 0
+    assert result["data"]["movie"] == []
+    assert result["data"]["movieCount"] == 0
 
 
 def test_query_as_of_current_revision_returns_rows(gql_db, gql_client):
     conn, spec, src, rev = gql_db
-    query = f"{{ movie(asOf: {rev}) {{ rows total }} }}"
+    query = f"{{ movie(asOf: {rev}) {{ imdbId }} movieCount(asOf: {rev}) }}"
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert len(page["rows"]) == 5
-    assert page["total"] == 5
+    assert len(result["data"]["movie"]) == 5
+    assert result["data"]["movieCount"] == 5
 
 
 # ---------------------------------------------------------------------------
@@ -251,11 +239,13 @@ def test_query_as_of_current_revision_returns_rows(gql_db, gql_client):
 # ---------------------------------------------------------------------------
 
 def test_query_class_with_no_rows(gql_client):
-    query = "{ movie(where: { year: { gt: 9999 } }) { rows total } }"
+    query = (
+        "{ movie(where: { year: { gt: 9999 } }) { imdbId } "
+        "  movieCount(where: { year: { gt: 9999 } }) }"
+    )
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert page["rows"] == []
-    assert page["total"] == 0
+    assert result["data"]["movie"] == []
+    assert result["data"]["movieCount"] == 0
 
 
 # ---------------------------------------------------------------------------
@@ -263,14 +253,16 @@ def test_query_class_with_no_rows(gql_client):
 # ---------------------------------------------------------------------------
 
 def test_query_like_filter(gql_client):
-    query = '{ movie(where: { title: { like: "The%" } }) { rows total } }'
+    query = (
+        '{ movie(where: { title: { like: "The%" } }) { title } '
+        '  movieCount(where: { title: { like: "The%" } }) }'
+    )
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    rows = [json.loads(r) for r in page["rows"]]
+    rows = result["data"]["movie"]
     titles = [r["title"] for r in rows]
     assert all(t.startswith("The") for t in titles), f"unexpected titles: {titles}"
-    assert len(rows) == 3  # "The Shawshank Redemption", "The Godfather", "The Return of the King"
-    assert page["total"] == 3
+    assert len(rows) == 3
+    assert result["data"]["movieCount"] == 3
 
 
 # ---------------------------------------------------------------------------
@@ -368,33 +360,31 @@ def test_graphql_no_spec_returns_409(pg_conn):
 # 11. Pagination metadata fields
 # ---------------------------------------------------------------------------
 
-def test_page_metadata_fields(gql_client):
-    """Verify all page metadata fields are present and correct."""
-    query = "{ movie(limit: 3, offset: 1) { rows total limit offset } }"
+def test_pagination_window(gql_client):
+    """limit and offset honour the requested window; movieCount returns total."""
+    query = "{ movie(limit: 3, offset: 1) { imdbId } movieCount }"
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert page["total"] == 5
-    assert page["limit"] == 3
-    assert page["offset"] == 1
-    assert len(page["rows"]) == 3
+    assert len(result["data"]["movie"]) == 3
+    assert result["data"]["movieCount"] == 5  # unfiltered total
 
 
-def test_page_total_reflects_predicate(gql_client):
-    """total should count only rows matching the where filter."""
-    query = "{ movie(where: { year: { gte: 1990 } }) { rows total } }"
+def test_count_reflects_predicate(gql_client):
+    """movieCount should return only rows matching the where filter."""
+    query = (
+        "{ movie(where: { year: { gte: 1990 } }) { imdbId title year } "
+        "  movieCount(where: { year: { gte: 1990 } }) }"
+    )
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert page["total"] == 3
-    assert len(page["rows"]) == 3
+    assert result["data"]["movieCount"] == 3
+    assert len(result["data"]["movie"]) == 3
 
 
-def test_page_as_of_field_present(gql_db, gql_client):
+def test_as_of_propagates_through_count(gql_db, gql_client):
     conn, spec, src, rev = gql_db
-    query = f"{{ movie(asOf: {rev}) {{ rows total asOf }} }}"
+    query = f"{{ movie(asOf: {rev}) {{ imdbId }} movieCount(asOf: {rev}) }}"
     result = _post(gql_client, query)
-    page = result["data"]["movie"]
-    assert page["asOf"] == rev
-    assert page["total"] == 5
+    assert len(result["data"]["movie"]) == 5
+    assert result["data"]["movieCount"] == 5
 
 
 # ---------------------------------------------------------------------------
@@ -402,34 +392,34 @@ def test_page_as_of_field_present(gql_db, gql_client):
 # ---------------------------------------------------------------------------
 
 def test_order_by_year_asc(gql_client):
-    query = "{ movie(orderBy: [{ field: year, direction: ASC }]) { rows } }"
+    query = "{ movie(orderBy: [{ field: year, direction: ASC }]) { imdbId title year } }"
     result = _post(gql_client, query)
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
+    rows = result["data"]["movie"]
     years = [r["year"] for r in rows]
     assert years == sorted(years), f"expected ASC, got {years}"
 
 
 def test_order_by_year_desc(gql_client):
-    query = "{ movie(orderBy: [{ field: year, direction: DESC }]) { rows } }"
+    query = "{ movie(orderBy: [{ field: year, direction: DESC }]) { imdbId title year } }"
     result = _post(gql_client, query)
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
+    rows = result["data"]["movie"]
     years = [r["year"] for r in rows]
     assert years == sorted(years, reverse=True), f"expected DESC, got {years}"
 
 
 def test_order_by_title_asc(gql_client):
-    query = "{ movie(orderBy: [{ field: title, direction: ASC }]) { rows } }"
+    query = "{ movie(orderBy: [{ field: title, direction: ASC }]) { imdbId title year } }"
     result = _post(gql_client, query)
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
+    rows = result["data"]["movie"]
     titles = [r["title"] for r in rows]
     assert titles == sorted(titles), f"expected ASC, got {titles}"
 
 
 def test_order_by_year_desc_with_limit(gql_client):
     """orderBy DESC with limit → first N in descending order."""
-    query = "{ movie(orderBy: [{ field: year, direction: DESC }], limit: 2) { rows } }"
+    query = "{ movie(orderBy: [{ field: year, direction: DESC }], limit: 2) { imdbId title year } }"
     result = _post(gql_client, query)
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
+    rows = result["data"]["movie"]
     years = [r["year"] for r in rows]
     assert len(years) == 2
     assert years[0] >= years[1], f"expected DESC, got {years}"
@@ -440,20 +430,22 @@ def test_order_by_year_desc_with_limit(gql_client):
 # 13. Single-entity lookup: movieByCanonicalId
 # ---------------------------------------------------------------------------
 
+_BY_ID_FIELDS = "{ imdbId title year canonicalId }"
+
+
 def test_by_canonical_id_found(gql_client):
-    query = '{ movieByCanonicalId(canonicalId: "tt0111161") }'
+    query = f'{{ movieByCanonicalId(canonicalId: "tt0111161") {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
     assert "errors" not in result, result.get("errors")
-    raw = result["data"]["movieByCanonicalId"]
-    assert raw is not None
-    row = json.loads(raw)
-    assert row["imdb_id"] == "tt0111161"
+    row = result["data"]["movieByCanonicalId"]
+    assert row is not None
+    assert row["imdbId"] == "tt0111161"
     assert row["title"] == "The Shawshank Redemption"
     assert row["year"] == 1994
 
 
 def test_by_canonical_id_not_found_returns_null(gql_client):
-    query = '{ movieByCanonicalId(canonicalId: "tt9999999") }'
+    query = f'{{ movieByCanonicalId(canonicalId: "tt9999999") {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
     assert "errors" not in result, result.get("errors")
     assert result["data"]["movieByCanonicalId"] is None
@@ -461,18 +453,17 @@ def test_by_canonical_id_not_found_returns_null(gql_client):
 
 def test_by_canonical_id_as_of_before_ingest_returns_null(gql_db, gql_client):
     conn, spec, src, rev = gql_db
-    query = f'{{ movieByCanonicalId(canonicalId: "tt0111161", asOf: {rev - 1}) }}'
+    query = f'{{ movieByCanonicalId(canonicalId: "tt0111161", asOf: {rev - 1}) {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
     assert result["data"]["movieByCanonicalId"] is None
 
 
 def test_by_canonical_id_as_of_current_returns_record(gql_db, gql_client):
     conn, spec, src, rev = gql_db
-    query = f'{{ movieByCanonicalId(canonicalId: "tt0068646", asOf: {rev}) }}'
+    query = f'{{ movieByCanonicalId(canonicalId: "tt0068646", asOf: {rev}) {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
-    raw = result["data"]["movieByCanonicalId"]
-    assert raw is not None
-    row = json.loads(raw)
+    row = result["data"]["movieByCanonicalId"]
+    assert row is not None
     assert row["title"] == "The Godfather"
 
 
@@ -481,19 +472,18 @@ def test_by_canonical_id_as_of_current_returns_record(gql_db, gql_client):
 # ---------------------------------------------------------------------------
 
 def test_resolved_found(gql_client):
-    query = '{ movieResolved(canonicalId: "tt0050083") }'
+    query = f'{{ movieResolved(canonicalId: "tt0050083") {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
     assert "errors" not in result, result.get("errors")
-    raw = result["data"]["movieResolved"]
-    assert raw is not None
-    row = json.loads(raw)
-    assert row["_canonical_id"] == "tt0050083"
+    row = result["data"]["movieResolved"]
+    assert row is not None
+    assert row["canonicalId"] == "tt0050083"
     assert row["title"] == "12 Angry Men"
     assert row["year"] == 1957
 
 
 def test_resolved_not_found_returns_null(gql_client):
-    query = '{ movieResolved(canonicalId: "tt9999999") }'
+    query = f'{{ movieResolved(canonicalId: "tt9999999") {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
     assert "errors" not in result, result.get("errors")
     assert result["data"]["movieResolved"] is None
@@ -501,18 +491,17 @@ def test_resolved_not_found_returns_null(gql_client):
 
 def test_resolved_as_of_before_ingest_returns_null(gql_db, gql_client):
     conn, spec, src, rev = gql_db
-    query = f'{{ movieResolved(canonicalId: "tt0111161", asOf: {rev - 1}) }}'
+    query = f'{{ movieResolved(canonicalId: "tt0111161", asOf: {rev - 1}) {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
     assert result["data"]["movieResolved"] is None
 
 
 def test_resolved_as_of_current_returns_record(gql_db, gql_client):
     conn, spec, src, rev = gql_db
-    query = f'{{ movieResolved(canonicalId: "tt0167260", asOf: {rev}) }}'
+    query = f'{{ movieResolved(canonicalId: "tt0167260", asOf: {rev}) {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
-    raw = result["data"]["movieResolved"]
-    assert raw is not None
-    row = json.loads(raw)
+    row = result["data"]["movieResolved"]
+    assert row is not None
     assert row["title"] == "The Return of the King"
 
 
@@ -646,24 +635,24 @@ def derived_client(derived_db):
 
 def test_where_on_derived_slot_returns_matching_rows(derived_client):
     """WHERE credit_count >= 2 should return only m1 (3 credits)."""
-    query = "{ movie(where: { creditCount: { gte: 2 } }) { rows total } }"
+    query = (
+        "{ movie(where: { creditCount: { gte: 2 } }) { imdbId creditCount } "
+        "  movieCount(where: { creditCount: { gte: 2 } }) }"
+    )
     result = _post(derived_client, query)
     assert "errors" not in result, result.get("errors")
-    page = result["data"]["movie"]
-    rows = [json.loads(r) for r in page["rows"]]
-    ids = {r["imdb_id"] for r in rows}
+    rows = result["data"]["movie"]
+    ids = {r["imdbId"] for r in rows}
     assert ids == {"m1"}, f"expected only m1, got {ids}"
-    assert page["total"] == 1
+    assert result["data"]["movieCount"] == 1
 
 
 def test_where_on_derived_slot_eq_zero(derived_client):
     """WHERE credit_count = 0 should return only m3 (no credits)."""
-    query = "{ movie(where: { creditCount: { eq: 0 } }) { rows total } }"
+    query = "{ movie(where: { creditCount: { eq: 0 } }) { imdbId creditCount } }"
     result = _post(derived_client, query)
     assert "errors" not in result, result.get("errors")
-    page = result["data"]["movie"]
-    rows = [json.loads(r) for r in page["rows"]]
-    ids = {r["imdb_id"] for r in rows}
+    ids = {r["imdbId"] for r in result["data"]["movie"]}
     assert ids == {"m3"}, f"expected only m3, got {ids}"
 
 
@@ -671,13 +660,11 @@ def test_where_combined_derived_and_stored(derived_client):
     """WHERE year >= 2000 AND credit_count >= 1 → only m2 (year=2000, 1 credit)."""
     query = (
         "{ movie(where: { year: { gte: 2000 }, creditCount: { gte: 1 } }) "
-        "{ rows total } }"
+        "  { imdbId creditCount } }"
     )
     result = _post(derived_client, query)
     assert "errors" not in result, result.get("errors")
-    page = result["data"]["movie"]
-    rows = [json.loads(r) for r in page["rows"]]
-    ids = {r["imdb_id"] for r in rows}
+    ids = {r["imdbId"] for r in result["data"]["movie"]}
     assert ids == {"m2"}, f"expected only m2, got {ids}"
 
 
@@ -687,11 +674,10 @@ def test_where_combined_derived_and_stored(derived_client):
 
 def test_order_by_derived_slot_asc(derived_client):
     """ORDER BY credit_count ASC → m3(0), m2(1), m1(3)."""
-    query = "{ movie(orderBy: [{ field: creditCount, direction: ASC }]) { rows } }"
+    query = "{ movie(orderBy: [{ field: creditCount, direction: ASC }]) { imdbId creditCount } }"
     result = _post(derived_client, query)
     assert "errors" not in result, result.get("errors")
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
-    counts = [r["credit_count"] for r in rows]
+    counts = [r["creditCount"] for r in result["data"]["movie"]]
     assert counts == sorted(counts), f"expected ASC, got {counts}"
     assert counts[0] == 0
     assert counts[-1] == 3
@@ -699,11 +685,10 @@ def test_order_by_derived_slot_asc(derived_client):
 
 def test_order_by_derived_slot_desc(derived_client):
     """ORDER BY credit_count DESC → m1(3), m2(1), m3(0)."""
-    query = "{ movie(orderBy: [{ field: creditCount, direction: DESC }]) { rows } }"
+    query = "{ movie(orderBy: [{ field: creditCount, direction: DESC }]) { imdbId creditCount } }"
     result = _post(derived_client, query)
     assert "errors" not in result, result.get("errors")
-    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
-    counts = [r["credit_count"] for r in rows]
+    counts = [r["creditCount"] for r in result["data"]["movie"]]
     assert counts == sorted(counts, reverse=True), f"expected DESC, got {counts}"
     assert counts[0] == 3
     assert counts[-1] == 0

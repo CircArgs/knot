@@ -182,27 +182,49 @@ def _make_class_where_type(oc: OntologyClass) -> type:
 
 
 # ---------------------------------------------------------------------------
-# Page type: { rows: [String!]!, total: Int!, limit: Int!, offset: Int!, asOf: Int }
+# Per-class object type: one field per slot (+ canonical_id), all Optional
 # ---------------------------------------------------------------------------
 
-def _make_page_type(class_name: str) -> type:
-    type_name = f"Page_{class_name}"
-    annotations: dict[str, Any] = {
-        "rows":   list[str],
-        "total":  int,
-        "limit":  int,
-        "offset": int,
-        "as_of":  Optional[int],
-    }
-    ns: dict[str, Any] = {
-        "rows":   strawberry.UNSET,
-        "total":  strawberry.UNSET,
-        "limit":  strawberry.UNSET,
-        "offset": strawberry.UNSET,
-        "as_of":  None,
-    }
+def _make_class_object_type(oc: OntologyClass) -> type:
+    """Strawberry object type with one Optional field per slot.
+
+    Every field is Optional because contributions may be partial (a row from
+    one source may not carry every slot). ``canonical_id`` is exposed as a
+    convenience system field; if a class actually declares a slot named
+    ``canonical_id`` it shadows the system field (slot wins).
+    """
+    type_name = f"Type_{oc.name}"
+    annotations: dict[str, Any] = {}
+    ns: dict[str, Any] = {}
+
+    for slot in _all_slots(oc):
+        py = _slot_python_type(slot)
+        ann = Optional[list[py]] if slot.multivalued else Optional[py]
+        annotations[slot.name] = ann
+        ns[slot.name] = None
+
+    if "canonical_id" not in annotations:
+        annotations["canonical_id"] = Optional[str]
+        ns["canonical_id"] = None
+
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
     return strawberry.type(cls)
+
+
+def _row_to_typed(class_type: type, oc: OntologyClass, row: Any) -> Any:
+    """Construct an instance of ``class_type`` from a graph_store row dict.
+
+    Returns None if the input is None. The graph_store dict uses ``_canonical_id``
+    for the system-attribution canonical id; we surface that as ``canonical_id``
+    on the GraphQL type unless the class shadows it with its own slot.
+    """
+    if row is None:
+        return None
+    slot_names = {s.name for s in _all_slots(oc)}
+    kwargs: dict[str, Any] = {n: row.get(n) for n in slot_names}
+    if "canonical_id" not in slot_names:
+        kwargs["canonical_id"] = row.get("_canonical_id") or row.get("canonical_id")
+    return class_type(**kwargs)
 
 
 # ---------------------------------------------------------------------------
@@ -666,14 +688,14 @@ def _build_schema(spec: Spec) -> Schema:
 
     # Build per-class types.
     where_types: dict[str, type] = {}
-    page_types: dict[str, type] = {}
+    class_object_types: dict[str, type] = {}
     field_enums: dict[str, type] = {}
     order_by_inputs: dict[str, type] = {}
     agg_result_types: dict[str, type] = {}
     agg_fields_map: dict[str, list[tuple[str, str, str]]] = {}
     for oc in concrete_classes:
         where_types[oc.name] = _make_class_where_type(oc)
-        page_types[oc.name] = _make_page_type(oc.name)
+        class_object_types[oc.name] = _make_class_object_type(oc)
         field_enums[oc.name] = _make_field_enum(oc)
         order_by_inputs[oc.name] = _make_order_by_input(oc, field_enums[oc.name])
         agg_result_types[oc.name], agg_fields_map[oc.name] = _make_aggregate_result_type(oc)
@@ -687,7 +709,7 @@ def _build_schema(spec: Spec) -> Schema:
     mod.__dict__["list"] = list
     for t in where_types.values():
         mod.__dict__[t.__name__] = t
-    for t in page_types.values():
+    for t in class_object_types.values():
         mod.__dict__[t.__name__] = t
     for t in field_enums.values():
         mod.__dict__[t.__name__] = t
@@ -704,6 +726,7 @@ def _build_schema(spec: Spec) -> Schema:
     mod.__dict__["_build_pred"] = build_predicate_sql
     mod.__dict__["_build_order_by"] = _build_order_by_sql
     mod.__dict__["_merge_contribs"] = _merge_contributions
+    mod.__dict__["_row_to_typed"] = _row_to_typed
     mod.__dict__["_UNSET"] = strawberry.UNSET
 
     sys.modules[mod_name] = mod
@@ -712,28 +735,27 @@ def _build_schema(spec: Spec) -> Schema:
 
     for oc in concrete_classes:
         wtype = where_types[oc.name]
-        ptype = page_types[oc.name]
         ob_input = order_by_inputs[oc.name]
         agg_rtype = agg_result_types[oc.name]
         wtype_name = wtype.__name__
-        ptype_name = ptype.__name__
         ob_name = ob_input.__name__
         agg_rtype_name = agg_rtype.__name__
         bound_oc = oc
 
         # Unique per-class bindings in the module dict.
         oc_key = f"_oc_{oc.name}"
-        ptype_key = f"_ptype_{oc.name}"
+        ctype_key = f"_ctype_{oc.name}"
         agg_rtype_key = f"_agg_rtype_{oc.name}"
         agg_fields_key = f"_agg_fields_{oc.name}"
         mod.__dict__[oc_key] = bound_oc
-        mod.__dict__[ptype_key] = ptype
+        mod.__dict__[ctype_key] = class_object_types[oc.name]
         mod.__dict__[agg_rtype_key] = agg_rtype
         mod.__dict__[agg_fields_key] = agg_fields_map[oc.name]
 
         cls_lower = oc.name.lower()
 
-        # ── List resolver (paginated) ──────────────────────────────────────
+        # ── List resolver (returns the list directly — no Page wrapper) ──
+        ctype_name = class_object_types[oc.name].__name__
         list_fn_name = f"resolve_{cls_lower}"
         list_fn_src = (
             f"def {list_fn_name}(\n"
@@ -742,7 +764,7 @@ def _build_schema(spec: Spec) -> Schema:
             f"    offset: int = 0,\n"
             f"    as_of: Optional[int] = None,\n"
             f"    order_by: Optional[list[{ob_name}]] = _UNSET,\n"
-            f") -> {ptype_name}:\n"
+            f") -> list[{ctype_name}]:\n"
             f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
             f"    ob_sql, ob_params = _build_order_by(order_by, {oc_key})\n"
             f"    with _db.connect() as conn:\n"
@@ -754,14 +776,22 @@ def _build_schema(spec: Spec) -> Schema:
             f"            order_by_sql=ob_sql,\n"
             f"            order_by_params=ob_params,\n"
             f"        )\n"
-            f"        total = _gs.count_rows(\n"
+            f"    return [_row_to_typed({ctype_key}, {oc_key}, r) for r in rows]\n"
+        )
+
+        # ── Count resolver: <class>Count(where, asOf) → int ──────────────
+        count_fn_name = f"resolve_{cls_lower}_count"
+        count_fn_src = (
+            f"def {count_fn_name}(\n"
+            f"    where: Optional[{wtype_name}] = _UNSET,\n"
+            f"    as_of: Optional[int] = None,\n"
+            f") -> int:\n"
+            f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
+            f"    with _db.connect() as conn:\n"
+            f"        return _gs.count_rows(\n"
             f"            conn, cls={oc_key}, as_of=as_of,\n"
             f"            predicate_sql=pred_sql, predicate_params=pred_params,\n"
             f"        )\n"
-            f"    return {ptype_key}(\n"
-            f"        rows=[_json.dumps(r, default=str) for r in rows],\n"
-            f"        total=total, limit=limit, offset=offset, as_of=as_of,\n"
-            f"    )\n"
         )
 
         is_polymorphic = getattr(bound_oc, "identifier_pattern", None) is not None
@@ -778,12 +808,13 @@ def _build_schema(spec: Spec) -> Schema:
             _disc_key_slot_name = ip.key_slot.name
 
             by_disc_fn_name = f"resolve_{cls_lower}_by_discriminator"
+            ctype_name = class_object_types[oc.name].__name__
             by_disc_fn_src = (
                 f"def {by_disc_fn_name}(\n"
                 f"    target_class: str,\n"
                 f"    key: str,\n"
                 f"    as_of: Optional[int] = None,\n"
-                f") -> Optional[str]:\n"
+                f") -> Optional[{ctype_name}]:\n"
                 f"    from knot.db.sql_compiler import CompileContext, compile_predicate\n"
                 f"    from knot.ontology.metaschema import BoolExpr, BoolOpKind, Compare, CompareOp, Literal_, SlotPath\n"
                 f"    oc = {oc_key}\n"
@@ -811,11 +842,12 @@ def _build_schema(spec: Spec) -> Schema:
                 f"        )\n"
                 f"    if not rows:\n"
                 f"        return None\n"
-                f"    return _json.dumps(rows[0], default=str)\n"
+                f"    return _row_to_typed({ctype_key}, {oc_key}, rows[0])\n"
             )
 
             for fn_src, fn_name in [
                 (list_fn_src, list_fn_name),
+                (count_fn_src, count_fn_name),
                 (by_disc_fn_src, by_disc_fn_name),
             ]:
                 exec(fn_src, mod.__dict__)  # noqa: S102
@@ -825,18 +857,23 @@ def _build_schema(spec: Spec) -> Schema:
             query_fields[cls_lower] = strawberry.field(
                 resolver=mod.__dict__[list_fn_name]
             )
+            query_fields[f"{cls_lower}Count"] = strawberry.field(
+                resolver=mod.__dict__[count_fn_name]
+            )
             query_fields[f"{cls_lower}ByDiscriminator"] = strawberry.field(
                 resolver=mod.__dict__[by_disc_fn_name]
             )
 
         else:
+            ctype_name = class_object_types[oc.name].__name__
+
             # ── Single-entity (contributions) resolver ─────────────────────
             by_id_fn_name = f"resolve_{cls_lower}_by_canonical_id"
             by_id_fn_src = (
                 f"def {by_id_fn_name}(\n"
                 f"    canonical_id: str,\n"
                 f"    as_of: Optional[int] = None,\n"
-                f") -> Optional[str]:\n"
+                f") -> Optional[{ctype_name}]:\n"
                 f"    with _db.connect() as conn:\n"
                 f"        contribs = _gs.get_canonical_contributions(\n"
                 f"            conn, cls={oc_key},\n"
@@ -845,7 +882,8 @@ def _build_schema(spec: Spec) -> Schema:
                 f"    if not contribs:\n"
                 f"        return None\n"
                 f"    merged = _merge_contribs(contribs, {oc_key})\n"
-                f"    return _json.dumps(merged, default=str)\n"
+                f"    merged.setdefault('_canonical_id', canonical_id)\n"
+                f"    return _row_to_typed({ctype_key}, {oc_key}, merged)\n"
             )
 
             # ── Resolved view resolver ─────────────────────────────────────
@@ -854,7 +892,7 @@ def _build_schema(spec: Spec) -> Schema:
                 f"def {resolved_fn_name}(\n"
                 f"    canonical_id: str,\n"
                 f"    as_of: Optional[int] = None,\n"
-                f") -> Optional[str]:\n"
+                f") -> Optional[{ctype_name}]:\n"
                 f"    with _db.connect() as conn:\n"
                 f"        record = _resolve_mod.resolve_entity(\n"
                 f"            conn, cls={oc_key},\n"
@@ -862,7 +900,8 @@ def _build_schema(spec: Spec) -> Schema:
                 f"        )\n"
                 f"    if record is None:\n"
                 f"        return None\n"
-                f"    return _json.dumps(record, default=str)\n"
+                f"    record.setdefault('_canonical_id', canonical_id)\n"
+                f"    return _row_to_typed({ctype_key}, {oc_key}, record)\n"
             )
 
             # ── Aggregate resolver ─────────────────────────────────────────
@@ -891,6 +930,7 @@ def _build_schema(spec: Spec) -> Schema:
 
             for fn_src, fn_name in [
                 (list_fn_src, list_fn_name),
+                (count_fn_src, count_fn_name),
                 (by_id_fn_src, by_id_fn_name),
                 (resolved_fn_src, resolved_fn_name),
                 (agg_fn_src, agg_fn_name),
@@ -899,9 +939,11 @@ def _build_schema(spec: Spec) -> Schema:
                 fn = mod.__dict__[fn_name]
                 fn.__module__ = mod_name
 
-            # Register the four root fields.
             query_fields[cls_lower] = strawberry.field(
                 resolver=mod.__dict__[list_fn_name]
+            )
+            query_fields[f"{cls_lower}Count"] = strawberry.field(
+                resolver=mod.__dict__[count_fn_name]
             )
             query_fields[f"{cls_lower}ByCanonicalId"] = strawberry.field(
                 resolver=mod.__dict__[by_id_fn_name]

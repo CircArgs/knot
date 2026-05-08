@@ -223,16 +223,17 @@ def test_add_identifier_rows_and_query_by_discriminator(poly_db):
     result = schema.execute_sync(
         """
         query {
-            identifierByDiscriminator(targetClass: "Movie", key: "tt0111161")
+            identifierByDiscriminator(targetClass: "Movie", key: "tt0111161") {
+                entityClass entitySrcKey label
+            }
         }
         """
     )
     assert result.errors is None, result.errors
-    raw = result.data["identifierByDiscriminator"]
-    assert raw is not None
-    row = json.loads(raw)
-    assert row["entity_class"] == "Movie"
-    assert row["entity_src_key"] == "tt0111161"
+    row = result.data["identifierByDiscriminator"]
+    assert row is not None
+    assert row["entityClass"] == "Movie"
+    assert row["entitySrcKey"] == "tt0111161"
     assert row["label"] == "Shawshank"
 
 
@@ -252,7 +253,9 @@ def test_by_discriminator_unknown_returns_null(poly_db):
     result = schema.execute_sync(
         """
         query {
-            identifierByDiscriminator(targetClass: "Movie", key: "doesnotexist")
+            identifierByDiscriminator(targetClass: "Movie", key: "doesnotexist") {
+                entityClass entitySrcKey
+            }
         }
         """
     )
