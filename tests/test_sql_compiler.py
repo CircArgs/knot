@@ -33,6 +33,8 @@ from knot.ontology.metaschema import (
     Compare,
     CompareOp,
     Constraint,
+    DirectRef,
+    DiscriminatedRef,
     Literal_,
     Matches,
     OntologyClass,
@@ -398,7 +400,7 @@ def test_relation_all_non_class_ranged_slot_raises():
         left=SlotPath(from_class=movie, slots=[bad_slot]),
     )
     node = RelationAll(relation=ref, body=body)
-    with pytest.raises(CompilerError, match="OntologyClass as its range"):
+    with pytest.raises(CompilerError, match="cannot be traversed"):
         compile_predicate(node, ctx)
 
 
@@ -714,3 +716,87 @@ def test_publish_gate_warning_constraint_allows_publish(clean_db):
     # Should not raise.
     result = publish_draft(conn, rev2)
     assert result == rev2
+
+
+# ---------------------------------------------------------------------------
+# Slot.reference traversal — DirectRef and DiscriminatedRef with static target
+# ---------------------------------------------------------------------------
+
+def test_relation_any_with_direct_ref_target_class():
+    """A slot with range=string + reference=DirectRef(target_class=Movie)
+    is traversable: _target_class falls through to slot.reference.target_class."""
+    str_t = TypeDefinition(name="string", base="str")
+    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
+    movie = OntologyClass(name="Movie", slots=[imdb_id])
+
+    # Outer slot: range=str_t, but reference says target is Movie.
+    fk_slot = Slot(
+        name="movie_imdb_id",
+        range=str_t,
+        reference=DirectRef(target_class=movie, fk_slot=imdb_id),
+    )
+    review = OntologyClass(name="Review", slots=[fk_slot])
+    ctx = _make_ctx(review)
+
+    ref = RelationRef(from_class=review, slot=fk_slot)
+    node = RelationAny(relation=ref)
+    rendered = compile_predicate(node, ctx).as_string(None)
+
+    assert "EXISTS" in rendered
+    # JOIN should hit Movie's bindings, not Review's.
+    assert "knot_data.\"movie_bindings\"" in rendered or '"knot_data"."movie_bindings"' in rendered
+
+
+def test_relation_any_with_discriminated_ref_target_class():
+    """A slot with reference=DiscriminatedRef(target_class=Movie) traverses
+    to Movie just like a DirectRef would (statically-known target slice)."""
+    str_t = TypeDefinition(name="string", base="str")
+    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
+    movie = OntologyClass(name="Movie", slots=[imdb_id])
+
+    entity_class = Slot(name="entity_class", range=str_t, required=True)
+    entity_src_key = Slot(name="entity_src_key", range=str_t, required=True)
+
+    fk_slot = Slot(
+        name="ref_key",
+        range=str_t,
+        reference=DiscriminatedRef(
+            target_class=movie,
+            class_slot=entity_class,
+            key_slot=entity_src_key,
+        ),
+    )
+    tag = OntologyClass(name="Tag", slots=[fk_slot])
+    ctx = _make_ctx(tag)
+
+    ref = RelationRef(from_class=tag, slot=fk_slot)
+    node = RelationAny(relation=ref)
+    rendered = compile_predicate(node, ctx).as_string(None)
+
+    assert "EXISTS" in rendered
+    assert "knot_data.\"movie_bindings\"" in rendered or '"knot_data"."movie_bindings"' in rendered
+
+
+def test_relation_any_discriminated_ref_without_target_raises():
+    """DiscriminatedRef with target_class=None is true row-level polymorphism
+    and isn't supported in this slice — should raise CompilerError."""
+    str_t = TypeDefinition(name="string", base="str")
+    entity_class = Slot(name="entity_class", range=str_t, required=True)
+    entity_src_key = Slot(name="entity_src_key", range=str_t, required=True)
+
+    fk_slot = Slot(
+        name="ref_key",
+        range=str_t,
+        reference=DiscriminatedRef(
+            target_class=None,
+            class_slot=entity_class,
+            key_slot=entity_src_key,
+        ),
+    )
+    tag = OntologyClass(name="Tag", slots=[fk_slot])
+    ctx = _make_ctx(tag)
+
+    ref = RelationRef(from_class=tag, slot=fk_slot)
+    node = RelationAny(relation=ref)
+    with pytest.raises(CompilerError, match="cannot be traversed"):
+        compile_predicate(node, ctx)

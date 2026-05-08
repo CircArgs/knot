@@ -64,18 +64,32 @@ def _resolve_relation_ref(
 
 
 def _target_class(ref: RelationRef) -> OntologyClass:
-    """Extract the target OntologyClass from a RelationRef's slot range.
+    """Extract the target OntologyClass from a RelationRef's slot.
 
-    Raises CompilerError if the slot's range is not an OntologyClass.
+    Three cases, in resolution order:
+      1. ``slot.range`` is an OntologyClass — direct ranged ref.
+      2. ``slot.reference`` is a ``DirectRef`` or ``DiscriminatedRef`` with a
+         statically-known ``target_class`` — use it.
+      3. Neither — raise CompilerError. (DiscriminatedRef without target_class
+         is true row-level polymorphism and isn't supported in this slice.)
+
+    The slot still holds the FK value as a column (``range=string`` typically);
+    the JOIN goes through the target's bindings table, the same shape used
+    for class-ranged refs.
     """
     slot = ref.slot
-    if not isinstance(slot.range, OntologyClass):
-        raise CompilerError(
-            f"RelationRef slot {slot.name!r} must have an OntologyClass as its "
-            f"range for relation traversal; got {type(slot.range).__name__!r}.  "
-            "Only class-ranged slots can be traversed."
-        )
-    return slot.range
+    if isinstance(slot.range, OntologyClass):
+        return slot.range
+    reference = getattr(slot, "reference", None)
+    target = getattr(reference, "target_class", None)
+    if isinstance(target, OntologyClass):
+        return target
+    raise CompilerError(
+        f"RelationRef slot {slot.name!r} cannot be traversed: its range is "
+        f"{type(slot.range).__name__!r} and it has no static "
+        f"reference.target_class. Either declare range as an OntologyClass "
+        f"or set slot.reference.target_class."
+    )
 
 
 def _build_subquery_body(
