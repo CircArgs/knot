@@ -35,6 +35,7 @@ from knot.ontology.metaschema import (
     RelationFirst,
     RelationProject,
     RelationRef,
+    ReverseRelation,
     ScalarDerivation,
 )
 
@@ -121,6 +122,53 @@ def _build_subquery_body(
     return parts
 
 
+def _build_reverse_subquery_body(
+    rev: ReverseRelation,
+    outer_ctx: CompileContext,
+    *,
+    row_alias: str,
+    bind_alias: str,
+    outer_bind_alias: str,
+) -> sql.Composable:
+    """Emit the FROM/JOIN/WHERE core for EXISTS subqueries over a ReverseRelation.
+
+    Pattern: all rows of ``rev.target_class`` whose ``rev.fk_slot`` value
+    matches the outer row's canonical_id (from its bindings table).
+
+        SELECT 1
+        FROM knot_data.<target> <row_alias>
+        JOIN knot_data.<target>_bindings <bind_alias>
+          ON <bind_alias>.knot_row_id = <row_alias>._knot_row_id
+         AND <bind_alias>.valid_to IS NULL
+        JOIN knot_data.<primary>_bindings <outer_bind_alias>
+          ON <outer_bind_alias>.knot_row_id = <outer_alias>._knot_row_id
+         AND <outer_bind_alias>.valid_to IS NULL
+        WHERE <row_alias>.<fk_slot> = <outer_bind_alias>.canonical_id
+    """
+    target_cls = rev.target_class
+    fk_col = rev.fk_slot.name
+    primary_cls = outer_ctx.primary_class
+
+    return sql.SQL(
+        "SELECT 1"
+        " FROM {tbl} {ra}"
+        " JOIN {btbl} {ba}"
+        "   ON {ba}.knot_row_id = {ra}._knot_row_id AND {ba}.valid_to IS NULL"
+        " JOIN {outer_btbl} {oba}"
+        "   ON {oba}.knot_row_id = {outer_alias}._knot_row_id AND {oba}.valid_to IS NULL"
+        " WHERE {ra}.{fk_col} = {oba}.canonical_id"
+    ).format(
+        tbl=table_id(target_cls),
+        btbl=bindings_table_id(target_cls),
+        ra=sql.Identifier(row_alias),
+        ba=sql.Identifier(bind_alias),
+        outer_btbl=bindings_table_id(primary_cls),
+        oba=sql.Identifier(outer_bind_alias),
+        outer_alias=sql.Identifier(outer_ctx.alias),
+        fk_col=sql.Identifier(fk_col),
+    )
+
+
 # ---------------------------------------------------------------------------
 # RelationAll — NOT EXISTS (... WHERE NOT predicate)
 # ---------------------------------------------------------------------------
@@ -131,6 +179,21 @@ def _compile_relation_all(node: RelationAll, ctx: CompileContext) -> sql.Composa
         raise CompilerError(
             "RelationAll.body must be provided; a vacuous (body=None) quantifier "
             "has no SQL translation."
+        )
+
+    if isinstance(node.relation, ReverseRelation):
+        rev = node.relation
+        target_cls = rev.target_class
+        inner_ctx = ctx.with_subquery_alias(target_cls, "t")
+        body_sql = compile_predicate(node.body, inner_ctx)
+        core = _build_reverse_subquery_body(
+            rev, ctx,
+            row_alias="t",
+            bind_alias="tb",
+            outer_bind_alias="ob",
+        )
+        return sql.SQL("NOT EXISTS ({core} AND NOT ({body}))").format(
+            core=core, body=body_sql,
         )
 
     ref, filter_node = _resolve_relation_ref(node.relation)
@@ -158,6 +221,16 @@ def _compile_relation_all(node: RelationAll, ctx: CompileContext) -> sql.Composa
 
 @compile_predicate.register
 def _compile_relation_any(node: RelationAny, ctx: CompileContext) -> sql.Composable:
+    if isinstance(node.relation, ReverseRelation):
+        rev = node.relation
+        core = _build_reverse_subquery_body(
+            rev, ctx,
+            row_alias="t",
+            bind_alias="tb",
+            outer_bind_alias="ob",
+        )
+        return sql.SQL("EXISTS ({core})").format(core=core)
+
     ref, filter_node = _resolve_relation_ref(node.relation)
     target_cls = _target_class(ref)
 
@@ -236,6 +309,13 @@ compile_predicate.register(FilteredRelation)(
         "FilteredRelation",
         "FilteredRelation is a relation-valued node, not a boolean predicate.  "
         "Wrap it in RelationAll or RelationAny to use it as a constraint body.",
+    )
+)
+compile_predicate.register(ReverseRelation)(
+    _stub(
+        "ReverseRelation",
+        "ReverseRelation is a relation-valued node, not a boolean predicate.  "
+        "Wrap it in RelationAll or RelationAny to use it as a class definition body.",
     )
 )
 compile_predicate.register(RelationRef)(

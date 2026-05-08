@@ -28,8 +28,8 @@ from knot.ontology import (
 from knot.ontology.canonical import CANONICAL_DUMP_VERSION
 
 
-PINNED_HASH = "e92479e5b45295457735dee7d914b2ae9cc2690d5008806bfce99d96821ed8da"
-PINNED_VERSION = 2
+PINNED_HASH = "7f3318722fb1bd00fd1e057be13f8a61ed61226382cfc83a1333c9da09d79e36"
+PINNED_VERSION = 3
 
 
 def _fixture_spec() -> Spec:

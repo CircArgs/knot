@@ -296,20 +296,20 @@ class RelationAggregate(SpecBase):
 class RelationAny(SpecBase):
     """Boolean: `EXISTS` — any row in the relation matches."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
 
 
 class RelationAll(SpecBase):
     """Boolean: `NOT EXISTS (NOT body)` — every row satisfies a predicate."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
     body: Optional[Any] = None  # Compare | BoolExpr
 
 
 class RelationFirst(SpecBase):
     """Surface the first row's projection by an ordering."""
 
-    relation: Union["RelationRef", "FilteredRelation"]
+    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
     project: "SlotPath"
     order_by: list["SlotPath"] = Field(default_factory=list)
     assert_unique: bool = False
@@ -327,6 +327,23 @@ class RecursiveTraversal(SpecBase):
     step: "SlotPath"
     until: Optional[Any] = None  # Compare | BoolExpr
     max_depth: Optional[int] = None
+
+
+class ReverseRelation(SpecBase):
+    """Reverse-FK traversal: all rows of target_class whose fk_slot value
+    matches the canonical_id of the primary (outer) row.
+
+    Represents: "all Credit rows whose Credit.person == this.canonical_id".
+    Used as the ``relation`` argument to RelationAll / RelationAny / RelationFirst
+    when traversing from parent-class rows back to referencing rows.
+
+    ``target_class`` — the class being traversed to (e.g. Credit).
+    ``fk_slot``      — the slot on target_class that holds the FK back to
+                       the primary class (e.g. Credit.person).
+    """
+
+    target_class: "OntologyClass"
+    fk_slot: "Slot"
 
 
 class ScalarDerivation(SpecBase):
@@ -561,6 +578,19 @@ class OntologyClass(SpecBase):
     `__getattr__` resolves slot names so impl authors write
     `Movie.imdb_id` rather than indexing into a slot list.  Walks the
     is_a chain + mixins to inherit slot visibility.
+
+    Defined classes vs concrete classes
+    ------------------------------------
+    When both ``is_a`` and ``definition`` are set, this is a **defined class**:
+    it is stored as a VIEW over the parent class (``is_a``) filtered by the
+    compiled ``definition`` predicate.  No separate table or bindings table is
+    created; the defined class shares the parent's storage.
+
+    When only ``is_a`` is set (``definition`` is None), the class is a
+    **concrete subclass** with its own table (standard OWL subclass).
+
+    When neither ``is_a`` nor ``definition`` is set, the class is a
+    **top-level concrete class** with its own table.
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
@@ -572,6 +602,7 @@ class OntologyClass(SpecBase):
     abstract: bool = False
     identifier_pattern: Optional["IdentifierPattern"] = None
     description: Optional[str] = None
+    definition: Optional[Any] = None  # BoolExpr | RelationAll | RelationAny | Compare | ReverseRelation
 
     def __getattr__(self, item: str) -> "Slot":
         # Pydantic and Python internals probe for sentinel attributes; raise
@@ -708,6 +739,7 @@ RelationAny.model_rebuild()
 RelationAll.model_rebuild()
 RelationFirst.model_rebuild()
 RecursiveTraversal.model_rebuild()
+ReverseRelation.model_rebuild()
 ScalarDerivation.model_rebuild()
 FormatDerivation.model_rebuild()
 Slot.model_rebuild()
@@ -733,8 +765,8 @@ __all__ = [
     "Literal_", "SlotPath", "Compare", "BoolExpr", "Within", "Between",
     "Matches", "RelationRef", "FilteredRelation", "RelationProject",
     "RelationCount", "RelationAggregate", "RelationAny", "RelationAll",
-    "RelationFirst", "RecursiveTraversal", "ScalarDerivation",
-    "FormatDerivation", "DerivationExpr",
+    "RelationFirst", "RecursiveTraversal", "ReverseRelation",
+    "ScalarDerivation", "FormatDerivation", "DerivationExpr",
     # slots + classes
     "Slot", "DerivedSlot", "SlotOverride", "OntologyClass",
     # references

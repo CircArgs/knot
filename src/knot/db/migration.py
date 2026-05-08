@@ -51,6 +51,11 @@ from knot.db._naming import (
 from knot.ontology import OntologyClass, Slot, Spec
 
 
+def _is_defined(cls: OntologyClass) -> bool:
+    """True when the class is a defined class (has a definition — becomes a VIEW)."""
+    return getattr(cls, "definition", None) is not None
+
+
 def _bindings_index_id(cls: OntologyClass) -> sql.Identifier:
     return sql.Identifier(f"{cls.name.lower()}_bindings_current")
 
@@ -143,6 +148,19 @@ class AddClass(Change):
 @dataclass
 class DropClass(Change):
     class_name: str
+    is_view: bool = False  # True when dropping a defined-class VIEW
+
+
+@dataclass
+class AddDefinedClass(Change):
+    """Create a VIEW for a defined class (equivalentClass / OWL DL defined)."""
+    cls: OntologyClass
+
+
+@dataclass
+class DropDefinedClass(Change):
+    """Drop the VIEW for a defined class."""
+    class_name: str
 
 
 @dataclass
@@ -189,17 +207,48 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
     for name in cand_classes.keys() - prev_classes.keys():
         c = cand_classes[name]
         if not c.abstract:
-            changes.append(AddClass(cls=c))
+            if _is_defined(c):
+                changes.append(AddDefinedClass(cls=c))
+            else:
+                changes.append(AddClass(cls=c))
 
     for name in prev_classes.keys() - cand_classes.keys():
         c = prev_classes[name]
         if not c.abstract:
-            changes.append(DropClass(class_name=name))
+            if _is_defined(c):
+                changes.append(DropDefinedClass(class_name=name))
+            else:
+                changes.append(DropClass(class_name=name))
 
     for name in cand_classes.keys() & prev_classes.keys():
         prev_cls, cand_cls = prev_classes[name], cand_classes[name]
         if cand_cls.abstract or prev_cls.abstract:
             continue
+
+        prev_defined = _is_defined(prev_cls)
+        cand_defined = _is_defined(cand_cls)
+
+        # Concrete ↔ defined transition is always destructive: the storage
+        # type changes (table ↔ view).  Emit as drop+add to force the
+        # destructive gate.
+        if prev_defined != cand_defined:
+            if prev_defined:
+                # Was a view, now concrete: drop view + add table.
+                changes.append(DropDefinedClass(class_name=name))
+                changes.append(AddClass(cls=cand_cls))
+            else:
+                # Was concrete, now defined: drop table + add view.
+                changes.append(DropClass(class_name=name))
+                changes.append(AddDefinedClass(cls=cand_cls))
+            continue
+
+        if cand_defined:
+            # Both defined: re-create view if definition changed (simplest
+            # approach; view DDL is idempotent via CREATE OR REPLACE).
+            changes.append(AddDefinedClass(cls=cand_cls))
+            continue
+
+        # Both concrete — diff slots.
         prev_slots = _stored_slots_by_name(prev_cls)
         cand_slots = _stored_slots_by_name(cand_cls)
 
@@ -243,6 +292,13 @@ def _(change: AddClass, conn: psycopg.Connection) -> None:
 def _(change: DropClass, conn: psycopg.Connection) -> None:
     # Drop bindings first to avoid FK-constraint-of-our-own-making.
     cls_lower = change.class_name.lower()
+    if change.is_view:
+        conn.execute(
+            sql.SQL("DROP VIEW IF EXISTS {t} CASCADE").format(
+                t=sql.Identifier(_SCHEMA, cls_lower),
+            )
+        )
+        return
     conn.execute(
         sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
             t=sql.Identifier(_SCHEMA, f"{cls_lower}_bindings"),
@@ -251,6 +307,77 @@ def _(change: DropClass, conn: psycopg.Connection) -> None:
     conn.execute(
         sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
             t=sql.Identifier(_SCHEMA, cls_lower),
+        )
+    )
+
+
+@emit_ddl.register
+def _(change: AddDefinedClass, conn: psycopg.Connection) -> None:
+    """Create (or replace) a VIEW for the defined class.
+
+    The VIEW selects all rows from the parent class (is_a) that satisfy the
+    compiled definition predicate.  It JOINs source × bindings just like
+    concrete-class reads, so resolvers can query it identically.
+
+    Schema:
+        CREATE OR REPLACE VIEW knot_data.<cls> AS
+        SELECT s.*, b.canonical_id AS _canonical_id
+        FROM knot_data.<parent> s
+        JOIN knot_data.<parent>_bindings b
+          ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
+        WHERE (<compiled definition>)
+    """
+    from knot.db.sql_compiler import CompileContext, compile_predicate
+
+    cls = change.cls
+    if cls.is_a is None:
+        raise ValueError(
+            f"Defined class {cls.name!r} must have is_a set to a parent class."
+        )
+    parent = cls.is_a
+
+    ctx = CompileContext(primary_class=parent, alias="s")
+    where_sql = compile_predicate(cls.definition, ctx)
+
+    # Join fragments from multi-slot SlotPath traversal (rare in definitions
+    # but supported). Prepend to FROM clause.
+    if ctx.joins:
+        joins_sql = sql.SQL(" ") + sql.SQL(" ").join(ctx.joins)
+    else:
+        joins_sql = sql.SQL("")
+
+    view_stmt = sql.SQL(
+        "CREATE OR REPLACE VIEW {view} AS "
+        "SELECT s.*, {bind_alias}.canonical_id AS _canonical_id "
+        "FROM {parent_tbl} s "
+        "JOIN {parent_btbl} {bind_alias} "
+        "  ON {bind_alias}.knot_row_id = s._knot_row_id "
+        " AND {bind_alias}.valid_to IS NULL"
+        "{joins} "
+        "WHERE ({where})"
+    ).format(
+        view=_table_id(cls),
+        bind_alias=sql.Identifier("b"),
+        parent_tbl=_table_id(parent),
+        parent_btbl=_bindings_table_id(parent),
+        joins=joins_sql,
+        where=where_sql,
+    )
+    # CREATE VIEW DDL cannot use server-side parameters ($1, $2...) because
+    # PostgreSQL can't infer their types in a view body.  Use a ClientCursor
+    # to mogrify the statement (parameter values inlined as SQL literals by
+    # the psycopg client) and execute the fully-rendered DDL string.
+    from psycopg import ClientCursor
+    ccur = ClientCursor(conn)
+    rendered = ccur.mogrify(view_stmt, ctx.params)
+    conn.execute(rendered)
+
+
+@emit_ddl.register
+def _(change: DropDefinedClass, conn: psycopg.Connection) -> None:
+    conn.execute(
+        sql.SQL("DROP VIEW IF EXISTS {t} CASCADE").format(
+            t=sql.Identifier(_SCHEMA, change.class_name.lower()),
         )
     )
 
@@ -303,6 +430,7 @@ _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
     DropClass,
     DropSlot,
     ChangeSlotType,
+    DropDefinedClass,
 )
 
 
@@ -313,12 +441,19 @@ def is_destructive(change: Change) -> bool:
 def apply_changes(conn: psycopg.Connection, changes: list[Change]) -> None:
     """Apply a precomputed list of changes (used after diff + safety check).
 
-    Drops are emitted before adds so that a class renamed via drop+add with
-    the same lowercase name doesn't try to CREATE TABLE before the DROP runs.
+    Order:
+      1. Drops (DropClass, DropSlot, DropDefinedClass) — before adds so that a
+         class renamed via drop+add with the same lowercase name doesn't try to
+         CREATE TABLE before the DROP runs.
+      2. Concrete class adds (AddClass, AddSlot, etc.) — tables must exist before
+         the VIEW DDL for defined classes references them.
+      3. Defined class adds (AddDefinedClass) — CREATE OR REPLACE VIEW runs after
+         all parent tables are in place.
     """
-    drops = [c for c in changes if isinstance(c, (DropClass, DropSlot))]
-    others = [c for c in changes if not isinstance(c, (DropClass, DropSlot))]
-    for change in drops + others:
+    drops = [c for c in changes if isinstance(c, (DropClass, DropSlot, DropDefinedClass))]
+    concrete_adds = [c for c in changes if not isinstance(c, (DropClass, DropSlot, DropDefinedClass, AddDefinedClass))]
+    defined_adds = [c for c in changes if isinstance(c, AddDefinedClass)]
+    for change in drops + concrete_adds + defined_adds:
         emit_ddl(change, conn)
 
 

@@ -203,9 +203,22 @@ def upsert_user_correction_row(
 # ─── Reads (JOIN source × current bindings) ─────────────────────────────────
 
 
+def _is_defined_class(cls: OntologyClass) -> bool:
+    """True when the class is a defined class (backed by a VIEW, not a TABLE)."""
+    return getattr(cls, "definition", None) is not None
+
+
 def _select_with_binding(cls: OntologyClass) -> sql.Composable:
     """SELECT s.*, b.canonical_id AS _canonical_id FROM source s
-    JOIN bindings b ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL."""
+    JOIN bindings b ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL.
+
+    For defined classes, the VIEW already embeds the JOIN and exposes
+    _canonical_id directly; query it without the extra JOIN.
+    """
+    if _is_defined_class(cls):
+        return sql.SQL(
+            "SELECT s.* FROM {view} s"
+        ).format(source=_table_id(cls), view=_table_id(cls))
     return sql.SQL(
         "SELECT s.*, b.canonical_id AS _canonical_id "
         "FROM {source} s "
@@ -278,12 +291,17 @@ def query_rows(
     else:
         where = sql.SQL("")
 
-    if order_by_sql is not None:
-        order_clause = sql.SQL("ORDER BY ") + order_by_sql + sql.SQL(
-            ", b.canonical_id ASC, s._source ASC"
-        )
+    # Defined classes are backed by a VIEW that already embeds _canonical_id.
+    # Use s._canonical_id for ORDER BY instead of the bindings alias b.canonical_id.
+    if _is_defined_class(cls):
+        canonical_order = sql.SQL("s._canonical_id ASC, s._source ASC")
     else:
-        order_clause = sql.SQL("ORDER BY b.canonical_id ASC, s._source ASC")
+        canonical_order = sql.SQL("b.canonical_id ASC, s._source ASC")
+
+    if order_by_sql is not None:
+        order_clause = sql.SQL("ORDER BY ") + order_by_sql + sql.SQL(", ") + canonical_order
+    else:
+        order_clause = sql.SQL("ORDER BY ") + canonical_order
 
     stmt = sql.SQL(
         "{base} {where} {order} LIMIT %s OFFSET %s"
@@ -302,12 +320,26 @@ def get_canonical_contributions(
     canonical_id: str,
     as_of: int | None = None,
 ) -> list[dict[str, Any]]:
+    if _is_defined_class(cls):
+        # VIEW exposes _canonical_id directly; filter on it.
+        where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
+        stmt = sql.SQL(
+            "SELECT s.* FROM {view} s"
+            " WHERE s._canonical_id = %s{where_extra} ORDER BY s._source"
+        ).format(view=_table_id(cls), where_extra=where_extra)
+        params: list[Any] = [canonical_id]
+        if as_of is not None:
+            params.append(as_of)
+        cur = conn.cursor(row_factory=dict_row)
+        cur.execute(stmt, params)
+        return [_serialize_row(r) for r in cur.fetchall()]
+
     base = _select_with_binding(cls)
     where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
         "{base} WHERE b.canonical_id = %s{where_extra} ORDER BY s._source"
     ).format(base=base, where_extra=where_extra)
-    params: list[Any] = [canonical_id]
+    params = [canonical_id]
     if as_of is not None:
         params.append(as_of)
     cur = conn.cursor(row_factory=dict_row)
@@ -342,12 +374,18 @@ def count_rows(
     else:
         where = sql.SQL("")
 
-    stmt = sql.SQL(
-        "SELECT count(*) FROM {source} s "
-        "JOIN {bindings} b "
-        "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
-        "{where}"
-    ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
+    if _is_defined_class(cls):
+        # VIEW already embeds the source×bindings join; query it directly.
+        stmt = sql.SQL(
+            "SELECT count(*) FROM {view} s {where}"
+        ).format(view=_table_id(cls), where=where)
+    else:
+        stmt = sql.SQL(
+            "SELECT count(*) FROM {source} s "
+            "JOIN {bindings} b "
+            "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
+            "{where}"
+        ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
     return conn.execute(stmt, params).fetchone()[0]
 
 

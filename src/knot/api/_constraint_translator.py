@@ -34,6 +34,7 @@ from knot.ontology.metaschema import (
     OntologyClass,
     RelationAll,
     RelationAny,
+    ReverseRelation,
     Slot,
     SlotPath,
     Spec,
@@ -105,6 +106,20 @@ class _RelationAnyJson(_JsonBase):
     predicate: "ExprJson"
 
 
+class _ReverseRelationJson(_JsonBase):
+    """Reverse-FK traversal: all rows of target_class whose fk_slot matches
+    the outer row's canonical_id.
+
+    ``target_class_name`` — name of the class being traversed to (e.g. "Credit").
+    ``fk_slot_name``      — name of the FK slot on target_class that points back
+                           to the primary class (e.g. "person").
+    """
+
+    kind: Literal["reverse_relation"]
+    target_class_name: str
+    fk_slot_name: str
+
+
 # Annotated union — Pydantic dispatches on the ``kind`` field automatically.
 ExprJson = Annotated[
     Union[
@@ -117,6 +132,7 @@ ExprJson = Annotated[
         _MatchesJson,
         _RelationAllJson,
         _RelationAnyJson,
+        _ReverseRelationJson,
     ],
     Field(discriminator="kind"),
 ]
@@ -137,6 +153,13 @@ def _find_slot(spec: Spec, name: str) -> Slot:
         if s.name == name:
             return s
     raise HTTPException(404, f"Slot {name!r} not on this draft")
+
+
+def _find_class(spec: Spec, name: str) -> OntologyClass:
+    for c in spec.classes:
+        if c.name == name:
+            return c
+    raise HTTPException(404, f"OntologyClass {name!r} not on this draft")
 
 
 def _sentinel_from_class(spec: Spec, primary_class: OntologyClass) -> OntologyClass:
@@ -201,6 +224,11 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
     if isinstance(node_json, _RelationAnyJson):
         relation = translate_expr(node_json.relation, spec, primary_class)
         return RelationAny(relation=relation)
+
+    if isinstance(node_json, _ReverseRelationJson):
+        target_cls = _find_class(spec, node_json.target_class_name)
+        fk_slot = _find_slot(spec, node_json.fk_slot_name)
+        return ReverseRelation(target_class=target_cls, fk_slot=fk_slot)
 
     # Unreachable — discriminator exhausts all variants.
     raise HTTPException(400, f"Unsupported expression kind: {type(node_json).__name__}")

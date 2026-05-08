@@ -26,7 +26,7 @@ from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
 
-CANONICAL_DUMP_VERSION: int = 2
+CANONICAL_DUMP_VERSION: int = 3
 
 
 # ---------------------------------------------------------------------------

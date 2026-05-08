@@ -120,6 +120,7 @@ class ClassCreate(_StrictBase):
     mixin_names: list[str] = Field(default_factory=list)
     abstract: bool = False
     description: str | None = None
+    definition: "ExprJson | None" = None
 
 
 class ClassUpdate(_StrictBase):
@@ -485,6 +486,11 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
         is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
         mixins = [_find_class(spec, n) for n in body.mixin_names]
 
+        definition = None
+        if body.definition is not None:
+            primary = is_a if is_a is not None else _find_class(spec, body.name) if any(c.name == body.name for c in spec.classes) else OntologyClass(name=body.name)
+            definition = translate_expr(body.definition, spec, primary)
+
         spec.classes.append(OntologyClass(
             name=body.name,
             slots=slots,
@@ -492,6 +498,7 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
             mixins=mixins,
             abstract=body.abstract,
             description=body.description,
+            definition=definition,
         ))
         return _persist(conn, draft_id, spec)
 

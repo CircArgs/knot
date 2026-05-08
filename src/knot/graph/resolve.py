@@ -67,8 +67,20 @@ def resolve_entity(
         (p.source, p.slot): p for p in trust_posteriors.list_posteriors(conn)
     }
 
+    # Walk the full slot set including inherited slots (is_a chain).
+    # Defined classes (backed by VIEW) inherit all slots from their parent.
+    seen_slot_names: set[str] = set()
+    all_slots: list[Slot] = []
+    current = cls
+    while current is not None:
+        for s in current.slots:
+            if s.name not in seen_slot_names:
+                seen_slot_names.add(s.name)
+                all_slots.append(s)
+        current = current.is_a
+
     resolved: dict[str, Any] = {"_canonical_id": canonical_id}
-    for slot in cls.slots:
+    for slot in all_slots:
         if getattr(slot, "derivation", None) is not None:
             continue
         if slot.multivalued:

@@ -61,6 +61,7 @@ from knot.ontology.metaschema import (
     RelationProject,
     RelationRef,
     ResolutionPolicy,
+    ReverseRelation,
     ScalarDerivation,
     Severity,
     Slot,
@@ -204,6 +205,7 @@ _KIND_REGISTRY: dict[str, type] = {
     "RelationAll": RelationAll,
     "RelationFirst": RelationFirst,
     "RecursiveTraversal": RecursiveTraversal,
+    "ReverseRelation": ReverseRelation,
     "ScalarDerivation": ScalarDerivation,
     "FormatDerivation": FormatDerivation,
 }
@@ -433,6 +435,33 @@ def publish_gate(candidate: Spec) -> None:
                 f"{con.primary.name!r} not on spec.classes."
             )
 
+    # Defined-class validation.
+    for c in candidate.classes:
+        if getattr(c, "definition", None) is None:
+            continue
+        # is_a must be set for defined classes.
+        if c.is_a is None:
+            errors.append(
+                f"Defined class {c.name!r} must have is_a set to a parent class."
+            )
+            continue
+        if id(c.is_a) not in classes_by_id:
+            errors.append(
+                f"Defined class {c.name!r}.is_a references OntologyClass "
+                f"{c.is_a.name!r} not on spec.classes."
+            )
+            continue
+        # Definition must compile without error.
+        from knot.db.sql_compiler import CompileContext, compile_predicate
+        from knot.db.sql_compiler._dispatch import CompilerError
+        try:
+            ctx = CompileContext(primary_class=c.is_a, alias="s")
+            compile_predicate(c.definition, ctx)
+        except (CompilerError, NotImplementedError) as exc:
+            errors.append(
+                f"Defined class {c.name!r}.definition failed to compile: {exc}"
+            )
+
     if errors:
         raise PublishGateError("Publish gate failed:\n  - " + "\n  - ".join(errors))
 
@@ -631,6 +660,12 @@ def publish_draft(
             for con in prev.constraints:
                 prev_constraint_hashes[con.name] = compute_content_hash(con)
 
+        # Index defined classes by name for skip logic below.
+        defined_class_names: set[str] = {
+            c.name for c in candidate.classes
+            if getattr(c, "definition", None) is not None
+        }
+
         for con in candidate.constraints:
             cand_hash = compute_content_hash(con)
             prev_hash = prev_constraint_hashes.get(con.name)
@@ -638,6 +673,8 @@ def publish_draft(
                 continue  # unchanged — skip
             if con.primary.name not in prev_class_names:
                 continue  # new class — no rows to check yet
+            if con.primary.name in defined_class_names:
+                continue  # defined classes are views; VIEW handles inclusion
 
             # Find the primary class on the candidate spec (by identity from
             # the rehydrated spec; `con.primary` already points to it).

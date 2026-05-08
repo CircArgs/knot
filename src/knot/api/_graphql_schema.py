@@ -88,6 +88,24 @@ _RANGE_TO_PYTHON: dict[str, type] = {
 }
 
 
+def _all_slots(oc: OntologyClass) -> list[Slot]:
+    """Collect the full slot set for a class, walking the is_a chain.
+
+    Defined classes inherit all slots from their parent (is_a) structurally.
+    Own slots shadow parent slots of the same name.
+    """
+    seen_names: set[str] = set()
+    result: list[Slot] = []
+    current: OntologyClass | None = oc
+    while current is not None:
+        for slot in current.slots:
+            if slot.name not in seen_names:
+                seen_names.add(slot.name)
+                result.append(slot)
+        current = current.is_a
+    return result
+
+
 def _slot_python_type(slot: Slot) -> type:
     rng = slot.range
     if rng is None:
@@ -127,9 +145,13 @@ def _make_slot_where_type(slot: Slot, class_name: str) -> type:
 
 
 def _make_class_where_type(oc: OntologyClass) -> type:
-    """Build the top-level WhereInput for a class (one field per slot)."""
+    """Build the top-level WhereInput for a class (one field per slot).
+
+    For defined classes (is_a set + definition), walks the is_a chain to
+    collect all inherited slots so the GraphQL surface matches actual columns.
+    """
     type_name = f"WhereInput_{oc.name}"
-    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in oc.slots}
+    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in _all_slots(oc)}
     annotations: dict[str, Any] = {
         name: Optional[t] for name, t in slot_types.items()
     }
@@ -173,10 +195,13 @@ class OrderDirection(enum.Enum):
 
 
 def _make_field_enum(oc: OntologyClass) -> type:
-    """Build a strawberry enum of stored slot names for a class."""
+    """Build a strawberry enum of stored slot names for a class.
+
+    For defined classes, walks the is_a chain so all inherited slots appear.
+    """
     enum_name = f"Field_{oc.name}"
-    # stored slots only (no derivation)
-    stored = [s for s in oc.slots if getattr(s, "derivation", None) is None]
+    # stored slots only (no derivation), collected from full inheritance chain
+    stored = [s for s in _all_slots(oc) if getattr(s, "derivation", None) is None]
     members = {s.name: s.name for s in stored}
     py_enum = enum.Enum(enum_name, members)  # type: ignore[misc]
     return strawberry.enum(py_enum)
@@ -257,21 +282,32 @@ def build_predicate_sql(
     """Convert the top-level WhereInput object to (sql_fragment, params).
 
     Returns (None, []) when no filters are specified (caller omits WHERE).
+
+    For defined classes (backed by VIEW), the SQL compiler validates slots
+    against the primary class.  Since the VIEW exposes the parent class's
+    columns, we use the effective storage class (is_a chain root) as primary.
     """
     if where_input is strawberry.UNSET or where_input is None:
         return None, []
 
+    # For defined classes, compile predicates against the parent class so that
+    # slot-identity validation in _compile_slot_path finds the right columns.
+    # The VIEW exposes the parent's columns directly.
+    storage_class = oc
+    if getattr(oc, "definition", None) is not None and oc.is_a is not None:
+        storage_class = oc.is_a
+
     all_predicates: list[Any] = []
-    for slot in oc.slots:
+    for slot in _all_slots(oc):
         slot_where = getattr(where_input, slot.name, strawberry.UNSET)
         if slot_where is strawberry.UNSET or slot_where is None:
             continue
-        all_predicates.extend(_slot_where_to_predicates(slot, slot_where, oc))
+        all_predicates.extend(_slot_where_to_predicates(slot, slot_where, storage_class))
 
     if not all_predicates:
         return None, []
 
-    ctx = CompileContext(primary_class=oc, alias=alias)
+    ctx = CompileContext(primary_class=storage_class, alias=alias)
     if len(all_predicates) == 1:
         fragment = compile_predicate(all_predicates[0], ctx)
     else:
@@ -322,7 +358,7 @@ def _merge_contributions(
         if k.startswith("_"):
             merged[k] = v
 
-    for slot in oc.slots:
+    for slot in _all_slots(oc):
         if slot.multivalued:
             flat: list[Any] = []
             seen_set: set = set()
