@@ -97,20 +97,28 @@ _RANGE_TO_PYTHON: dict[str, type] = {
 
 
 def _all_slots(oc: OntologyClass) -> list[Slot]:
-    """Collect the full slot set for a class, walking the is_a chain.
+    """Collect the full slot set for a class, walking is_a + mixins.
 
-    Defined classes inherit all slots from their parent (is_a) structurally.
-    Own slots shadow parent slots of the same name.
+    Defined classes inherit all slots from their parent (is_a) structurally;
+    every class also inherits its mixins' slots. Own slots shadow parent /
+    mixin slots of the same name.
     """
     seen_names: set[str] = set()
     result: list[Slot] = []
-    current: OntologyClass | None = oc
-    while current is not None:
+    visited: list[OntologyClass] = []
+    queue: list[OntologyClass] = [oc]
+    while queue:
+        current = queue.pop(0)
+        if any(current is v for v in visited):
+            continue
+        visited.append(current)
         for slot in current.slots:
             if slot.name not in seen_names:
                 seen_names.add(slot.name)
                 result.append(slot)
-        current = current.is_a
+        if current.is_a is not None:
+            queue.append(current.is_a)
+        queue.extend(current.mixins)
     return result
 
 

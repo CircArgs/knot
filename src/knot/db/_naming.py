@@ -53,8 +53,40 @@ def is_stored(slot: Slot) -> bool:
     return getattr(slot, "derivation", None) is None
 
 
+def effective_slots(cls: OntologyClass) -> list[Slot]:
+    """All slots a class declares for *its own* table — own + mixin slots.
+
+    Walks the mixin chain breadth-first; later mixins do NOT shadow earlier
+    ones (publish-gate rejects collisions before we ever get here). Own slots
+    DO shadow mixin slots of the same name.
+
+    Does NOT walk ``is_a``: a concrete subclass with its own table inherits
+    its parent's slots structurally via the GraphQL surface, not via column
+    duplication. Mixins, by contrast, are pure trait composition — their
+    slots live on every including class's own table.
+    """
+    seen: set[str] = set()
+    result: list[Slot] = []
+    for s in cls.slots:
+        seen.add(s.name)
+        result.append(s)
+    queue: list[OntologyClass] = list(cls.mixins)
+    visited: list[OntologyClass] = []
+    while queue:
+        current = queue.pop(0)
+        if any(current is v for v in visited):
+            continue
+        visited.append(current)
+        for s in current.slots:
+            if s.name not in seen:
+                seen.add(s.name)
+                result.append(s)
+        queue.extend(current.mixins)
+    return result
+
+
 def stored_slot_names(cls: OntologyClass) -> list[str]:
-    return [s.name for s in cls.slots if is_stored(s)]
+    return [s.name for s in effective_slots(cls) if is_stored(s)]
 
 
 def table_id(cls: OntologyClass) -> sql.Identifier:

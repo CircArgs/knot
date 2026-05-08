@@ -36,6 +36,7 @@ from psycopg.rows import dict_row
 from knot.db._naming import (
     USER_CORRECTIONS_SOURCE,
     bindings_table_id as _bindings_id,
+    effective_slots as _effective_slots,
     is_stored as _is_stored,
     stored_slot_names as _stored_slot_names,
     table_id as _table_id,
@@ -271,7 +272,7 @@ def _derived_column_exprs(
 
     derived_cols: list[sql.Composable] = []
     derived_params: list[Any] = []
-    for slot in cls.slots:
+    for slot in _effective_slots(cls):
         if _is_stored(slot):
             continue
         derivation = getattr(slot, "derivation", None)

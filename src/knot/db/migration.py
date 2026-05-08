@@ -44,6 +44,7 @@ from psycopg import sql
 from knot.db._naming import (
     SCHEMA as _SCHEMA,
     bindings_table_id as _bindings_table_id,
+    effective_slots as _effective_slots,
     is_stored as _is_stored,
     slot_pg_type as _slot_pg_type,
     table_id as _table_id,
@@ -117,7 +118,7 @@ def _bindings_unique_current_sql(cls: OntologyClass) -> sql.Composable:
 
 def _create_source_table_sql(cls: OntologyClass) -> sql.Composable:
     user_cols: list[sql.Composable] = []
-    for slot in cls.slots:
+    for slot in _effective_slots(cls):
         if not _is_stored(slot):
             continue
         user_cols.append(
@@ -196,7 +197,9 @@ class ChangeSlotRequired(Change):
 
 
 def _stored_slots_by_name(cls: OntologyClass) -> dict[str, Slot]:
-    return {s.name: s for s in cls.slots if _is_stored(s)}
+    # Walks own + mixin slots so adding/removing a mixin shows up as
+    # AddSlot/DropSlot in the diff.
+    return {s.name: s for s in _effective_slots(cls) if _is_stored(s)}
 
 
 def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:

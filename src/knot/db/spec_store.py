@@ -353,6 +353,52 @@ def spec_from_dict(d: dict[str, Any]) -> Spec:
 # Publish gate
 # ---------------------------------------------------------------------------
 
+def _detect_mixin_cycle(start: OntologyClass) -> list[str] | None:
+    """If ``start``'s mixin chain has a cycle, return the offending name path.
+    Else None. Identity-compared (mixins are object refs, not name lookups)."""
+    stack: list[OntologyClass] = []
+
+    def visit(c: OntologyClass) -> list[str] | None:
+        if any(c is s for s in stack):
+            idx = next(i for i, s in enumerate(stack) if s is c)
+            return [s.name for s in stack[idx:]] + [c.name]
+        stack.append(c)
+        for mx in c.mixins:
+            cycle = visit(mx)
+            if cycle is not None:
+                return cycle
+        stack.pop()
+        return None
+
+    return visit(start)
+
+
+def _detect_mixin_slot_collision(
+    start: OntologyClass,
+) -> tuple[str, str, str] | None:
+    """Walk the effective slot set; return ``(slot_name, source_a, source_b)``
+    if two distinct mixins contribute the same slot name. Own slots shadow
+    mixin slots silently and are not a collision."""
+    own_names = {s.name for s in start.slots}
+    contributors: dict[str, str] = {}
+    visited: list[OntologyClass] = []
+    queue: list[OntologyClass] = list(start.mixins)
+    while queue:
+        current = queue.pop(0)
+        if any(current is v for v in visited):
+            continue
+        visited.append(current)
+        for s in current.slots:
+            if s.name in own_names:
+                continue
+            prev = contributors.get(s.name)
+            if prev is not None and prev != current.name:
+                return (s.name, prev, current.name)
+            contributors[s.name] = current.name
+        queue.extend(current.mixins)
+    return None
+
+
 def publish_gate(candidate: Spec) -> None:
     """Run all spec-graph-side validation.  Raises `PublishGateError` on failure.
 
@@ -454,6 +500,31 @@ def publish_gate(candidate: Spec) -> None:
                     f"Slot {s.name!r}.reference.target_class references OntologyClass "
                     f"{ref.target_class.name!r} not on spec.classes."
                 )
+
+    # Mixin validation: every mixin must be on spec.classes; the mixin chain
+    # must be acyclic; the effective slot set (own + transitive mixins) must
+    # have no name collisions.
+    for c in candidate.classes:
+        for mx in c.mixins:
+            if id(mx) not in classes_by_id:
+                errors.append(
+                    f"Class {c.name!r}.mixins references OntologyClass "
+                    f"{mx.name!r} not on spec.classes."
+                )
+        cycle_path = _detect_mixin_cycle(c)
+        if cycle_path is not None:
+            errors.append(
+                f"Class {c.name!r} has a cyclic mixin chain: "
+                + " -> ".join(cycle_path)
+            )
+            continue
+        collision = _detect_mixin_slot_collision(c)
+        if collision is not None:
+            slot_name, source_a, source_b = collision
+            errors.append(
+                f"Class {c.name!r} has a slot name collision on {slot_name!r} "
+                f"between mixins {source_a!r} and {source_b!r}."
+            )
 
     # Defined-class validation.
     for c in candidate.classes:
