@@ -663,17 +663,18 @@ def test_integration_filtered_relation_derivation(full_spec_db):
     assert set(directors) == {"Alice", "Bob"}
 
 
-# 20. Derived slot does not appear in WhereInput (filtering unsupported)
-def test_derived_slot_absent_from_where_input():
-    """The WhereInput type for a class with derived slots should NOT have
-    a field for the derived slot (filtering on computed columns is open)."""
+# 20. Derived slot appears in WhereInput (filtering via subquery subquery)
+def test_derived_slot_present_in_where_input():
+    """The WhereInput type for a class with derived slots should have a field
+    for the derived slot — filtering compiles the derivation as a subquery
+    in the WHERE clause."""
     from knot.api._graphql_schema import _make_class_where_type
 
     (spec, movie_cls, *_) = _build_full_spec()
     where_type = _make_class_where_type(movie_cls)
-    # directors is derived → must not appear in WhereInput
-    assert not hasattr(where_type, "directors"), \
-        "Derived slot 'directors' should not be in WhereInput"
-    # imdb_id is stored → must appear
+    # directors is derived → must appear in WhereInput (filters via subquery)
+    assert hasattr(where_type, "directors"), \
+        "Derived slot 'directors' must be in WhereInput (subquery filter)"
+    # imdb_id is stored → must also appear
     assert hasattr(where_type, "imdb_id"), \
         "Stored slot 'imdb_id' must be in WhereInput"

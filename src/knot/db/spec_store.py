@@ -416,6 +416,14 @@ def publish_gate(candidate: Spec) -> None:
                 f"Source {src.name!r}.entity_class references OntologyClass "
                 f"{src.entity_class.name!r} not on spec.classes."
             )
+        # Polymorphic classes cannot be pointed at by a Source (commitment 11,
+        # slice restriction (b)). Their rows arrive only via Add corrections.
+        if getattr(src.entity_class, "identifier_pattern", None) is not None:
+            errors.append(
+                f"Source {src.name!r}.entity_class {src.entity_class.name!r} has an "
+                f"identifier_pattern and is polymorphic. Sources cannot target "
+                f"polymorphic classes directly; use Add corrections instead."
+            )
         if id(src.identifier_slot) not in slots_by_id:
             errors.append(
                 f"Source {src.name!r}.identifier_slot references Slot "
@@ -434,6 +442,18 @@ def publish_gate(candidate: Spec) -> None:
                 f"Constraint {con.name!r}.primary references OntologyClass "
                 f"{con.primary.name!r} not on spec.classes."
             )
+
+    # DiscriminatedRef target_class validation: every DiscriminatedRef on any
+    # slot must name a target_class that is present on spec.classes.
+    from knot.ontology.metaschema import DiscriminatedRef as _DiscriminatedRef
+    for s in candidate.slots:
+        ref = getattr(s, "reference", None)
+        if isinstance(ref, _DiscriminatedRef) and ref.target_class is not None:
+            if id(ref.target_class) not in classes_by_id:
+                errors.append(
+                    f"Slot {s.name!r}.reference.target_class references OntologyClass "
+                    f"{ref.target_class.name!r} not on spec.classes."
+                )
 
     # Defined-class validation.
     for c in candidate.classes:

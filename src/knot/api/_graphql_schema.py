@@ -15,14 +15,22 @@ Each OntologyClass becomes a root query with several fields:
       Trust-resolved record via ``knot.graph.resolve.resolve_entity``.
       Returns null when not found.
 
+  movieAggregate(where, asOf) -> AggregateResult_Movie
+      Count + numeric aggregates over the filtered row set.
+
 orderBy is a list of { field: MovieField!, direction: ASC | DESC } objects.
-MovieField is an enum of stored slot names.
+MovieField is an enum of all slot names (stored + derived).
+
+WHERE filters on derived slots compile the derivation subquery into the
+WHERE clause.  ORDER BY on derived slots inlines the derivation expression
+as the sort key.
 
 Schema is cached by content_hash so it rebuilds only when the spec changes.
 
 Centralisation rule: all SQL lives in db/. The resolver here delegates to
-graph_store.query_rows / count_rows / get_canonical_contributions and
-resolve.resolve_entity; ORDER BY is compiled via sql_compiler.compile_order_by.
+graph_store.query_rows / count_rows / aggregate_rows /
+get_canonical_contributions and resolve.resolve_entity; ORDER BY is compiled
+via sql_compiler.compile_order_by.
 
 Traversal (relation joins) and projection are out of scope for this slice.
 """
@@ -40,7 +48,7 @@ import strawberry
 from psycopg import sql
 from strawberry import Schema
 
-from knot.db.sql_compiler import CompileContext, compile_predicate
+from knot.db.sql_compiler import CompileContext, compile_predicate, compile_value
 from knot.ontology.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -145,19 +153,18 @@ def _make_slot_where_type(slot: Slot, class_name: str) -> type:
 
 
 def _make_class_where_type(oc: OntologyClass) -> type:
-    """Build the top-level WhereInput for a class (one field per stored slot).
+    """Build the top-level WhereInput for a class (one field per slot).
 
-    Derived slots are excluded: filtering on a derived column requires
-    evaluating its subquery in the WHERE clause, which is not yet supported.
-    Only stored slots (derivation is None) appear in WhereInput.
+    Both stored slots and derived slots appear in WhereInput.  Filtering on a
+    derived slot compiles its derivation expression as a subquery placed in the
+    WHERE clause.
 
     For defined classes (is_a set + definition), walks the is_a chain to
-    collect all inherited stored slots so the GraphQL surface matches actual
-    columns.
+    collect all inherited slots so the GraphQL surface matches actual columns.
     """
     type_name = f"WhereInput_{oc.name}"
-    stored_slots = [s for s in _all_slots(oc) if getattr(s, "derivation", None) is None]
-    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in stored_slots}
+    all_s = _all_slots(oc)
+    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in all_s}
     annotations: dict[str, Any] = {
         name: Optional[t] for name, t in slot_types.items()
     }
@@ -200,15 +207,25 @@ class OrderDirection(enum.Enum):
     DESC = "DESC"
 
 
+def _slot_camel(name: str) -> str:
+    """snake_case slot name → camelCase enum member, matching Strawberry's
+    auto_camel_case for fields. ``credit_count`` → ``creditCount``."""
+    head, *tail = name.split("_")
+    return head + "".join(part.title() for part in tail)
+
+
 def _make_field_enum(oc: OntologyClass) -> type:
-    """Build a strawberry enum of stored slot names for a class.
+    """Build a strawberry enum of slot names for a class (stored + derived).
 
     For defined classes, walks the is_a chain so all inherited slots appear.
+    Derived slots are included so ORDER BY can sort on computed expressions.
+
+    Member names are camelCase (matching the GraphQL field convention) while
+    enum *values* are the underlying snake_case slot names — so callers reading
+    ``item.field.value`` get the real slot name back.
     """
     enum_name = f"Field_{oc.name}"
-    # stored slots only (no derivation), collected from full inheritance chain
-    stored = [s for s in _all_slots(oc) if getattr(s, "derivation", None) is None]
-    members = {s.name: s.name for s in stored}
+    members = {_slot_camel(s.name): s.name for s in _all_slots(oc)}
     py_enum = enum.Enum(enum_name, members)  # type: ignore[misc]
     return strawberry.enum(py_enum)
 
@@ -253,7 +270,11 @@ def _slot_where_to_predicates(
     slot_where: Any,
     oc: OntologyClass,
 ) -> list[Any]:
-    """Convert a per-slot WhereInput to a list of expression-tree nodes."""
+    """Convert a per-slot WhereInput to a list of expression-tree nodes.
+
+    Only used for stored slots (where the slot is a real column).  For derived
+    slots see ``_derived_slot_where_to_sql``.
+    """
     predicates: list[Any] = []
     path = SlotPath(from_class=oc, slots=[slot])
 
@@ -280,6 +301,88 @@ def _slot_where_to_predicates(
     return predicates
 
 
+def _derived_slot_where_to_sql(
+    slot: Slot,
+    slot_where: Any,
+    storage_class: OntologyClass,
+    alias: str,
+    ctx: CompileContext,
+) -> list[sql.Composable]:
+    """Compile WHERE fragments for a derived slot by inlining its derivation.
+
+    The derivation expression is compiled to a correlated subquery (or scalar
+    expression), then wrapped with the requested comparison operator.
+
+    Returns a list of ``sql.Composable`` fragments (one per active operator in
+    ``slot_where``).  The ctx.params list is mutated in place as each operator
+    is processed.
+    """
+    derivation = slot.derivation
+    # Compile the derivation expression — params for it go into ctx first.
+    deriv_ctx = CompileContext(primary_class=storage_class, alias=alias, params=ctx.params)
+    deriv_sql = compile_value(derivation, deriv_ctx)
+    # deriv_ctx.params is the same list as ctx.params (shared reference).
+
+    fragments: list[sql.Composable] = []
+
+    _BINARY_OP_SQL_LOCAL: dict[CompareOp, str] = {
+        CompareOp.EQ:  "=",
+        CompareOp.NEQ: "<>",
+        CompareOp.GT:  ">",
+        CompareOp.GTE: ">=",
+        CompareOp.LT:  "<",
+        CompareOp.LTE: "<=",
+    }
+
+    for field_name, op in _OP_MAP.items():
+        val = getattr(slot_where, field_name, strawberry.UNSET)
+        if val is strawberry.UNSET or val is None:
+            continue
+
+        if op in _UNARY_OPS:
+            if val:
+                op_str = "IS NULL" if op == CompareOp.IS_NULL else "IS NOT NULL"
+                fragments.append(
+                    sql.SQL("({deriv}) {op}").format(
+                        deriv=deriv_sql,
+                        op=sql.SQL(op_str),
+                    )
+                )
+        elif op == CompareOp.IN:
+            ctx.params.append(list(val))
+            fragments.append(
+                sql.SQL("({deriv}) = ANY(").format(deriv=deriv_sql)
+                + sql.Placeholder()
+                + sql.SQL(")")
+            )
+        elif op == CompareOp.NOT_IN:
+            ctx.params.append(list(val))
+            fragments.append(
+                sql.SQL("({deriv}) != ALL(").format(deriv=deriv_sql)
+                + sql.Placeholder()
+                + sql.SQL(")")
+            )
+        elif op in _BINARY_OP_SQL_LOCAL:
+            ctx.params.append(val)
+            fragments.append(
+                sql.SQL("({deriv}) {op} ").format(
+                    deriv=deriv_sql,
+                    op=sql.SQL(_BINARY_OP_SQL_LOCAL[op]),
+                )
+                + sql.Placeholder()
+            )
+
+    like_val = getattr(slot_where, "like", strawberry.UNSET)
+    if like_val is not strawberry.UNSET and like_val is not None:
+        ctx.params.append(like_val)
+        fragments.append(
+            sql.SQL("({deriv}) LIKE ").format(deriv=deriv_sql)
+            + sql.Placeholder()
+        )
+
+    return fragments
+
+
 def build_predicate_sql(
     oc: OntologyClass,
     where_input: Any,
@@ -292,6 +395,9 @@ def build_predicate_sql(
     For defined classes (backed by VIEW), the SQL compiler validates slots
     against the primary class.  Since the VIEW exposes the parent class's
     columns, we use the effective storage class (is_a chain root) as primary.
+
+    Stored slots are compiled via the expression-tree path.
+    Derived slots inline their derivation expression as a subquery in WHERE.
     """
     if where_input is strawberry.UNSET or where_input is None:
         return None, []
@@ -303,42 +409,131 @@ def build_predicate_sql(
     if getattr(oc, "definition", None) is not None and oc.is_a is not None:
         storage_class = oc.is_a
 
-    # Only stored slots appear in WhereInput (derived slots excluded from filtering).
-    stored_slots = [s for s in _all_slots(oc) if getattr(s, "derivation", None) is None]
-    all_predicates: list[Any] = []
-    for slot in stored_slots:
+    ctx = CompileContext(primary_class=storage_class, alias=alias)
+    all_fragments: list[sql.Composable] = []
+
+    for slot in _all_slots(oc):
         slot_where = getattr(where_input, slot.name, strawberry.UNSET)
         if slot_where is strawberry.UNSET or slot_where is None:
             continue
-        all_predicates.extend(_slot_where_to_predicates(slot, slot_where, storage_class))
 
-    if not all_predicates:
+        if getattr(slot, "derivation", None) is None:
+            # Stored slot: use the expression-tree path.
+            # Resolve the slot against the storage class for slot-identity check.
+            storage_slot = slot
+            if storage_class is not oc:
+                storage_slot = next(
+                    (s for s in _all_slots(storage_class) if s.name == slot.name),
+                    slot,
+                )
+            tree_predicates = _slot_where_to_predicates(storage_slot, slot_where, storage_class)
+            if tree_predicates:
+                for pred in tree_predicates:
+                    all_fragments.append(compile_predicate(pred, ctx))
+        else:
+            # Derived slot: inline the derivation expression as a subquery.
+            frags = _derived_slot_where_to_sql(slot, slot_where, storage_class, alias, ctx)
+            all_fragments.extend(frags)
+
+    if not all_fragments:
         return None, []
 
-    ctx = CompileContext(primary_class=storage_class, alias=alias)
-    if len(all_predicates) == 1:
-        fragment = compile_predicate(all_predicates[0], ctx)
+    if len(all_fragments) == 1:
+        fragment = all_fragments[0]
     else:
-        bool_expr = BoolExpr(op=BoolOpKind.AND, operands=all_predicates)
-        fragment = compile_predicate(bool_expr, ctx)
+        fragment = sql.SQL(" AND ").join(
+            sql.SQL("(") + f + sql.SQL(")") for f in all_fragments
+        )
 
     return fragment, ctx.params
 
 
 def _build_order_by_sql(
     order_by_list: Any,
+    oc: OntologyClass,
     alias: str = "s",
-) -> sql.Composable | None:
-    """Convert a list of OrderBy input objects to a sql.Composable fragment.
+) -> tuple[sql.Composable | None, list[Any]]:
+    """Convert a list of OrderBy input objects to a (sql.Composable, params) pair.
 
-    Returns None when the list is empty/unset (caller uses default sort).
+    Returns (None, []) when the list is empty/unset (caller uses default sort).
+
+    For stored slots, emits ``s.<col> ASC|DESC``.
+    For derived slots, inlines the derivation expression as the sort key —
+    the derivation subquery is compiled and used directly in ORDER BY.
     """
     from knot.db.sql_compiler import compile_order_by
 
     if order_by_list is strawberry.UNSET or not order_by_list:
-        return None
-    terms = [(item.field.value, item.direction.value) for item in order_by_list]
-    return compile_order_by(terms, alias=alias)
+        return None, []
+
+    # Build a slot-name → Slot map for quick lookup.
+    slot_by_name: dict[str, Slot] = {s.name: s for s in _all_slots(oc)}
+
+    # For defined classes, the storage class is the parent.
+    storage_class = oc
+    if getattr(oc, "definition", None) is not None and oc.is_a is not None:
+        storage_class = oc.is_a
+
+    stored_terms: list[tuple[str, str]] = []
+    derived_parts: list[sql.Composable] = []
+    derived_params: list[Any] = []
+
+    for item in order_by_list:
+        field_name = item.field.value
+        direction = item.direction.value
+        slot = slot_by_name.get(field_name)
+        if slot is None or getattr(slot, "derivation", None) is None:
+            # Stored slot (or unknown) — handled by compile_order_by.
+            stored_terms.append((field_name, direction))
+        else:
+            # Derived slot — inline derivation expression.
+            dir_upper = direction.upper()
+            ctx = CompileContext(primary_class=storage_class, alias=alias, params=derived_params)
+            deriv_sql = compile_value(slot.derivation, ctx)
+            derived_parts.append(
+                sql.SQL("({expr}) {dir}").format(
+                    expr=deriv_sql,
+                    dir=sql.SQL(dir_upper),
+                )
+            )
+
+    # Compose stored + derived terms in the order they appear in the input list.
+    # We rebuild in input order to preserve user-specified sort priority.
+    all_parts: list[sql.Composable] = []
+    all_params: list[Any] = list(derived_params)
+
+    # Re-iterate to emit in input order.
+    slot_by_name2: dict[str, Slot] = {s.name: s for s in _all_slots(oc)}
+    ctx2 = CompileContext(primary_class=storage_class, alias=alias, params=[])
+    for item in order_by_list:
+        field_name = item.field.value
+        direction = item.direction.value.upper()
+        slot = slot_by_name2.get(field_name)
+        if slot is not None and getattr(slot, "derivation", None) is not None:
+            # Derived: compile fresh to get params in order.
+            item_params: list[Any] = []
+            ctx_item = CompileContext(primary_class=storage_class, alias=alias, params=item_params)
+            deriv_sql = compile_value(slot.derivation, ctx_item)
+            all_params.extend(item_params)
+            all_parts.append(
+                sql.SQL("({expr}) {dir}").format(
+                    expr=deriv_sql,
+                    dir=sql.SQL(direction),
+                )
+            )
+        else:
+            all_parts.append(
+                sql.SQL("{alias}.{col} {dir}").format(
+                    alias=sql.Identifier(alias),
+                    col=sql.Identifier(field_name),
+                    dir=sql.SQL(direction),
+                )
+            )
+
+    if not all_parts:
+        return None, []
+
+    return sql.SQL(", ").join(all_parts), all_params
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +589,48 @@ def _merge_contributions(
 
 
 # ---------------------------------------------------------------------------
+# Aggregate result type per class
+# ---------------------------------------------------------------------------
+
+def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str, str, str]]]:
+    """Build the AggregateResult strawberry type for a class.
+
+    Always includes ``count: Int!``.  For each stored slot whose Postgres type
+    is numeric (BIGINT / DOUBLE PRECISION), adds sum/avg/min/max fields.
+
+    Returns ``(strawberry_type, agg_fields)`` where ``agg_fields`` is the list
+    of ``(agg_func, slot_name, result_key)`` triples passed to
+    ``graph_store.aggregate_rows``.
+    """
+    from knot.db._naming import PG_TYPE_FOR_BASE, slot_pg_type
+
+    type_name = f"AggregateResult_{oc.name}"
+
+    _NUMERIC_PG_TYPES = {"BIGINT", "DOUBLE PRECISION"}
+
+    agg_fields: list[tuple[str, str, str]] = []
+    annotations: dict[str, Any] = {"count": int}
+    ns: dict[str, Any] = {"count": 0}
+
+    for slot in _all_slots(oc):
+        if getattr(slot, "derivation", None) is not None:
+            continue  # derived slots have no column to aggregate
+        pg_type = slot_pg_type(slot).upper()
+        if pg_type not in _NUMERIC_PG_TYPES:
+            continue
+        for func in ("sum", "avg", "min", "max"):
+            result_key = f"{func}_{slot.name}".replace("-", "_")
+            # Title-case the func for the GraphQL field name: sumYear, avgYear…
+            gql_key = f"{func}{slot.name.capitalize()}"
+            agg_fields.append((func, slot.name, result_key))
+            annotations[gql_key] = Optional[float]
+            ns[gql_key] = None
+
+    cls = type(type_name, (), {"__annotations__": annotations, **ns})
+    return strawberry.type(cls), agg_fields
+
+
+# ---------------------------------------------------------------------------
 # Schema builder
 # ---------------------------------------------------------------------------
 
@@ -411,6 +648,7 @@ def _build_schema(spec: Spec) -> Schema:
       <class_lower>(where, limit, offset, asOf, orderBy) -> Page_<Class>
       <class_lower>ByCanonicalId(canonicalId, asOf)      -> String | null
       <class_lower>Resolved(canonicalId, asOf)           -> String | null
+      <class_lower>Aggregate(where, asOf)                -> AggregateResult_<Class>
     """
     from knot import db
     from knot.db import graph_store
@@ -423,11 +661,14 @@ def _build_schema(spec: Spec) -> Schema:
     page_types: dict[str, type] = {}
     field_enums: dict[str, type] = {}
     order_by_inputs: dict[str, type] = {}
+    agg_result_types: dict[str, type] = {}
+    agg_fields_map: dict[str, list[tuple[str, str, str]]] = {}
     for oc in concrete_classes:
         where_types[oc.name] = _make_class_where_type(oc)
         page_types[oc.name] = _make_page_type(oc.name)
         field_enums[oc.name] = _make_field_enum(oc)
         order_by_inputs[oc.name] = _make_order_by_input(oc, field_enums[oc.name])
+        agg_result_types[oc.name], agg_fields_map[oc.name] = _make_aggregate_result_type(oc)
 
     # Build a synthetic module for Strawberry's type resolution.
     mod_name = f"knot.api._graphql_schema._dynamic_{id(spec)}"
@@ -443,6 +684,8 @@ def _build_schema(spec: Spec) -> Schema:
     for t in field_enums.values():
         mod.__dict__[t.__name__] = t
     for t in order_by_inputs.values():
+        mod.__dict__[t.__name__] = t
+    for t in agg_result_types.values():
         mod.__dict__[t.__name__] = t
     mod.__dict__["OrderDirection"] = OrderDirection
     # Runtime helpers available inside resolver bodies.
@@ -463,16 +706,22 @@ def _build_schema(spec: Spec) -> Schema:
         wtype = where_types[oc.name]
         ptype = page_types[oc.name]
         ob_input = order_by_inputs[oc.name]
+        agg_rtype = agg_result_types[oc.name]
         wtype_name = wtype.__name__
         ptype_name = ptype.__name__
         ob_name = ob_input.__name__
+        agg_rtype_name = agg_rtype.__name__
         bound_oc = oc
 
         # Unique per-class bindings in the module dict.
         oc_key = f"_oc_{oc.name}"
         ptype_key = f"_ptype_{oc.name}"
+        agg_rtype_key = f"_agg_rtype_{oc.name}"
+        agg_fields_key = f"_agg_fields_{oc.name}"
         mod.__dict__[oc_key] = bound_oc
         mod.__dict__[ptype_key] = ptype
+        mod.__dict__[agg_rtype_key] = agg_rtype
+        mod.__dict__[agg_fields_key] = agg_fields_map[oc.name]
 
         cls_lower = oc.name.lower()
 
@@ -487,7 +736,7 @@ def _build_schema(spec: Spec) -> Schema:
             f"    order_by: Optional[list[{ob_name}]] = _UNSET,\n"
             f") -> {ptype_name}:\n"
             f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
-            f"    ob_sql = _build_order_by(order_by)\n"
+            f"    ob_sql, ob_params = _build_order_by(order_by, {oc_key})\n"
             f"    with _db.connect() as conn:\n"
             f"        rows = _gs.query_rows(\n"
             f"            conn, cls={oc_key},\n"
@@ -495,6 +744,7 @@ def _build_schema(spec: Spec) -> Schema:
             f"            predicate_params=pred_params,\n"
             f"            limit=limit, offset=offset, as_of=as_of,\n"
             f"            order_by_sql=ob_sql,\n"
+            f"            order_by_params=ob_params,\n"
             f"        )\n"
             f"        total = _gs.count_rows(\n"
             f"            conn, cls={oc_key}, as_of=as_of,\n"
@@ -506,60 +756,154 @@ def _build_schema(spec: Spec) -> Schema:
             f"    )\n"
         )
 
-        # ── Single-entity (contributions) resolver ─────────────────────────
-        by_id_fn_name = f"resolve_{cls_lower}_by_canonical_id"
-        by_id_fn_src = (
-            f"def {by_id_fn_name}(\n"
-            f"    canonical_id: str,\n"
-            f"    as_of: Optional[int] = None,\n"
-            f") -> Optional[str]:\n"
-            f"    with _db.connect() as conn:\n"
-            f"        contribs = _gs.get_canonical_contributions(\n"
-            f"            conn, cls={oc_key},\n"
-            f"            canonical_id=canonical_id, as_of=as_of,\n"
-            f"        )\n"
-            f"    if not contribs:\n"
-            f"        return None\n"
-            f"    merged = _merge_contribs(contribs, {oc_key})\n"
-            f"    return _json.dumps(merged, default=str)\n"
-        )
+        is_polymorphic = getattr(bound_oc, "identifier_pattern", None) is not None
 
-        # ── Resolved view resolver ─────────────────────────────────────────
-        resolved_fn_name = f"resolve_{cls_lower}_resolved"
-        resolved_fn_src = (
-            f"def {resolved_fn_name}(\n"
-            f"    canonical_id: str,\n"
-            f"    as_of: Optional[int] = None,\n"
-            f") -> Optional[str]:\n"
-            f"    with _db.connect() as conn:\n"
-            f"        record = _resolve_mod.resolve_entity(\n"
-            f"            conn, cls={oc_key},\n"
-            f"            canonical_id=canonical_id, as_of=as_of,\n"
-            f"        )\n"
-            f"    if record is None:\n"
-            f"        return None\n"
-            f"    return _json.dumps(record, default=str)\n"
-        )
+        if is_polymorphic:
+            # Polymorphic class: expose byDiscriminator(targetClass, key) instead of
+            # byCanonicalId.  Lookup filters by class_slot == targetClass AND key_slot == key.
+            # byCanonicalId, Resolved, and Aggregate are omitted — canonical_id is not
+            # well-defined for polymorphic classes (each row references a different target).
+            ip = bound_oc.identifier_pattern
+            # Capture actual slot name strings now (at schema-build time) so
+            # the generated resolver source embeds literal names, not key names.
+            _disc_class_slot_name = ip.class_slot.name
+            _disc_key_slot_name = ip.key_slot.name
 
-        for fn_src, fn_name in [
-            (list_fn_src, list_fn_name),
-            (by_id_fn_src, by_id_fn_name),
-            (resolved_fn_src, resolved_fn_name),
-        ]:
-            exec(fn_src, mod.__dict__)  # noqa: S102
-            fn = mod.__dict__[fn_name]
-            fn.__module__ = mod_name
+            by_disc_fn_name = f"resolve_{cls_lower}_by_discriminator"
+            by_disc_fn_src = (
+                f"def {by_disc_fn_name}(\n"
+                f"    target_class: str,\n"
+                f"    key: str,\n"
+                f"    as_of: Optional[int] = None,\n"
+                f") -> Optional[str]:\n"
+                f"    from knot.db.sql_compiler import CompileContext, compile_predicate\n"
+                f"    from knot.ontology.metaschema import BoolExpr, BoolOpKind, Compare, CompareOp, Literal_, SlotPath\n"
+                f"    oc = {oc_key}\n"
+                f"    class_slot = next(s for s in oc.slots if s.name == {_disc_class_slot_name!r})\n"
+                f"    key_slot = next(s for s in oc.slots if s.name == {_disc_key_slot_name!r})\n"
+                f"    pred_class = Compare(\n"
+                f"        op=CompareOp.EQ,\n"
+                f"        left=SlotPath(from_class=oc, slots=[class_slot]),\n"
+                f"        right=Literal_(value=target_class),\n"
+                f"    )\n"
+                f"    pred_key = Compare(\n"
+                f"        op=CompareOp.EQ,\n"
+                f"        left=SlotPath(from_class=oc, slots=[key_slot]),\n"
+                f"        right=Literal_(value=key),\n"
+                f"    )\n"
+                f"    combined = BoolExpr(op=BoolOpKind.AND, operands=[pred_class, pred_key])\n"
+                f"    cctx = CompileContext(primary_class=oc, alias='s')\n"
+                f"    pred_sql = compile_predicate(combined, cctx)\n"
+                f"    with _db.connect() as conn:\n"
+                f"        rows = _gs.query_rows(\n"
+                f"            conn, cls=oc,\n"
+                f"            predicate_sql=pred_sql,\n"
+                f"            predicate_params=cctx.params,\n"
+                f"            limit=1, offset=0, as_of=as_of,\n"
+                f"        )\n"
+                f"    if not rows:\n"
+                f"        return None\n"
+                f"    return _json.dumps(rows[0], default=str)\n"
+            )
 
-        # Register the three root fields.
-        query_fields[cls_lower] = strawberry.field(
-            resolver=mod.__dict__[list_fn_name]
-        )
-        query_fields[f"{cls_lower}ByCanonicalId"] = strawberry.field(
-            resolver=mod.__dict__[by_id_fn_name]
-        )
-        query_fields[f"{cls_lower}Resolved"] = strawberry.field(
-            resolver=mod.__dict__[resolved_fn_name]
-        )
+            for fn_src, fn_name in [
+                (list_fn_src, list_fn_name),
+                (by_disc_fn_src, by_disc_fn_name),
+            ]:
+                exec(fn_src, mod.__dict__)  # noqa: S102
+                fn = mod.__dict__[fn_name]
+                fn.__module__ = mod_name
+
+            query_fields[cls_lower] = strawberry.field(
+                resolver=mod.__dict__[list_fn_name]
+            )
+            query_fields[f"{cls_lower}ByDiscriminator"] = strawberry.field(
+                resolver=mod.__dict__[by_disc_fn_name]
+            )
+
+        else:
+            # ── Single-entity (contributions) resolver ─────────────────────
+            by_id_fn_name = f"resolve_{cls_lower}_by_canonical_id"
+            by_id_fn_src = (
+                f"def {by_id_fn_name}(\n"
+                f"    canonical_id: str,\n"
+                f"    as_of: Optional[int] = None,\n"
+                f") -> Optional[str]:\n"
+                f"    with _db.connect() as conn:\n"
+                f"        contribs = _gs.get_canonical_contributions(\n"
+                f"            conn, cls={oc_key},\n"
+                f"            canonical_id=canonical_id, as_of=as_of,\n"
+                f"        )\n"
+                f"    if not contribs:\n"
+                f"        return None\n"
+                f"    merged = _merge_contribs(contribs, {oc_key})\n"
+                f"    return _json.dumps(merged, default=str)\n"
+            )
+
+            # ── Resolved view resolver ─────────────────────────────────────
+            resolved_fn_name = f"resolve_{cls_lower}_resolved"
+            resolved_fn_src = (
+                f"def {resolved_fn_name}(\n"
+                f"    canonical_id: str,\n"
+                f"    as_of: Optional[int] = None,\n"
+                f") -> Optional[str]:\n"
+                f"    with _db.connect() as conn:\n"
+                f"        record = _resolve_mod.resolve_entity(\n"
+                f"            conn, cls={oc_key},\n"
+                f"            canonical_id=canonical_id, as_of=as_of,\n"
+                f"        )\n"
+                f"    if record is None:\n"
+                f"        return None\n"
+                f"    return _json.dumps(record, default=str)\n"
+            )
+
+            # ── Aggregate resolver ─────────────────────────────────────────
+            agg_fn_name = f"resolve_{cls_lower}_aggregate"
+            agg_fn_src = (
+                f"def {agg_fn_name}(\n"
+                f"    where: Optional[{wtype_name}] = _UNSET,\n"
+                f"    as_of: Optional[int] = None,\n"
+                f") -> {agg_rtype_name}:\n"
+                f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
+                f"    with _db.connect() as conn:\n"
+                f"        result = _gs.aggregate_rows(\n"
+                f"            conn, cls={oc_key},\n"
+                f"            as_of=as_of,\n"
+                f"            predicate_sql=pred_sql,\n"
+                f"            predicate_params=pred_params,\n"
+                f"            agg_fields={agg_fields_key},\n"
+                f"        )\n"
+                f"    kwargs = {{'count': result['count']}}\n"
+                f"    for _func, _slot, _key in {agg_fields_key}:\n"
+                f"        gql_key = _func + _slot.capitalize()\n"
+                f"        val = result.get(_key)\n"
+                f"        kwargs[gql_key] = float(val) if val is not None else None\n"
+                f"    return {agg_rtype_key}(**kwargs)\n"
+            )
+
+            for fn_src, fn_name in [
+                (list_fn_src, list_fn_name),
+                (by_id_fn_src, by_id_fn_name),
+                (resolved_fn_src, resolved_fn_name),
+                (agg_fn_src, agg_fn_name),
+            ]:
+                exec(fn_src, mod.__dict__)  # noqa: S102
+                fn = mod.__dict__[fn_name]
+                fn.__module__ = mod_name
+
+            # Register the four root fields.
+            query_fields[cls_lower] = strawberry.field(
+                resolver=mod.__dict__[list_fn_name]
+            )
+            query_fields[f"{cls_lower}ByCanonicalId"] = strawberry.field(
+                resolver=mod.__dict__[by_id_fn_name]
+            )
+            query_fields[f"{cls_lower}Resolved"] = strawberry.field(
+                resolver=mod.__dict__[resolved_fn_name]
+            )
+            query_fields[f"{cls_lower}Aggregate"] = strawberry.field(
+                resolver=mod.__dict__[agg_fn_name]
+            )
 
     Query = strawberry.type(type("Query", (), query_fields))
     return strawberry.Schema(query=Query)

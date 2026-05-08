@@ -187,7 +187,19 @@ def _published_or_404(conn) -> Spec:
     response_model=IngestResponse,
     dependencies=[Depends(require_user)],
 )
-def ingest(source_name: str, body: IngestBatch) -> IngestResponse:
+def ingest(
+    source_name: str,
+    body: IngestBatch,
+    validate_constraints: bool = Query(
+        False,
+        description=(
+            "When true, run all published ERROR-severity constraints whose "
+            "primary_class matches the source's class after INSERTs.  If any "
+            "violation is found the entire batch is rolled back and a 422 is "
+            "returned with the violation list."
+        ),
+    ),
+) -> IngestResponse:
     """Push a batch of rows attributed to a known source.
 
     Validation:
@@ -198,9 +210,19 @@ def ingest(source_name: str, body: IngestBatch) -> IngestResponse:
         identifier required, types coerced from slot.range, pattern/min/max
         enforced, permissible_values constrained, multivalued list-shape).
 
+    When ``validate_constraints=true``, post-INSERT constraint check:
+      - Compiles and runs each published ERROR-severity ``Constraint`` whose
+        ``primary_class`` matches the source's entity class.
+      - If any constraint returns offending rows, the transaction is rolled
+        back and a 422 is returned with the violation list.
+      - WARNING-severity constraints are skipped; they never block ingest.
+
     Successful rows are upserted into the per-class table; system columns
     are set from the source + currently-published revision.
     """
+    from knot.db.sql_compiler import compile_constraint
+    from knot.ontology.metaschema import Severity
+
     with db.connect() as conn:
         spec = _published_or_404(conn)
         source = next((s for s in spec.sources if s.name == source_name), None)
@@ -225,12 +247,48 @@ def ingest(source_name: str, body: IngestBatch) -> IngestResponse:
         if errors:
             raise HTTPException(422, detail=errors)
 
-        count = graph_store.insert_rows(
-            conn,
-            source=source,
-            spec_revision=revision,
-            rows=validated,
-        )
+        if validate_constraints:
+            # Run inside an explicit transaction so violations cause a rollback.
+            cls = source.entity_class
+            relevant = [
+                c for c in spec.constraints
+                if c.primary.name == cls.name
+                and getattr(c, "severity", Severity.ERROR) == Severity.ERROR
+            ]
+            try:
+                with conn.transaction():
+                    count = graph_store.insert_rows(
+                        conn,
+                        source=source,
+                        spec_revision=revision,
+                        rows=validated,
+                    )
+                    violations: list[dict[str, Any]] = []
+                    for constraint in relevant:
+                        stmt, params = compile_constraint(constraint, cls)
+                        try:
+                            rows = conn.execute(stmt, params).fetchall()
+                        except Exception:
+                            continue
+                        for row in rows:
+                            violations.append({
+                                "rule_id": row[0],
+                                "class_name": row[1],
+                                "slot_name": row[2],
+                                "offending_pk": str(row[3]),
+                                "detail": row[4] or "",
+                            })
+                    if violations:
+                        raise _ConstraintViolationError(violations)
+            except _ConstraintViolationError as exc:
+                raise HTTPException(422, detail={"violations": exc.violations})
+        else:
+            count = graph_store.insert_rows(
+                conn,
+                source=source,
+                spec_revision=revision,
+                rows=validated,
+            )
 
     return IngestResponse(
         accepted=count,
@@ -238,6 +296,14 @@ def ingest(source_name: str, body: IngestBatch) -> IngestResponse:
         entity_class=source.entity_class.name,
         spec_revision=revision,
     )
+
+
+class _ConstraintViolationError(Exception):
+    """Internal sentinel raised inside a transaction to trigger rollback."""
+
+    def __init__(self, violations: list[dict[str, Any]]) -> None:
+        self.violations = violations
+        super().__init__(f"{len(violations)} constraint violation(s)")
 
 
 @router.get("/classes/{class_name}", response_model=ListResponse)

@@ -49,6 +49,7 @@ __all__ = (
     "list_rows",
     "query_rows",
     "count_rows",
+    "aggregate_rows",
     "get_canonical_contributions",
     "get_disagreeing_contributions",
     "canonical_id_exists",
@@ -376,6 +377,7 @@ def query_rows(
     offset: int = 0,
     as_of: int | None = None,
     order_by_sql: "sql.Composable | None" = None,
+    order_by_params: "list[Any] | None" = None,
 ) -> list[dict[str, Any]]:
     """List rows with an optional compiled predicate fragment.
 
@@ -386,6 +388,11 @@ def query_rows(
     ``order_by_sql`` is an optional ORDER BY clause (without the ORDER BY
     keyword) as a sql.Composable. When None, defaults to
     ``b.canonical_id ASC, s._source ASC`` for deterministic output.
+
+    ``order_by_params`` are the positional parameters for any subquery
+    expressions in the ORDER BY clause (e.g. derived-slot derivations).
+    They are inserted after derived-column SELECT params and before
+    WHERE params in the overall positional binding list.
 
     Reads JOIN source × current bindings (valid_to IS NULL).  Derived slots
     are computed as correlated subqueries appended to the SELECT list.
@@ -426,6 +433,10 @@ def query_rows(
     stmt = sql.SQL(
         "{base} {where} {order} LIMIT %s OFFSET %s"
     ).format(base=base, where=where, order=order_clause)
+
+    # ORDER BY params (from derived-slot sort expressions) go after WHERE params.
+    if order_by_params:
+        params.extend(order_by_params)
     params.extend([limit, offset])
 
     cur = conn.cursor(row_factory=dict_row)
@@ -524,6 +535,95 @@ def count_rows(
             "{where}"
         ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
     return conn.execute(stmt, params).fetchone()[0]
+
+
+def aggregate_rows(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    as_of: int | None = None,
+    predicate_sql: "sql.Composable | None" = None,
+    predicate_params: "list[Any] | None" = None,
+    agg_fields: "list[tuple[str, str, str]]",
+) -> dict[str, Any]:
+    """Run one SELECT with COUNT(*) plus requested aggregates over filtered rows.
+
+    ``agg_fields`` is a list of ``(agg_func, slot_name, result_key)`` triples:
+      - ``agg_func``   — SQL aggregate function name: ``sum``, ``avg``, ``min``, ``max``
+      - ``slot_name``  — stored slot column name
+      - ``result_key`` — key in the returned dict
+
+    Returns a dict with ``count`` (int) plus one entry per agg_fields element.
+    NULL is returned as None for slots with no matching rows.
+
+    Centralisation rule: all SQL lives in db/.  The resolver in
+    ``api._graphql_schema`` calls this and maps the dict to the
+    ``AggregateResult_<Class>`` strawberry type.
+    """
+    _ALLOWED_AGG_FUNCS = {"sum", "avg", "min", "max"}
+    clauses: list[sql.Composable] = []
+    params: list[Any] = []
+
+    if as_of is not None:
+        clauses.append(sql.SQL("s._spec_revision <= %s"))
+        params.append(as_of)
+
+    if predicate_sql is not None:
+        clauses.append(predicate_sql)
+        params.extend(predicate_params or [])
+
+    if clauses:
+        where = sql.SQL("WHERE ") + sql.SQL(" AND ").join(
+            sql.SQL("(") + c + sql.SQL(")") for c in clauses
+        )
+    else:
+        where = sql.SQL("")
+
+    # Build SELECT list: count(*) first, then each requested aggregate.
+    select_parts: list[sql.Composable] = [sql.SQL("count(*) AS _count")]
+    for agg_func, slot_name, result_key in agg_fields:
+        if agg_func.lower() not in _ALLOWED_AGG_FUNCS:
+            raise ValueError(
+                f"aggregate_rows: unsupported agg_func {agg_func!r}; "
+                f"allowed: {sorted(_ALLOWED_AGG_FUNCS)}"
+            )
+        select_parts.append(
+            sql.SQL("{func}(s.{col}) AS {alias}").format(
+                func=sql.SQL(agg_func.lower()),
+                col=sql.Identifier(slot_name),
+                alias=sql.Identifier(result_key),
+            )
+        )
+    select_sql = sql.SQL(", ").join(select_parts)
+
+    if _is_defined_class(cls):
+        stmt = sql.SQL(
+            "SELECT {select} FROM {view} s {where}"
+        ).format(select=select_sql, view=_table_id(cls), where=where)
+    else:
+        stmt = sql.SQL(
+            "SELECT {select} FROM {source} s "
+            "JOIN {bindings} b "
+            "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
+            "{where}"
+        ).format(
+            select=select_sql,
+            source=_table_id(cls),
+            bindings=_bindings_id(cls),
+            where=where,
+        )
+
+    row = conn.execute(stmt, params).fetchone()
+    if row is None:
+        result: dict[str, Any] = {"count": 0}
+        for _, _, result_key in agg_fields:
+            result[result_key] = None
+        return result
+
+    result = {"count": row[0]}
+    for i, (_, _, result_key) in enumerate(agg_fields):
+        result[result_key] = row[1 + i]
+    return result
 
 
 def get_disagreeing_contributions(

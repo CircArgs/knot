@@ -542,3 +542,231 @@ def test_count_rows_with_predicate(gql_db):
         predicate_sql=pred_sql, predicate_params=ctx.params,
     )
     assert total_filtered == 3  # 1994, 1993, 2003
+
+
+# ===========================================================================
+# 16. Slice A — derived-slot WHERE / ORDER BY / aggregation
+# ===========================================================================
+
+# ---------------------------------------------------------------------------
+# Fixtures: Movie + Credit spec with a derived slot (credit_count)
+# ---------------------------------------------------------------------------
+
+def _build_derived_spec():
+    """Movie + Credit spec.  Movie.credit_count is a derived slot
+    (RelationCount over Credit rows whose movie FK = movie canonical_id).
+    """
+    from knot.ontology.metaschema import (
+        RelationCount, ReverseRelation,
+    )
+    st = TypeDefinition(name="string", base="str")
+    it = TypeDefinition(name="integer", base="int")
+    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    title = Slot(name="title", range=st)
+    year = Slot(name="year", range=it)
+    movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title, year])
+
+    credit_id = Slot(name="credit_id", range=st, identifier=True, required=True)
+    credit_movie = Slot(name="movie", range=movie_cls)
+    credit_role = Slot(name="role", range=st)
+    credit_cls = OntologyClass(name="Credit", slots=[credit_id, credit_movie, credit_role])
+
+    credit_count_deriv = RelationCount(
+        relation=ReverseRelation(target_class=credit_cls, fk_slot=credit_movie),
+    )
+    credit_count_slot = Slot(name="credit_count", range=it, derivation=credit_count_deriv)
+    movie_cls.slots = [imdb_id, title, year, credit_count_slot]
+
+    movie_src = Source(name="imdb", entity_class=movie_cls, identifier_slot=imdb_id)
+    credit_src = Source(name="credits", entity_class=credit_cls, identifier_slot=credit_id)
+
+    spec = Spec(
+        id="derived_gql_test",
+        version="1.0.0",
+        types=[st, it],
+        slots=[imdb_id, title, year, credit_count_slot, credit_id, credit_movie, credit_role],
+        classes=[movie_cls, credit_cls],
+        sources=[movie_src, credit_src],
+    )
+    return spec, movie_cls, credit_cls, movie_src, credit_src
+
+
+@pytest.fixture
+def derived_db(pg_conn):
+    """Publish the Movie+Credit spec with derived credit_count, insert rows."""
+    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    db.apply_schema()
+
+    spec, movie_cls, credit_cls, movie_src, credit_src = _build_derived_spec()
+    rev = create_draft(pg_conn)
+    update_draft(pg_conn, rev, spec)
+    publish_draft(pg_conn, rev)
+
+    # Ingest 3 movies.
+    graph_store.insert_rows(
+        pg_conn, source=movie_src, spec_revision=rev,
+        rows=[
+            {"imdb_id": "m1", "title": "Film One",   "year": 1990},
+            {"imdb_id": "m2", "title": "Film Two",   "year": 2000},
+            {"imdb_id": "m3", "title": "Film Three", "year": 2010},
+        ],
+    )
+    # m1 has 3 credits; m2 has 1 credit; m3 has 0
+    graph_store.insert_rows(
+        pg_conn, source=credit_src, spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "movie": "m1", "role": "director"},
+            {"credit_id": "c2", "movie": "m1", "role": "actor"},
+            {"credit_id": "c3", "movie": "m1", "role": "writer"},
+            {"credit_id": "c4", "movie": "m2", "role": "director"},
+        ],
+    )
+    yield pg_conn, spec, movie_src, credit_src, rev
+
+
+@pytest.fixture
+def derived_client(derived_db):
+    from knot.api.main import app
+    os.environ["KNOT_AUTH_DEV_MODE"] = "1"
+    try:
+        yield TestClient(app, raise_server_exceptions=True)
+    finally:
+        os.environ.pop("KNOT_AUTH_DEV_MODE", None)
+
+
+# ---------------------------------------------------------------------------
+# 16a. WHERE filter on a derived slot returns expected rows
+# ---------------------------------------------------------------------------
+
+def test_where_on_derived_slot_returns_matching_rows(derived_client):
+    """WHERE credit_count >= 2 should return only m1 (3 credits)."""
+    query = "{ movie(where: { creditCount: { gte: 2 } }) { rows total } }"
+    result = _post(derived_client, query)
+    assert "errors" not in result, result.get("errors")
+    page = result["data"]["movie"]
+    rows = [json.loads(r) for r in page["rows"]]
+    ids = {r["imdb_id"] for r in rows}
+    assert ids == {"m1"}, f"expected only m1, got {ids}"
+    assert page["total"] == 1
+
+
+def test_where_on_derived_slot_eq_zero(derived_client):
+    """WHERE credit_count = 0 should return only m3 (no credits)."""
+    query = "{ movie(where: { creditCount: { eq: 0 } }) { rows total } }"
+    result = _post(derived_client, query)
+    assert "errors" not in result, result.get("errors")
+    page = result["data"]["movie"]
+    rows = [json.loads(r) for r in page["rows"]]
+    ids = {r["imdb_id"] for r in rows}
+    assert ids == {"m3"}, f"expected only m3, got {ids}"
+
+
+def test_where_combined_derived_and_stored(derived_client):
+    """WHERE year >= 2000 AND credit_count >= 1 → only m2 (year=2000, 1 credit)."""
+    query = (
+        "{ movie(where: { year: { gte: 2000 }, creditCount: { gte: 1 } }) "
+        "{ rows total } }"
+    )
+    result = _post(derived_client, query)
+    assert "errors" not in result, result.get("errors")
+    page = result["data"]["movie"]
+    rows = [json.loads(r) for r in page["rows"]]
+    ids = {r["imdb_id"] for r in rows}
+    assert ids == {"m2"}, f"expected only m2, got {ids}"
+
+
+# ---------------------------------------------------------------------------
+# 16b. ORDER BY derived slot ASC + DESC
+# ---------------------------------------------------------------------------
+
+def test_order_by_derived_slot_asc(derived_client):
+    """ORDER BY credit_count ASC → m3(0), m2(1), m1(3)."""
+    query = "{ movie(orderBy: [{ field: creditCount, direction: ASC }]) { rows } }"
+    result = _post(derived_client, query)
+    assert "errors" not in result, result.get("errors")
+    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
+    counts = [r["credit_count"] for r in rows]
+    assert counts == sorted(counts), f"expected ASC, got {counts}"
+    assert counts[0] == 0
+    assert counts[-1] == 3
+
+
+def test_order_by_derived_slot_desc(derived_client):
+    """ORDER BY credit_count DESC → m1(3), m2(1), m3(0)."""
+    query = "{ movie(orderBy: [{ field: creditCount, direction: DESC }]) { rows } }"
+    result = _post(derived_client, query)
+    assert "errors" not in result, result.get("errors")
+    rows = [json.loads(r) for r in result["data"]["movie"]["rows"]]
+    counts = [r["credit_count"] for r in rows]
+    assert counts == sorted(counts, reverse=True), f"expected DESC, got {counts}"
+    assert counts[0] == 3
+    assert counts[-1] == 0
+
+
+# ---------------------------------------------------------------------------
+# 16c. Aggregation queries — count, sum, avg, min, max
+# ---------------------------------------------------------------------------
+
+def test_aggregate_count(gql_client):
+    """movieAggregate returns correct count of all rows."""
+    query = "{ movieAggregate { count } }"
+    result = _post(gql_client, query)
+    assert "errors" not in result, result.get("errors")
+    agg = result["data"]["movieAggregate"]
+    assert agg["count"] == 5
+
+
+def test_aggregate_sum_avg_min_max(gql_client):
+    """movieAggregate returns correct sum/avg/min/max for year."""
+    query = "{ movieAggregate { count sumYear avgYear minYear maxYear } }"
+    result = _post(gql_client, query)
+    assert "errors" not in result, result.get("errors")
+    agg = result["data"]["movieAggregate"]
+    # years: 1994, 1972, 1993, 2003, 1957
+    assert agg["count"] == 5
+    assert agg["sumYear"] == pytest.approx(1994 + 1972 + 1993 + 2003 + 1957)
+    assert agg["minYear"] == pytest.approx(1957)
+    assert agg["maxYear"] == pytest.approx(2003)
+    expected_avg = (1994 + 1972 + 1993 + 2003 + 1957) / 5
+    assert agg["avgYear"] == pytest.approx(expected_avg, rel=1e-4)
+
+
+def test_aggregate_with_where_filter(gql_client):
+    """movieAggregate with where filter counts only matching rows."""
+    query = "{ movieAggregate(where: { year: { gte: 1990 } }) { count sumYear minYear maxYear } }"
+    result = _post(gql_client, query)
+    assert "errors" not in result, result.get("errors")
+    agg = result["data"]["movieAggregate"]
+    # years >= 1990: 1994, 1993, 2003
+    assert agg["count"] == 3
+    assert agg["sumYear"] == pytest.approx(1994 + 1993 + 2003)
+    assert agg["minYear"] == pytest.approx(1993)
+    assert agg["maxYear"] == pytest.approx(2003)
+
+
+def test_aggregate_empty_result(gql_client):
+    """movieAggregate with no matching rows returns count=0 and null aggregates."""
+    query = "{ movieAggregate(where: { year: { gt: 9999 } }) { count sumYear avgYear } }"
+    result = _post(gql_client, query)
+    assert "errors" not in result, result.get("errors")
+    agg = result["data"]["movieAggregate"]
+    assert agg["count"] == 0
+    # SQL aggregate over zero rows returns NULL → None in Python
+    assert agg["sumYear"] is None
+    assert agg["avgYear"] is None
+
+
+def test_aggregate_respects_as_of(derived_db, derived_client):
+    """movieAggregate with asOf before any rows → count=0."""
+    pg_conn, spec, movie_src, credit_src, rev = derived_db
+    query = f"{{ movieAggregate(asOf: {rev - 1}) {{ count }} }}"
+    result = _post(derived_client, query)
+    assert "errors" not in result, result.get("errors")
+    agg = result["data"]["movieAggregate"]
+    assert agg["count"] == 0
