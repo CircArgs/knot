@@ -628,3 +628,60 @@ def publish(
         content_hash=row["content_hash"],
         published_at=row["published_at"] or "",
     )
+
+
+# ─── Rollback ───────────────────────────────────────────────────────────────
+
+@router.post(
+    "/rollback/{target_revision}",
+    response_model=PublishResponse,
+    dependencies=[Depends(require_user)],
+)
+def rollback(
+    target_revision: int,
+    allow_destructive: bool = Query(
+        False,
+        description=(
+            "Required to confirm destructive migrations. Rollbacks typically "
+            "drop classes/slots that the newer spec added; pass "
+            "allow_destructive=true to confirm those rows are forfeit."
+        ),
+    ),
+) -> PublishResponse:
+    """Promote a prior revision back to published.
+
+    Mechanically identical to publish: the diff (current_published → target)
+    is applied to the data plane, the constraint gate runs against current
+    data, and the published flag flips atomically. Rejects an attempt to
+    rollback to the currently-published revision (no-op).
+    """
+    with db.connect() as conn:
+        current = spec_store.get_published_revision(conn)
+        if current == target_revision:
+            raise HTTPException(
+                400,
+                f"Revision {target_revision} is already the published spec; "
+                "nothing to roll back to.",
+            )
+        try:
+            spec_store.publish_draft(
+                conn, target_revision, allow_destructive=allow_destructive,
+            )
+        except spec_store.DraftNotFoundError as exc:
+            raise HTTPException(
+                404, f"Revision {target_revision} not found.",
+            ) from exc
+        except spec_store.PublishGateError as exc:
+            raise HTTPException(
+                400,
+                f"Rollback to revision {target_revision} failed the publish "
+                f"gate: {exc}",
+            ) from exc
+
+        rows = spec_store.list_published(conn)
+    row = next(r for r in rows if r["revision"] == target_revision)
+    return PublishResponse(
+        revision=target_revision,
+        content_hash=row["content_hash"],
+        published_at=row["published_at"] or "",
+    )
