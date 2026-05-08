@@ -1,3 +1,10 @@
+import os
+
+# Tests run against the local docker-compose stack with the dev DSN.
+# Setting this before `knot.config` is imported avoids the fail-closed
+# guard rejecting a missing KNOT_CONTROL_DSN.
+os.environ.setdefault("KNOT_DEV_MODE", "1")
+
 import pytest
 import psycopg
 from neo4j import GraphDatabase

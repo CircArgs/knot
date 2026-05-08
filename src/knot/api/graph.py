@@ -27,10 +27,11 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Optional, Union
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from knot import db
+from knot.auth import require_bearer
 from knot.db import graph_store, spec_store, trust_config, trust_posteriors
 from knot.graph import corrections as graph_corrections
 from knot.graph import resolve
@@ -43,7 +44,7 @@ class _StrictBase(BaseModel):
 
 
 class IngestBatch(_StrictBase):
-    rows: list[dict[str, Any]]
+    rows: list[dict[str, Any]] = Field(..., max_length=10_000)
 
 
 class IngestResponse(_StrictBase):
@@ -116,7 +117,7 @@ class Merge(_StrictBase):
     type: Literal["merge"] = "merge"
     class_name: str
     keep_canonical_id: str
-    merge_canonical_ids: list[str]
+    merge_canonical_ids: list[str] = Field(..., max_length=1_000)
     applied_by: Optional[str] = None
 
 
@@ -156,7 +157,11 @@ def _published_or_404(conn) -> Spec:
     return spec
 
 
-@router.post("/ingest/{source_name}", response_model=IngestResponse)
+@router.post(
+    "/ingest/{source_name}",
+    response_model=IngestResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def ingest(source_name: str, body: IngestBatch) -> IngestResponse:
     """Push a batch of rows attributed to a known source.
 
@@ -351,7 +356,10 @@ def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
         return _posterior_view(trust_posteriors.get_posterior(conn, source_name, slot_name))
 
 
-@router.delete("/trust/posteriors/{source_name}/{slot_name}")
+@router.delete(
+    "/trust/posteriors/{source_name}/{slot_name}",
+    dependencies=[Depends(require_bearer)],
+)
 def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     """Drop the per-(source, slot) posterior, reverting it to the uniform prior."""
     with db.connect() as conn:
@@ -359,7 +367,11 @@ def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     return {"reset": existed, "source": source_name, "slot": slot_name}
 
 
-@router.post("/trust/feedback", response_model=PosteriorView)
+@router.post(
+    "/trust/feedback",
+    response_model=PosteriorView,
+    dependencies=[Depends(require_bearer)],
+)
 def submit_feedback(body: FeedbackBody) -> PosteriorView:
     """Record one Bernoulli observation (source, slot, success) — increments
     α on success, β on failure. Source and slot must be on the published spec."""
@@ -386,7 +398,11 @@ def get_trust_score(source_name: str) -> TrustScore:
     return TrustScore(source=source_name, trust_score=score)
 
 
-@router.put("/trust/{source_name}", response_model=TrustScore)
+@router.put(
+    "/trust/{source_name}",
+    response_model=TrustScore,
+    dependencies=[Depends(require_bearer)],
+)
 def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
     with db.connect() as conn:
         spec = _published_or_404(conn)
@@ -424,7 +440,11 @@ def build_row_model_for_slot(slot: Slot):
     )
 
 
-@router.post("/corrections", response_model=CorrectionResponse)
+@router.post(
+    "/corrections",
+    response_model=CorrectionResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def submit_correction(body: Correction) -> CorrectionResponse:
     """Submit a typed correction. Auto-applies in one transaction:
     audit row + per-class data mutation + bandit feedback against

@@ -128,6 +128,20 @@ def _bindings_index_sql(cls: OntologyClass) -> sql.Composable:
     ).format(idx=_bindings_index_id(cls), table=_bindings_table_id(cls))
 
 
+def _bindings_unique_current_id(cls: OntologyClass) -> sql.Identifier:
+    return sql.Identifier(f"{cls.name.lower()}_bindings_one_current_per_row")
+
+
+def _bindings_unique_current_sql(cls: OntologyClass) -> sql.Composable:
+    # Partial UNIQUE index enforcing exactly one current binding per
+    # knot_row_id. Catches any race in merge / split / correction that
+    # escapes FOR UPDATE locking.
+    return sql.SQL(
+        "CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table} (knot_row_id) "
+        "WHERE valid_to IS NULL"
+    ).format(idx=_bindings_unique_current_id(cls), table=_bindings_table_id(cls))
+
+
 def _create_source_table_sql(cls: OntologyClass) -> sql.Composable:
     user_cols: list[sql.Composable] = []
     for slot in cls.slots:
@@ -250,10 +264,11 @@ def emit_ddl(change: Change, conn: psycopg.Connection) -> None:
 
 @emit_ddl.register
 def _(change: AddClass, conn: psycopg.Connection) -> None:
-    # Source-row table + bindings table + bindings partial index.
+    # Source-row table + bindings table + bindings indexes.
     conn.execute(_create_source_table_sql(change.cls))
     conn.execute(_bindings_create_sql(change.cls))
     conn.execute(_bindings_index_sql(change.cls))
+    conn.execute(_bindings_unique_current_sql(change.cls))
 
 
 @emit_ddl.register
@@ -309,13 +324,40 @@ def _(change: ChangeSlotRequired, conn: psycopg.Connection) -> None:
 # ─── Apply ──────────────────────────────────────────────────────────────────
 
 
+# ─── Destructive-change classification ──────────────────────────────────────
+
+# Changes that destroy or rewrite stored data without a backfill path.
+# DropSlot loses a column's data; DropClass loses an entire table;
+# ChangeSlotType issues a raw ALTER COLUMN TYPE and may reject existing
+# data. The publish gate refuses these unless allow_destructive is
+# explicitly set.
+_DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
+    DropClass,
+    DropSlot,
+    ChangeSlotType,
+)
+
+
+def is_destructive(change: Change) -> bool:
+    return isinstance(change, _DESTRUCTIVE_CHANGE_TYPES)
+
+
+def apply_changes(conn: psycopg.Connection, changes: list[Change]) -> None:
+    """Apply a precomputed list of changes (used after diff + safety check)."""
+    for change in changes:
+        emit_ddl(change, conn)
+
+
 def apply_migration(
     conn: psycopg.Connection,
     prev: Spec | None,
     candidate: Spec,
 ) -> list[Change]:
-    """Diff the two specs and apply the resulting DDL. Returns the changes run."""
+    """Diff the two specs and apply the resulting DDL. Returns the changes run.
+
+    Caller is responsible for any destructive-change gating; see
+    ``is_destructive`` and ``apply_changes`` for the split-control variant.
+    """
     changes = diff_specs(prev, candidate)
-    for change in changes:
-        emit_ddl(change, conn)
+    apply_changes(conn, changes)
     return changes

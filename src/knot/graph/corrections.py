@@ -125,6 +125,21 @@ def apply_property_correction(
         for source, contributed in graph_store.get_disagreeing_contributions(
             conn, cls=cls, canonical_id=canonical_id, slot_name=slot_name,
         ):
-            success = contributed == value
+            success = _values_match(contributed, value)
             trust_posteriors.record_feedback(conn, source, slot_name, success)
         return correction_id
+
+
+def _values_match(contributed: Any, corrected: Any) -> bool:
+    """Equality used for bandit-feedback signal extraction.
+
+    Multivalued slots come back as Python lists; equality is order-
+    insensitive (sources providing the same set in different order
+    shouldn't be punished). Scalars use plain equality.
+    """
+    if isinstance(contributed, list) and isinstance(corrected, list):
+        try:
+            return frozenset(contributed) == frozenset(corrected)
+        except TypeError:
+            return sorted(map(repr, contributed)) == sorted(map(repr, corrected))
+    return contributed == corrected

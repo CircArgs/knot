@@ -327,20 +327,30 @@ def merge_canonical_ids(
     """SCD2 merge: close current bindings whose canonical_id is in
     ``merge_canonical_ids``; open new bindings for the same knot_row_ids
     with ``canonical_id = keep_canonical_id``. Returns the count of
-    bindings rewritten."""
+    bindings rewritten.
+
+    Concurrency: the SELECT uses ``FOR UPDATE`` to serialise concurrent
+    merges on overlapping rows. The close-stamp uses ``clock_timestamp()``
+    so the boundary differs from the new binding's ``valid_from``
+    (which is also ``clock_timestamp()`` on the next call) — the
+    half-open ``[valid_from, valid_to)`` invariant is preserved.
+    A partial unique index ``(knot_row_id) WHERE valid_to IS NULL``
+    on the bindings table catches any escaped duplicate.
+    """
     rewritten = 0
     for from_cid in merge_canonical_ids:
         rows = conn.execute(
             sql.SQL(
                 "SELECT knot_row_id FROM {bindings} "
-                "WHERE canonical_id = %s AND valid_to IS NULL"
+                "WHERE canonical_id = %s AND valid_to IS NULL "
+                "FOR UPDATE"
             ).format(bindings=_bindings_id(cls)),
             (from_cid,),
         ).fetchall()
         for (knot_row_id,) in rows:
             conn.execute(
                 sql.SQL(
-                    "UPDATE {bindings} SET valid_to = now() "
+                    "UPDATE {bindings} SET valid_to = clock_timestamp() "
                     "WHERE knot_row_id = %s AND valid_to IS NULL"
                 ).format(bindings=_bindings_id(cls)),
                 (knot_row_id,),
@@ -348,9 +358,9 @@ def merge_canonical_ids(
             conn.execute(
                 sql.SQL(
                     "INSERT INTO {bindings} "
-                    "(knot_row_id, canonical_id, change_type, "
+                    "(knot_row_id, canonical_id, valid_from, change_type, "
                     " applied_revision, correction_id) "
-                    "VALUES (%s, %s, %s, %s, %s)"
+                    "VALUES (%s, %s, clock_timestamp(), %s, %s, %s)"
                 ).format(bindings=_bindings_id(cls)),
                 (knot_row_id, keep_canonical_id, change_type, spec_revision, correction_id),
             )

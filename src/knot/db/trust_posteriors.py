@@ -78,18 +78,30 @@ def record_feedback(
     slot: str,
     success: bool,
 ) -> Posterior:
-    """Update the ``(source, slot)`` posterior with one Bernoulli observation."""
-    current = get_posterior(conn, source, slot)
-    new_alpha = current.alpha + (1.0 if success else 0.0)
-    new_beta = current.beta + (0.0 if success else 1.0)
-    conn.execute(
+    """Update the ``(source, slot)`` posterior with one Bernoulli observation.
+
+    Atomic at the DB layer — a single UPSERT with delta math, so concurrent
+    feedback on the same (source, slot) doesn't lose increments.
+    """
+    delta_alpha = 1.0 if success else 0.0
+    delta_beta = 0.0 if success else 1.0
+    row = conn.execute(
         "INSERT INTO trust_posteriors (source_name, slot_name, alpha, beta) "
         "VALUES (%s, %s, %s, %s) "
         "ON CONFLICT (source_name, slot_name) DO UPDATE "
-        "SET alpha = EXCLUDED.alpha, beta = EXCLUDED.beta, updated_at = now()",
-        (source, slot, new_alpha, new_beta),
-    )
-    return Posterior(source=source, slot=slot, alpha=new_alpha, beta=new_beta)
+        "SET alpha = trust_posteriors.alpha + %s, "
+        "    beta  = trust_posteriors.beta  + %s, "
+        "    updated_at = now() "
+        "RETURNING alpha, beta",
+        (
+            source, slot,
+            PRIOR_ALPHA + delta_alpha,
+            PRIOR_BETA + delta_beta,
+            delta_alpha,
+            delta_beta,
+        ),
+    ).fetchone()
+    return Posterior(source=source, slot=slot, alpha=row[0], beta=row[1])
 
 
 def reset_posterior(

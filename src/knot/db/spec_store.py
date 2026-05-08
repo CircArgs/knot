@@ -567,25 +567,48 @@ def get_published_revision(conn: psycopg.Connection) -> int | None:
     return row[0] if row else None
 
 
-def publish_draft(conn: psycopg.Connection, draft_id: int) -> int:
+def publish_draft(
+    conn: psycopg.Connection,
+    draft_id: int,
+    *,
+    allow_destructive: bool = False,
+) -> int:
     """Run the publish gate; on pass, atomically flip this draft to published
     and bring the data-plane schema in line with the new spec.
 
-    Returns the revision number of the now-published draft.  Raises
-    `PublishGateError` on validation failure (draft remains a draft).
-    """
-    candidate = get_revision(conn, draft_id)
-    publish_gate(candidate)  # raises on failure
-    prev = get_published(conn)
+    The destructive-change check (DropClass / DropSlot / ChangeSlotType)
+    runs against the diff before the flag flip; if any destructive change
+    is present and ``allow_destructive`` is False, raises
+    ``PublishGateError`` and the draft stays a draft.
 
-    # The partial unique index `(published) WHERE published = TRUE` is
-    # validated per-row, not per-statement, so a single combined UPDATE
-    # is racy (postgres may transiently see two TRUE rows depending on
-    # row order). Split into demote → promote inside an explicit
-    # transaction so the publish flag flip + migration are atomic and
-    # the index never sees two TRUE rows simultaneously.
-    from knot.db.migration import apply_migration
+    The whole flow — gate, diff, classify, flip, migrate — runs inside one
+    transaction so concurrent publishes can't observe the partial unique
+    index in a transient state, and the data plane and the spec are
+    never out of sync.
+    """
+    from knot.db.migration import (
+        apply_changes,
+        diff_specs,
+        is_destructive,
+    )
+
     with conn.transaction():
+        candidate = get_revision(conn, draft_id)
+        publish_gate(candidate)
+        prev = get_published(conn)
+
+        changes = diff_specs(prev, candidate)
+        destructive = [type(c).__name__ for c in changes if is_destructive(c)]
+        if destructive and not allow_destructive:
+            raise PublishGateError(
+                "Publish would apply destructive changes "
+                f"({', '.join(sorted(set(destructive)))}); pass "
+                "allow_destructive=true to confirm."
+            )
+
+        # Demote → promote in two statements so the partial unique index
+        # `(published) WHERE published = TRUE` doesn't see two TRUE rows
+        # transiently (postgres validates per-row, not per-statement).
         conn.execute(
             "UPDATE spec_revisions SET published = FALSE "
             "WHERE published = TRUE AND revision <> %s",
@@ -596,7 +619,7 @@ def publish_draft(conn: psycopg.Connection, draft_id: int) -> int:
             "WHERE revision = %s",
             (_now(), draft_id),
         )
-        apply_migration(conn, prev, candidate)
+        apply_changes(conn, changes)
 
     return draft_id
 

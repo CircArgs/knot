@@ -15,10 +15,11 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
+from knot.auth import require_bearer
 from knot.db import spec_store
 from knot.ontology import (
     OntologyClass,
@@ -84,15 +85,18 @@ class RevisionSummary(_StrictBase):
 
 # ─── Mutation requests ──────────────────────────────────────────────────────
 
+_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]{0,62}$"
+
+
 class TypeDefinitionCreate(_StrictBase):
-    name: str
+    name: str = Field(pattern=_NAME_PATTERN)
     base: Optional[str] = None
     pattern: Optional[str] = None
     description: Optional[str] = None
 
 
 class SlotCreate(_StrictBase):
-    name: str
+    name: str = Field(pattern=_NAME_PATTERN)
     range_kind: Optional[str] = None    # "type" | "class" | None
     range_name: Optional[str] = None
     identifier: bool = False
@@ -107,7 +111,7 @@ class SlotCreate(_StrictBase):
 
 
 class ClassCreate(_StrictBase):
-    name: str
+    name: str = Field(pattern=_NAME_PATTERN)
     slot_names: list[str] = Field(default_factory=list)
     is_a_name: Optional[str] = None
     mixin_names: list[str] = Field(default_factory=list)
@@ -124,7 +128,7 @@ class ClassUpdate(_StrictBase):
 
 
 class SourceCreate(_StrictBase):
-    name: str
+    name: str = Field(pattern=_NAME_PATTERN)
     entity_class_name: str
     identifier_slot_name: str
     description: Optional[str] = None
@@ -337,7 +341,11 @@ def list_drafts_endpoint() -> list[DraftSummary]:
     return [DraftSummary(**r) for r in rows]
 
 
-@router.post("/drafts", response_model=DraftSummary)
+@router.post(
+    "/drafts",
+    response_model=DraftSummary,
+    dependencies=[Depends(require_bearer)],
+)
 def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
     with db.connect() as conn:
         try:
@@ -361,7 +369,7 @@ def get_draft(draft_id: int) -> dict[str, Any]:
     return spec_store.spec_to_dict(spec)
 
 
-@router.delete("/drafts/{draft_id}")
+@router.delete("/drafts/{draft_id}", dependencies=[Depends(require_bearer)])
 def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
     with db.connect() as conn:
         try:
@@ -375,12 +383,19 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 
 # ─── Draft mutations ────────────────────────────────────────────────────────
 
-@router.post("/drafts/{draft_id}/types", response_model=MutationResponse)
+@router.post(
+    "/drafts/{draft_id}/types",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
     with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
-        if any(t.name == body.name for t in spec.types):
-            raise HTTPException(409, f"TypeDefinition {body.name!r} already exists.")
+        if any(t.name.lower() == body.name.lower() for t in spec.types):
+            raise HTTPException(
+                409,
+                f"TypeDefinition collides (case-insensitive) for name {body.name!r}.",
+            )
         spec.types.append(TypeDefinition(
             name=body.name,
             base=body.base,
@@ -390,12 +405,19 @@ def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
         return _persist(conn, draft_id, spec)
 
 
-@router.post("/drafts/{draft_id}/slots", response_model=MutationResponse)
+@router.post(
+    "/drafts/{draft_id}/slots",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
     with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
-        if any(s.name == body.name for s in spec.slots):
-            raise HTTPException(409, f"Slot {body.name!r} already exists.")
+        if any(s.name.lower() == body.name.lower() for s in spec.slots):
+            raise HTTPException(
+                409,
+                f"Slot collides (case-insensitive) for name {body.name!r}.",
+            )
 
         range_obj: Optional[Any] = None
         if body.range_kind == "type":
@@ -429,12 +451,20 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
         return _persist(conn, draft_id, spec)
 
 
-@router.post("/drafts/{draft_id}/classes", response_model=MutationResponse)
+@router.post(
+    "/drafts/{draft_id}/classes",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
     with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
-        if any(c.name == body.name for c in spec.classes):
-            raise HTTPException(409, f"OntologyClass {body.name!r} already exists.")
+        if any(c.name.lower() == body.name.lower() for c in spec.classes):
+            raise HTTPException(
+                409,
+                f"OntologyClass collides (case-insensitive) with an existing "
+                f"class for name {body.name!r}.",
+            )
 
         slots = [_find_slot(spec, n) for n in body.slot_names]
         is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
@@ -451,7 +481,11 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
         return _persist(conn, draft_id, spec)
 
 
-@router.patch("/drafts/{draft_id}/classes/{name}", response_model=MutationResponse)
+@router.patch(
+    "/drafts/{draft_id}/classes/{name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
     with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
@@ -471,12 +505,19 @@ def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationRespons
         return _persist(conn, draft_id, spec)
 
 
-@router.post("/drafts/{draft_id}/sources", response_model=MutationResponse)
+@router.post(
+    "/drafts/{draft_id}/sources",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_bearer)],
+)
 def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
     with db.connect() as conn:
         spec = spec_store.get_revision(conn, draft_id)
-        if any(s.name == body.name for s in spec.sources):
-            raise HTTPException(409, f"Source {body.name!r} already exists.")
+        if any(s.name.lower() == body.name.lower() for s in spec.sources):
+            raise HTTPException(
+                409,
+                f"Source collides (case-insensitive) for name {body.name!r}.",
+            )
 
         cls = _find_class(spec, body.entity_class_name)
         slot = next((s for s in cls.slots if s.name == body.identifier_slot_name), None)
@@ -497,12 +538,27 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
 
 # ─── Publish ────────────────────────────────────────────────────────────────
 
-@router.post("/drafts/{draft_id}/publish", response_model=PublishResponse)
-def publish(draft_id: int) -> PublishResponse:
+@router.post(
+    "/drafts/{draft_id}/publish",
+    response_model=PublishResponse,
+    dependencies=[Depends(require_bearer)],
+)
+def publish(
+    draft_id: int,
+    allow_destructive: bool = Query(
+        False,
+        description=(
+            "Required to confirm destructive migrations (DropClass / DropSlot / "
+            "ChangeSlotType). Publish fails with 400 otherwise."
+        ),
+    ),
+) -> PublishResponse:
     """Run the publish gate; on pass, atomically promote this draft to published."""
     with db.connect() as conn:
         try:
-            spec_store.publish_draft(conn, draft_id)
+            spec_store.publish_draft(
+                conn, draft_id, allow_destructive=allow_destructive,
+            )
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
         except spec_store.PublishGateError as exc:

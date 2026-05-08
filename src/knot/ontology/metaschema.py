@@ -33,6 +33,9 @@ from pydantic import BaseModel, ConfigDict, Field
 # 1. SpecBase — shared Pydantic configuration
 # ---------------------------------------------------------------------------
 
+_ENTITY_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]{0,62}$"
+
+
 class SpecBase(BaseModel):
     """Common parent for every metaschema model.
 
@@ -135,7 +138,7 @@ class ReferenceKind(str, Enum):
 class TypeDefinition(SpecBase):
     """A primitive or named type referenced by `Slot.range`."""
 
-    name: str
+    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     base: Optional[str] = None
     pattern: Optional[str] = None
     description: Optional[str] = None
@@ -401,7 +404,7 @@ class Slot(SpecBase):
     authors compose predicates as Python expressions rather than strings.
     """
 
-    name: str
+    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     range: Optional[Union[TypeDefinition, "OntologyClass"]] = None
     identifier: bool = False
     required: bool = False
@@ -565,7 +568,7 @@ class OntologyClass(SpecBase):
     is_a chain + mixins to inherit slot visibility.
     """
 
-    name: str
+    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     is_a: Optional["OntologyClass"] = None
     mixins: list["OntologyClass"] = Field(default_factory=list)
     slots: list["Slot"] = Field(default_factory=list)
@@ -642,7 +645,7 @@ class Constraint(SpecBase):
     offending_pk, detail)` shape per `spec-model.md` + `dq-design.md`.
     """
 
-    name: str
+    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     primary: "OntologyClass"
     body: Any  # BoolExpr | Compare | RelationAll | RelationAny
     severity: Severity = Severity.ERROR
@@ -662,7 +665,7 @@ class Source(SpecBase):
     schema / mapping are bound impl concerns (out of scope for spec graph).
     """
 
-    name: str
+    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     entity_class: "OntologyClass"
     identifier_slot: "Slot"
     description: Optional[str] = None
