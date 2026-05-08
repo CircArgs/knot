@@ -26,6 +26,7 @@ Draft lifecycle:
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 from typing import Any
 
@@ -33,6 +34,8 @@ import psycopg
 from pydantic import BaseModel
 
 from knot.ontology.canonical import compute_content_hash
+
+logger = logging.getLogger(__name__)
 from knot.ontology.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -591,6 +594,7 @@ def publish_draft(
         diff_specs,
         is_destructive,
     )
+    from knot.db.sql_compiler import compile_constraint
 
     with conn.transaction():
         candidate = get_revision(conn, draft_id)
@@ -605,6 +609,53 @@ def publish_draft(
                 f"({', '.join(sorted(set(destructive)))}); pass "
                 "allow_destructive=true to confirm."
             )
+
+        # Step 4: constraint gate — for every constraint that is NEW or CHANGED
+        # in the candidate vs prev, compile + run it against existing data.
+        # ERROR severity with any violations → PublishGateError.
+        # WARNING severity → log and continue.
+        #
+        # Only run against classes that already have tables (i.e., present in
+        # prev).  Constraints on brand-new classes are skipped — no rows exist yet.
+        prev_class_names: set[str] = {c.name for c in (prev.classes if prev else [])}
+        prev_constraint_hashes: dict[str, str] = {}
+        if prev:
+            for con in prev.constraints:
+                prev_constraint_hashes[con.name] = compute_content_hash(con)
+
+        for con in candidate.constraints:
+            cand_hash = compute_content_hash(con)
+            prev_hash = prev_constraint_hashes.get(con.name)
+            if cand_hash == prev_hash:
+                continue  # unchanged — skip
+            if con.primary.name not in prev_class_names:
+                continue  # new class — no rows to check yet
+
+            # Find the primary class on the candidate spec (by identity from
+            # the rehydrated spec; `con.primary` already points to it).
+            cls = con.primary
+            stmt, params = compile_constraint(con, cls)
+            try:
+                violations = conn.execute(stmt, params).fetchall()
+            except Exception as exc:
+                raise PublishGateError(
+                    f"Constraint {con.name!r} SQL execution failed: {exc}"
+                ) from exc
+
+            if violations:
+                n = len(violations)
+                if con.severity.value == "error":
+                    raise PublishGateError(
+                        f"Constraint {con.name!r} has {n} violation(s) against "
+                        f"existing data (severity=ERROR). Publish rejected."
+                    )
+                else:
+                    logger.warning(
+                        "Constraint %r has %d violation(s) against existing data "
+                        "(severity=WARNING); publishing anyway.",
+                        con.name,
+                        n,
+                    )
 
         # Demote → promote in two statements so the partial unique index
         # `(published) WHERE published = TRUE` doesn't see two TRUE rows

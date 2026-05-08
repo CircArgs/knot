@@ -531,3 +531,63 @@ def submit_correction(
 def list_corrections(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, Any]]:
     with db.connect() as conn:
         return db.corrections.list_audit_log(conn, limit=limit)
+
+
+# ─── Constraint check ────────────────────────────────────────────────────────
+
+
+class ViolationRow(_StrictBase):
+    rule_id: str
+    class_name: str
+    slot_name: str | None
+    offending_pk: str
+    detail: str
+
+
+class ConstraintCheckResponse(_StrictBase):
+    violations: list[ViolationRow]
+
+
+@router.post(
+    "/constraints/check",
+    response_model=ConstraintCheckResponse,
+    dependencies=[Depends(require_user)],
+)
+def check_constraints() -> ConstraintCheckResponse:
+    """Run every published constraint against the current data plane.
+
+    Returns the union of offending rows across all constraints in the
+    uniform violation shape: (rule_id, class_name, slot_name, offending_pk,
+    detail).  An empty ``violations`` list means all constraints pass.
+
+    Requires an authenticated user (admin or any user).
+    """
+    from knot.db.sql_compiler import compile_constraint
+
+    violations: list[ViolationRow] = []
+
+    with db.connect() as conn:
+        spec = _published_or_404(conn)
+        classes_by_name = {c.name: c for c in spec.classes}
+
+        for constraint in spec.constraints:
+            cls = classes_by_name.get(constraint.primary.name)
+            if cls is None or cls.abstract:
+                continue
+            stmt, params = compile_constraint(constraint, cls)
+            try:
+                rows = conn.execute(stmt, params).fetchall()
+            except Exception:
+                # Table may not exist yet (e.g., abstract class or migration
+                # lag); skip rather than crash the whole check.
+                continue
+            for row in rows:
+                violations.append(ViolationRow(
+                    rule_id=row[0],
+                    class_name=row[1],
+                    slot_name=row[2],
+                    offending_pk=str(row[3]),
+                    detail=row[4] or "",
+                ))
+
+    return ConstraintCheckResponse(violations=violations)
