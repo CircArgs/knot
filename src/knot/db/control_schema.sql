@@ -114,3 +114,17 @@ CREATE TABLE IF NOT EXISTS canonical_id_lineage (
 
 CREATE INDEX IF NOT EXISTS canonical_id_lineage_class
     ON canonical_id_lineage (class_name, created_at DESC);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- users
+-- API-key-based auth. Each user has a username and an SHA-256 hash of
+-- their issued bearer token (raw token never stored). is_admin gates
+-- user-management endpoints. Hashes are 64 hex chars; uniqueness lets
+-- the auth dep do a single indexed lookup per request.
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS users (
+    username      TEXT         PRIMARY KEY,
+    api_key_hash  CHAR(64)     UNIQUE NOT NULL,
+    is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);

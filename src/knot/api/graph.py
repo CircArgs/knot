@@ -31,7 +31,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from knot import db
-from knot.auth import require_bearer
+from knot.auth import Principal, require_user
 from knot.db import graph_store, spec_store, trust_config, trust_posteriors
 from knot.graph import corrections as graph_corrections
 from knot.graph import resolve
@@ -105,12 +105,12 @@ class FeedbackBody(_StrictBase):
 
 
 class PropertyCorrection(_StrictBase):
+    # ``applied_by`` is derived from the auth principal — never self-reported.
     type: Literal["property"] = "property"
     class_name: str
     canonical_id: str
     slot: str
     value: Any
-    applied_by: Optional[str] = None
 
 
 class Merge(_StrictBase):
@@ -118,7 +118,6 @@ class Merge(_StrictBase):
     class_name: str
     keep_canonical_id: str
     merge_canonical_ids: list[str] = Field(..., max_length=1_000)
-    applied_by: Optional[str] = None
 
 
 # Future: Split, Add, Tombstone, RejectContribution. The Annotated
@@ -160,7 +159,7 @@ def _published_or_404(conn) -> Spec:
 @router.post(
     "/ingest/{source_name}",
     response_model=IngestResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def ingest(source_name: str, body: IngestBatch) -> IngestResponse:
     """Push a batch of rows attributed to a known source.
@@ -358,7 +357,7 @@ def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
 
 @router.delete(
     "/trust/posteriors/{source_name}/{slot_name}",
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     """Drop the per-(source, slot) posterior, reverting it to the uniform prior."""
@@ -370,7 +369,7 @@ def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
 @router.post(
     "/trust/feedback",
     response_model=PosteriorView,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def submit_feedback(body: FeedbackBody) -> PosteriorView:
     """Record one Bernoulli observation (source, slot, success) — increments
@@ -401,7 +400,7 @@ def get_trust_score(source_name: str) -> TrustScore:
 @router.put(
     "/trust/{source_name}",
     response_model=TrustScore,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
     with db.connect() as conn:
@@ -443,9 +442,11 @@ def build_row_model_for_slot(slot: Slot):
 @router.post(
     "/corrections",
     response_model=CorrectionResponse,
-    dependencies=[Depends(require_bearer)],
 )
-def submit_correction(body: Correction) -> CorrectionResponse:
+def submit_correction(
+    body: Correction,
+    principal: Principal = Depends(require_user),
+) -> CorrectionResponse:
     """Submit a typed correction. Auto-applies in one transaction:
     audit row + per-class data mutation + bandit feedback against
     disagreeing sources. 422 on payload type mismatch; 404 on unknown
@@ -469,7 +470,7 @@ def submit_correction(body: Correction) -> CorrectionResponse:
                 slot_name=body.slot,
                 value=value,
                 spec_revision=spec_revision,
-                applied_by=body.applied_by,
+                applied_by=principal.username,
                 payload_for_log=body.model_dump(),
             )
             return CorrectionResponse(
@@ -518,7 +519,7 @@ def submit_correction(body: Correction) -> CorrectionResponse:
                 keep_canonical_id=body.keep_canonical_id,
                 merge_canonical_ids=deduped,
                 spec_revision=spec_revision,
-                applied_by=body.applied_by,
+                applied_by=principal.username,
                 payload_for_log=body.model_dump(),
             )
             return CorrectionResponse(

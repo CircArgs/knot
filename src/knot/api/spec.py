@@ -19,7 +19,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
-from knot.auth import require_bearer
+from knot.auth import require_user
 from knot.db import spec_store
 from knot.ontology import (
     OntologyClass,
@@ -344,7 +344,7 @@ def list_drafts_endpoint() -> list[DraftSummary]:
 @router.post(
     "/drafts",
     response_model=DraftSummary,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
     with db.connect() as conn:
@@ -369,7 +369,7 @@ def get_draft(draft_id: int) -> dict[str, Any]:
     return spec_store.spec_to_dict(spec)
 
 
-@router.delete("/drafts/{draft_id}", dependencies=[Depends(require_bearer)])
+@router.delete("/drafts/{draft_id}", dependencies=[Depends(require_user)])
 def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
     with db.connect() as conn:
         try:
@@ -386,7 +386,7 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 @router.post(
     "/drafts/{draft_id}/types",
     response_model=MutationResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
     with db.connect() as conn:
@@ -408,7 +408,7 @@ def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
 @router.post(
     "/drafts/{draft_id}/slots",
     response_model=MutationResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
     with db.connect() as conn:
@@ -454,7 +454,7 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
 @router.post(
     "/drafts/{draft_id}/classes",
     response_model=MutationResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
     with db.connect() as conn:
@@ -484,7 +484,7 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
 @router.patch(
     "/drafts/{draft_id}/classes/{name}",
     response_model=MutationResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
     with db.connect() as conn:
@@ -508,7 +508,7 @@ def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationRespons
 @router.post(
     "/drafts/{draft_id}/sources",
     response_model=MutationResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
     with db.connect() as conn:
@@ -541,7 +541,7 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
 @router.post(
     "/drafts/{draft_id}/publish",
     response_model=PublishResponse,
-    dependencies=[Depends(require_bearer)],
+    dependencies=[Depends(require_user)],
 )
 def publish(
     draft_id: int,
