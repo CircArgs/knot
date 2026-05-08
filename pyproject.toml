@@ -16,6 +16,7 @@ runtime = [
     "fastapi>=0.110",
     "uvicorn>=0.29",
     "rapidfuzz>=3.0",
+    "strawberry-graphql[fastapi]>=0.200",
 ]
 dev = [
     "mkdocs-material",

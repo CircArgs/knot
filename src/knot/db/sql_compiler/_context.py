@@ -21,3 +21,19 @@ class CompileContext:
     primary_class: OntologyClass
     alias: str = "s"
     params: list[Any] = field(default_factory=list)
+
+    def with_subquery_alias(
+        self,
+        target_cls: OntologyClass,
+        alias: str,
+    ) -> "CompileContext":
+        """Return a child context for compiling a predicate inside a subquery.
+
+        The child shares the *same* ``params`` list so parameters accumulate
+        in left-to-right emit order across the entire statement.
+        """
+        return CompileContext(
+            primary_class=target_cls,
+            alias=alias,
+            params=self.params,
+        )

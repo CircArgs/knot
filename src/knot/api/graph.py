@@ -533,6 +533,55 @@ def list_corrections(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, A
         return db.corrections.list_audit_log(conn, limit=limit)
 
 
+# ─── GraphQL query endpoint ───────────────────────────────────────────────────
+
+
+class GraphQLBody(_StrictBase):
+    query: str
+    variables: dict[str, Any] | None = None
+    operation_name: str | None = None
+
+
+@router.post(
+    "/query",
+    dependencies=[Depends(require_user)],
+    tags=["graph"],
+)
+def graphql_query(body: GraphQLBody) -> dict[str, Any]:
+    """Execute a GraphQL query against the published graph.
+
+    Schema is derived from the currently-published spec.  Each OntologyClass
+    is queryable with optional ``where``, ``limit``, ``offset``, and
+    ``as_of`` arguments.  Returns ``{data: ..., errors: ...}`` in the
+    standard GraphQL response envelope.
+
+    Traversal (relation joins) and projection (field selection in SQL) are
+    out of scope for this slice; full rows are returned for matching entities.
+    """
+    from knot.api._graphql_schema import get_or_build_schema
+    from knot.db import spec_store
+
+    with db.connect() as conn:
+        spec = _published_or_404(conn)
+        content_hash = spec_store.get_published_content_hash(conn) or ""
+
+    schema = get_or_build_schema(spec, content_hash)
+    result = schema.execute_sync(
+        body.query,
+        variable_values=body.variables,
+        operation_name=body.operation_name,
+    )
+    response: dict[str, Any] = {}
+    if result.data is not None:
+        response["data"] = result.data
+    if result.errors:
+        response["errors"] = [
+            {"message": str(e), "locations": getattr(e, "locations", None)}
+            for e in result.errors
+        ]
+    return response
+
+
 # ─── Constraint check ────────────────────────────────────────────────────────
 
 

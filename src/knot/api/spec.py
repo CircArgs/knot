@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
 from knot.auth import require_user
+from knot.api._constraint_translator import ExprJson, translate_expr
 from knot.db import spec_store
 from knot.ontology import (
     OntologyClass,
@@ -32,6 +33,7 @@ from knot.ontology import (
     TypeDefinition,
     compute_content_hash,
 )
+from knot.ontology.metaschema import Constraint, Severity
 
 
 # ---------------------------------------------------------------------------
@@ -133,6 +135,14 @@ class SourceCreate(_StrictBase):
     entity_class_name: str
     identifier_slot_name: str
     description: str | None = None
+
+
+class ConstraintCreate(_StrictBase):
+    name: str = Field(pattern=_NAME_PATTERN)
+    primary_class_name: str
+    body: ExprJson
+    severity: Severity = Severity.ERROR
+    message: str | None = None
 
 
 class DraftCreate(_StrictBase):
@@ -538,6 +548,40 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
             identifier_slot=slot,
             description=body.description,
         ))
+        return _persist(conn, draft_id, spec)
+
+
+@router.post(
+    "/drafts/{draft_id}/constraints",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
+    with db.connect() as conn:
+        spec = spec_store.get_revision(conn, draft_id)
+
+        # Duplicate-name guard (case-insensitive twin, like other mutation endpoints).
+        if any(c.name.lower() == body.name.lower() for c in spec.constraints):
+            raise HTTPException(
+                409,
+                f"Constraint collides (case-insensitive) for name {body.name!r}.",
+            )
+
+        # Resolve primary class.
+        primary = _find_class(spec, body.primary_class_name)
+
+        # Translate the JSON expression tree → metaschema expression tree.
+        # _find_slot called inside translate_expr raises 404 on unknown slot.
+        expr = translate_expr(body.body, spec, primary)
+
+        constraint = Constraint(
+            name=body.name,
+            primary=primary,
+            body=expr,
+            severity=body.severity,
+            message=body.message,
+        )
+        spec.constraints.append(constraint)
         return _persist(conn, draft_id, spec)
 
 

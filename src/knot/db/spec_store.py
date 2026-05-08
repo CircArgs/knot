@@ -570,6 +570,14 @@ def get_published_revision(conn: psycopg.Connection) -> int | None:
     return row[0] if row else None
 
 
+def get_published_content_hash(conn: psycopg.Connection) -> str | None:
+    """Content hash of the currently-published spec, or None."""
+    row = conn.execute(
+        "SELECT content_hash FROM spec_revisions WHERE published = TRUE",
+    ).fetchone()
+    return row[0] if row else None
+
+
 def publish_draft(
     conn: psycopg.Connection,
     draft_id: int,

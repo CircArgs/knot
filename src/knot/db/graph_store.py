@@ -46,6 +46,7 @@ __all__ = (
     "USER_CORRECTIONS_SOURCE",
     "insert_rows",
     "list_rows",
+    "query_rows",
     "count_rows",
     "get_canonical_contributions",
     "get_disagreeing_contributions",
@@ -230,6 +231,53 @@ def list_rows(
     if as_of is not None:
         params.append(as_of)
     params.extend([limit, offset])
+    cur = conn.cursor(row_factory=dict_row)
+    cur.execute(stmt, params)
+    return [_serialize_row(r) for r in cur.fetchall()]
+
+
+def query_rows(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    predicate_sql: "sql.Composable | None",
+    predicate_params: "list[Any]",
+    limit: int = 100,
+    offset: int = 0,
+    as_of: int | None = None,
+) -> list[dict[str, Any]]:
+    """List rows with an optional compiled predicate fragment.
+
+    ``predicate_sql`` is a psycopg sql.Composable from the SQL compiler
+    (already parameterised); ``predicate_params`` are its positional values.
+    When ``predicate_sql`` is None the query is equivalent to list_rows.
+
+    Reads JOIN source × current bindings (valid_to IS NULL).
+    """
+    base = _select_with_binding(cls)
+    clauses: list[sql.Composable] = []
+    params: list[Any] = []
+
+    if as_of is not None:
+        clauses.append(sql.SQL("s._spec_revision <= %s"))
+        params.append(as_of)
+
+    if predicate_sql is not None:
+        clauses.append(predicate_sql)
+        params.extend(predicate_params)
+
+    if clauses:
+        where = sql.SQL("WHERE ") + sql.SQL(" AND ").join(
+            sql.SQL("(") + c + sql.SQL(")") for c in clauses
+        )
+    else:
+        where = sql.SQL("")
+
+    stmt = sql.SQL(
+        "{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s"
+    ).format(base=base, where=where)
+    params.extend([limit, offset])
+
     cur = conn.cursor(row_factory=dict_row)
     cur.execute(stmt, params)
     return [_serialize_row(r) for r in cur.fetchall()]

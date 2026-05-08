@@ -38,6 +38,7 @@ from knot.ontology.metaschema import (
     OntologyClass,
     RelationAll,
     RelationAny,
+    RelationRef,
     Severity,
     Slot,
     SlotPath,
@@ -366,34 +367,92 @@ def test_matches_emits_like():
 
 
 # ---------------------------------------------------------------------------
-# 11. RelationAll / RelationAny raise NotImplementedError
+# 11. RelationAll / RelationAny — error cases (no body, non-class slot)
 # ---------------------------------------------------------------------------
 
 
-def test_relation_all_raises_not_implemented():
+def test_relation_all_no_body_raises_compiler_error():
+    """RelationAll with body=None should raise CompilerError."""
     str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="imdb_id", range=str_t, identifier=True)
-    cls = OntologyClass(name="Movie", slots=[slot])
-    ctx = _make_ctx(cls)
+    credit_cls = OntologyClass(name="Credit", slots=[])
+    fk_slot = Slot(name="credits", range=credit_cls)
+    movie = OntologyClass(name="Movie", slots=[fk_slot])
+    ctx = _make_ctx(movie)
 
-    from knot.ontology.metaschema import RelationRef
-    ref = RelationRef(from_class=cls, slot=slot)
-    node = RelationAll(relation=ref)
-    with pytest.raises(NotImplementedError, match="/graph/query"):
+    ref = RelationRef(from_class=movie, slot=fk_slot)
+    node = RelationAll(relation=ref, body=None)
+    with pytest.raises(CompilerError, match="body must be provided"):
         compile_predicate(node, ctx)
 
 
-def test_relation_any_raises_not_implemented():
+def test_relation_all_non_class_ranged_slot_raises():
+    """RelationAll whose slot range is a TypeDefinition (not OntologyClass) raises."""
     str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="imdb_id", range=str_t, identifier=True)
-    cls = OntologyClass(name="Movie", slots=[slot])
-    ctx = _make_ctx(cls)
+    bad_slot = Slot(name="title", range=str_t)
+    movie = OntologyClass(name="Movie", slots=[bad_slot])
+    ctx = _make_ctx(movie)
 
-    from knot.ontology.metaschema import RelationRef
-    ref = RelationRef(from_class=cls, slot=slot)
+    ref = RelationRef(from_class=movie, slot=bad_slot)
+    body = Compare(
+        op=CompareOp.IS_NOT_NULL,
+        left=SlotPath(from_class=movie, slots=[bad_slot]),
+    )
+    node = RelationAll(relation=ref, body=body)
+    with pytest.raises(CompilerError, match="OntologyClass as its range"):
+        compile_predicate(node, ctx)
+
+
+def test_relation_all_emits_not_exists():
+    """RelationAll emits NOT EXISTS with NOT predicate fragment."""
+    str_t = TypeDefinition(name="string", base="str")
+    role_slot = Slot(name="role", range=str_t)
+    credit_cls = OntologyClass(name="Credit", slots=[role_slot])
+    fk_slot = Slot(name="credits", range=credit_cls)
+    movie = OntologyClass(name="Movie", slots=[fk_slot])
+    ctx = _make_ctx(movie)
+
+    ref = RelationRef(from_class=movie, slot=fk_slot)
+    body = Compare(
+        op=CompareOp.IS_NOT_NULL,
+        left=SlotPath(from_class=credit_cls, slots=[role_slot]),
+    )
+    node = RelationAll(relation=ref, body=body)
+    result = compile_predicate(node, ctx)
+    rendered = result.as_string(None)
+    assert "NOT EXISTS" in rendered
+    assert "NOT" in rendered
+
+
+def test_relation_any_emits_exists():
+    """RelationAny emits EXISTS."""
+    str_t = TypeDefinition(name="string", base="str")
+    role_slot = Slot(name="role", range=str_t)
+    credit_cls = OntologyClass(name="Credit", slots=[role_slot])
+    fk_slot = Slot(name="credits", range=credit_cls)
+    movie = OntologyClass(name="Movie", slots=[fk_slot])
+    ctx = _make_ctx(movie)
+
+    ref = RelationRef(from_class=movie, slot=fk_slot)
     node = RelationAny(relation=ref)
-    with pytest.raises(NotImplementedError, match="/graph/query"):
-        compile_predicate(node, ctx)
+    result = compile_predicate(node, ctx)
+    rendered = result.as_string(None)
+    assert "EXISTS" in rendered
+
+
+def test_compile_context_with_subquery_alias_shares_params():
+    """with_subquery_alias returns a child context sharing the params list."""
+    str_t = TypeDefinition(name="string", base="str")
+    slot = Slot(name="title", range=str_t)
+    cls_a = OntologyClass(name="A", slots=[slot])
+    cls_b = OntologyClass(name="B", slots=[slot])
+    ctx = CompileContext(primary_class=cls_a, alias="s")
+
+    child = ctx.with_subquery_alias(cls_b, "t")
+    assert child.primary_class is cls_b
+    assert child.alias == "t"
+    # Shared params list — mutating child affects parent.
+    child.params.append(42)
+    assert ctx.params == [42]
 
 
 # ---------------------------------------------------------------------------
