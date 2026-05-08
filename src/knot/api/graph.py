@@ -112,11 +112,19 @@ class PropertyCorrection(_StrictBase):
     applied_by: Optional[str] = None
 
 
-# Future: Merge, Split, Add, Tombstone, RejectContribution. The Annotated
+class Merge(_StrictBase):
+    type: Literal["merge"] = "merge"
+    class_name: str
+    keep_canonical_id: str
+    merge_canonical_ids: list[str]
+    applied_by: Optional[str] = None
+
+
+# Future: Split, Add, Tombstone, RejectContribution. The Annotated
 # discriminator enables Pydantic to dispatch on the type field at parse
 # time (Pattern 1: real types, no string-keyed lookups in the handler).
 Correction = Annotated[
-    Union[PropertyCorrection],
+    Union[PropertyCorrection, Merge],
     Field(discriminator="type"),
 ]
 
@@ -425,7 +433,6 @@ def submit_correction(body: Correction) -> CorrectionResponse:
     with db.connect() as conn:
         spec = _published_or_404(conn)
 
-        # Today only PropertyCorrection is implemented.
         if isinstance(body, PropertyCorrection):
             cls = _resolve_class(spec, body.class_name)
             slot = next((s for s in cls.slots if s.name == body.slot), None)
@@ -451,8 +458,57 @@ def submit_correction(body: Correction) -> CorrectionResponse:
                 applied_revision=spec_revision,
             )
 
-        # Should be unreachable while the discriminated union has only
-        # PropertyCorrection, but explicit-or-open per Pattern 14.
+        if isinstance(body, Merge):
+            cls = _resolve_class(spec, body.class_name)
+            if not body.merge_canonical_ids:
+                raise HTTPException(400, "merge_canonical_ids must be non-empty")
+            if body.keep_canonical_id in body.merge_canonical_ids:
+                raise HTTPException(
+                    400,
+                    "keep_canonical_id must not appear in merge_canonical_ids",
+                )
+            # Dedupe while preserving order.
+            seen: set[str] = set()
+            deduped: list[str] = []
+            for cid in body.merge_canonical_ids:
+                if cid not in seen:
+                    seen.add(cid)
+                    deduped.append(cid)
+            if not graph_store.canonical_id_exists(
+                conn, cls=cls, canonical_id=body.keep_canonical_id,
+            ):
+                raise HTTPException(
+                    404,
+                    f"keep_canonical_id {body.keep_canonical_id!r} has no "
+                    f"contributions for class {cls.name!r}",
+                )
+            for cid in deduped:
+                if not graph_store.canonical_id_exists(
+                    conn, cls=cls, canonical_id=cid,
+                ):
+                    raise HTTPException(
+                        404,
+                        f"merge_canonical_id {cid!r} has no contributions "
+                        f"for class {cls.name!r}",
+                    )
+            spec_revision = spec_store.get_published_revision(conn)
+            correction_id = graph_corrections.apply_merge(
+                conn,
+                cls=cls,
+                keep_canonical_id=body.keep_canonical_id,
+                merge_canonical_ids=deduped,
+                spec_revision=spec_revision,
+                applied_by=body.applied_by,
+                payload_for_log=body.model_dump(),
+            )
+            return CorrectionResponse(
+                id=correction_id,
+                correction_type="merge",
+                applied_revision=spec_revision,
+            )
+
+        # Unreachable today (Property + Merge cover the union); kept
+        # explicit-or-open per Pattern 14 for future types.
         raise HTTPException(
             501,
             f"Correction type {body.type!r} not implemented yet (open).",

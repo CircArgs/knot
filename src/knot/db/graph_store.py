@@ -154,6 +154,40 @@ def get_canonical_contributions(
     return [_serialize_row(r) for r in cur.fetchall()]
 
 
+def canonical_id_exists(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+) -> bool:
+    """True iff at least one row exists for the canonical_id in the class table."""
+    stmt = sql.SQL("SELECT 1 FROM {table} WHERE _canonical_id = %s LIMIT 1").format(
+        table=_table_id(cls),
+    )
+    return conn.execute(stmt, (canonical_id,)).fetchone() is not None
+
+
+def reassign_canonical_id(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    from_canonical_id: str,
+    to_canonical_id: str,
+) -> int:
+    """Rewrite ``_canonical_id`` from one value to another for a class.
+
+    Used by the Merge correction: collapses contributions that were
+    different canonical_ids into one. Source rows retain their original
+    ``(_source, _source_row_id)`` PKs; only the grouping changes.
+    Returns rowcount.
+    """
+    stmt = sql.SQL(
+        "UPDATE {table} SET _canonical_id = %s WHERE _canonical_id = %s"
+    ).format(table=_table_id(cls))
+    cur = conn.execute(stmt, (to_canonical_id, from_canonical_id))
+    return cur.rowcount
+
+
 def upsert_user_correction_row(
     conn: psycopg.Connection,
     *,
