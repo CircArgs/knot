@@ -14,7 +14,7 @@ slots, with types and constraints derived from each Slot's metadata.
 from __future__ import annotations
 
 from datetime import date, datetime
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
@@ -71,7 +71,7 @@ def _field_spec(slot: Slot, *, force_optional: bool = False) -> tuple[Any, Any]:
         default: Any = ...
     else:
         default = None
-        py_type = Optional[py_type]
+        py_type = py_type | None
 
     return py_type, Field(default, **kwargs)
 

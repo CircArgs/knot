@@ -26,7 +26,6 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import Optional
 
 from fastapi import Depends, HTTPException, Header
 
@@ -57,7 +56,7 @@ def _strip_bearer(authorization: str | None) -> str:
 
 
 def require_user(
-    authorization: Optional[str] = Header(default=None),
+    authorization: str | None = Header(default=None),
 ) -> Principal:
     """FastAPI dependency for any authenticated route.
 

@@ -13,8 +13,9 @@ land with the modeling router.
 
 from __future__ import annotations
 
-from typing import Any, Optional
+from typing import Any
 
+import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -45,14 +46,14 @@ class _StrictBase(BaseModel):
 
 class TypeSummary(_StrictBase):
     name: str
-    base: Optional[str]
-    pattern: Optional[str]
+    base: str | None
+    pattern: str | None
 
 
 class SlotSummary(_StrictBase):
     name: str
-    range_kind: Optional[str]   # "type" | "class" | None
-    range_name: Optional[str]
+    range_kind: str | None   # "type" | "class" | None
+    range_name: str | None
     identifier: bool
     required: bool
     multivalued: bool
@@ -62,7 +63,7 @@ class SlotSummary(_StrictBase):
 class ClassSummary(_StrictBase):
     name: str
     slots: list[str]
-    is_a: Optional[str]
+    is_a: str | None
     mixins: list[str]
     abstract: bool
 
@@ -71,16 +72,16 @@ class SourceSummary(_StrictBase):
     name: str
     entity_class: str
     identifier_slot: str
-    description: Optional[str]
+    description: str | None
 
 
 class RevisionSummary(_StrictBase):
     revision: int
     content_hash: str
-    label: Optional[str]
-    parent_revision: Optional[int]
+    label: str | None
+    parent_revision: int | None
     created_at: str
-    published_at: Optional[str] = None
+    published_at: str | None = None
 
 
 # ─── Mutation requests ──────────────────────────────────────────────────────
@@ -90,61 +91,61 @@ _NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]{0,62}$"
 
 class TypeDefinitionCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    base: Optional[str] = None
-    pattern: Optional[str] = None
-    description: Optional[str] = None
+    base: str | None = None
+    pattern: str | None = None
+    description: str | None = None
 
 
 class SlotCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    range_kind: Optional[str] = None    # "type" | "class" | None
-    range_name: Optional[str] = None
+    range_kind: str | None = None    # "type" | "class" | None
+    range_name: str | None = None
     identifier: bool = False
     required: bool = False
     multivalued: bool = False
     resolution_policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST
-    pattern: Optional[str] = None
-    minimum_value: Optional[float] = None
-    maximum_value: Optional[float] = None
-    permissible_values: Optional[list[str]] = None
-    description: Optional[str] = None
+    pattern: str | None = None
+    minimum_value: float | None = None
+    maximum_value: float | None = None
+    permissible_values: list[str] | None = None
+    description: str | None = None
 
 
 class ClassCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
     slot_names: list[str] = Field(default_factory=list)
-    is_a_name: Optional[str] = None
+    is_a_name: str | None = None
     mixin_names: list[str] = Field(default_factory=list)
     abstract: bool = False
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class ClassUpdate(_StrictBase):
-    slot_names: Optional[list[str]] = None
-    is_a_name: Optional[str] = None
-    mixin_names: Optional[list[str]] = None
-    abstract: Optional[bool] = None
-    description: Optional[str] = None
+    slot_names: list[str] | None = None
+    is_a_name: str | None = None
+    mixin_names: list[str] | None = None
+    abstract: bool | None = None
+    description: str | None = None
 
 
 class SourceCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
     entity_class_name: str
     identifier_slot_name: str
-    description: Optional[str] = None
+    description: str | None = None
 
 
 class DraftCreate(_StrictBase):
-    parent_revision: Optional[int] = None
-    label: Optional[str] = None
+    parent_revision: int | None = None
+    label: str | None = None
 
 
 # ─── Response shapes ────────────────────────────────────────────────────────
 
 class DraftSummary(_StrictBase):
     revision: int
-    label: Optional[str]
-    parent_revision: Optional[int]
+    label: str | None
+    parent_revision: int | None
     content_hash: str
     created_at: str
 
@@ -218,8 +219,8 @@ def _summarize_class(c: OntologyClass) -> ClassSummary:
 
 
 def _summarize_slot(s: Slot) -> SlotSummary:
-    range_kind: Optional[str] = None
-    range_name: Optional[str] = None
+    range_kind: str | None = None
+    range_name: str | None = None
     if isinstance(s.range, OntologyClass):
         range_kind, range_name = "class", s.range.name
     elif isinstance(s.range, TypeDefinition):
@@ -328,7 +329,7 @@ def get_revision_spec(revision: int) -> dict[str, Any]:
         try:
             spec = spec_store.get_revision(conn, revision)
         except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, f"Revision {revision} not found.") from exc
     return spec_store.spec_to_dict(spec)
 
 
@@ -353,7 +354,9 @@ def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
                 conn, parent_revision=body.parent_revision, label=body.label,
             )
         except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(
+                404, f"Parent revision {body.parent_revision} not found.",
+            ) from exc
         rows = spec_store.list_drafts(conn)
     row = next(r for r in rows if r["revision"] == new_id)
     return DraftSummary(**row)
@@ -365,7 +368,7 @@ def get_draft(draft_id: int) -> dict[str, Any]:
         try:
             spec = spec_store.get_revision(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, f"Draft {draft_id} not found.") from exc
     return spec_store.spec_to_dict(spec)
 
 
@@ -375,9 +378,11 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
         try:
             spec_store.discard_draft(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, f"Draft {draft_id} not found.") from exc
         except spec_store.DraftAlreadyPublishedError as exc:
-            raise HTTPException(409, str(exc)) from exc
+            raise HTTPException(
+                409, f"Draft {draft_id} is already published and cannot be discarded.",
+            ) from exc
     return {"discarded": str(draft_id)}
 
 
@@ -419,7 +424,7 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
                 f"Slot collides (case-insensitive) for name {body.name!r}.",
             )
 
-        range_obj: Optional[Any] = None
+        range_obj: Any | None = None
         if body.range_kind == "type":
             if body.range_name is None:
                 raise HTTPException(400, "range_kind='type' requires range_name")
@@ -560,9 +565,9 @@ def publish(
                 conn, draft_id, allow_destructive=allow_destructive,
             )
         except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(404, f"Draft {draft_id} not found.") from exc
         except spec_store.PublishGateError as exc:
-            raise HTTPException(400, str(exc)) from exc
+            raise HTTPException(400, f"Draft {draft_id} failed the publish gate: {exc}") from exc
 
         spec = spec_store.get_revision(conn, draft_id)
         rows = spec_store.list_published(conn)

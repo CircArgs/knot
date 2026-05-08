@@ -162,12 +162,23 @@ def _lcb(
 
 
 def _union_multivalued(slot: Slot, contribs: list[dict[str, Any]]) -> list[Any] | None:
-    seen: list[Any] = []
+    # Flatten all per-source value lists and dedup while preserving order.
+    # dict.fromkeys gives O(N) order-preserving dedup for hashable values
+    # (postgres arrays of primitives always are); fall back to the O(N²)
+    # list-scan path for any unhashable element.
+    flat: list[Any] = []
     for c in contribs:
         values = c.get(slot.name)
         if values is None:
             continue
-        for v in values:
+        flat.extend(values)
+    if not flat:
+        return None
+    try:
+        return list(dict.fromkeys(flat))
+    except TypeError:
+        seen: list[Any] = []
+        for v in flat:
             if v not in seen:
                 seen.append(v)
-    return seen if seen else None
+        return seen

@@ -25,7 +25,7 @@ import hashlib
 import secrets
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 import psycopg
 
@@ -40,9 +40,9 @@ class User:
     username: str
     is_admin: bool
     kind: PrincipalKind = PrincipalKind.USER
-    email: Optional[str] = None
-    display_name: Optional[str] = None
-    created_by: Optional[str] = None
+    email: str | None = None
+    display_name: str | None = None
+    created_by: str | None = None
 
 
 def hash_key(raw_key: str) -> str:
@@ -112,9 +112,9 @@ def create_user(
     username: str,
     is_admin: bool = False,
     kind: PrincipalKind = PrincipalKind.USER,
-    email: Optional[str] = None,
-    display_name: Optional[str] = None,
-    created_by: Optional[str] = None,
+    email: str | None = None,
+    display_name: str | None = None,
+    created_by: str | None = None,
 ) -> tuple[User, str]:
     """Insert a new user; returns (User, raw_api_key). The raw key is shown
     only here — store it client-side."""

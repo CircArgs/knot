@@ -25,7 +25,7 @@ and ``_spec_revision`` (FK into spec_revisions for audit walk-back).
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Optional, Union
+from typing import Annotated, Any, Literal, Union
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -60,21 +60,21 @@ class ListResponse(_StrictBase):
     total: int
     limit: int
     offset: int
-    as_of: Optional[int] = None
+    as_of: int | None = None
 
 
 class EntityResponse(_StrictBase):
     entity_class: str
     canonical_id: str
     contributions: list[dict[str, Any]]
-    as_of: Optional[int] = None
+    as_of: int | None = None
 
 
 class ResolvedEntityResponse(_StrictBase):
     entity_class: str
     canonical_id: str
     resolved: dict[str, Any]
-    as_of: Optional[int] = None
+    as_of: int | None = None
 
 
 class TrustScore(_StrictBase):
@@ -219,7 +219,7 @@ def list_class_rows(
     class_name: str,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
-    as_of: Optional[int] = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
+    as_of: int | None = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
 ) -> ListResponse:
     """List rows for a published class. Disagreement-aware: one row per
     ``(_canonical_id, _source)`` — same canonical_id may appear N times when
@@ -249,7 +249,7 @@ def list_class_rows(
 def get_canonical_entity(
     class_name: str,
     canonical_id: str,
-    as_of: Optional[int] = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
+    as_of: int | None = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
 ) -> EntityResponse:
     """All per-source contributions for a single canonical entity.
 
@@ -283,7 +283,7 @@ def get_canonical_entity(
 def get_resolved_entity(
     class_name: str,
     canonical_id: str,
-    as_of: Optional[int] = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
+    as_of: int | None = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
 ) -> ResolvedEntityResponse:
     """One trust-resolved record for the canonical_id (per-slot resolution).
 

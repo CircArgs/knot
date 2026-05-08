@@ -34,7 +34,17 @@ class Posterior:
 
     @property
     def observations(self) -> float:
-        """Number of observations seen (excludes the (α=1, β=1) prior)."""
+        """Estimated number of Bernoulli observations recorded for this pair.
+
+        Computed as ``(α + β) − (PRIOR_ALPHA + PRIOR_BETA)``, clamped to 0.
+
+        ASSUMPTION: the row was initialised at the module-level prior
+        (``PRIOR_ALPHA=1, PRIOR_BETA=1``). If a row is hand-seeded with
+        non-prior starting values (e.g. via a direct INSERT), this property
+        will over- or under-count accordingly — it cannot distinguish "prior
+        mass" from "manually set mass".  All rows created via
+        ``record_feedback`` start at the prior and satisfy the assumption.
+        """
         return max(self.alpha + self.beta - (PRIOR_ALPHA + PRIOR_BETA), 0.0)
 
 

@@ -70,7 +70,7 @@ def apply_merge(
             conn,
             cls=cls,
             keep_canonical_id=keep_canonical_id,
-            merge_canonical_ids=merge_canonical_ids,
+            from_canonical_ids=merge_canonical_ids,
             spec_revision=spec_revision,
             correction_id=correction_id,
             change_type="merge",

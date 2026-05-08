@@ -42,6 +42,7 @@ import psycopg
 from psycopg import sql
 
 from knot.db._naming import (
+    SCHEMA as _SCHEMA,
     bindings_table_id as _bindings_table_id,
     is_stored as _is_stored,
     slot_pg_type as _slot_pg_type,
@@ -310,8 +311,14 @@ def is_destructive(change: Change) -> bool:
 
 
 def apply_changes(conn: psycopg.Connection, changes: list[Change]) -> None:
-    """Apply a precomputed list of changes (used after diff + safety check)."""
-    for change in changes:
+    """Apply a precomputed list of changes (used after diff + safety check).
+
+    Drops are emitted before adds so that a class renamed via drop+add with
+    the same lowercase name doesn't try to CREATE TABLE before the DROP runs.
+    """
+    drops = [c for c in changes if isinstance(c, (DropClass, DropSlot))]
+    others = [c for c in changes if not isinstance(c, (DropClass, DropSlot))]
+    for change in drops + others:
         emit_ddl(change, conn)
 
 

@@ -323,13 +323,13 @@ def merge_canonical_ids(
     *,
     cls: OntologyClass,
     keep_canonical_id: str,
-    merge_canonical_ids: list[str],
+    from_canonical_ids: list[str],
     spec_revision: int,
     correction_id: int | None = None,
     change_type: str = "merge",
 ) -> int:
     """SCD2 merge: close current bindings whose canonical_id is in
-    ``merge_canonical_ids``; open new bindings for the same knot_row_ids
+    ``from_canonical_ids``; open new bindings for the same knot_row_ids
     with ``canonical_id = keep_canonical_id``. Returns the count of
     bindings rewritten.
 
@@ -342,7 +342,7 @@ def merge_canonical_ids(
     on the bindings table catches any escaped duplicate.
     """
     rewritten = 0
-    for from_cid in merge_canonical_ids:
+    for from_cid in from_canonical_ids:
         rows = conn.execute(
             sql.SQL(
                 "SELECT knot_row_id FROM {bindings} "
