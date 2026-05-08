@@ -32,7 +32,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from knot import db
 from knot.auth import Principal, require_user
-from knot.db import graph_store, spec_store, trust_config, trust_posteriors
+from knot.db import dq, graph_store, spec_store, trust_config, trust_posteriors
+from knot.middleware import get_request_id
 from knot.graph import corrections as graph_corrections
 from knot.graph import resolve
 from knot.ontology import OntologyClass, Slot, Spec, TypeDefinition
@@ -280,6 +281,15 @@ def ingest(
                             })
                     if violations:
                         raise _ConstraintViolationError(violations)
+                    # DQ inside the transaction so it rolls back if a later
+                    # constraint check fails.
+                    dq.record_incremental(
+                        conn,
+                        source_name=source.name,
+                        cls=cls,
+                        batch_id=get_request_id(),
+                        rows=validated,
+                    )
             except _ConstraintViolationError as exc:
                 raise HTTPException(422, detail={"violations": exc.violations})
         else:
@@ -287,6 +297,13 @@ def ingest(
                 conn,
                 source=source,
                 spec_revision=revision,
+                rows=validated,
+            )
+            dq.record_incremental(
+                conn,
+                source_name=source.name,
+                cls=source.entity_class,
+                batch_id=get_request_id(),
                 rows=validated,
             )
 

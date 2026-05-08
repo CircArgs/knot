@@ -22,7 +22,8 @@ from typing import Any
 import psycopg
 
 from knot.db import corrections as db_corrections
-from knot.db import graph_store, trust_posteriors
+from knot.db import dq, graph_store, trust_posteriors
+from knot.db._naming import USER_CORRECTIONS_SOURCE
 from knot.ontology import OntologyClass
 
 
@@ -118,6 +119,14 @@ def apply_property_correction(
             slot_name=slot_name,
             value=value,
             spec_revision=spec_revision,
+        )
+        dq.record_incremental(
+            conn,
+            source_name=USER_CORRECTIONS_SOURCE,
+            cls=cls,
+            batch_id=str(correction_id),
+            rows=[{slot_name: value}],
+            only_slots=[slot_name],
         )
         for source, contributed in graph_store.get_disagreeing_contributions(
             conn, cls=cls, canonical_id=canonical_id, slot_name=slot_name,
@@ -222,6 +231,13 @@ def apply_add(
             to_canonical_ids=[new_canonical_id],
             applied_revision=spec_revision,
             correction_id=correction_id,
+        )
+        dq.record_incremental(
+            conn,
+            source_name=USER_CORRECTIONS_SOURCE,
+            cls=cls,
+            batch_id=str(correction_id),
+            rows=[values],
         )
         return correction_id
 

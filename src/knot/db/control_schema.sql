@@ -122,6 +122,46 @@ CREATE INDEX IF NOT EXISTS canonical_id_lineage_class
 -- user-management endpoints. Hashes are 64 hex chars; uniqueness lets
 -- the auth dep do a single indexed lookup per request.
 -- ──────────────────────────────────────────────────────────────────────────────
+-- ──────────────────────────────────────────────────────────────────────────────
+-- dq_observations
+-- Per-(source, class, slot) data-quality stats.  Two write paths:
+--   - ``incremental`` rows are appended at every API ingest / correction —
+--     stats are computed over the batch and tagged with the batch_id of
+--     the originating ingest call or correction id.
+--   - ``full_scan`` rows are appended by ``POST /dq/scan`` — stats are
+--     computed over the entire current per-class table for each (source,
+--     class, slot) tuple. ``batch_id`` is NULL for full scans.
+--
+-- This is data, not telemetry: the table is queryable like any other in
+-- the control plane (REST today; eventually a separate management
+-- GraphQL surface).  ``min_value`` / ``max_value`` are text-encoded so
+-- one column shape covers numeric, temporal, and lexical slots; callers
+-- cast on read.  ``extra`` is a typed escape hatch for per-kind specifics
+-- (HLL sketches, percentiles, etc.) without schema churn.
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS dq_observations (
+    id              BIGSERIAL    PRIMARY KEY,
+    observed_at     TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    source_name     TEXT         NOT NULL,
+    class_name      TEXT         NOT NULL,
+    slot_name       TEXT         NOT NULL,
+    kind            TEXT         NOT NULL
+                    CHECK (kind IN ('incremental', 'full_scan')),
+    batch_id        TEXT,
+    row_count       BIGINT       NOT NULL,
+    null_count      BIGINT       NOT NULL DEFAULT 0,
+    distinct_count  BIGINT,
+    min_value       TEXT,
+    max_value       TEXT,
+    extra           JSONB        NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS dq_observations_lookup
+    ON dq_observations (source_name, class_name, slot_name, observed_at DESC);
+
+CREATE INDEX IF NOT EXISTS dq_observations_observed_at
+    ON dq_observations (observed_at DESC);
+
 CREATE TABLE IF NOT EXISTS users (
     username      TEXT         PRIMARY KEY,
     api_key_hash  CHAR(64)     UNIQUE NOT NULL,
