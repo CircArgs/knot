@@ -39,13 +39,16 @@ def apply_merge(
     applied_by: str | None = None,
     payload_for_log: dict[str, Any] | None = None,
 ) -> int:
-    """Collapse ``merge_canonical_ids`` into ``keep_canonical_id`` in one
-    transaction: audit row + per-canonical_id ``UPDATE _canonical_id``.
+    """Collapse ``merge_canonical_ids`` into ``keep_canonical_id`` via SCD2:
+      1. Audit row in _user_corrections.
+      2. For each merged canonical_id: close current bindings (set
+         valid_to=now()) and open new bindings on the same knot_row_ids
+         with the kept canonical_id.
+      3. Append a canonical_id_lineage event for human-readable audit.
 
     No bandit feedback on merges in this slice — slot-level Beta
     posteriors don't have a natural Bernoulli signal here. ER-level
-    feedback (which slots signaled the wrong identity) is its own
-    design and lives elsewhere.
+    feedback is its own design.
 
     Returns the audit-log id.
     """
@@ -63,13 +66,24 @@ def apply_merge(
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        for cid in merge_canonical_ids:
-            graph_store.reassign_canonical_id(
-                conn,
-                cls=cls,
-                from_canonical_id=cid,
-                to_canonical_id=keep_canonical_id,
-            )
+        graph_store.merge_canonical_ids(
+            conn,
+            cls=cls,
+            keep_canonical_id=keep_canonical_id,
+            merge_canonical_ids=merge_canonical_ids,
+            spec_revision=spec_revision,
+            correction_id=correction_id,
+            change_type="merge",
+        )
+        graph_store.append_lineage_event(
+            conn,
+            class_name=cls.name,
+            change_type="merge",
+            from_canonical_ids=list(merge_canonical_ids),
+            to_canonical_ids=[keep_canonical_id],
+            applied_revision=spec_revision,
+            correction_id=correction_id,
+        )
         return correction_id
 
 

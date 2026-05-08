@@ -1,20 +1,28 @@
-"""Graph data-plane CRUD against per-class postgres tables.
+"""Graph data-plane CRUD against per-class postgres tables (SCD2 bindings).
 
-Owns INSERT/SELECT against ``knot_data.<class>``. Tables themselves are
-emitted by ``knot.db.migration`` at publish time; this module assumes
-they exist (and they do, because publish wires them).
+Two tables per class:
+  - ``knot_data.<class>``          source rows (immutable per ingest);
+                                   ``_knot_row_id`` UUID is the anchor.
+  - ``knot_data.<class>_bindings`` SCD2 bindings; ``valid_to IS NULL``
+                                   marks the current binding for a row.
 
-System-column conventions (locked, see ``migration``):
-  - ``_canonical_id``    initially the identifier-slot value (ER refines later)
-  - ``_source``          source.name (FK by name to the published spec)
-  - ``_source_row_id``   string-coerced identifier-slot value
-  - ``_spec_revision``   spec_revisions.revision at ingest time (FK)
-  - ``_ingest_at``       ``now()`` (DB default on insert; refreshed on update)
+System columns on the source-row table:
+  - ``_knot_row_id``    UUID anchor (stable across re-pushes via ON CONFLICT)
+  - ``_source``         source name (FK by name to published spec)
+  - ``_source_row_id``  string-coerced identifier-slot value
+  - ``_spec_revision``  spec_revisions.revision at ingest time (FK)
+  - ``_ingest_at``      ``now()``
 
-PK is ``(_source, _source_row_id)``; INSERTs upsert on conflict.
+Reserved synthetic source name ``_user_corrections`` is the source for
+user-correction rows.
 
-All identifiers are quoted via ``psycopg.sql.Identifier`` — never f-strings —
-because class and slot names come from API requests and must be safe.
+Reads JOIN source × bindings WHERE valid_to IS NULL. Merge/split/correct
+operations close current bindings and open new ones. ``reassign`` is
+gone — replaced by ``merge_canonical_ids`` which is the SCD2-respecting
+merge primitive.
+
+All identifiers go through ``psycopg.sql.Identifier``; no f-string
+interpolation of names that came from the API.
 """
 
 from __future__ import annotations
@@ -29,11 +37,7 @@ from knot.ontology import OntologyClass, Source
 
 
 _SCHEMA = "knot_data"
-_SYSTEM_COLS = ("_canonical_id", "_source", "_source_row_id", "_spec_revision")
 
-# Reserved synthetic source name for user-correction rows. The data-plane
-# row attributed to this source carries only the corrected slot value
-# (other slots NULL on first insert; preserved on subsequent corrections).
 USER_CORRECTIONS_SOURCE = "_user_corrections"
 
 
@@ -41,12 +45,15 @@ def _table_id(cls: OntologyClass) -> sql.Identifier:
     return sql.Identifier(_SCHEMA, cls.name.lower())
 
 
+def _bindings_id(cls: OntologyClass) -> sql.Identifier:
+    return sql.Identifier(_SCHEMA, f"{cls.name.lower()}_bindings")
+
+
 def _stored_slot_names(cls: OntologyClass) -> list[str]:
     return [s.name for s in cls.slots if getattr(s, "derivation", None) is None]
 
 
 def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
-    """Coerce postgres-native types (datetime) to JSON-serializable shapes."""
     out: dict[str, Any] = {}
     for k, v in row.items():
         if hasattr(v, "isoformat"):
@@ -56,6 +63,9 @@ def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# ─── Ingest ─────────────────────────────────────────────────────────────────
+
+
 def insert_rows(
     conn: psycopg.Connection,
     *,
@@ -63,45 +73,140 @@ def insert_rows(
     spec_revision: int,
     rows: list[dict[str, Any]],
 ) -> int:
-    """Upsert a batch of rows for one source. Returns number written."""
+    """Upsert a batch of source rows. For each row:
+      1. INSERT/UPDATE the source-row table (preserves _knot_row_id on conflict).
+      2. INSERT a binding (canonical_id = identifier value, valid_to NULL,
+         change_type 'ingest') iff no current binding exists for that
+         knot_row_id.
+
+    Returns the number of source rows written.
+    """
     cls = source.entity_class
     id_slot_name = source.identifier_slot.name
     slot_names = _stored_slot_names(cls)
-    col_names = [*_SYSTEM_COLS, *slot_names]
-
-    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in col_names)
-    placeholders = sql.SQL(", ").join(sql.Placeholder() * len(col_names))
+    user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
+    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
+    placeholders = sql.SQL(", ").join(sql.Placeholder() * len(user_cols))
     update_set = sql.SQL(", ").join(
         sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(c))
-        for c in col_names
+        for c in user_cols
         if c not in ("_source", "_source_row_id")
     )
 
-    stmt = sql.SQL(
-        "INSERT INTO {table} ({cols}) VALUES ({placeholders}) "
+    upsert_stmt = sql.SQL(
+        "INSERT INTO {table} ({cols}) VALUES ({ph}) "
         "ON CONFLICT (_source, _source_row_id) DO UPDATE "
-        "SET {update_set}, _ingest_at = now()"
+        "SET {update_set}, _ingest_at = now() "
+        "RETURNING _knot_row_id"
     ).format(
         table=_table_id(cls),
         cols=cols_sql,
-        placeholders=placeholders,
+        ph=placeholders,
         update_set=update_set,
     )
 
+    binding_insert_stmt = sql.SQL(
+        "INSERT INTO {bindings} "
+        "(knot_row_id, canonical_id, change_type, applied_revision) "
+        "SELECT %s, %s, 'ingest', %s "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM {bindings} "
+        "  WHERE knot_row_id = %s AND valid_to IS NULL"
+        ")"
+    ).format(bindings=_bindings_id(cls))
+
     count = 0
-    for row in rows:
-        id_value = row[id_slot_name]
-        values: list[Any] = [
-            id_value,        # _canonical_id
-            source.name,     # _source
-            str(id_value),   # _source_row_id
-            spec_revision,   # _spec_revision
-        ]
-        for slot_name in slot_names:
-            values.append(row.get(slot_name))
-        conn.execute(stmt, values)
-        count += 1
+    with conn.transaction():
+        for row in rows:
+            id_value = row[id_slot_name]
+            values: list[Any] = [
+                source.name,
+                str(id_value),
+                spec_revision,
+            ]
+            for slot_name in slot_names:
+                values.append(row.get(slot_name))
+            knot_row_id = conn.execute(upsert_stmt, values).fetchone()[0]
+            conn.execute(
+                binding_insert_stmt,
+                (knot_row_id, str(id_value), spec_revision, knot_row_id),
+            )
+            count += 1
     return count
+
+
+# ─── User-correction-row upsert ─────────────────────────────────────────────
+
+
+def upsert_user_correction_row(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    slot_name: str,
+    value: Any,
+    spec_revision: int,
+) -> str:
+    """Upsert the user-correction row for a canonical_id, setting only the
+    corrected slot. Other slot columns remain NULL on first insert and
+    unchanged on subsequent corrections. Also opens a binding to the
+    canonical_id if none is current. Returns _knot_row_id (str)."""
+    slot_names = _stored_slot_names(cls)
+    user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
+    placeholder_values: list[Any] = [
+        USER_CORRECTIONS_SOURCE,
+        canonical_id,  # _source_row_id = canonical_id at correction time
+        spec_revision,
+    ]
+    for sn in slot_names:
+        placeholder_values.append(value if sn == slot_name else None)
+
+    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
+    placeholders = sql.SQL(", ").join(sql.Placeholder() * len(user_cols))
+    upsert_set = sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(slot_name))
+    upsert_stmt = sql.SQL(
+        "INSERT INTO {table} ({cols}) VALUES ({ph}) "
+        "ON CONFLICT (_source, _source_row_id) DO UPDATE "
+        "SET {upsert_set}, _spec_revision = EXCLUDED._spec_revision, "
+        "_ingest_at = now() "
+        "RETURNING _knot_row_id"
+    ).format(
+        table=_table_id(cls),
+        cols=cols_sql,
+        ph=placeholders,
+        upsert_set=upsert_set,
+    )
+
+    binding_insert_stmt = sql.SQL(
+        "INSERT INTO {bindings} "
+        "(knot_row_id, canonical_id, change_type, applied_revision) "
+        "SELECT %s, %s, 'correction', %s "
+        "WHERE NOT EXISTS ("
+        "  SELECT 1 FROM {bindings} "
+        "  WHERE knot_row_id = %s AND valid_to IS NULL"
+        ")"
+    ).format(bindings=_bindings_id(cls))
+
+    knot_row_id = conn.execute(upsert_stmt, placeholder_values).fetchone()[0]
+    conn.execute(
+        binding_insert_stmt,
+        (knot_row_id, canonical_id, spec_revision, knot_row_id),
+    )
+    return str(knot_row_id)
+
+
+# ─── Reads (JOIN source × current bindings) ─────────────────────────────────
+
+
+def _select_with_binding(cls: OntologyClass) -> sql.Composable:
+    """SELECT s.*, b.canonical_id AS _canonical_id FROM source s
+    JOIN bindings b ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL."""
+    return sql.SQL(
+        "SELECT s.*, b.canonical_id AS _canonical_id "
+        "FROM {source} s "
+        "JOIN {bindings} b "
+        "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL"
+    ).format(source=_table_id(cls), bindings=_bindings_id(cls))
 
 
 def list_rows(
@@ -112,15 +217,11 @@ def list_rows(
     offset: int = 0,
     as_of: int | None = None,
 ) -> list[dict[str, Any]]:
-    """List rows for a class, ordered by ``(_canonical_id, _source)``.
-
-    ``as_of`` filters rows ingested under spec_revision ≤ N (revision pin).
-    """
-    where = sql.SQL("WHERE _spec_revision <= %s") if as_of is not None else sql.SQL("")
+    base = _select_with_binding(cls)
+    where = sql.SQL("WHERE s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
-        "SELECT * FROM {table} {where} "
-        "ORDER BY _canonical_id, _source LIMIT %s OFFSET %s"
-    ).format(table=_table_id(cls), where=where)
+        "{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s"
+    ).format(base=base, where=where)
     params: list[Any] = []
     if as_of is not None:
         params.append(as_of)
@@ -137,15 +238,11 @@ def get_canonical_contributions(
     canonical_id: str,
     as_of: int | None = None,
 ) -> list[dict[str, Any]]:
-    """All per-source rows that share a ``_canonical_id`` (the multi-valued bag).
-
-    Empty list if the canonical_id is unknown.
-    """
-    where_extra = sql.SQL(" AND _spec_revision <= %s") if as_of is not None else sql.SQL("")
+    base = _select_with_binding(cls)
+    where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
-        "SELECT * FROM {table} WHERE _canonical_id = %s{where_extra} "
-        "ORDER BY _source"
-    ).format(table=_table_id(cls), where_extra=where_extra)
+        "{base} WHERE b.canonical_id = %s{where_extra} ORDER BY s._source"
+    ).format(base=base, where_extra=where_extra)
     params: list[Any] = [canonical_id]
     if as_of is not None:
         params.append(as_of)
@@ -154,78 +251,23 @@ def get_canonical_contributions(
     return [_serialize_row(r) for r in cur.fetchall()]
 
 
-def canonical_id_exists(
+def count_rows(
     conn: psycopg.Connection,
     *,
     cls: OntologyClass,
-    canonical_id: str,
-) -> bool:
-    """True iff at least one row exists for the canonical_id in the class table."""
-    stmt = sql.SQL("SELECT 1 FROM {table} WHERE _canonical_id = %s LIMIT 1").format(
-        table=_table_id(cls),
-    )
-    return conn.execute(stmt, (canonical_id,)).fetchone() is not None
-
-
-def reassign_canonical_id(
-    conn: psycopg.Connection,
-    *,
-    cls: OntologyClass,
-    from_canonical_id: str,
-    to_canonical_id: str,
+    as_of: int | None = None,
 ) -> int:
-    """Rewrite ``_canonical_id`` from one value to another for a class.
-
-    Used by the Merge correction: collapses contributions that were
-    different canonical_ids into one. Source rows retain their original
-    ``(_source, _source_row_id)`` PKs; only the grouping changes.
-    Returns rowcount.
-    """
+    where = sql.SQL("WHERE s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
-        "UPDATE {table} SET _canonical_id = %s WHERE _canonical_id = %s"
-    ).format(table=_table_id(cls))
-    cur = conn.execute(stmt, (to_canonical_id, from_canonical_id))
-    return cur.rowcount
-
-
-def upsert_user_correction_row(
-    conn: psycopg.Connection,
-    *,
-    cls: OntologyClass,
-    canonical_id: str,
-    slot_name: str,
-    value: Any,
-    spec_revision: int,
-) -> None:
-    """Upsert the (canonical_id, _source=USER_CORRECTIONS_SOURCE) row,
-    setting only the corrected slot. Other slots remain NULL on first
-    insert and unchanged on subsequent corrections."""
-    slot_names = _stored_slot_names(cls)
-    col_names = [*_SYSTEM_COLS, *slot_names]
-    values: list[Any] = [
-        canonical_id,
-        USER_CORRECTIONS_SOURCE,
-        canonical_id,
-        spec_revision,
-    ]
-    for sn in slot_names:
-        values.append(value if sn == slot_name else None)
-
-    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in col_names)
-    placeholders = sql.SQL(", ").join(sql.Placeholder() * len(col_names))
-    upsert_set = sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(slot_name))
-    stmt = sql.SQL(
-        "INSERT INTO {table} ({cols}) VALUES ({ph}) "
-        "ON CONFLICT (_source, _source_row_id) DO UPDATE "
-        "SET {upsert_set}, _spec_revision = EXCLUDED._spec_revision, "
-        "_ingest_at = now()"
-    ).format(
-        table=_table_id(cls),
-        cols=cols_sql,
-        ph=placeholders,
-        upsert_set=upsert_set,
-    )
-    conn.execute(stmt, values)
+        "SELECT count(*) FROM {source} s "
+        "JOIN {bindings} b "
+        "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
+        "{where}"
+    ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
+    params: list[Any] = []
+    if as_of is not None:
+        params.append(as_of)
+    return conn.execute(stmt, params).fetchone()[0]
 
 
 def get_disagreeing_contributions(
@@ -236,26 +278,141 @@ def get_disagreeing_contributions(
     slot_name: str,
 ) -> list[tuple[str, Any]]:
     """For bandit-feedback emission: per-source non-null values for one
-    slot of one canonical entity, excluding the user-corrections row."""
+    slot under the current binding for ``canonical_id``, excluding the
+    user-corrections source."""
     stmt = sql.SQL(
-        "SELECT _source, {col} FROM {table} "
-        "WHERE _canonical_id = %s AND _source <> %s AND {col} IS NOT NULL"
-    ).format(table=_table_id(cls), col=sql.Identifier(slot_name))
+        "SELECT s._source, s.{col} "
+        "FROM {source} s "
+        "JOIN {bindings} b "
+        "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
+        "WHERE b.canonical_id = %s "
+        "  AND s._source <> %s "
+        "  AND s.{col} IS NOT NULL"
+    ).format(
+        col=sql.Identifier(slot_name),
+        source=_table_id(cls),
+        bindings=_bindings_id(cls),
+    )
     rows = conn.execute(stmt, (canonical_id, USER_CORRECTIONS_SOURCE)).fetchall()
     return [(r[0], r[1]) for r in rows]
 
 
-def count_rows(
+def canonical_id_exists(
     conn: psycopg.Connection,
     *,
     cls: OntologyClass,
-    as_of: int | None = None,
+    canonical_id: str,
+) -> bool:
+    """True iff at least one current binding has this canonical_id."""
+    stmt = sql.SQL(
+        "SELECT 1 FROM {bindings} "
+        "WHERE canonical_id = %s AND valid_to IS NULL LIMIT 1"
+    ).format(bindings=_bindings_id(cls))
+    return conn.execute(stmt, (canonical_id,)).fetchone() is not None
+
+
+# ─── SCD2 binding mutations (used by Merge / Split / corrections) ───────────
+
+
+def merge_canonical_ids(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    keep_canonical_id: str,
+    merge_canonical_ids: list[str],
+    spec_revision: int,
+    correction_id: int | None = None,
+    change_type: str = "merge",
 ) -> int:
-    where = sql.SQL("WHERE _spec_revision <= %s") if as_of is not None else sql.SQL("")
-    stmt = sql.SQL("SELECT count(*) FROM {table} {where}").format(
-        table=_table_id(cls), where=where,
-    )
-    params: list[Any] = []
-    if as_of is not None:
-        params.append(as_of)
-    return conn.execute(stmt, params).fetchone()[0]
+    """SCD2 merge: close current bindings whose canonical_id is in
+    ``merge_canonical_ids``; open new bindings for the same knot_row_ids
+    with ``canonical_id = keep_canonical_id``. Returns the count of
+    bindings rewritten."""
+    rewritten = 0
+    for from_cid in merge_canonical_ids:
+        rows = conn.execute(
+            sql.SQL(
+                "SELECT knot_row_id FROM {bindings} "
+                "WHERE canonical_id = %s AND valid_to IS NULL"
+            ).format(bindings=_bindings_id(cls)),
+            (from_cid,),
+        ).fetchall()
+        for (knot_row_id,) in rows:
+            conn.execute(
+                sql.SQL(
+                    "UPDATE {bindings} SET valid_to = now() "
+                    "WHERE knot_row_id = %s AND valid_to IS NULL"
+                ).format(bindings=_bindings_id(cls)),
+                (knot_row_id,),
+            )
+            conn.execute(
+                sql.SQL(
+                    "INSERT INTO {bindings} "
+                    "(knot_row_id, canonical_id, change_type, "
+                    " applied_revision, correction_id) "
+                    "VALUES (%s, %s, %s, %s, %s)"
+                ).format(bindings=_bindings_id(cls)),
+                (knot_row_id, keep_canonical_id, change_type, spec_revision, correction_id),
+            )
+            rewritten += 1
+    return rewritten
+
+
+# ─── Lineage event log ──────────────────────────────────────────────────────
+
+
+def append_lineage_event(
+    conn: psycopg.Connection,
+    *,
+    class_name: str,
+    change_type: str,
+    from_canonical_ids: list[str],
+    to_canonical_ids: list[str],
+    applied_revision: int,
+    correction_id: int | None = None,
+) -> int:
+    """Append a row to ``canonical_id_lineage``. Returns the event_id."""
+    return conn.execute(
+        "INSERT INTO canonical_id_lineage "
+        "(class_name, change_type, from_canonical_ids, to_canonical_ids, "
+        " applied_revision, correction_id) "
+        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING event_id",
+        (class_name, change_type, from_canonical_ids, to_canonical_ids,
+         applied_revision, correction_id),
+    ).fetchone()[0]
+
+
+def list_lineage(
+    conn: psycopg.Connection,
+    *,
+    class_name: str | None = None,
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    if class_name is None:
+        rows = conn.execute(
+            "SELECT event_id, class_name, change_type, from_canonical_ids, "
+            "to_canonical_ids, applied_revision, correction_id, created_at "
+            "FROM canonical_id_lineage ORDER BY event_id DESC LIMIT %s",
+            (limit,),
+        ).fetchall()
+    else:
+        rows = conn.execute(
+            "SELECT event_id, class_name, change_type, from_canonical_ids, "
+            "to_canonical_ids, applied_revision, correction_id, created_at "
+            "FROM canonical_id_lineage WHERE class_name = %s "
+            "ORDER BY event_id DESC LIMIT %s",
+            (class_name, limit),
+        ).fetchall()
+    return [
+        {
+            "event_id": r[0],
+            "class_name": r[1],
+            "change_type": r[2],
+            "from_canonical_ids": list(r[3]),
+            "to_canonical_ids": list(r[4]),
+            "applied_revision": r[5],
+            "correction_id": r[6],
+            "created_at": r[7].isoformat(),
+        }
+        for r in rows
+    ]

@@ -92,3 +92,25 @@ CREATE TABLE IF NOT EXISTS _user_corrections (
 
 CREATE INDEX IF NOT EXISTS user_corrections_type
     ON _user_corrections (correction_type);
+
+-- ──────────────────────────────────────────────────────────────────────────────
+-- canonical_id_lineage
+-- Append-only event log for canonical_id transitions: ingest, merge, split,
+-- correction. Lineage is technically derivable from the SCD2 bindings tables
+-- (knot_data.<class>_bindings) but this table is the human-readable audit
+-- convenience: "who merged X into Y, when, by which correction, under which
+-- spec revision."
+-- ──────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS canonical_id_lineage (
+    event_id           SERIAL       PRIMARY KEY,
+    class_name         TEXT         NOT NULL,
+    change_type        TEXT         NOT NULL,
+    from_canonical_ids TEXT[]       NOT NULL,
+    to_canonical_ids   TEXT[]       NOT NULL,
+    applied_revision   INTEGER      NOT NULL REFERENCES spec_revisions(revision),
+    correction_id      INTEGER      REFERENCES _user_corrections(id),
+    created_at         TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS canonical_id_lineage_class
+    ON canonical_id_lineage (class_name, created_at DESC);
