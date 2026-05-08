@@ -5,9 +5,9 @@ Each ``(source, slot)`` pair has a Beta(α, β) posterior over the
 Beta(1, 1) — uniform. Each Bernoulli observation increments α on
 success or β on failure.
 
-The posteriors drive ``ResolutionPolicy.THOMPSON_SAMPLING`` (sample
-θ ~ Beta(α, β) per source-slot, argmax θ) and ``UCB1`` (μ + c√(ln N / n))
-in ``knot.db.resolve``.
+The posteriors drive ``ResolutionPolicy.POSTERIOR_MEAN`` (argmax over
+α/(α+β)) and ``LCB`` (argmax over mean − k·stddev) in
+``knot.graph.resolve``. Both are deterministic; we don't sample.
 """
 
 from __future__ import annotations

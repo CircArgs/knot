@@ -65,14 +65,9 @@ class ResolutionPolicy(str, Enum):
     (per `multi-valued-semantics.md`).
     """
 
-    ARGMAX_TRUST     = "argmax_trust"      # scalar trust_config, deterministic
-    POSTERIOR_MEAN   = "posterior_mean"    # Beta posterior, argmax α/(α+β)
-    LCB              = "lcb"               # Beta posterior, mean − k·stddev (conservative)
-    MODE             = "mode"
-    WEIGHTED_VOTE    = "weighted_vote"
-    MEDIAN_NUMERIC   = "median_numeric"
-    LATEST_WATERMARK = "latest_watermark"
-    UNIQUE_OR_FAIL   = "unique_or_fail"
+    ARGMAX_TRUST   = "argmax_trust"     # scalar trust_config, deterministic
+    POSTERIOR_MEAN = "posterior_mean"   # Beta posterior, argmax α/(α+β)
+    LCB            = "lcb"              # Beta posterior, mean − k·stddev (conservative)
 
 
 class Severity(str, Enum):

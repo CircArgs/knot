@@ -5,8 +5,14 @@ of the token is stored, never the raw value. Hash is SHA-256 hex
 (64 chars) — fast lookup, no per-request bcrypt. Tokens are returned
 exactly once at creation.
 
+Audit fields (DataJunction-shaped, simplified):
+  - ``kind``         'user' | 'service_account' — distinguishes humans from bots
+  - ``email``        nullable
+  - ``display_name`` nullable
+  - ``created_by``   nullable FK to users(username)
+
 Admin-only mutation surface:
-  - ``create_user``    issues a new token; returns ``(user, raw_key)``
+  - ``create_user``    issues a new token; returns ``(User, raw_key)``
   - ``rotate_key``     replaces a user's hash; returns the new raw key
   - ``delete_user``    drops the row.
 
@@ -18,15 +24,25 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from typing import Any
+from enum import Enum
+from typing import Any, Optional
 
 import psycopg
+
+
+class PrincipalKind(str, Enum):
+    USER = "user"
+    SERVICE_ACCOUNT = "service_account"
 
 
 @dataclass(frozen=True)
 class User:
     username: str
     is_admin: bool
+    kind: PrincipalKind = PrincipalKind.USER
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    created_by: Optional[str] = None
 
 
 def hash_key(raw_key: str) -> str:
@@ -38,32 +54,54 @@ def generate_key() -> str:
     return secrets.token_urlsafe(32)
 
 
+_USER_COLS = (
+    "username, is_admin, kind, email, display_name, created_by"
+)
+
+
+def _row_to_user(row: tuple) -> User:
+    return User(
+        username=row[0],
+        is_admin=row[1],
+        kind=PrincipalKind(row[2]),
+        email=row[3],
+        display_name=row[4],
+        created_by=row[5],
+    )
+
+
 def find_by_key_hash(conn: psycopg.Connection, key_hash: str) -> User | None:
     row = conn.execute(
-        "SELECT username, is_admin FROM users WHERE api_key_hash = %s",
+        f"SELECT {_USER_COLS} FROM users WHERE api_key_hash = %s",
         (key_hash,),
     ).fetchone()
-    if row is None:
-        return None
-    return User(username=row[0], is_admin=row[1])
+    return _row_to_user(row) if row else None
 
 
 def get_user(conn: psycopg.Connection, username: str) -> User | None:
     row = conn.execute(
-        "SELECT username, is_admin FROM users WHERE username = %s",
+        f"SELECT {_USER_COLS} FROM users WHERE username = %s",
         (username,),
     ).fetchone()
-    if row is None:
-        return None
-    return User(username=row[0], is_admin=row[1])
+    return _row_to_user(row) if row else None
 
 
 def list_users(conn: psycopg.Connection) -> list[dict[str, Any]]:
     rows = conn.execute(
-        "SELECT username, is_admin, created_at FROM users ORDER BY username"
+        "SELECT username, is_admin, kind, email, display_name, "
+        "       created_by, created_at "
+        "FROM users ORDER BY username"
     ).fetchall()
     return [
-        {"username": r[0], "is_admin": r[1], "created_at": r[2].isoformat()}
+        {
+            "username": r[0],
+            "is_admin": r[1],
+            "kind": r[2],
+            "email": r[3],
+            "display_name": r[4],
+            "created_by": r[5],
+            "created_at": r[6].isoformat(),
+        }
         for r in rows
     ]
 
@@ -73,16 +111,31 @@ def create_user(
     *,
     username: str,
     is_admin: bool = False,
+    kind: PrincipalKind = PrincipalKind.USER,
+    email: Optional[str] = None,
+    display_name: Optional[str] = None,
+    created_by: Optional[str] = None,
 ) -> tuple[User, str]:
     """Insert a new user; returns (User, raw_api_key). The raw key is shown
     only here — store it client-side."""
     raw = generate_key()
     conn.execute(
-        "INSERT INTO users (username, api_key_hash, is_admin) "
-        "VALUES (%s, %s, %s)",
-        (username, hash_key(raw), is_admin),
+        "INSERT INTO users "
+        "(username, api_key_hash, is_admin, kind, email, display_name, created_by) "
+        "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        (username, hash_key(raw), is_admin, kind.value, email, display_name, created_by),
     )
-    return User(username=username, is_admin=is_admin), raw
+    return (
+        User(
+            username=username,
+            is_admin=is_admin,
+            kind=kind,
+            email=email,
+            display_name=display_name,
+            created_by=created_by,
+        ),
+        raw,
+    )
 
 
 def rotate_key(conn: psycopg.Connection, *, username: str) -> str:
@@ -113,8 +166,9 @@ def bootstrap_admin_if_empty(
     if existing is not None:
         return False
     conn.execute(
-        "INSERT INTO users (username, api_key_hash, is_admin) "
-        "VALUES (%s, %s, TRUE)",
-        (username, hash_key(raw_admin_key)),
+        "INSERT INTO users "
+        "(username, api_key_hash, is_admin, kind, display_name) "
+        "VALUES (%s, %s, TRUE, 'user', %s)",
+        (username, hash_key(raw_admin_key), "Bootstrap admin"),
     )
     return True

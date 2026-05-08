@@ -26,10 +26,6 @@ Resolution policies implemented today:
                           high uncertainty (low observation count). Same
                           state as POSTERIOR_MEAN, different optimum.
 
-Other policies declared on Slot.resolution_policy raise
-``NotImplementedError``: ``MODE``, ``WEIGHTED_VOTE``, ``MEDIAN_NUMERIC``,
-``LATEST_WATERMARK``, ``UNIQUE_OR_FAIL``.
-
 Multivalued slots: union of all per-source contributions (dedup),
 regardless of policy — multi-valued canonical is the bag of contributions.
 """
@@ -105,8 +101,8 @@ def _resolve_scalar(
         return _posterior_mean(slot, non_null, posteriors)
     if policy == ResolutionPolicy.LCB:
         return _lcb(slot, non_null, posteriors)
-    raise NotImplementedError(
-        f"Resolution policy {policy.value!r} for slot {slot.name!r} not implemented yet"
+    raise AssertionError(  # exhaustive over ResolutionPolicy
+        f"Unhandled resolution policy {policy!r} for slot {slot.name!r}"
     )
 
 

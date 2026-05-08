@@ -36,7 +36,7 @@ from knot.db import graph_store, spec_store, trust_config, trust_posteriors
 from knot.graph import corrections as graph_corrections
 from knot.graph import resolve
 from knot.ontology import OntologyClass, Slot, Spec, TypeDefinition
-from knot.ontology.row_models import build_row_model
+from knot.ontology.row_models import build_row_model, build_value_model_for_slot
 
 
 class _StrictBase(BaseModel):
@@ -415,28 +415,19 @@ def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
 
 
 def _validate_property_value(slot: Slot, value: Any) -> Any:
-    """Validate the corrected value's type matches the slot's range using a
-    one-field Pydantic model. Raises HTTPException(422) on mismatch."""
-    one_field = build_row_model_for_slot(slot)
+    """Validate the corrected value against the slot's full constraint set
+    (type, pattern, min/max, Literal-from-permissible-values, multivalued
+    list-shape). Raises HTTPException(422) on mismatch with FastAPI-shaped
+    error detail.
+
+    Uses the same constraint-application logic as ingest's per-source row
+    model so corrections enforce the same rules as ingestion."""
+    one_field = build_value_model_for_slot(slot)
     try:
         return one_field.model_validate({slot.name: value}).model_dump()[slot.name]
     except ValidationError as exc:
         errors = [{**e, "loc": ("body", "value", *e["loc"])} for e in exc.errors()]
         raise HTTPException(422, detail=errors)
-
-
-def build_row_model_for_slot(slot: Slot):
-    """Build a single-field Pydantic model from one Slot for value validation."""
-    from pydantic import create_model
-    from knot.ontology.row_models import _slot_python_type
-    py_type = _slot_python_type(slot)
-    if slot.multivalued:
-        py_type = list[py_type]
-    return create_model(
-        f"{slot.name}_value",
-        __config__=ConfigDict(extra="forbid"),
-        **{slot.name: (py_type, ...)},
-    )
 
 
 @router.post(

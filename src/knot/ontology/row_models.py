@@ -49,6 +49,33 @@ def _is_stored(slot: Slot) -> bool:
     return getattr(slot, "derivation", None) is None
 
 
+def _field_spec(slot: Slot, *, force_optional: bool = False) -> tuple[Any, Any]:
+    """Compute the (py_type, Field(...)) tuple for one slot.
+
+    Shared between ``build_row_model`` (full row at ingest) and
+    ``build_value_model_for_slot`` (single value at correction time).
+    """
+    py_type = _slot_python_type(slot)
+    if slot.multivalued:
+        py_type = list[py_type]
+
+    kwargs: dict[str, Any] = {}
+    if slot.pattern:
+        kwargs["pattern"] = slot.pattern
+    if slot.minimum_value is not None:
+        kwargs["ge"] = slot.minimum_value
+    if slot.maximum_value is not None:
+        kwargs["le"] = slot.maximum_value
+
+    if not force_optional and (slot.required or slot.identifier):
+        default: Any = ...
+    else:
+        default = None
+        py_type = Optional[py_type]
+
+    return py_type, Field(default, **kwargs)
+
+
 def build_row_model(source: Source) -> type[BaseModel]:
     """Strict Pydantic model whose fields mirror the source's class slots.
 
@@ -64,28 +91,24 @@ def build_row_model(source: Source) -> type[BaseModel]:
     for slot in cls.slots:
         if not _is_stored(slot):
             continue
-        py_type = _slot_python_type(slot)
-        if slot.multivalued:
-            py_type = list[py_type]
-
-        kwargs: dict[str, Any] = {}
-        if slot.pattern:
-            kwargs["pattern"] = slot.pattern
-        if slot.minimum_value is not None:
-            kwargs["ge"] = slot.minimum_value
-        if slot.maximum_value is not None:
-            kwargs["le"] = slot.maximum_value
-
-        if slot.required or slot.identifier:
-            default: Any = ...
-        else:
-            default = None
-            py_type = Optional[py_type]
-
-        fields[slot.name] = (py_type, Field(default, **kwargs))
+        fields[slot.name] = _field_spec(slot)
 
     return create_model(
         f"{cls.name}IngestRow",
         __config__=ConfigDict(extra="forbid"),
         **fields,
+    )
+
+
+def build_value_model_for_slot(slot: Slot) -> type[BaseModel]:
+    """Single-field Pydantic model for one slot, used to validate a
+    PropertyCorrection's ``value`` against the same constraints ingest
+    enforces (type, pattern, min/max, Literal-from-permissible-values,
+    multivalued list-shape). The lone field is required; the constraint
+    set is reused via ``_field_spec``."""
+    py_type, field_info = _field_spec(slot, force_optional=False)
+    return create_model(
+        f"{slot.name}Value",
+        __config__=ConfigDict(extra="forbid"),
+        **{slot.name: (py_type, field_info)},
     )

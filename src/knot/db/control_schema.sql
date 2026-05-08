@@ -54,7 +54,7 @@ CREATE TABLE IF NOT EXISTS trust_config (
 -- ──────────────────────────────────────────────────────────────────────────────
 -- trust_posteriors
 -- Per-(source, slot) Beta posterior driving bandit-style resolution
--- (THOMPSON_SAMPLING / UCB1). alpha and beta initialise at the uniform
+-- (POSTERIOR_MEAN / LCB). alpha and beta initialise at the uniform
 -- prior (1, 1); each Bernoulli observation increments alpha (success) or
 -- beta (failure). Mean = alpha / (alpha + beta); observation count =
 -- alpha + beta - 2.
@@ -126,5 +126,12 @@ CREATE TABLE IF NOT EXISTS users (
     username      TEXT         PRIMARY KEY,
     api_key_hash  CHAR(64)     UNIQUE NOT NULL,
     is_admin      BOOLEAN      NOT NULL DEFAULT FALSE,
+    -- audit attribution (DataJunction-shaped: user vs service_account,
+    -- email + display name, who created this principal)
+    kind          TEXT         NOT NULL DEFAULT 'user'
+                  CHECK (kind IN ('user', 'service_account')),
+    email         TEXT,
+    display_name  TEXT,
+    created_by    TEXT         REFERENCES users(username) ON DELETE SET NULL,
     created_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
 );

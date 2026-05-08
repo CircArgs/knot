@@ -33,24 +33,28 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
+from knot.db._naming import (
+    USER_CORRECTIONS_SOURCE,
+    bindings_table_id as _bindings_id,
+    stored_slot_names as _stored_slot_names,
+    table_id as _table_id,
+)
 from knot.ontology import OntologyClass, Source
 
 
-_SCHEMA = "knot_data"
-
-USER_CORRECTIONS_SOURCE = "_user_corrections"
-
-
-def _table_id(cls: OntologyClass) -> sql.Identifier:
-    return sql.Identifier(_SCHEMA, cls.name.lower())
-
-
-def _bindings_id(cls: OntologyClass) -> sql.Identifier:
-    return sql.Identifier(_SCHEMA, f"{cls.name.lower()}_bindings")
-
-
-def _stored_slot_names(cls: OntologyClass) -> list[str]:
-    return [s.name for s in cls.slots if getattr(s, "derivation", None) is None]
+__all__ = (
+    "USER_CORRECTIONS_SOURCE",
+    "insert_rows",
+    "list_rows",
+    "count_rows",
+    "get_canonical_contributions",
+    "get_disagreeing_contributions",
+    "canonical_id_exists",
+    "merge_canonical_ids",
+    "upsert_user_correction_row",
+    "append_lineage_event",
+    "list_lineage",
+)
 
 
 def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:

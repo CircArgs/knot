@@ -30,17 +30,25 @@ class _StrictBase(BaseModel):
 class CreateUserBody(_StrictBase):
     username: str = Field(pattern=_NAME_PATTERN)
     is_admin: bool = False
+    kind: users.PrincipalKind = users.PrincipalKind.USER
+    email: str | None = None
+    display_name: str | None = None
 
 
 class CreatedUser(_StrictBase):
     username: str
     is_admin: bool
+    kind: users.PrincipalKind
     api_key: str  # shown only once; client stores
 
 
 class UserRow(_StrictBase):
     username: str
     is_admin: bool
+    kind: str
+    email: str | None
+    display_name: str | None
+    created_by: str | None
     created_at: str
 
 
@@ -71,18 +79,27 @@ def list_users() -> list[UserRow]:
     "/users",
     response_model=CreatedUser,
     status_code=201,
-    dependencies=[Depends(require_admin)],
 )
-def create_user(body: CreateUserBody) -> CreatedUser:
+def create_user(
+    body: CreateUserBody,
+    creator: Principal = Depends(require_admin),
+) -> CreatedUser:
     with db.connect() as conn:
         if users.get_user(conn, body.username) is not None:
             raise HTTPException(409, f"User {body.username!r} already exists.")
         user, raw = users.create_user(
-            conn, username=body.username, is_admin=body.is_admin,
+            conn,
+            username=body.username,
+            is_admin=body.is_admin,
+            kind=body.kind,
+            email=body.email,
+            display_name=body.display_name,
+            created_by=creator.username,
         )
     return CreatedUser(
         username=user.username,
         is_admin=user.is_admin,
+        kind=user.kind,
         api_key=raw,
     )
 
@@ -101,6 +118,7 @@ def rotate_key(username: str) -> CreatedUser:
     return CreatedUser(
         username=user.username,
         is_admin=user.is_admin,
+        kind=user.kind,
         api_key=raw,
     )
 

@@ -41,50 +41,17 @@ from functools import singledispatch
 import psycopg
 from psycopg import sql
 
-from knot.ontology import OntologyClass, Slot, Spec, TypeDefinition
-
-
-_SCHEMA = "knot_data"
-
-
-_PG_TYPE_FOR_BASE: dict[str, str] = {
-    "str":      "TEXT",
-    "string":   "TEXT",
-    "int":      "BIGINT",
-    "integer":  "BIGINT",
-    "float":    "DOUBLE PRECISION",
-    "bool":     "BOOLEAN",
-    "boolean":  "BOOLEAN",
-    "datetime": "TIMESTAMPTZ",
-    "date":     "DATE",
-}
-
-
-def _slot_pg_type(slot: Slot) -> str:
-    if isinstance(slot.range, OntologyClass):
-        base = "TEXT"
-    elif isinstance(slot.range, TypeDefinition):
-        key = (slot.range.base or "str").lower()
-        base = _PG_TYPE_FOR_BASE.get(key, "TEXT")
-    else:
-        base = "TEXT"
-    return f"{base}[]" if slot.multivalued else base
-
-
-def _table_id(cls: OntologyClass) -> sql.Identifier:
-    return sql.Identifier(_SCHEMA, cls.name.lower())
-
-
-def _bindings_table_id(cls: OntologyClass) -> sql.Identifier:
-    return sql.Identifier(_SCHEMA, f"{cls.name.lower()}_bindings")
+from knot.db._naming import (
+    bindings_table_id as _bindings_table_id,
+    is_stored as _is_stored,
+    slot_pg_type as _slot_pg_type,
+    table_id as _table_id,
+)
+from knot.ontology import OntologyClass, Slot, Spec
 
 
 def _bindings_index_id(cls: OntologyClass) -> sql.Identifier:
     return sql.Identifier(f"{cls.name.lower()}_bindings_current")
-
-
-def _is_stored(slot: Slot) -> bool:
-    return getattr(slot, "derivation", None) is None
 
 
 # Source-row system columns (per-ingest, immutable except by re-push).
