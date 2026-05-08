@@ -10,7 +10,7 @@ import pytest
 import psycopg
 
 from knot import db
-from knot.db.migration import (
+from knot.spec.compile.sql.dialects.postgres.migration import (
     AddClass,
     AddSlot,
     ChangeSlotType,
@@ -27,8 +27,8 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.db._naming import SCHEMA
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition, ResolutionPolicy
+from knot.db._naming import schema
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition, ResolutionPolicy
 
 
 # ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ def _table_exists(conn: psycopg.Connection, table_name: str) -> bool:
     row = conn.execute(
         "SELECT 1 FROM information_schema.tables "
         "WHERE table_schema = %s AND table_name = %s",
-        (SCHEMA, table_name),
+        (schema(), table_name),
     ).fetchone()
     return row is not None
 
@@ -72,7 +72,7 @@ def _column_exists(conn: psycopg.Connection, table_name: str, column_name: str) 
     row = conn.execute(
         "SELECT 1 FROM information_schema.columns "
         "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
-        (SCHEMA, table_name, column_name),
+        (schema(), table_name, column_name),
     ).fetchone()
     return row is not None
 

@@ -1,1 +1,0 @@
-"""knot — reflective ontology compiler."""

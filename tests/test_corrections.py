@@ -14,7 +14,7 @@ from knot.db import graph_store, trust_posteriors
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
 from knot.graph.corrections import apply_merge, apply_property_correction, _values_match
-from knot.ontology import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
 
 
 # ---------------------------------------------------------------------------

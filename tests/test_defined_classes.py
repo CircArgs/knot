@@ -43,8 +43,8 @@ import pytest
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
-from knot.ontology.metaschema import (
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
     Compare,
@@ -55,9 +55,9 @@ from knot.ontology.metaschema import (
     ReverseRelation,
     SlotPath,
 )
-from knot.db.sql_compiler import CompileContext, compile_predicate
-from knot.db.sql_compiler._dispatch import CompilerError
-from knot.db import migration
+from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate
+from knot.spec.compile.sql.dialects.postgres._dispatch import CompilerError
+from knot.spec.compile.sql.dialects.postgres import migration
 
 
 # ---------------------------------------------------------------------------
@@ -506,7 +506,7 @@ def test_publish_gate_rejects_broken_definition(pg_conn):
     person = OntologyClass(name="Person", slots=[person_id])
 
     # Use a RecursiveTraversal as the definition — compile raises NotImplementedError
-    from knot.ontology.metaschema import RecursiveTraversal, RelationRef, SlotPath as SP
+    from knot.spec.metaschema import RecursiveTraversal, RelationRef, SlotPath as SP
     is_a_slot = Slot(name="is_a", range=person)
     start = RelationRef(from_class=person, slot=is_a_slot)
     bad_definition = RecursiveTraversal(start=start, step=SP(from_class=person, slots=[is_a_slot]))

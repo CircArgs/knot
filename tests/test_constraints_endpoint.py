@@ -15,14 +15,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.security import Principal, require_user
+from knot.api.auth.security import Principal, require_user
 from knot.db.spec_store import (
     create_draft,
     get_revision,
     publish_draft,
     update_draft,
 )
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 
 # ---------------------------------------------------------------------------
@@ -185,7 +185,7 @@ def test_add_bool_expr_constraint(draft_with_movie, client):
     spec = get_revision(conn, draft_id)
     con = spec.constraints[0]
     assert con.name == "year_plausible_range"
-    from knot.ontology.metaschema import BoolExpr, BoolOpKind
+    from knot.spec.metaschema import BoolExpr, BoolOpKind
     assert isinstance(con.body, BoolExpr)
     assert con.body.op == BoolOpKind.AND
     assert len(con.body.operands) == 2

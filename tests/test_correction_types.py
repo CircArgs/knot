@@ -24,7 +24,7 @@ from knot.graph.corrections import (
     apply_split,
     apply_tombstone,
 )
-from knot.ontology import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
 
 
 # ---------------------------------------------------------------------------

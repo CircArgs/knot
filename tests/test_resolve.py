@@ -19,7 +19,7 @@ from knot.graph.resolve import (
     _union_multivalued,
     resolve_entity,
 )
-from knot.ontology import (
+from knot.spec import (
     OntologyClass,
     ResolutionPolicy,
     Slot,

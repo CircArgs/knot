@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from knot.ontology import (
+from knot.spec import (
     OntologyClass,
     Slot,
     Source,

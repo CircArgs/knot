@@ -19,14 +19,14 @@ from fastapi.testclient import TestClient
 
 from knot import db
 from knot.api.main import app
-from knot.security import Principal, require_user
+from knot.api.auth.security import Principal, require_user
 from knot.db import spec_store
 from knot.db.spec_store import (
     create_draft,
     publish_draft,
     update_draft,
 )
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 
 def _dev_principal() -> Principal:

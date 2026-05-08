@@ -17,7 +17,8 @@ from __future__ import annotations
 import pytest
 
 from knot import db
-from knot.db import migration, spec_store
+from knot.db import spec_store
+from knot.spec.compile.sql.dialects.postgres import migration
 from knot.db.spec_store import (
     PublishGateError,
     create_draft,
@@ -25,7 +26,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.graph.corrections import apply_add
-from knot.ontology import (
+from knot.spec import (
     OntologyClass,
     Slot,
     Source,
@@ -132,8 +133,8 @@ def test_mixin_slot_is_queryable_via_graphql(pg_conn):
         spec_revision=rev,
     )
 
-    from knot.api.graphql_schema import get_or_build_schema
-    from knot.ontology.canonical import compute_content_hash
+    from knot.spec.compile.graphql import get_or_build_schema
+    from knot.spec.canonical import compute_content_hash
 
     published = spec_store.get_published(pg_conn)
     schema = get_or_build_schema(published, compute_content_hash(published))

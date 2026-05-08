@@ -51,7 +51,7 @@ def _(mo):
     mo.md("""
     ## Step 1 — Clean slate
 
-    Truncate spec_revisions, drop the data-plane schema, drop trust
+    Truncate spec_revisions, drop the data-plane schema(), drop trust
     + correction state. Idempotent schema bootstrap recreates the
     control plane.
     """)

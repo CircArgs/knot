@@ -175,8 +175,8 @@ def test_bootstrap_admin_does_not_insert_when_users_exist(auth_db):
 # parameter (not a router-level dependency), making the override reliable.
 # ---------------------------------------------------------------------------
 
-from knot.security import require_user as _require_user  # module-level for override key
-from knot.security import Principal as _Principal
+from knot.api.auth.security import require_user as _require_user  # module-level for override key
+from knot.api.auth.security import Principal as _Principal
 
 
 def _make_strict_require_user():
@@ -185,7 +185,7 @@ def _make_strict_require_user():
     Uses `str | None` annotation (not Optional[str] via ForwardRef) to avoid
     the Pydantic TypeAdapter ForwardRef resolution error inside local functions.
     """
-    from knot.security import _strip_bearer
+    from knot.api.auth.security import _strip_bearer
     from fastapi import HTTPException, Header
 
     def strict_require_user(

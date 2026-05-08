@@ -22,8 +22,8 @@ from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.extensions import _Dispatcher
 from knot.extensions.events import IngestResolveCanonical
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
-from knot.security import Principal, require_user
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.api.auth.security import Principal, require_user
 
 
 # ---------------------------------------------------------------------------

@@ -20,13 +20,13 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.db.sql_compiler import (
+from knot.spec.compile.sql.dialects.postgres import (
     CompileContext,
     CompilerError,
     compile_constraint,
     compile_predicate,
 )
-from knot.ontology.metaschema import (
+from knot.spec.metaschema import (
     Between,
     BoolExpr,
     BoolOpKind,
@@ -58,7 +58,7 @@ from knot.ontology.metaschema import (
 
 @pytest.fixture
 def clean_db(pg_conn):
-    """Truncate all state, re-apply schema, yield the connection."""
+    """Truncate all state, re-apply schema(), yield the connection."""
     pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
     pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
     pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")

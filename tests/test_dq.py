@@ -19,16 +19,16 @@ from fastapi.testclient import TestClient
 
 from knot import db
 from knot.api.main import app
-from knot.security import Principal, require_user
+from knot.api.auth.security import Principal, require_user
 from knot.db import dq, spec_store
-from knot.db._naming import USER_CORRECTIONS_SOURCE
+from knot.db._naming import user_corrections_source
 from knot.db.spec_store import (
     create_draft,
     publish_draft,
     update_draft,
 )
 from knot.graph.corrections import apply_add, apply_property_correction
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 
 def _dev_principal() -> Principal:
@@ -146,7 +146,7 @@ def test_add_correction_emits_dq(published):
         values={"imdb_id": "tt_synth", "title": "Synthetic", "year": 2026},
         spec_revision=rev,
     )
-    obs = dq.query_observations(conn, source=USER_CORRECTIONS_SOURCE)
+    obs = dq.query_observations(conn, source=user_corrections_source())
     by_slot = {o["slot"]: o for o in obs}
     assert by_slot["title"]["row_count"] == 1
     assert by_slot["title"]["null_count"] == 0
@@ -180,7 +180,7 @@ def test_property_correction_emits_dq_for_one_slot(published):
         spec_revision=rev,
     )
 
-    obs = dq.query_observations(conn, source=USER_CORRECTIONS_SOURCE)
+    obs = dq.query_observations(conn, source=user_corrections_source())
     assert {o["slot"] for o in obs} == {"title"}
     assert obs[0]["row_count"] == 1
     assert obs[0]["null_count"] == 0

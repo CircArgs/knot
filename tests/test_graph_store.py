@@ -18,7 +18,7 @@ import psycopg
 from knot import db
 from knot.db import graph_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 
 # ---------------------------------------------------------------------------

@@ -14,7 +14,7 @@ import psycopg
 import pytest
 
 from knot import db
-from knot.config import get_dsn
+from knot.config.config import get_dsn
 from knot.db import spec_store
 from knot.db.spec_store import (
     DraftAlreadyPublishedError,
@@ -22,7 +22,7 @@ from knot.db.spec_store import (
     create_draft,
     edit_draft,
 )
-from knot.ontology import Spec, TypeDefinition
+from knot.spec import Spec, TypeDefinition
 
 
 def _empty_spec() -> Spec:

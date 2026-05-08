@@ -1,7 +1,7 @@
 """Integration tests for POST /graph/query (GraphQL endpoint).
 
 Coverage:
-  - Schema regenerates on spec publish (content_hash changes → new schema).
+  - Schema regenerates on spec publish (content_hash changes → new schema()).
   - Query a class with a Compare filter (year >= 1990).
   - Multiple Compare filters AND-ed together.
   - Pagination: limit/offset.
@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.ontology import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 
 # ---------------------------------------------------------------------------
@@ -124,7 +124,7 @@ def _post(client: TestClient, query: str, variables: dict | None = None) -> dict
 
 def test_schema_cache_changes_on_new_publish(gql_db):
     """Content hash changes after a new publish → schema cache miss → new schema."""
-    from knot.api.graphql_schema import _schema_cache, get_or_build_schema
+    from knot.spec.compile.graphql import _schema_cache, get_or_build_schema
 
     conn, spec, src, rev = gql_db
 
@@ -274,7 +274,7 @@ def test_query_like_filter(gql_client):
 def test_graphql_no_auth_returns_401_when_enforced():
     """Without KNOT_AUTH_DEV_MODE=1, missing token → 401."""
     from knot.api.main import app
-    from knot.security import require_user as _require_user, Principal as _Principal, _strip_bearer
+    from knot.api.auth.security import require_user as _require_user, Principal as _Principal, _strip_bearer
     from knot.db import users
     from fastapi import HTTPException, Header
 
@@ -301,7 +301,7 @@ def test_graphql_no_auth_returns_401_when_enforced():
 def test_graphql_wrong_token_returns_403_when_enforced():
     """Wrong token → 403."""
     from knot.api.main import app
-    from knot.security import require_user as _require_user, Principal as _Principal, _strip_bearer
+    from knot.api.auth.security import require_user as _require_user, Principal as _Principal, _strip_bearer
     from knot.db import users
     from fastapi import HTTPException, Header
 
@@ -513,8 +513,8 @@ def test_resolved_as_of_current_returns_record(gql_db, gql_client):
 
 def test_count_rows_with_predicate(gql_db):
     """count_rows should honour the predicate and return filtered count."""
-    from knot.db.sql_compiler import CompileContext, compile_predicate
-    from knot.ontology.metaschema import Compare, CompareOp, Literal_, SlotPath
+    from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate
+    from knot.spec.metaschema import Compare, CompareOp, Literal_, SlotPath
 
     conn, spec, src, rev = gql_db
     movie_cls = next(c for c in spec.classes if c.name == "Movie")
@@ -547,7 +547,7 @@ def _build_derived_spec():
     """Movie + Credit spec.  Movie.credit_count is a derived slot
     (RelationCount over Credit rows whose movie FK = movie canonical_id).
     """
-    from knot.ontology.metaschema import (
+    from knot.spec.metaschema import (
         RelationCount, ReverseRelation,
     )
     st = TypeDefinition(name="string", base="str")

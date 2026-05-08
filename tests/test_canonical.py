@@ -17,7 +17,7 @@ canonical-form pipeline + the entity tree shape.
 
 from __future__ import annotations
 
-from knot.ontology import (
+from knot.spec import (
     OntologyClass,
     Slot,
     Source,
@@ -25,7 +25,7 @@ from knot.ontology import (
     TypeDefinition,
     compute_content_hash,
 )
-from knot.ontology.canonical import CANONICAL_DUMP_VERSION
+from knot.spec.canonical import CANONICAL_DUMP_VERSION
 
 
 PINNED_HASH = "7f3318722fb1bd00fd1e057be13f8a61ed61226382cfc83a1333c9da09d79e36"

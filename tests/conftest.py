@@ -11,7 +11,7 @@ from neo4j import GraphDatabase
 
 from tests.test_env import TestEnv
 from knot import db
-from knot.config import get_dsn
+from knot.config.config import get_dsn
 
 
 @pytest.fixture(scope="session")
