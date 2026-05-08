@@ -211,8 +211,8 @@ def _spec_summary(spec: Spec) -> dict[str, int]:
     }
 
 
-def _persist(conn: psycopg.Connection, draft_id: int, spec: Spec) -> MutationResponse:
-    spec_store.update_draft(conn, draft_id, spec)
+def _response(draft_id: int, spec: Spec) -> MutationResponse:
+    """Build the mutation response after ``edit_draft`` has written back."""
     return MutationResponse(
         draft_revision=draft_id,
         content_hash=compute_content_hash(spec),
@@ -407,19 +407,19 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 )
 def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
     with db.connect() as conn:
-        spec = spec_store.get_revision(conn, draft_id)
-        if any(t.name.lower() == body.name.lower() for t in spec.types):
-            raise HTTPException(
-                409,
-                f"TypeDefinition collides (case-insensitive) for name {body.name!r}.",
-            )
-        spec.types.append(TypeDefinition(
-            name=body.name,
-            base=body.base,
-            pattern=body.pattern,
-            description=body.description,
-        ))
-        return _persist(conn, draft_id, spec)
+        with spec_store.edit_draft(conn, draft_id) as spec:
+            if any(t.name.lower() == body.name.lower() for t in spec.types):
+                raise HTTPException(
+                    409,
+                    f"TypeDefinition collides (case-insensitive) for name {body.name!r}.",
+                )
+            spec.types.append(TypeDefinition(
+                name=body.name,
+                base=body.base,
+                pattern=body.pattern,
+                description=body.description,
+            ))
+        return _response(draft_id, spec)
 
 
 @router.post(
@@ -429,52 +429,49 @@ def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
 )
 def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
     with db.connect() as conn:
-        spec = spec_store.get_revision(conn, draft_id)
-        if any(s.name.lower() == body.name.lower() for s in spec.slots):
-            raise HTTPException(
-                409,
-                f"Slot collides (case-insensitive) for name {body.name!r}.",
-            )
+        with spec_store.edit_draft(conn, draft_id) as spec:
+            if any(s.name.lower() == body.name.lower() for s in spec.slots):
+                raise HTTPException(
+                    409,
+                    f"Slot collides (case-insensitive) for name {body.name!r}.",
+                )
 
-        range_obj: Any | None = None
-        if body.range_kind == "type":
-            if body.range_name is None:
-                raise HTTPException(400, "range_kind='type' requires range_name")
-            range_obj = _find_type(spec, body.range_name)
-        elif body.range_kind == "class":
-            if body.range_name is None:
-                raise HTTPException(400, "range_kind='class' requires range_name")
-            range_obj = _find_class(spec, body.range_name)
-        elif body.range_kind is not None:
-            raise HTTPException(400, f"range_kind must be 'type', 'class', or null; got {body.range_kind!r}")
+            range_obj: Any | None = None
+            if body.range_kind == "type":
+                if body.range_name is None:
+                    raise HTTPException(400, "range_kind='type' requires range_name")
+                range_obj = _find_type(spec, body.range_name)
+            elif body.range_kind == "class":
+                if body.range_name is None:
+                    raise HTTPException(400, "range_kind='class' requires range_name")
+                range_obj = _find_class(spec, body.range_name)
+            elif body.range_kind is not None:
+                raise HTTPException(400, f"range_kind must be 'type', 'class', or null; got {body.range_kind!r}")
 
-        permissible = None
-        if body.permissible_values is not None:
-            permissible = [PermissibleValue(text=t) for t in body.permissible_values]
+            permissible = None
+            if body.permissible_values is not None:
+                permissible = [PermissibleValue(text=t) for t in body.permissible_values]
 
-        derivation = None
-        if body.derivation is not None:
-            # Use a placeholder primary class for translation; the derivation
-            # expression references classes/slots by name and is resolved against
-            # the full spec graph at compile time (not at slot-authoring time).
-            placeholder_primary = OntologyClass(name="__derivation_ctx__")
-            derivation = translate_expr(body.derivation, spec, placeholder_primary)
+            derivation = None
+            if body.derivation is not None:
+                placeholder_primary = OntologyClass(name="__derivation_ctx__")
+                derivation = translate_expr(body.derivation, spec, placeholder_primary)
 
-        spec.slots.append(Slot(
-            name=body.name,
-            range=range_obj,
-            identifier=body.identifier,
-            required=body.required,
-            multivalued=body.multivalued,
-            resolution_policy=body.resolution_policy,
-            pattern=body.pattern,
-            minimum_value=body.minimum_value,
-            maximum_value=body.maximum_value,
-            permissible_values=permissible,
-            description=body.description,
-            derivation=derivation,
-        ))
-        return _persist(conn, draft_id, spec)
+            spec.slots.append(Slot(
+                name=body.name,
+                range=range_obj,
+                identifier=body.identifier,
+                required=body.required,
+                multivalued=body.multivalued,
+                resolution_policy=body.resolution_policy,
+                pattern=body.pattern,
+                minimum_value=body.minimum_value,
+                maximum_value=body.maximum_value,
+                permissible_values=permissible,
+                description=body.description,
+                derivation=derivation,
+            ))
+        return _response(draft_id, spec)
 
 
 @router.post(
@@ -484,33 +481,33 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
 )
 def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
     with db.connect() as conn:
-        spec = spec_store.get_revision(conn, draft_id)
-        if any(c.name.lower() == body.name.lower() for c in spec.classes):
-            raise HTTPException(
-                409,
-                f"OntologyClass collides (case-insensitive) with an existing "
-                f"class for name {body.name!r}.",
-            )
+        with spec_store.edit_draft(conn, draft_id) as spec:
+            if any(c.name.lower() == body.name.lower() for c in spec.classes):
+                raise HTTPException(
+                    409,
+                    f"OntologyClass collides (case-insensitive) with an existing "
+                    f"class for name {body.name!r}.",
+                )
 
-        slots = [_find_slot(spec, n) for n in body.slot_names]
-        is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
-        mixins = [_find_class(spec, n) for n in body.mixin_names]
+            slots = [_find_slot(spec, n) for n in body.slot_names]
+            is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
+            mixins = [_find_class(spec, n) for n in body.mixin_names]
 
-        definition = None
-        if body.definition is not None:
-            primary = is_a if is_a is not None else _find_class(spec, body.name) if any(c.name == body.name for c in spec.classes) else OntologyClass(name=body.name)
-            definition = translate_expr(body.definition, spec, primary)
+            definition = None
+            if body.definition is not None:
+                primary = is_a if is_a is not None else _find_class(spec, body.name) if any(c.name == body.name for c in spec.classes) else OntologyClass(name=body.name)
+                definition = translate_expr(body.definition, spec, primary)
 
-        spec.classes.append(OntologyClass(
-            name=body.name,
-            slots=slots,
-            is_a=is_a,
-            mixins=mixins,
-            abstract=body.abstract,
-            description=body.description,
-            definition=definition,
-        ))
-        return _persist(conn, draft_id, spec)
+            spec.classes.append(OntologyClass(
+                name=body.name,
+                slots=slots,
+                is_a=is_a,
+                mixins=mixins,
+                abstract=body.abstract,
+                description=body.description,
+                definition=definition,
+            ))
+        return _response(draft_id, spec)
 
 
 @router.patch(
@@ -520,21 +517,21 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
 )
 def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
     with db.connect() as conn:
-        spec = spec_store.get_revision(conn, draft_id)
-        cls = _find_class(spec, name)
+        with spec_store.edit_draft(conn, draft_id) as spec:
+            cls = _find_class(spec, name)
 
-        if body.slot_names is not None:
-            cls.slots = [_find_slot(spec, n) for n in body.slot_names]
-        if body.is_a_name is not None:
-            cls.is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
-        if body.mixin_names is not None:
-            cls.mixins = [_find_class(spec, n) for n in body.mixin_names]
-        if body.abstract is not None:
-            cls.abstract = body.abstract
-        if body.description is not None:
-            cls.description = body.description
+            if body.slot_names is not None:
+                cls.slots = [_find_slot(spec, n) for n in body.slot_names]
+            if body.is_a_name is not None:
+                cls.is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
+            if body.mixin_names is not None:
+                cls.mixins = [_find_class(spec, n) for n in body.mixin_names]
+            if body.abstract is not None:
+                cls.abstract = body.abstract
+            if body.description is not None:
+                cls.description = body.description
 
-        return _persist(conn, draft_id, spec)
+        return _response(draft_id, spec)
 
 
 @router.post(
@@ -544,28 +541,28 @@ def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationRespons
 )
 def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
     with db.connect() as conn:
-        spec = spec_store.get_revision(conn, draft_id)
-        if any(s.name.lower() == body.name.lower() for s in spec.sources):
-            raise HTTPException(
-                409,
-                f"Source collides (case-insensitive) for name {body.name!r}.",
-            )
+        with spec_store.edit_draft(conn, draft_id) as spec:
+            if any(s.name.lower() == body.name.lower() for s in spec.sources):
+                raise HTTPException(
+                    409,
+                    f"Source collides (case-insensitive) for name {body.name!r}.",
+                )
 
-        cls = _find_class(spec, body.entity_class_name)
-        slot = next((s for s in cls.slots if s.name == body.identifier_slot_name), None)
-        if slot is None:
-            raise HTTPException(
-                400,
-                f"Slot {body.identifier_slot_name!r} is not on class {cls.name!r}",
-            )
+            cls = _find_class(spec, body.entity_class_name)
+            slot = next((s for s in cls.slots if s.name == body.identifier_slot_name), None)
+            if slot is None:
+                raise HTTPException(
+                    400,
+                    f"Slot {body.identifier_slot_name!r} is not on class {cls.name!r}",
+                )
 
-        spec.sources.append(Source(
-            name=body.name,
-            entity_class=cls,
-            identifier_slot=slot,
-            description=body.description,
-        ))
-        return _persist(conn, draft_id, spec)
+            spec.sources.append(Source(
+                name=body.name,
+                entity_class=cls,
+                identifier_slot=slot,
+                description=body.description,
+            ))
+        return _response(draft_id, spec)
 
 
 @router.post(
@@ -575,31 +572,24 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
 )
 def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
     with db.connect() as conn:
-        spec = spec_store.get_revision(conn, draft_id)
+        with spec_store.edit_draft(conn, draft_id) as spec:
+            if any(c.name.lower() == body.name.lower() for c in spec.constraints):
+                raise HTTPException(
+                    409,
+                    f"Constraint collides (case-insensitive) for name {body.name!r}.",
+                )
 
-        # Duplicate-name guard (case-insensitive twin, like other mutation endpoints).
-        if any(c.name.lower() == body.name.lower() for c in spec.constraints):
-            raise HTTPException(
-                409,
-                f"Constraint collides (case-insensitive) for name {body.name!r}.",
-            )
+            primary = _find_class(spec, body.primary_class_name)
+            expr = translate_expr(body.body, spec, primary)
 
-        # Resolve primary class.
-        primary = _find_class(spec, body.primary_class_name)
-
-        # Translate the JSON expression tree → metaschema expression tree.
-        # _find_slot called inside translate_expr raises 404 on unknown slot.
-        expr = translate_expr(body.body, spec, primary)
-
-        constraint = Constraint(
-            name=body.name,
-            primary=primary,
-            body=expr,
-            severity=body.severity,
-            message=body.message,
-        )
-        spec.constraints.append(constraint)
-        return _persist(conn, draft_id, spec)
+            spec.constraints.append(Constraint(
+                name=body.name,
+                primary=primary,
+                body=expr,
+                severity=body.severity,
+                message=body.message,
+            ))
+        return _response(draft_id, spec)
 
 
 # ─── Publish ────────────────────────────────────────────────────────────────

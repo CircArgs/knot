@@ -27,8 +27,9 @@ from __future__ import annotations
 
 import json
 import logging
+from contextlib import contextmanager
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Iterator
 
 import psycopg
 from pydantic import BaseModel
@@ -661,7 +662,14 @@ def create_draft(
 
 
 def update_draft(conn: psycopg.Connection, draft_id: int, spec: Spec) -> None:
-    """Overwrite a draft's spec content.  Drafts are mutable; published rows are not."""
+    """Overwrite a draft's spec content. Drafts are mutable; published rows are not.
+
+    NOTE: this primitive is *not* concurrency-safe on its own — two parallel
+    callers that read the same draft, mutate, and call ``update_draft`` will
+    silently overwrite each other. For mutate-in-place flows (every endpoint
+    in ``api/spec.py``), use :func:`edit_draft` instead, which holds a row
+    lock for the full read-modify-write window.
+    """
     row = conn.execute(
         "SELECT published FROM spec_revisions WHERE revision = %s",
         (draft_id,),
@@ -680,6 +688,47 @@ def update_draft(conn: psycopg.Connection, draft_id: int, spec: Spec) -> None:
         "UPDATE spec_revisions SET spec = %s, content_hash = %s WHERE revision = %s",
         (json.dumps(payload), content_hash, draft_id),
     )
+
+
+@contextmanager
+def edit_draft(conn: psycopg.Connection, draft_id: int) -> Iterator[Spec]:
+    """Atomic read-modify-write of a draft.
+
+    Opens a transaction, locks the ``spec_revisions`` row with FOR UPDATE,
+    yields the rehydrated Spec, and writes the (possibly mutated) spec back
+    on context exit. Concurrent calls on the same draft serialize on the row
+    lock, eliminating the lost-update race that plain ``get_revision`` +
+    ``update_draft`` would have.
+
+    Raises ``DraftNotFoundError`` if the revision doesn't exist and
+    ``DraftAlreadyPublishedError`` if it's already published.
+    """
+    with conn.transaction():
+        row = conn.execute(
+            "SELECT spec, published FROM spec_revisions "
+            "WHERE revision = %s FOR UPDATE",
+            (draft_id,),
+        ).fetchone()
+        if row is None:
+            raise DraftNotFoundError(f"spec_revisions {draft_id} not found")
+        if row[1] is True:
+            raise DraftAlreadyPublishedError(
+                f"spec_revisions {draft_id} is already published; create a new "
+                "draft branched from it instead."
+            )
+
+        payload = row[0] if isinstance(row[0], dict) else json.loads(row[0])
+        spec = spec_from_dict(payload)
+
+        yield spec
+
+        new_payload = spec_to_dict(spec)
+        new_hash = compute_content_hash(spec)
+        conn.execute(
+            "UPDATE spec_revisions SET spec = %s, content_hash = %s "
+            "WHERE revision = %s",
+            (json.dumps(new_payload), new_hash, draft_id),
+        )
 
 
 def get_published_revision(conn: psycopg.Connection) -> int | None:
