@@ -21,9 +21,12 @@ from knot.ontology.metaschema import (
     CompareOp,
     Literal_,
     Matches,
+    OntologyClass,
     SlotPath,
     Within,
 )
+
+from knot.db._naming import bindings_table_id, table_id
 
 from knot.db.sql_compiler._context import CompileContext
 from knot.db.sql_compiler._dispatch import CompilerError, compile_predicate
@@ -66,24 +69,71 @@ def _compile_literal(node: Literal_, ctx: CompileContext) -> sql.Composable:
 
 @compile_predicate.register
 def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
-    if len(node.slots) != 1:
-        raise CompilerError(
-            f"Multi-slot SlotPath compilation (len={len(node.slots)}) is not "
-            "supported in the predicate compiler; relation traversal lands with "
-            "/graph/query (RelationAll / RelationAny)."
+    if len(node.slots) == 0:
+        raise CompilerError("SlotPath must have at least one slot.")
+
+    if len(node.slots) == 1:
+        slot = node.slots[0]
+        # Validate slot is on the primary class (by identity walk).
+        primary_slot_ids = {id(s) for s in ctx.primary_class.slots}
+        if id(slot) not in primary_slot_ids:
+            raise CompilerError(
+                f"SlotPath references slot {slot.name!r} which is not on the "
+                f"primary class {ctx.primary_class.name!r}.  Cross-class slot "
+                "paths require relation traversal (not implemented in this slice)."
+            )
+        return sql.SQL("{alias}.{col}").format(
+            alias=sql.Identifier(ctx.alias),
+            col=sql.Identifier(slot.name),
         )
-    slot = node.slots[0]
-    # Validate slot is on the primary class (by identity walk).
-    primary_slot_ids = {id(s) for s in ctx.primary_class.slots}
-    if id(slot) not in primary_slot_ids:
-        raise CompilerError(
-            f"SlotPath references slot {slot.name!r} which is not on the "
-            f"primary class {ctx.primary_class.name!r}.  Cross-class slot "
-            "paths require relation traversal (not implemented in this slice)."
+
+    # Multi-slot: traverse class-ranged FK slots via accumulated JOINs.
+    # Each non-terminal slot must have range=OntologyClass (a FK column).
+    # The terminal slot is a plain column on the last-joined table.
+    #
+    # For path [slot_a, slot_b, slot_c] starting from alias "s":
+    #   JOIN knot_data.<B> _sp1 JOIN knot_data.<B>_bindings _sb1
+    #     ON _sb1.knot_row_id = _sp1._knot_row_id AND _sb1.valid_to IS NULL
+    #    AND _sb1.canonical_id = s.<slot_a>
+    #   JOIN knot_data.<C> _sp2 JOIN knot_data.<C>_bindings _sb2
+    #     ON _sb2.knot_row_id = _sp2._knot_row_id AND _sb2.valid_to IS NULL
+    #    AND _sb2.canonical_id = _sp1.<slot_b>
+    # Terminal column: _sp2.<slot_c>
+    #
+    # JOIN fragments are appended to ctx.joins; the caller wraps them.
+
+    current_alias = ctx.alias
+    for step_idx, slot in enumerate(node.slots[:-1]):
+        if not isinstance(slot.range, OntologyClass):
+            raise CompilerError(
+                f"SlotPath non-terminal slot {slot.name!r} at position {step_idx} "
+                f"must have an OntologyClass range for FK traversal; "
+                f"got {type(slot.range).__name__!r}."
+            )
+        target_cls: OntologyClass = slot.range
+        row_alias = f"_sp{step_idx + 1}"
+        bind_alias = f"_sb{step_idx + 1}"
+
+        join_frag = sql.SQL(
+            "JOIN {tbl} {ra} JOIN {btbl} {ba}"
+            " ON {ba}.knot_row_id = {ra}._knot_row_id"
+            " AND {ba}.valid_to IS NULL"
+            " AND {ba}.canonical_id = {outer}.{fk}"
+        ).format(
+            tbl=table_id(target_cls),
+            btbl=bindings_table_id(target_cls),
+            ra=sql.Identifier(row_alias),
+            ba=sql.Identifier(bind_alias),
+            outer=sql.Identifier(current_alias),
+            fk=sql.Identifier(slot.name),
         )
+        ctx.joins.append(join_frag)
+        current_alias = row_alias
+
+    terminal_slot = node.slots[-1]
     return sql.SQL("{alias}.{col}").format(
-        alias=sql.Identifier(ctx.alias),
-        col=sql.Identifier(slot.name),
+        alias=sql.Identifier(current_alias),
+        col=sql.Identifier(terminal_slot.name),
     )
 
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
+from psycopg import sql
+
 from knot.ontology.metaschema import OntologyClass
 
 
@@ -16,11 +18,14 @@ class CompileContext:
     ``alias`` is the SQL table alias for the source-row table (default "s").
     ``params`` accumulates positional parameters in left-to-right emit order;
     callers read it after ``compile_predicate`` returns.
+    ``joins`` accumulates JOIN clauses needed by multi-slot SlotPath traversal;
+    callers prepend them to the FROM clause after compilation.
     """
 
     primary_class: OntologyClass
     alias: str = "s"
     params: list[Any] = field(default_factory=list)
+    joins: list[sql.Composable] = field(default_factory=list)
 
     def with_subquery_alias(
         self,
@@ -30,7 +35,8 @@ class CompileContext:
         """Return a child context for compiling a predicate inside a subquery.
 
         The child shares the *same* ``params`` list so parameters accumulate
-        in left-to-right emit order across the entire statement.
+        in left-to-right emit order across the entire statement.  Joins are
+        *not* shared: subquery contexts accumulate their own JOIN list.
         """
         return CompileContext(
             primary_class=target_cls,

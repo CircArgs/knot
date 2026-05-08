@@ -43,9 +43,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import sys
 from datetime import datetime, timezone
+
+from knot.config import get_settings
 
 
 # ── JSON formatter ────────────────────────────────────────────────────────────
@@ -110,11 +111,9 @@ def configure_logging() -> None:
            for h in root.handlers):
         return
 
-    level_name = os.environ.get("KNOT_LOG_LEVEL", "INFO").upper()
-    level = getattr(logging, level_name, logging.INFO)
-
-    dev_mode = os.environ.get("KNOT_DEV_MODE") == "1"
-    fmt_name = os.environ.get("KNOT_LOG_FORMAT", "text" if dev_mode else "json").lower()
+    settings = get_settings()
+    level = getattr(logging, settings.log_level.upper(), logging.INFO)
+    fmt_name = settings.effective_log_format
 
     if fmt_name == "json":
         formatter: logging.Formatter = _JsonFormatter()

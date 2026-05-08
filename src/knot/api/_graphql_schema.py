@@ -1,22 +1,35 @@
 """GraphQL schema generation from a published Spec.
 
-Each OntologyClass becomes a Strawberry type; each is queryable with:
-  - where: flat AND of Compare predicates per slot (WhereInput per class)
-  - limit: Int (default 100)
-  - offset: Int (default 0)
-  - as_of: Int | None (pin to spec_revision <= N)
+Each OntologyClass becomes a root query with several fields:
+
+  movies(where, limit, offset, asOf, orderBy) -> MoviePage
+      Paginated list with total count.  ``MoviePage`` shape:
+          { rows: [String!]!, total: Int!, limit: Int!, offset: Int!, asOf: Int }
+
+  movieByCanonicalId(canonicalId, asOf) -> String | null
+      All contributions for a single canonical_id serialised as one JSON
+      string.  Multiple sources → alphabetical-source tiebreak for scalar
+      fields; multivalued slots unioned.  Returns null when not found.
+
+  movieResolved(canonicalId, asOf) -> String | null
+      Trust-resolved record via ``knot.graph.resolve.resolve_entity``.
+      Returns null when not found.
+
+orderBy is a list of { field: MovieField!, direction: ASC | DESC } objects.
+MovieField is an enum of stored slot names.
 
 Schema is cached by content_hash so it rebuilds only when the spec changes.
 
 Centralisation rule: all SQL lives in db/. The resolver here delegates to
-graph_store.query_rows which holds the parameterised SQL.
+graph_store.query_rows / count_rows / get_canonical_contributions and
+resolve.resolve_entity; ORDER BY is compiled via sql_compiler.compile_order_by.
 
-Traversal (movie.credits joins) and projection (SELECT specific cols) are
-out of scope for this slice. Full rows are returned for every match.
+Traversal (relation joins) and projection are out of scope for this slice.
 """
 
 from __future__ import annotations
 
+import enum
 import json
 import logging
 import sys
@@ -126,14 +139,62 @@ def _make_class_where_type(oc: OntologyClass) -> type:
 
 
 # ---------------------------------------------------------------------------
-# Result type: {rows: [String!]}
+# Page type: { rows: [String!]!, total: Int!, limit: Int!, offset: Int!, asOf: Int }
 # ---------------------------------------------------------------------------
 
-def _make_result_type(class_name: str) -> type:
-    type_name = f"QueryResult_{class_name}"
-    annotations: dict[str, Any] = {"rows": list[str]}
-    cls = type(type_name, (), {"__annotations__": annotations})
+def _make_page_type(class_name: str) -> type:
+    type_name = f"Page_{class_name}"
+    annotations: dict[str, Any] = {
+        "rows":   list[str],
+        "total":  int,
+        "limit":  int,
+        "offset": int,
+        "as_of":  Optional[int],
+    }
+    ns: dict[str, Any] = {
+        "rows":   strawberry.UNSET,
+        "total":  strawberry.UNSET,
+        "limit":  strawberry.UNSET,
+        "offset": strawberry.UNSET,
+        "as_of":  None,
+    }
+    cls = type(type_name, (), {"__annotations__": annotations, **ns})
     return strawberry.type(cls)
+
+
+# ---------------------------------------------------------------------------
+# OrderBy input: { field: <ClassField>, direction: ASC | DESC }
+# ---------------------------------------------------------------------------
+
+@strawberry.enum
+class OrderDirection(enum.Enum):
+    ASC = "ASC"
+    DESC = "DESC"
+
+
+def _make_field_enum(oc: OntologyClass) -> type:
+    """Build a strawberry enum of stored slot names for a class."""
+    enum_name = f"Field_{oc.name}"
+    # stored slots only (no derivation)
+    stored = [s for s in oc.slots if getattr(s, "derivation", None) is None]
+    members = {s.name: s.name for s in stored}
+    py_enum = enum.Enum(enum_name, members)  # type: ignore[misc]
+    return strawberry.enum(py_enum)
+
+
+def _make_order_by_input(oc: OntologyClass, field_enum: type) -> type:
+    """Build the OrderBy input type for a class."""
+    type_name = f"OrderBy_{oc.name}"
+    annotations: dict[str, Any] = {
+        "field":     field_enum,
+        "direction": OrderDirection,
+    }
+    ns: dict[str, Any] = {
+        "field":     strawberry.UNSET,
+        "direction": OrderDirection.ASC,
+    }
+    cls = type(type_name, (), {"__annotations__": annotations, **ns})
+    return strawberry.input(cls)
 
 
 # ---------------------------------------------------------------------------
@@ -220,6 +281,74 @@ def build_predicate_sql(
     return fragment, ctx.params
 
 
+def _build_order_by_sql(
+    order_by_list: Any,
+    alias: str = "s",
+) -> sql.Composable | None:
+    """Convert a list of OrderBy input objects to a sql.Composable fragment.
+
+    Returns None when the list is empty/unset (caller uses default sort).
+    """
+    from knot.db.sql_compiler import compile_order_by
+
+    if order_by_list is strawberry.UNSET or not order_by_list:
+        return None
+    terms = [(item.field.value, item.direction.value) for item in order_by_list]
+    return compile_order_by(terms, alias=alias)
+
+
+# ---------------------------------------------------------------------------
+# Single-entity merge: multiple contributions → one dict (alpha-source tiebreak)
+# ---------------------------------------------------------------------------
+
+def _merge_contributions(
+    contribs: list[dict[str, Any]],
+    oc: OntologyClass,
+) -> dict[str, Any]:
+    """Merge multiple per-source contribution dicts into one.
+
+    Scalar slots: value from alphabetically-first source that provides a
+    non-null value (contribs are already ordered by _source from
+    get_canonical_contributions).
+    Multivalued slots: union across sources in source order, deduped.
+    System columns (_canonical_id, _source, etc.) taken from first contrib.
+    """
+    if not contribs:
+        return {}
+    # contribs already sorted by _source (get_canonical_contributions ORDER BY s._source)
+    merged: dict[str, Any] = {}
+    # Copy system columns from first contrib
+    for k, v in contribs[0].items():
+        if k.startswith("_"):
+            merged[k] = v
+
+    for slot in oc.slots:
+        if slot.multivalued:
+            flat: list[Any] = []
+            seen_set: set = set()
+            for c in contribs:
+                vals = c.get(slot.name)
+                if vals is None:
+                    continue
+                for v in vals:
+                    try:
+                        if v not in seen_set:
+                            seen_set.add(v)
+                            flat.append(v)
+                    except TypeError:
+                        if v not in flat:
+                            flat.append(v)
+            merged[slot.name] = flat if flat else None
+        else:
+            merged[slot.name] = None
+            for c in contribs:
+                val = c.get(slot.name)
+                if val is not None:
+                    merged[slot.name] = val
+                    break  # first non-null alphabetical source wins
+    return merged
+
+
 # ---------------------------------------------------------------------------
 # Schema builder
 # ---------------------------------------------------------------------------
@@ -231,37 +360,55 @@ def _build_schema(spec: Spec) -> Schema:
     - Build all input/result types per class.
     - Register a throw-away module in sys.modules so Strawberry can look up
       the type names from the resolver's __module__ attribute.
-    - Create resolver functions using types.FunctionType so we control
-      __globals__ and __module__.
+    - Create resolver functions using exec() so we control __globals__
+      and __module__.
+
+    Per-class root fields:
+      <class_lower>(where, limit, offset, asOf, orderBy) -> Page_<Class>
+      <class_lower>ByCanonicalId(canonicalId, asOf)      -> String | null
+      <class_lower>Resolved(canonicalId, asOf)           -> String | null
     """
     from knot import db
     from knot.db import graph_store
+    from knot.graph import resolve as _resolve_mod
 
     concrete_classes = [c for c in spec.classes if not c.abstract]
 
-    # Build input/result types for all classes.
+    # Build per-class types.
     where_types: dict[str, type] = {}
-    result_types: dict[str, type] = {}
+    page_types: dict[str, type] = {}
+    field_enums: dict[str, type] = {}
+    order_by_inputs: dict[str, type] = {}
     for oc in concrete_classes:
         where_types[oc.name] = _make_class_where_type(oc)
-        result_types[oc.name] = _make_result_type(oc.name)
+        page_types[oc.name] = _make_page_type(oc.name)
+        field_enums[oc.name] = _make_field_enum(oc)
+        order_by_inputs[oc.name] = _make_order_by_input(oc, field_enums[oc.name])
 
-    # Build a synthetic module that Strawberry can look up by name.
-    # The module's __dict__ must contain all the type names used in annotations.
+    # Build a synthetic module for Strawberry's type resolution.
     mod_name = f"knot.api._graphql_schema._dynamic_{id(spec)}"
     mod = types.ModuleType(mod_name)
     mod.__dict__["Optional"] = Optional
     mod.__dict__["int"] = int
     mod.__dict__["str"] = str
+    mod.__dict__["list"] = list
     for t in where_types.values():
         mod.__dict__[t.__name__] = t
-    for t in result_types.values():
+    for t in page_types.values():
         mod.__dict__[t.__name__] = t
+    for t in field_enums.values():
+        mod.__dict__[t.__name__] = t
+    for t in order_by_inputs.values():
+        mod.__dict__[t.__name__] = t
+    mod.__dict__["OrderDirection"] = OrderDirection
     # Runtime helpers available inside resolver bodies.
     mod.__dict__["_json"] = json
     mod.__dict__["_db"] = db
     mod.__dict__["_gs"] = graph_store
+    mod.__dict__["_resolve_mod"] = _resolve_mod
     mod.__dict__["_build_pred"] = build_predicate_sql
+    mod.__dict__["_build_order_by"] = _build_order_by_sql
+    mod.__dict__["_merge_contribs"] = _merge_contributions
     mod.__dict__["_UNSET"] = strawberry.UNSET
 
     sys.modules[mod_name] = mod
@@ -270,46 +417,105 @@ def _build_schema(spec: Spec) -> Schema:
 
     for oc in concrete_classes:
         wtype = where_types[oc.name]
-        rtype = result_types[oc.name]
+        ptype = page_types[oc.name]
+        ob_input = order_by_inputs[oc.name]
         wtype_name = wtype.__name__
-        rtype_name = rtype.__name__
+        ptype_name = ptype.__name__
+        ob_name = ob_input.__name__
         bound_oc = oc
 
-        # Compile resolver code with type names expressed as strings that
-        # resolve via the synthetic module's __dict__.
-        fn_name = f"resolve_{oc.name.lower()}"
-        fn_src = (
-            f"def {fn_name}(\n"
+        # Unique per-class bindings in the module dict.
+        oc_key = f"_oc_{oc.name}"
+        ptype_key = f"_ptype_{oc.name}"
+        mod.__dict__[oc_key] = bound_oc
+        mod.__dict__[ptype_key] = ptype
+
+        cls_lower = oc.name.lower()
+
+        # ── List resolver (paginated) ──────────────────────────────────────
+        list_fn_name = f"resolve_{cls_lower}"
+        list_fn_src = (
+            f"def {list_fn_name}(\n"
             f"    where: Optional[{wtype_name}] = _UNSET,\n"
             f"    limit: int = 100,\n"
             f"    offset: int = 0,\n"
             f"    as_of: Optional[int] = None,\n"
-            f") -> {rtype_name}:\n"
-            f"    pred_sql, pred_params = _build_pred(_oc, where)\n"
+            f"    order_by: Optional[list[{ob_name}]] = _UNSET,\n"
+            f") -> {ptype_name}:\n"
+            f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
+            f"    ob_sql = _build_order_by(order_by)\n"
             f"    with _db.connect() as conn:\n"
             f"        rows = _gs.query_rows(\n"
-            f"            conn, cls=_oc,\n"
+            f"            conn, cls={oc_key},\n"
             f"            predicate_sql=pred_sql,\n"
             f"            predicate_params=pred_params,\n"
             f"            limit=limit, offset=offset, as_of=as_of,\n"
+            f"            order_by_sql=ob_sql,\n"
             f"        )\n"
-            f"    return _rtype(rows=[_json.dumps(r, default=str) for r in rows])\n"
+            f"        total = _gs.count_rows(\n"
+            f"            conn, cls={oc_key}, as_of=as_of,\n"
+            f"            predicate_sql=pred_sql, predicate_params=pred_params,\n"
+            f"        )\n"
+            f"    return {ptype_key}(\n"
+            f"        rows=[_json.dumps(r, default=str) for r in rows],\n"
+            f"        total=total, limit=limit, offset=offset, as_of=as_of,\n"
+            f"    )\n"
         )
 
-        # Inject oc-specific bindings into the module's __dict__ under
-        # unique names so concurrent classes don't stomp each other.
-        oc_key = f"_oc_{oc.name}"
-        rtype_key = f"_rtype_{oc.name}"
-        mod.__dict__[oc_key] = bound_oc
-        mod.__dict__[rtype_key] = rtype
+        # ── Single-entity (contributions) resolver ─────────────────────────
+        by_id_fn_name = f"resolve_{cls_lower}_by_canonical_id"
+        by_id_fn_src = (
+            f"def {by_id_fn_name}(\n"
+            f"    canonical_id: str,\n"
+            f"    as_of: Optional[int] = None,\n"
+            f") -> Optional[str]:\n"
+            f"    with _db.connect() as conn:\n"
+            f"        contribs = _gs.get_canonical_contributions(\n"
+            f"            conn, cls={oc_key},\n"
+            f"            canonical_id=canonical_id, as_of=as_of,\n"
+            f"        )\n"
+            f"    if not contribs:\n"
+            f"        return None\n"
+            f"    merged = _merge_contribs(contribs, {oc_key})\n"
+            f"    return _json.dumps(merged, default=str)\n"
+        )
 
-        fn_src = fn_src.replace("_oc", oc_key).replace("_rtype", rtype_key)
+        # ── Resolved view resolver ─────────────────────────────────────────
+        resolved_fn_name = f"resolve_{cls_lower}_resolved"
+        resolved_fn_src = (
+            f"def {resolved_fn_name}(\n"
+            f"    canonical_id: str,\n"
+            f"    as_of: Optional[int] = None,\n"
+            f") -> Optional[str]:\n"
+            f"    with _db.connect() as conn:\n"
+            f"        record = _resolve_mod.resolve_entity(\n"
+            f"            conn, cls={oc_key},\n"
+            f"            canonical_id=canonical_id, as_of=as_of,\n"
+            f"        )\n"
+            f"    if record is None:\n"
+            f"        return None\n"
+            f"    return _json.dumps(record, default=str)\n"
+        )
 
-        exec(fn_src, mod.__dict__)  # noqa: S102
-        resolver_fn = mod.__dict__[fn_name]
-        resolver_fn.__module__ = mod_name
+        for fn_src, fn_name in [
+            (list_fn_src, list_fn_name),
+            (by_id_fn_src, by_id_fn_name),
+            (resolved_fn_src, resolved_fn_name),
+        ]:
+            exec(fn_src, mod.__dict__)  # noqa: S102
+            fn = mod.__dict__[fn_name]
+            fn.__module__ = mod_name
 
-        query_fields[oc.name.lower()] = strawberry.field(resolver=resolver_fn)
+        # Register the three root fields.
+        query_fields[cls_lower] = strawberry.field(
+            resolver=mod.__dict__[list_fn_name]
+        )
+        query_fields[f"{cls_lower}ByCanonicalId"] = strawberry.field(
+            resolver=mod.__dict__[by_id_fn_name]
+        )
+        query_fields[f"{cls_lower}Resolved"] = strawberry.field(
+            resolver=mod.__dict__[resolved_fn_name]
+        )
 
     Query = strawberry.type(type("Query", (), query_fields))
     return strawberry.Schema(query=Query)

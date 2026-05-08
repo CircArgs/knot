@@ -31,7 +31,6 @@ Mount in ``api/main.py``::
 from __future__ import annotations
 
 import logging
-import os
 import time
 import uuid
 from contextvars import ContextVar
@@ -41,6 +40,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
 from starlette.types import ASGIApp
+
+from knot.config import get_settings
 
 # ContextVar so any logger in the call-stack can read the current request ID.
 _request_id_var: ContextVar[str] = ContextVar("knot_request_id", default="-")
@@ -56,10 +57,7 @@ def get_request_id() -> str:
 
 
 def _is_json() -> bool:
-    fmt = os.environ.get("KNOT_LOG_FORMAT", "")
-    if fmt:
-        return fmt.lower() == "json"
-    return os.environ.get("KNOT_DEV_MODE") != "1"
+    return get_settings().effective_log_format == "json"
 
 
 class RequestIDMiddleware(BaseHTTPMiddleware):

@@ -24,12 +24,12 @@ bodies is no longer accepted.
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 
 from fastapi import Depends, HTTPException, Header
 
 from knot import db
+from knot.config import get_settings
 from knot.db import users
 
 
@@ -43,10 +43,6 @@ class Principal:
 
     def __str__(self) -> str:  # for audit-log payloads
         return self.username
-
-
-def _dev_mode_enabled() -> bool:
-    return os.environ.get("KNOT_AUTH_DEV_MODE") == "1"
 
 
 def _strip_bearer(authorization: str | None) -> str:
@@ -64,7 +60,7 @@ def require_user(
     403 on no-such-user. In dev mode returns a synthetic non-admin
     principal without touching the DB.
     """
-    if _dev_mode_enabled():
+    if get_settings().auth_dev_mode:
         return Principal(username=DEV_PRINCIPAL, is_admin=False)
     token = _strip_bearer(authorization)
     key_hash = users.hash_key(token)
@@ -88,7 +84,7 @@ def bootstrap_admin_from_env() -> None:
     """If ``KNOT_BOOTSTRAP_ADMIN_KEY`` is set and the users table is empty,
     seed an ``admin`` user with that key. Called at app startup after
     ``apply_schema``."""
-    raw = os.environ.get("KNOT_BOOTSTRAP_ADMIN_KEY")
+    raw = get_settings().bootstrap_admin_key
     if not raw:
         return
     with db.connect() as conn:

@@ -33,6 +33,40 @@ import knot.db.sql_compiler._predicate  # noqa: F401
 import knot.db.sql_compiler._relation   # noqa: F401
 
 
+def compile_order_by(
+    order_terms: list[tuple[str, str]],
+    alias: str = "s",
+) -> sql.Composable:
+    """Compile a list of (field_name, direction) pairs into a SQL ORDER BY
+    fragment (without the ORDER BY keyword).
+
+    ``field_name`` must be a stored slot name or a system column
+    (e.g. ``_canonical_id``).  ``direction`` must be ``'ASC'`` or ``'DESC'``
+    (case-insensitive); any other value raises CompilerError.
+
+    The stable secondary sort (``b.canonical_id ASC, s._source ASC``) is
+    appended by ``graph_store.query_rows`` — this function returns only the
+    caller-specified terms.
+    """
+    if not order_terms:
+        raise CompilerError("compile_order_by called with empty order_terms.")
+    parts: list[sql.Composable] = []
+    for field_name, direction in order_terms:
+        dir_upper = direction.upper()
+        if dir_upper not in ("ASC", "DESC"):
+            raise CompilerError(
+                f"Invalid ORDER BY direction {direction!r}; expected ASC or DESC."
+            )
+        parts.append(
+            sql.SQL("{alias}.{col} {dir}").format(
+                alias=sql.Identifier(alias),
+                col=sql.Identifier(field_name),
+                dir=sql.SQL(dir_upper),
+            )
+        )
+    return sql.SQL(", ").join(parts)
+
+
 def compile_constraint(
     constraint: Constraint,
     cls: OntologyClass,
@@ -88,4 +122,5 @@ __all__ = [
     "CompilerError",
     "compile_predicate",
     "compile_constraint",
+    "compile_order_by",
 ]

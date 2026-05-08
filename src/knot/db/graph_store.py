@@ -245,12 +245,17 @@ def query_rows(
     limit: int = 100,
     offset: int = 0,
     as_of: int | None = None,
+    order_by_sql: "sql.Composable | None" = None,
 ) -> list[dict[str, Any]]:
     """List rows with an optional compiled predicate fragment.
 
     ``predicate_sql`` is a psycopg sql.Composable from the SQL compiler
     (already parameterised); ``predicate_params`` are its positional values.
     When ``predicate_sql`` is None the query is equivalent to list_rows.
+
+    ``order_by_sql`` is an optional ORDER BY clause (without the ORDER BY
+    keyword) as a sql.Composable. When None, defaults to
+    ``b.canonical_id ASC, s._source ASC`` for deterministic output.
 
     Reads JOIN source × current bindings (valid_to IS NULL).
     """
@@ -273,9 +278,16 @@ def query_rows(
     else:
         where = sql.SQL("")
 
+    if order_by_sql is not None:
+        order_clause = sql.SQL("ORDER BY ") + order_by_sql + sql.SQL(
+            ", b.canonical_id ASC, s._source ASC"
+        )
+    else:
+        order_clause = sql.SQL("ORDER BY b.canonical_id ASC, s._source ASC")
+
     stmt = sql.SQL(
-        "{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s"
-    ).format(base=base, where=where)
+        "{base} {where} {order} LIMIT %s OFFSET %s"
+    ).format(base=base, where=where, order=order_clause)
     params.extend([limit, offset])
 
     cur = conn.cursor(row_factory=dict_row)
@@ -308,17 +320,34 @@ def count_rows(
     *,
     cls: OntologyClass,
     as_of: int | None = None,
+    predicate_sql: "sql.Composable | None" = None,
+    predicate_params: "list[Any] | None" = None,
 ) -> int:
-    where = sql.SQL("WHERE s._spec_revision <= %s") if as_of is not None else sql.SQL("")
+    """Count rows matching optional predicate (same filter as query_rows)."""
+    clauses: list[sql.Composable] = []
+    params: list[Any] = []
+
+    if as_of is not None:
+        clauses.append(sql.SQL("s._spec_revision <= %s"))
+        params.append(as_of)
+
+    if predicate_sql is not None:
+        clauses.append(predicate_sql)
+        params.extend(predicate_params or [])
+
+    if clauses:
+        where = sql.SQL("WHERE ") + sql.SQL(" AND ").join(
+            sql.SQL("(") + c + sql.SQL(")") for c in clauses
+        )
+    else:
+        where = sql.SQL("")
+
     stmt = sql.SQL(
         "SELECT count(*) FROM {source} s "
         "JOIN {bindings} b "
         "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
         "{where}"
     ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
-    params: list[Any] = []
-    if as_of is not None:
-        params.append(as_of)
     return conn.execute(stmt, params).fetchone()[0]
 
 

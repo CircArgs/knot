@@ -5,6 +5,7 @@ description = "Knowledge graph orchestration and entity resolution toolkit"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5",
+    "pydantic-settings>=2.0",
 ]
 
 [project.optional-dependencies]

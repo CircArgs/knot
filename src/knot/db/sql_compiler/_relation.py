@@ -23,6 +23,7 @@ from __future__ import annotations
 from psycopg import sql
 
 from knot.ontology.metaschema import (
+    AggFunc,
     FilteredRelation,
     FormatDerivation,
     OntologyClass,
