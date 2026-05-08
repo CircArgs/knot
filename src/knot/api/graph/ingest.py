@@ -11,6 +11,8 @@ from knot import db
 from knot.api.graph._common import StrictBase, published_or_409
 from knot.api.row_models import build_row_model
 from knot.db import dq, graph_store, spec_store
+from knot.extensions import dispatch
+from knot.extensions.events import IngestResolveCanonical
 from knot.middleware import get_request_id
 from knot.security import require_user
 
@@ -93,8 +95,15 @@ def ingest(
         if errors:
             raise HTTPException(422, detail=errors)
 
+        cls = source.entity_class
+        ev = IngestResolveCanonical(cls=cls, source=source, incoming=validated)
+        dispatch.dispatch(ev)
+        if ev.canonical_ids is None:
+            raise RuntimeError(
+                "No handler set canonical_ids — default ER extension not registered"
+            )
+
         if validate_constraints:
-            cls = source.entity_class
             relevant = [
                 c for c in spec.constraints
                 if c.primary.name == cls.name
@@ -103,7 +112,8 @@ def ingest(
             try:
                 with conn.transaction():
                     count = graph_store.insert_rows(
-                        conn, source=source, spec_revision=revision, rows=validated,
+                        conn, source=source, spec_revision=revision,
+                        rows=validated, canonical_ids=ev.canonical_ids,
                     )
                     violations: list[dict[str, Any]] = []
                     for constraint in relevant:
@@ -133,12 +143,13 @@ def ingest(
                 raise HTTPException(422, detail={"violations": exc.violations})
         else:
             count = graph_store.insert_rows(
-                conn, source=source, spec_revision=revision, rows=validated,
+                conn, source=source, spec_revision=revision,
+                rows=validated, canonical_ids=ev.canonical_ids,
             )
             dq.record_incremental(
                 conn,
                 source_name=source.name,
-                cls=source.entity_class,
+                cls=cls,
                 batch_id=get_request_id(),
                 rows=validated,
             )

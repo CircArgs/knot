@@ -378,6 +378,7 @@ def test_regression_no_identifier_pattern(pg_conn):
         source=src,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}]]
     )
 
     rows = graph_store.query_rows(

@@ -83,6 +83,7 @@ def test_insert_rows_returns_count(graph_db):
         source=src,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "title": "Test Movie"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Test Movie"}]]
     )
     assert n == 1
 
@@ -92,6 +93,7 @@ def test_insert_rows_creates_current_binding(graph_db):
     graph_store.insert_rows(
         conn, source=src, spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "title": "Test Movie"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Test Movie"}]]
     )
     assert graph_store.canonical_id_exists(conn, cls=movie, canonical_id="tt0000001")
 
@@ -101,6 +103,7 @@ def test_insert_rows_binding_has_null_valid_to(graph_db):
     graph_store.insert_rows(
         conn, source=src, spec_revision=rev,
         rows=[{"imdb_id": "tt0000002", "title": "Another"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000002", "title": "Another"}]]
     )
     row = conn.execute(
         "SELECT valid_to FROM knot_data.movie_bindings WHERE canonical_id = %s AND valid_to IS NULL",
@@ -117,10 +120,12 @@ def test_insert_rows_binding_has_null_valid_to(graph_db):
 def test_repush_same_row_does_not_duplicate_binding(graph_db):
     conn, movie, src, rev = graph_db
     row_data = {"imdb_id": "tt0000003", "title": "Original"}
-    graph_store.insert_rows(conn, source=src, spec_revision=rev, rows=[row_data])
+    graph_store.insert_rows(conn, source=src, spec_revision=rev, rows=[row_data],
+                            canonical_ids=[str(r["imdb_id"]) for r in [row_data]])
     graph_store.insert_rows(
         conn, source=src, spec_revision=rev,
         rows=[{"imdb_id": "tt0000003", "title": "Updated title"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000003", "title": "Updated title"}]]
     )
     # Exactly one current binding
     count = conn.execute(
@@ -133,9 +138,11 @@ def test_repush_same_row_does_not_duplicate_binding(graph_db):
 def test_repush_updates_source_row_content(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt0000004", "title": "Old"}])
+                            rows=[{"imdb_id": "tt0000004", "title": "Old"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000004", "title": "Old"}]])
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt0000004", "title": "New"}])
+                            rows=[{"imdb_id": "tt0000004", "title": "New"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000004", "title": "New"}]])
     contribs = graph_store.get_canonical_contributions(conn, cls=movie, canonical_id="tt0000004")
     titles = [c["title"] for c in contribs]
     assert "New" in titles
@@ -153,7 +160,8 @@ def test_canonical_id_exists_returns_false_for_unknown(graph_db):
 def test_canonical_id_exists_after_insert(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt0000005"}])
+                            rows=[{"imdb_id": "tt0000005"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000005"}]])
     assert graph_store.canonical_id_exists(conn, cls=movie, canonical_id="tt0000005")
 
 
@@ -164,7 +172,8 @@ def test_canonical_id_exists_after_insert(graph_db):
 def test_list_rows_includes_canonical_id(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt0000006", "title": "Listed"}])
+                            rows=[{"imdb_id": "tt0000006", "title": "Listed"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000006", "title": "Listed"}]])
     rows = graph_store.list_rows(conn, cls=movie)
     matching = [r for r in rows if r.get("_canonical_id") == "tt0000006"]
     assert matching, "Row not found in list_rows output"
@@ -174,7 +183,8 @@ def test_list_rows_includes_canonical_id(graph_db):
 def test_list_rows_excludes_closed_bindings(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt0000007"}])
+                            rows=[{"imdb_id": "tt0000007"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000007"}]])
     # Manually close the binding
     conn.execute(
         "UPDATE knot_data.movie_bindings SET valid_to = now() WHERE canonical_id = %s AND valid_to IS NULL",
@@ -191,7 +201,8 @@ def test_list_rows_excludes_closed_bindings(graph_db):
 def test_list_rows_as_of_excludes_later_revisions(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_asof"}])
+                            rows=[{"imdb_id": "tt_asof"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_asof"}]])
     # as_of = rev-1 (before ingest) should exclude this row
     rows = graph_store.list_rows(conn, cls=movie, as_of=rev - 1)
     assert not any(r.get("_canonical_id") == "tt_asof" for r in rows)
@@ -200,7 +211,8 @@ def test_list_rows_as_of_excludes_later_revisions(graph_db):
 def test_list_rows_as_of_includes_current_revision(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_asof2"}])
+                            rows=[{"imdb_id": "tt_asof2"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_asof2"}]])
     rows = graph_store.list_rows(conn, cls=movie, as_of=rev)
     assert any(r.get("_canonical_id") == "tt_asof2" for r in rows)
 
@@ -212,7 +224,8 @@ def test_list_rows_as_of_includes_current_revision(graph_db):
 def test_get_canonical_contributions_returns_one_row_per_source(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt0000008", "title": "Contrib"}])
+                            rows=[{"imdb_id": "tt0000008", "title": "Contrib"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000008", "title": "Contrib"}]])
     contribs = graph_store.get_canonical_contributions(conn, cls=movie, canonical_id="tt0000008")
     assert len(contribs) == 1
     assert contribs[0]["_source"] == "imdb"
@@ -231,7 +244,8 @@ def test_get_canonical_contributions_returns_empty_for_unknown(graph_db):
 def test_count_rows_reflects_current_bindings(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "cnt1"}, {"imdb_id": "cnt2"}])
+                            rows=[{"imdb_id": "cnt1"}, {"imdb_id": "cnt2"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "cnt1"}, {"imdb_id": "cnt2"}]])
     assert graph_store.count_rows(conn, cls=movie) >= 2
 
 
@@ -242,7 +256,8 @@ def test_count_rows_reflects_current_bindings(graph_db):
 def test_merge_closes_source_binding_and_opens_new(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_keep"}, {"imdb_id": "tt_merge"}])
+                            rows=[{"imdb_id": "tt_keep"}, {"imdb_id": "tt_merge"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_keep"}, {"imdb_id": "tt_merge"}]])
 
     rewritten = graph_store.merge_canonical_ids(
         conn,
@@ -261,7 +276,8 @@ def test_merge_closes_source_binding_and_opens_new(graph_db):
 def test_merge_preserves_valid_from_lt_valid_to_invariant(graph_db):
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_inv_keep"}, {"imdb_id": "tt_inv_merge"}])
+                            rows=[{"imdb_id": "tt_inv_keep"}, {"imdb_id": "tt_inv_merge"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_inv_keep"}, {"imdb_id": "tt_inv_merge"}]])
     graph_store.merge_canonical_ids(
         conn, cls=movie,
         keep_canonical_id="tt_inv_keep",
@@ -280,7 +296,8 @@ def test_partial_unique_index_holds_after_merge(graph_db):
     """After merge no knot_row_id should have two current bindings."""
     conn, movie, src, rev = graph_db
     graph_store.insert_rows(conn, source=src, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_u1"}, {"imdb_id": "tt_u2"}])
+                            rows=[{"imdb_id": "tt_u1"}, {"imdb_id": "tt_u2"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_u1"}, {"imdb_id": "tt_u2"}]])
     graph_store.merge_canonical_ids(
         conn, cls=movie,
         keep_canonical_id="tt_u1",

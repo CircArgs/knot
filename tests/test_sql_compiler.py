@@ -523,6 +523,10 @@ def test_compile_constraint_catches_violating_rows(clean_db):
             {"imdb_id": "tt0000001", "year": 1972},   # valid
             {"imdb_id": "tt0000002", "year": 1800},   # violates year >= 1888
         ],
+        canonical_ids=[str(r["imdb_id"]) for r in [
+            {"imdb_id": "tt0000001", "year": 1972},   # valid
+            {"imdb_id": "tt0000002", "year": 1800},   # violates year >= 1888
+        ]]
     )
 
     # Compile the constraint and execute it.
@@ -579,6 +583,7 @@ def test_compile_constraint_no_violations(clean_db):
         source=src,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "year": 2000}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 2000}]]
     )
 
     stmt, params = compile_constraint(constraint, movie)
@@ -623,7 +628,8 @@ def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
         conn,
         source=src,
         spec_revision=rev1,
-        rows=[{"imdb_id": "tt0000001", "year": 1800}],  # violates >= 1888
+        rows=[{"imdb_id": "tt0000001", "year": 1800}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]]  # violates >= 1888
     )
 
     # v2: add ERROR constraint that the ingested row violates.
@@ -687,7 +693,8 @@ def test_publish_gate_warning_constraint_allows_publish(clean_db):
         conn,
         source=src,
         spec_revision=rev1,
-        rows=[{"imdb_id": "tt0000001", "year": 1800}],  # would violate >= 1888
+        rows=[{"imdb_id": "tt0000001", "year": 1800}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]]  # would violate >= 1888
     )
 
     body = Compare(

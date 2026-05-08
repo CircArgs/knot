@@ -84,17 +84,18 @@ def insert_rows(
     source: Source,
     spec_revision: int,
     rows: list[dict[str, Any]],
+    canonical_ids: list[str],
 ) -> int:
     """Upsert a batch of source rows. For each row:
       1. INSERT/UPDATE the source-row table (preserves _knot_row_id on conflict).
-      2. INSERT a binding (canonical_id = identifier value, valid_to NULL,
+      2. INSERT a binding (canonical_id from caller, valid_to NULL,
          change_type 'ingest') iff no current binding exists for that
          knot_row_id.
 
+    ``canonical_ids`` must be parallel to ``rows`` (same length, same order).
     Returns the number of source rows written.
     """
     cls = source.entity_class
-    id_slot_name = source.identifier_slot.name
     slot_names = _stored_slot_names(cls)
     user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
     cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
@@ -129,11 +130,10 @@ def insert_rows(
 
     count = 0
     with conn.transaction():
-        for row in rows:
-            id_value = row[id_slot_name]
+        for row, canonical_id in zip(rows, canonical_ids):
             values: list[Any] = [
                 source.name,
-                str(id_value),
+                canonical_id,
                 spec_revision,
             ]
             for slot_name in slot_names:
@@ -141,7 +141,7 @@ def insert_rows(
             knot_row_id = conn.execute(upsert_stmt, values).fetchone()[0]
             conn.execute(
                 binding_insert_stmt,
-                (knot_row_id, str(id_value), spec_revision, knot_row_id),
+                (knot_row_id, canonical_id, spec_revision, knot_row_id),
             )
             count += 1
     return count

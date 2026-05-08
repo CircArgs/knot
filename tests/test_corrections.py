@@ -54,9 +54,11 @@ def corrections_db(pg_conn):
 
     # Insert rows from two sources for canonical_id "tt_canonical"
     graph_store.insert_rows(pg_conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_canonical", "title": "From A"}])
+                            rows=[{"imdb_id": "tt_canonical", "title": "From A"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_canonical", "title": "From A"}]])
     graph_store.insert_rows(pg_conn, source=src_b, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_canonical", "title": "From B"}])
+                            rows=[{"imdb_id": "tt_canonical", "title": "From B"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_canonical", "title": "From B"}]])
 
     yield pg_conn, movie, src_a, src_b, rev
 
@@ -169,7 +171,8 @@ def test_apply_merge_writes_lineage_event(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
     # Insert a second canonical_id to merge into the first
     graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_secondary", "title": "Dup"}])
+                            rows=[{"imdb_id": "tt_secondary", "title": "Dup"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_secondary", "title": "Dup"}]])
 
     apply_merge(
         conn,
@@ -190,7 +193,8 @@ def test_apply_merge_writes_lineage_event(corrections_db):
 def test_apply_merge_closes_secondary_canonical_id(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
     graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_sec2"}])
+                            rows=[{"imdb_id": "tt_sec2"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_sec2"}]])
     apply_merge(
         conn, cls=movie,
         keep_canonical_id="tt_canonical",
@@ -203,7 +207,8 @@ def test_apply_merge_closes_secondary_canonical_id(corrections_db):
 def test_apply_merge_writes_audit_entry(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
     graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_merge_audit"}])
+                            rows=[{"imdb_id": "tt_merge_audit"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_merge_audit"}]])
     cid = apply_merge(
         conn, cls=movie,
         keep_canonical_id="tt_canonical",

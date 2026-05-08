@@ -248,13 +248,23 @@ def test_director_page_returns_only_directors(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+        {"person_id": "p3", "name": "Carol"},
+    ]])
     # Insert credits: Alice is director, Bob is actor, Carol is director
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
         {"credit_id": "c3", "person": "p3", "role": "director"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+        {"credit_id": "c2", "person": "p2", "role": "actor"},
+        {"credit_id": "c3", "person": "p3", "role": "director"},
+    ]])
 
     result = _post(dc_client, "{ director { personId } directorCount }")
     assert "errors" not in result, result.get("errors")
@@ -274,10 +284,17 @@ def test_person_page_returns_all_persons(dc_db, dc_client):
     graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+    ]])
 
     result = _post(dc_client, "{ person { personId } personCount }")
     assert len(result["data"]["person"]) == 2
@@ -294,11 +311,19 @@ def test_director_by_canonical_id_found(dc_db, dc_client):
     graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+        {"credit_id": "c2", "person": "p2", "role": "actor"},
+    ]])
 
     result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p1") { personId name } }')
     assert "errors" not in result, result.get("errors")
@@ -318,11 +343,19 @@ def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
     graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+        {"credit_id": "c2", "person": "p2", "role": "actor"},
+    ]])
 
     result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p2") { personId } }')
     assert "errors" not in result, result.get("errors")
@@ -338,11 +371,17 @@ def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
 
     graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+    ]])
     # Initially Alice is a director
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+    ]])
 
     result = _post(dc_client, "{ directorCount }")
     assert result["data"]["directorCount"] == 1
@@ -350,7 +389,10 @@ def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
     # Re-ingest with role changed to actor
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "actor"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "actor"},
+    ]])
 
     # View recomputes at query time — Alice is no longer a director
     result = _post(dc_client, "{ directorCount }")
@@ -616,11 +658,19 @@ def test_director_resolved_found(dc_db, dc_client):
     graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+        {"credit_id": "c2", "person": "p2", "role": "actor"},
+    ]])
 
     result = _post(dc_client, '{ directorResolved(canonicalId: "p1") { personId name canonicalId } }')
     assert "errors" not in result, result.get("errors")
@@ -640,11 +690,19 @@ def test_director_resolved_non_director_is_null(dc_db, dc_client):
     graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+        {"credit_id": "c2", "person": "p2", "role": "actor"},
+    ]])
 
     result = _post(dc_client, '{ directorResolved(canonicalId: "p2") { personId } }')
     assert "errors" not in result, result.get("errors")
@@ -662,12 +720,22 @@ def test_director_page_with_name_filter(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+        {"person_id": "p3", "name": "Carol"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
         {"credit_id": "c3", "person": "p3", "role": "director"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+        {"credit_id": "c2", "person": "p2", "role": "actor"},
+        {"credit_id": "c3", "person": "p3", "role": "director"},
+    ]])
 
     # Filter directors by name = 'Alice'
     result = _post(
@@ -835,10 +903,18 @@ def test_person_count_unchanged_after_director_view(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
-    ])
+    ],
+    canonical_ids=[str(r["person_id"]) for r in [
+        {"person_id": "p1", "name": "Alice"},
+        {"person_id": "p2", "name": "Bob"},
+        {"person_id": "p3", "name": "Carol"},
+    ]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
-    ])
+    ],
+    canonical_ids=[str(r["credit_id"]) for r in [
+        {"credit_id": "c1", "person": "p1", "role": "director"},
+    ]])
 
     result = _post(dc_client, "{ personCount }")
     assert result["data"]["personCount"] == 3

@@ -90,8 +90,10 @@ def gql_db(pg_conn):
     update_draft(pg_conn, rev, spec)
     publish_draft(pg_conn, rev)
 
+    _rows = _sample_rows()
     graph_store.insert_rows(
-        pg_conn, source=src, spec_revision=rev, rows=_sample_rows()
+        pg_conn, source=src, spec_revision=rev, rows=_rows,
+        canonical_ids=[str(r["imdb_id"]) for r in _rows],
     )
     yield pg_conn, spec, src, rev
 
@@ -605,6 +607,11 @@ def derived_db(pg_conn):
             {"imdb_id": "m2", "title": "Film Two",   "year": 2000},
             {"imdb_id": "m3", "title": "Film Three", "year": 2010},
         ],
+        canonical_ids=[str(r["imdb_id"]) for r in [
+            {"imdb_id": "m1", "title": "Film One",   "year": 1990},
+            {"imdb_id": "m2", "title": "Film Two",   "year": 2000},
+            {"imdb_id": "m3", "title": "Film Three", "year": 2010},
+        ]]
     )
     # m1 has 3 credits; m2 has 1 credit; m3 has 0
     graph_store.insert_rows(
@@ -615,6 +622,12 @@ def derived_db(pg_conn):
             {"credit_id": "c3", "movie": "m1", "role": "writer"},
             {"credit_id": "c4", "movie": "m2", "role": "director"},
         ],
+        canonical_ids=[str(r["credit_id"]) for r in [
+            {"credit_id": "c1", "movie": "m1", "role": "director"},
+            {"credit_id": "c2", "movie": "m1", "role": "actor"},
+            {"credit_id": "c3", "movie": "m1", "role": "writer"},
+            {"credit_id": "c4", "movie": "m2", "role": "director"},
+        ]]
     )
     yield pg_conn, spec, movie_src, credit_src, rev
 

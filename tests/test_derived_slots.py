@@ -211,6 +211,10 @@ def full_spec_db(clean_db):
             {"imdb_id": "tt0000001", "title": "Film A"},
             {"imdb_id": "tt0000002", "title": "Film B"},
         ],
+        canonical_ids=[str(r["imdb_id"]) for r in [
+            {"imdb_id": "tt0000001", "title": "Film A"},
+            {"imdb_id": "tt0000002", "title": "Film B"},
+        ]]
     )
     # Ingest credits: Film A has two directors; Film B has none
     graph_store.insert_rows(
@@ -220,6 +224,11 @@ def full_spec_db(clean_db):
             {"credit_id": "c002", "movie": "tt0000001", "role": "director", "person_name": "Bob"},
             {"credit_id": "c003", "movie": "tt0000001", "role": "actor",    "person_name": "Carol"},
         ],
+        canonical_ids=[str(r["credit_id"]) for r in [
+            {"credit_id": "c001", "movie": "tt0000001", "role": "director", "person_name": "Alice"},
+            {"credit_id": "c002", "movie": "tt0000001", "role": "director", "person_name": "Bob"},
+            {"credit_id": "c003", "movie": "tt0000001", "role": "actor",    "person_name": "Carol"},
+        ]]
     )
     return conn, spec, rev, movie_cls, credit_cls, movie_src, credit_src
 
@@ -563,7 +572,8 @@ def test_republish_with_new_derived_slot_no_destructive_migration(clean_db):
     publish_draft(conn, rev1)
 
     graph_store.insert_rows(conn, source=movie_src_v1, spec_revision=rev1,
-                            rows=[{"imdb_id": "tt0000001", "title": "Film A"}])
+                            rows=[{"imdb_id": "tt0000001", "title": "Film A"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Film A"}]])
 
     # v2: same Movie + Credit objects, Movie gains a derived slot (no new column).
     # Re-use the SAME movie_v1 object so cmovie_v1.range still resolves correctly.
@@ -628,12 +638,17 @@ def test_integration_relation_aggregate_collect(clean_db):
     publish_draft(conn, rev)
 
     graph_store.insert_rows(conn, source=movie_src, spec_revision=rev,
-                            rows=[{"imdb_id": "m1", "title": "Test Film"}])
+                            rows=[{"imdb_id": "m1", "title": "Test Film"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "m1", "title": "Test Film"}]])
     graph_store.insert_rows(conn, source=credit_src, spec_revision=rev,
                             rows=[
                                 {"credit_id": "x1", "movie": "m1", "role": "director"},
                                 {"credit_id": "x2", "movie": "m1", "role": "actor"},
-                            ])
+                            ],
+                            canonical_ids=[str(r["credit_id"]) for r in [
+                                {"credit_id": "x1", "movie": "m1", "role": "director"},
+                                {"credit_id": "x2", "movie": "m1", "role": "actor"},
+                            ]])
 
     rows = graph_store.query_rows(
         conn, cls=movie_cls,

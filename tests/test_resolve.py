@@ -256,9 +256,11 @@ def test_resolve_entity_returns_none_for_unknown_canonical_id(resolve_db):
 def test_resolve_entity_argmax_trust_picks_highest_trust_source(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
     graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_res1", "title": "Title from A"}])
+                            rows=[{"imdb_id": "tt_res1", "title": "Title from A"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from A"}]])
     graph_store.insert_rows(conn, source=src_b, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_res1", "title": "Title from B"}])
+                            rows=[{"imdb_id": "tt_res1", "title": "Title from B"}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from B"}]])
     # Set source_a higher trust
     trust_config.set_score(conn, "source_a", 0.9)
     trust_config.set_score(conn, "source_b", 0.1)

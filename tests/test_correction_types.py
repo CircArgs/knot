@@ -65,11 +65,14 @@ def ct_db(pg_conn):
 
     # Two distinct canonical ids; both sources contribute to "tt_main".
     graph_store.insert_rows(pg_conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_main", "title": "Main A", "year": 2000}])
+                            rows=[{"imdb_id": "tt_main", "title": "Main A", "year": 2000}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_main", "title": "Main A", "year": 2000}]])
     graph_store.insert_rows(pg_conn, source=src_b, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_main", "title": "Main B", "year": 2001}])
+                            rows=[{"imdb_id": "tt_main", "title": "Main B", "year": 2001}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_main", "title": "Main B", "year": 2001}]])
     graph_store.insert_rows(pg_conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}])
+                            rows=[{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}],
+                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}]])
 
     yield pg_conn, movie, src_a, src_b, rev
 
