@@ -36,6 +36,7 @@ from knot import db
 from knot.api import auth as auth_router_mod
 from knot.api import dq as dq_router_mod
 from knot.api import graph as graph_router_mod
+from knot.api import lake as lake_router_mod
 from knot.api import spec as spec_router_mod
 from knot.auth import bootstrap_admin_from_env
 from knot.logging_config import configure_logging
@@ -71,6 +72,7 @@ app.include_router(auth_router_mod.router)
 app.include_router(spec_router_mod.router)
 app.include_router(graph_router_mod.router)
 app.include_router(dq_router_mod.router)
+app.include_router(lake_router_mod.router)
 
 
 # ── /healthz — liveness probe (no auth, no router prefix) ─────────────────────
