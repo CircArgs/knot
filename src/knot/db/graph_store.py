@@ -54,6 +54,10 @@ __all__ = (
     "canonical_id_exists",
     "merge_canonical_ids",
     "upsert_user_correction_row",
+    "split_canonical_id",
+    "insert_synthetic_row",
+    "tombstone_canonical_id",
+    "reject_contribution",
     "append_lineage_event",
     "list_lineage",
 )
@@ -209,9 +213,15 @@ def _is_defined_class(cls: OntologyClass) -> bool:
     return getattr(cls, "definition", None) is not None
 
 
-def _select_with_binding(cls: OntologyClass) -> sql.Composable:
+def _select_with_binding(
+    cls: OntologyClass,
+    include_tombstoned: bool = False,
+) -> sql.Composable:
     """SELECT s.*, b.canonical_id AS _canonical_id FROM source s
     JOIN bindings b ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL.
+
+    When ``include_tombstoned=True``, also surfaces rows whose most-recent
+    binding has ``change_type = 'tombstone'`` (closed bindings).
 
     For defined classes, the VIEW already embeds the JOIN and exposes
     _canonical_id directly; query it without the extra JOIN.
@@ -220,6 +230,21 @@ def _select_with_binding(cls: OntologyClass) -> sql.Composable:
         return sql.SQL(
             "SELECT s.* FROM {view} s"
         ).format(source=_table_id(cls), view=_table_id(cls))
+    if include_tombstoned:
+        # Latest binding per knot_row_id where change_type is open or tombstone.
+        return sql.SQL(
+            "SELECT s.*, b.canonical_id AS _canonical_id "
+            "FROM {source} s "
+            "JOIN {bindings} b "
+            "  ON b.knot_row_id = s._knot_row_id "
+            "  AND b.valid_from = ("
+            "    SELECT max(b2.valid_from) FROM {bindings} b2 "
+            "    WHERE b2.knot_row_id = s._knot_row_id "
+            "      AND b2.change_type IN ('tombstone', 'ingest', 'correction', "
+            "                             'merge', 'split', 'add', 'rejected')"
+            "  ) "
+            "  AND (b.valid_to IS NULL OR b.change_type = 'tombstone')"
+        ).format(source=_table_id(cls), bindings=_bindings_id(cls))
     return sql.SQL(
         "SELECT s.*, b.canonical_id AS _canonical_id "
         "FROM {source} s "
@@ -265,6 +290,7 @@ def _derived_column_exprs(
 
 def _select_with_derivations(
     cls: OntologyClass,
+    include_tombstoned: bool = False,
 ) -> tuple[sql.Composable, list[Any]]:
     """Same as ``_select_with_binding`` but appends a computed column per
     derived slot, compiled via the SQL compiler.
@@ -276,7 +302,7 @@ def _select_with_derivations(
 
     When there are no derived slots the result is ``(_select_with_binding(cls), [])``.
     """
-    base = _select_with_binding(cls)
+    base = _select_with_binding(cls, include_tombstoned=include_tombstoned)
     derived_cols, derived_params = _derived_column_exprs(cls)
     if not derived_cols:
         return base, []
@@ -285,6 +311,24 @@ def _select_with_derivations(
         stmt = sql.SQL(
             "SELECT s.*, {extra} FROM {view} s"
         ).format(extra=extra, view=_table_id(cls))
+    elif include_tombstoned:
+        stmt = sql.SQL(
+            "SELECT s.*, b.canonical_id AS _canonical_id, {extra} "
+            "FROM {source} s "
+            "JOIN {bindings} b "
+            "  ON b.knot_row_id = s._knot_row_id "
+            "  AND b.valid_from = ("
+            "    SELECT max(b2.valid_from) FROM {bindings} b2 "
+            "    WHERE b2.knot_row_id = s._knot_row_id "
+            "      AND b2.change_type IN ('tombstone', 'ingest', 'correction', "
+            "                             'merge', 'split', 'add', 'rejected')"
+            "  ) "
+            "  AND (b.valid_to IS NULL OR b.change_type = 'tombstone')"
+        ).format(
+            extra=extra,
+            source=_table_id(cls),
+            bindings=_bindings_id(cls),
+        )
     else:
         stmt = sql.SQL(
             "SELECT s.*, b.canonical_id AS _canonical_id, {extra} "
@@ -306,8 +350,9 @@ def list_rows(
     limit: int = 100,
     offset: int = 0,
     as_of: int | None = None,
+    include_tombstoned: bool = False,
 ) -> list[dict[str, Any]]:
-    base = _select_with_binding(cls)
+    base = _select_with_binding(cls, include_tombstoned=include_tombstoned)
     where = sql.SQL("WHERE s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
         "{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s"
@@ -394,6 +439,7 @@ def get_canonical_contributions(
     cls: OntologyClass,
     canonical_id: str,
     as_of: int | None = None,
+    include_tombstoned: bool = False,
 ) -> list[dict[str, Any]]:
     if _is_defined_class(cls):
         # VIEW exposes _canonical_id directly; filter on it.
@@ -409,7 +455,7 @@ def get_canonical_contributions(
         cur.execute(stmt, params)
         return [_serialize_row(r) for r in cur.fetchall()]
 
-    base, derived_params = _select_with_derivations(cls)
+    base, derived_params = _select_with_derivations(cls, include_tombstoned=include_tombstoned)
     where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
     stmt = sql.SQL(
         "{base} WHERE b.canonical_id = %s{where_extra} ORDER BY s._source"
@@ -430,6 +476,7 @@ def count_rows(
     as_of: int | None = None,
     predicate_sql: "sql.Composable | None" = None,
     predicate_params: "list[Any] | None" = None,
+    include_tombstoned: bool = False,
 ) -> int:
     """Count rows matching optional predicate (same filter as query_rows)."""
     clauses: list[sql.Composable] = []
@@ -455,6 +502,20 @@ def count_rows(
         stmt = sql.SQL(
             "SELECT count(*) FROM {view} s {where}"
         ).format(view=_table_id(cls), where=where)
+    elif include_tombstoned:
+        stmt = sql.SQL(
+            "SELECT count(*) FROM {source} s "
+            "JOIN {bindings} b "
+            "  ON b.knot_row_id = s._knot_row_id "
+            "  AND b.valid_from = ("
+            "    SELECT max(b2.valid_from) FROM {bindings} b2 "
+            "    WHERE b2.knot_row_id = s._knot_row_id "
+            "      AND b2.change_type IN ('tombstone', 'ingest', 'correction', "
+            "                             'merge', 'split', 'add', 'rejected')"
+            "  ) "
+            "  AND (b.valid_to IS NULL OR b.change_type = 'tombstone') "
+            "{where}"
+        ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
     else:
         stmt = sql.SQL(
             "SELECT count(*) FROM {source} s "
@@ -561,6 +622,214 @@ def merge_canonical_ids(
             )
             rewritten += 1
     return rewritten
+
+
+# ─── Split ──────────────────────────────────────────────────────────────────
+
+
+def split_canonical_id(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    source_canonical_id: str,
+    partitions: dict[str, list[tuple[str, str]]],
+    spec_revision: int,
+    correction_id: int | None = None,
+) -> int:
+    """SCD2 split: close current bindings for ``source_canonical_id`` and
+    open new bindings per partition.
+
+    ``partitions`` maps ``new_canonical_id -> [(source, source_row_id), ...]``.
+    For each (source, source_row_id) in a partition we look up the knot_row_id
+    whose current binding has ``canonical_id = source_canonical_id``, close that
+    binding, and open a new binding with the new canonical_id and
+    ``change_type='split'``.
+
+    SELECT FOR UPDATE serialises concurrent splits on the same rows.
+    Returns the total number of bindings rewritten.
+    """
+    rewritten = 0
+    for new_cid, members in partitions.items():
+        for source_name, source_row_id in members:
+            row = conn.execute(
+                sql.SQL(
+                    "SELECT b.knot_row_id FROM {bindings} b "
+                    "JOIN {source} s ON s._knot_row_id = b.knot_row_id "
+                    "WHERE b.canonical_id = %s AND b.valid_to IS NULL "
+                    "  AND s._source = %s AND s._source_row_id = %s "
+                    "FOR UPDATE"
+                ).format(
+                    bindings=_bindings_id(cls),
+                    source=_table_id(cls),
+                ),
+                (source_canonical_id, source_name, source_row_id),
+            ).fetchone()
+            if row is None:
+                continue
+            knot_row_id = row[0]
+            conn.execute(
+                sql.SQL(
+                    "UPDATE {bindings} SET valid_to = clock_timestamp() "
+                    "WHERE knot_row_id = %s AND valid_to IS NULL"
+                ).format(bindings=_bindings_id(cls)),
+                (knot_row_id,),
+            )
+            conn.execute(
+                sql.SQL(
+                    "INSERT INTO {bindings} "
+                    "(knot_row_id, canonical_id, valid_from, change_type, "
+                    " applied_revision, correction_id) "
+                    "VALUES (%s, %s, clock_timestamp(), 'split', %s, %s)"
+                ).format(bindings=_bindings_id(cls)),
+                (knot_row_id, new_cid, spec_revision, correction_id),
+            )
+            rewritten += 1
+    return rewritten
+
+
+# ─── Add (synthetic entity) ─────────────────────────────────────────────────
+
+
+def insert_synthetic_row(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    new_canonical_id: str,
+    values: dict[str, Any],
+    spec_revision: int,
+    correction_id: int | None = None,
+) -> str:
+    """Insert a synthetic source row attributed to ``_user_corrections`` and
+    open an initial binding for it.
+
+    ``values`` must contain only stored-slot names for the class. Returns
+    the new ``_knot_row_id`` (str).
+    """
+    slot_names = _stored_slot_names(cls)
+    user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
+    cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
+    placeholders = sql.SQL(", ").join(sql.Placeholder() * len(user_cols))
+    placeholder_values: list[Any] = [
+        USER_CORRECTIONS_SOURCE,
+        new_canonical_id,
+        spec_revision,
+    ]
+    for sn in slot_names:
+        placeholder_values.append(values.get(sn))
+
+    knot_row_id = conn.execute(
+        sql.SQL(
+            "INSERT INTO {table} ({cols}) VALUES ({ph}) "
+            "RETURNING _knot_row_id"
+        ).format(
+            table=_table_id(cls),
+            cols=cols_sql,
+            ph=placeholders,
+        ),
+        placeholder_values,
+    ).fetchone()[0]
+
+    conn.execute(
+        sql.SQL(
+            "INSERT INTO {bindings} "
+            "(knot_row_id, canonical_id, valid_from, change_type, "
+            " applied_revision, correction_id) "
+            "VALUES (%s, %s, clock_timestamp(), 'add', %s, %s)"
+        ).format(bindings=_bindings_id(cls)),
+        (knot_row_id, new_canonical_id, spec_revision, correction_id),
+    )
+    return str(knot_row_id)
+
+
+# ─── Tombstone ───────────────────────────────────────────────────────────────
+
+
+def tombstone_canonical_id(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    spec_revision: int,
+    correction_id: int | None = None,
+) -> int:
+    """Close all current bindings for ``canonical_id`` with
+    ``change_type='tombstone'``. No replacement bindings are opened, so the
+    entity naturally disappears from reads (which JOIN ``valid_to IS NULL``).
+
+    SELECT FOR UPDATE serialises concurrent tombstones on the same rows.
+    Returns the number of bindings closed.
+    """
+    rows = conn.execute(
+        sql.SQL(
+            "SELECT knot_row_id FROM {bindings} "
+            "WHERE canonical_id = %s AND valid_to IS NULL "
+            "FOR UPDATE"
+        ).format(bindings=_bindings_id(cls)),
+        (canonical_id,),
+    ).fetchall()
+    closed = 0
+    for (knot_row_id,) in rows:
+        conn.execute(
+            sql.SQL(
+                "UPDATE {bindings} "
+                "SET valid_to = clock_timestamp(), "
+                "    change_type = 'tombstone', "
+                "    applied_revision = %s, "
+                "    correction_id = %s "
+                "WHERE knot_row_id = %s AND valid_to IS NULL"
+            ).format(bindings=_bindings_id(cls)),
+            (spec_revision, correction_id, knot_row_id),
+        )
+        closed += 1
+    return closed
+
+
+# ─── RejectContribution ──────────────────────────────────────────────────────
+
+
+def reject_contribution(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    source: str,
+    spec_revision: int,
+    correction_id: int | None = None,
+) -> bool:
+    """Close the single current binding for the (canonical_id, source) pair.
+
+    The source row in ``knot_data.<class>`` is preserved for audit. Returns
+    True if a binding was found and closed, False if none matched.
+    SELECT FOR UPDATE serialises concurrent rejections on the same row.
+    """
+    row = conn.execute(
+        sql.SQL(
+            "SELECT b.knot_row_id FROM {bindings} b "
+            "JOIN {source_table} s ON s._knot_row_id = b.knot_row_id "
+            "WHERE b.canonical_id = %s AND b.valid_to IS NULL "
+            "  AND s._source = %s "
+            "FOR UPDATE"
+        ).format(
+            bindings=_bindings_id(cls),
+            source_table=_table_id(cls),
+        ),
+        (canonical_id, source),
+    ).fetchone()
+    if row is None:
+        return False
+    knot_row_id = row[0]
+    conn.execute(
+        sql.SQL(
+            "UPDATE {bindings} "
+            "SET valid_to = clock_timestamp(), "
+            "    change_type = 'rejected', "
+            "    applied_revision = %s, "
+            "    correction_id = %s "
+            "WHERE knot_row_id = %s AND valid_to IS NULL"
+        ).format(bindings=_bindings_id(cls)),
+        (spec_revision, correction_id, knot_row_id),
+    )
+    return True
 
 
 # ─── Lineage event log ──────────────────────────────────────────────────────

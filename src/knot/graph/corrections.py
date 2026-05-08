@@ -4,18 +4,15 @@ Composes the persistence primitives in ``knot.db`` to apply a typed
 correction in one transaction:
 
   1. Audit log row in ``_user_corrections`` (db.corrections).
-  2. Data-plane upsert in ``knot_data.<class>`` attributed to the
-     reserved ``_user_corrections`` source (db.graph_store).
-  3. Bandit feedback per disagreeing source — sources whose contribution
-     matched the corrected value get α += 1; mismatches get β += 1
-     (db.trust_posteriors). Closes the loop without manual
-     ``/trust/feedback`` calls.
+  2. Data-plane mutation in ``knot_data.<class>`` (db.graph_store).
+  3. Bandit feedback per disagreeing source where applicable
+     (db.trust_posteriors).
 
 This module is pure composition: no SQL strings, no psycopg imports —
 everything routes through ``knot.db``.
 
-Today only ``PropertyCorrection`` is implemented; Merge / Split / Add /
-Tombstone / RejectContribution land as their own slices.
+Implemented: PropertyCorrection, Merge, Split, Add, Tombstone,
+RejectContribution.
 """
 
 from __future__ import annotations
@@ -127,6 +124,194 @@ def apply_property_correction(
         ):
             success = _values_match(contributed, value)
             trust_posteriors.record_feedback(conn, source, slot_name, success)
+        return correction_id
+
+
+def apply_split(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    source_canonical_id: str,
+    partitions: dict[str, list[tuple[str, str]]],
+    spec_revision: int,
+    applied_by: str | None = None,
+    payload_for_log: dict[str, Any] | None = None,
+) -> int:
+    """Split ``source_canonical_id`` into two or more new canonical IDs.
+
+    ``partitions`` maps new_canonical_id -> [(source, source_row_id), ...].
+    Each (source, source_row_id) currently bound to source_canonical_id is
+    moved to exactly one new canonical_id.  Returns the audit-log id.
+    """
+    log_payload = payload_for_log or {
+        "type": "split",
+        "class_name": cls.name,
+        "source_canonical_id": source_canonical_id,
+        "partitions": {k: v for k, v in partitions.items()},
+    }
+    with conn.transaction():
+        correction_id = db_corrections.record_audit_entry(
+            conn,
+            correction_type="split",
+            payload=log_payload,
+            applied_by=applied_by,
+            applied_revision=spec_revision,
+        )
+        graph_store.split_canonical_id(
+            conn,
+            cls=cls,
+            source_canonical_id=source_canonical_id,
+            partitions=partitions,
+            spec_revision=spec_revision,
+            correction_id=correction_id,
+        )
+        graph_store.append_lineage_event(
+            conn,
+            class_name=cls.name,
+            change_type="split",
+            from_canonical_ids=[source_canonical_id],
+            to_canonical_ids=list(partitions.keys()),
+            applied_revision=spec_revision,
+            correction_id=correction_id,
+        )
+        return correction_id
+
+
+def apply_add(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    new_canonical_id: str,
+    values: dict[str, Any],
+    spec_revision: int,
+    applied_by: str | None = None,
+    payload_for_log: dict[str, Any] | None = None,
+) -> int:
+    """Create a synthetic entity not present in any source.
+
+    Inserts a source row attributed to ``_user_corrections`` and opens an
+    initial binding.  Returns the audit-log id.
+    """
+    log_payload = payload_for_log or {
+        "type": "add",
+        "class_name": cls.name,
+        "new_canonical_id": new_canonical_id,
+        "values": values,
+    }
+    with conn.transaction():
+        correction_id = db_corrections.record_audit_entry(
+            conn,
+            correction_type="add",
+            payload=log_payload,
+            applied_by=applied_by,
+            applied_revision=spec_revision,
+        )
+        graph_store.insert_synthetic_row(
+            conn,
+            cls=cls,
+            new_canonical_id=new_canonical_id,
+            values=values,
+            spec_revision=spec_revision,
+            correction_id=correction_id,
+        )
+        graph_store.append_lineage_event(
+            conn,
+            class_name=cls.name,
+            change_type="add",
+            from_canonical_ids=[],
+            to_canonical_ids=[new_canonical_id],
+            applied_revision=spec_revision,
+            correction_id=correction_id,
+        )
+        return correction_id
+
+
+def apply_tombstone(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    reason: str | None = None,
+    spec_revision: int,
+    applied_by: str | None = None,
+    payload_for_log: dict[str, Any] | None = None,
+) -> int:
+    """Mark a canonical entity as deleted by closing all current bindings.
+
+    Tombstoned entities disappear from reads (``valid_to IS NULL`` joins)
+    unless ``include_tombstoned=True`` is passed.  Returns the audit-log id.
+    """
+    log_payload = payload_for_log or {
+        "type": "tombstone",
+        "class_name": cls.name,
+        "canonical_id": canonical_id,
+        "reason": reason,
+    }
+    with conn.transaction():
+        correction_id = db_corrections.record_audit_entry(
+            conn,
+            correction_type="tombstone",
+            payload=log_payload,
+            applied_by=applied_by,
+            applied_revision=spec_revision,
+        )
+        graph_store.tombstone_canonical_id(
+            conn,
+            cls=cls,
+            canonical_id=canonical_id,
+            spec_revision=spec_revision,
+            correction_id=correction_id,
+        )
+        graph_store.append_lineage_event(
+            conn,
+            class_name=cls.name,
+            change_type="tombstone",
+            from_canonical_ids=[canonical_id],
+            to_canonical_ids=[],
+            applied_revision=spec_revision,
+            correction_id=correction_id,
+        )
+        return correction_id
+
+
+def apply_reject_contribution(
+    conn: psycopg.Connection,
+    *,
+    cls: OntologyClass,
+    canonical_id: str,
+    source: str,
+    spec_revision: int,
+    applied_by: str | None = None,
+    payload_for_log: dict[str, Any] | None = None,
+) -> int:
+    """Drop one source's view of an entity by closing just that binding.
+
+    The source row is preserved for audit. No lineage event is emitted
+    (this is a single-source change, not an identity event). Returns the
+    audit-log id.
+    """
+    log_payload = payload_for_log or {
+        "type": "reject_contribution",
+        "class_name": cls.name,
+        "canonical_id": canonical_id,
+        "source": source,
+    }
+    with conn.transaction():
+        correction_id = db_corrections.record_audit_entry(
+            conn,
+            correction_type="reject_contribution",
+            payload=log_payload,
+            applied_by=applied_by,
+            applied_revision=spec_revision,
+        )
+        graph_store.reject_contribution(
+            conn,
+            cls=cls,
+            canonical_id=canonical_id,
+            source=source,
+            spec_revision=spec_revision,
+            correction_id=correction_id,
+        )
         return correction_id
 
 

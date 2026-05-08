@@ -100,6 +100,24 @@ def build_row_model(source: Source) -> type[BaseModel]:
     )
 
 
+def build_row_model_for_class(cls: OntologyClass) -> type[BaseModel]:
+    """Strict Pydantic model for a class whose fields are all stored slots,
+    all optional (suitable for synthetic / user-correction rows where only
+    a subset of slots may be supplied). Unlike ``build_row_model``, this is
+    not tied to a specific Source and does not require identifier slots."""
+    fields: dict[str, Any] = {}
+    for slot in cls.slots:
+        if not _is_stored(slot):
+            continue
+        fields[slot.name] = _field_spec(slot, force_optional=True)
+
+    return create_model(
+        f"{cls.name}SyntheticRow",
+        __config__=ConfigDict(extra="forbid"),
+        **fields,
+    )
+
+
 def build_value_model_for_slot(slot: Slot) -> type[BaseModel]:
     """Single-field Pydantic model for one slot, used to validate a
     PropertyCorrection's ``value`` against the same constraints ingest
