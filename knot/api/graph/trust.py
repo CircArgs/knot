@@ -10,7 +10,8 @@ from pydantic import Field
 from knot import db
 from knot.api.auth.security import require_user
 from knot.api.graph._common import StrictBase, published_or_409
-from knot.db import trust_config, trust_posteriors
+from knot.db import trust_posteriors
+from knot.graph import trust as graph_trust
 
 router = APIRouter()
 
@@ -50,6 +51,11 @@ def _posterior_view(p: trust_posteriors.Posterior) -> PosteriorView:
     )
 
 
+def _map_validation(exc: Exception) -> HTTPException:
+    """Translate orchestration validation errors to 404."""
+    return HTTPException(404, str(exc))
+
+
 # NOTE: literal-path routes are declared BEFORE `{source_name}` so FastAPI
 # matches /trust/posteriors and /trust/feedback exactly rather than
 # treating them as source names.
@@ -60,7 +66,7 @@ async def list_trust_scores() -> list[TrustScore]:
     """All configured per-source trust scores. Sources without an entry use
     ``trust_config.DEFAULT_TRUST``."""
     async with db.connect() as conn:
-        scores = await trust_config.list_scores(conn)
+        scores = await graph_trust.list_trust_scores(conn)
     return [TrustScore(source=s, trust_score=v) for s, v in scores.items()]
 
 
@@ -69,7 +75,7 @@ async def list_posteriors() -> list[PosteriorView]:
     """All Beta posteriors recorded so far. Pairs without a row use the
     uniform prior (Beta(1, 1))."""
     async with db.connect() as conn:
-        return [_posterior_view(p) for p in await trust_posteriors.list_posteriors(conn)]
+        return [_posterior_view(p) for p in await graph_trust.list_posteriors(conn)]
 
 
 @router.get(
@@ -79,11 +85,13 @@ async def list_posteriors() -> list[PosteriorView]:
 async def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
     async with db.connect() as conn:
         spec = await published_or_409(conn)
-        if not any(s.name == source_name for s in spec.sources):
-            raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
-        if not any(s.name == slot_name for s in spec.slots):
-            raise HTTPException(404, f"Slot {slot_name!r} not on the published spec.")
-        return _posterior_view(await trust_posteriors.get_posterior(conn, source_name, slot_name))
+        try:
+            post = await graph_trust.get_posterior(
+                conn, spec=spec, source=source_name, slot=slot_name
+            )
+        except (graph_trust.SourceNotOnSpecError, graph_trust.SlotNotOnSpecError) as exc:
+            raise _map_validation(exc) from exc
+        return _posterior_view(post)
 
 
 @router.delete(
@@ -93,7 +101,7 @@ async def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
 async def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     """Drop the per-(source, slot) posterior, reverting it to the uniform prior."""
     async with db.connect() as conn:
-        existed = await trust_posteriors.reset_posterior(conn, source_name, slot_name)
+        existed = await graph_trust.reset_posterior(conn, source=source_name, slot=slot_name)
     return {"reset": existed, "source": source_name, "slot": slot_name}
 
 
@@ -107,11 +115,16 @@ async def submit_feedback(body: FeedbackBody) -> PosteriorView:
     α on success, β on failure. Source and slot must be on the published spec."""
     async with db.connect() as conn:
         spec = await published_or_409(conn)
-        if not any(s.name == body.source for s in spec.sources):
-            raise HTTPException(404, f"Source {body.source!r} not on the published spec.")
-        if not any(s.name == body.slot for s in spec.slots):
-            raise HTTPException(404, f"Slot {body.slot!r} not on the published spec.")
-        post = await trust_posteriors.record_feedback(conn, body.source, body.slot, body.success)
+        try:
+            post = await graph_trust.record_feedback(
+                conn,
+                spec=spec,
+                source=body.source,
+                slot=body.slot,
+                success=body.success,
+            )
+        except (graph_trust.SourceNotOnSpecError, graph_trust.SlotNotOnSpecError) as exc:
+            raise _map_validation(exc) from exc
     return _posterior_view(post)
 
 
@@ -123,9 +136,10 @@ async def submit_feedback(body: FeedbackBody) -> PosteriorView:
 async def get_trust_score(source_name: str) -> TrustScore:
     async with db.connect() as conn:
         spec = await published_or_409(conn)
-        if not any(s.name == source_name for s in spec.sources):
-            raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
-        score = await trust_config.get_score(conn, source_name)
+        try:
+            score = await graph_trust.get_trust_score(conn, spec=spec, source=source_name)
+        except graph_trust.SourceNotOnSpecError as exc:
+            raise _map_validation(exc) from exc
     return TrustScore(source=source_name, trust_score=score)
 
 
@@ -137,7 +151,10 @@ async def get_trust_score(source_name: str) -> TrustScore:
 async def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
     async with db.connect() as conn:
         spec = await published_or_409(conn)
-        if not any(s.name == source_name for s in spec.sources):
-            raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
-        await trust_config.set_score(conn, source_name, body.trust_score)
+        try:
+            await graph_trust.set_trust_score(
+                conn, spec=spec, source=source_name, score=body.trust_score
+            )
+        except graph_trust.SourceNotOnSpecError as exc:
+            raise _map_validation(exc) from exc
     return TrustScore(source=source_name, trust_score=body.trust_score)
