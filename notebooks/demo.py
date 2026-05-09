@@ -596,9 +596,10 @@ def _(mo):
     mo.md("""
     ## Step 4 — Data graph (pre-merge)
 
-    One blue movie node, two green Person nodes, plus an orange dangling
-    placeholder for whichever `directed_by` flavour didn't land on a real
-    Person row. The edge labels are the slot name (`directed_by`).
+    Two green Person nodes (the duplicate we're about to merge) and one
+    blue Movie node. The Movie's `directed_by` edge points at whichever
+    flavour wins per-slot trust resolution; the other Person sits there
+    as a redundant entity.
 
     Click a node to see its resolved attribute set; click an edge to see
     the slot reference.
@@ -619,11 +620,15 @@ def _(mo):
 
     `nolan_chris` and `nolan_christopher` are the same human. Submit a
     typed `Merge` correction that collapses the duplicate into the
-    canonical id. Knot atomically:
+    canonical id. Knot atomically (one transaction):
 
     1. Logs the correction in `_user_corrections`.
-    2. SCD2-rewrites the duplicate's contributions to point at the keeper.
-    3. Appends a lineage event tying the two canonical_ids together.
+    2. SCD2-rewrites the duplicate's bindings to point at the keeper.
+    3. Walks the published spec, finds every stored slot whose range is
+       `Person`, and rewrites those FK columns on every referencing
+       class's data table — so `Movie.directed_by` flips from
+       `nolan_chris` to `nolan_christopher` automatically.
+    4. Appends a lineage event tying the two canonical_ids together.
     """)
     return
 
@@ -647,14 +652,9 @@ def _(mo):
 
     Same render path, fresh data. The duplicate Person canonical entity
     is gone — `nolan_chris` and `nolan_christopher` collapsed to one row
-    with `_canonical_id = nolan_christopher`.
-
-    Note the orange dangling node may persist: `Movie.directed_by` is a
-    string FK whose stored value is whatever the source row contributed,
-    and `Merge` rewrites the Person row's `_canonical_id` but does not
-    sweep through other classes' FK columns to rewrite stale references.
-    Closing that loop would be a follow-on correction (or an extension
-    that listens for `merge` events and rewrites referencing FKs).
+    with `_canonical_id = nolan_christopher`. The `Movie.directed_by`
+    edge points at the keeper because the merge rewrote the FK column
+    on the Movie data table in the same transaction. No dangling refs.
     """)
     return
 
