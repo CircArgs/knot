@@ -29,6 +29,7 @@ from knot.spec import (
     Source,
     Spec,
     TypeDefinition,
+    spec_to_dict,
 )
 from knot.spec.expressions import ExprJson
 from knot.spec.metaschema import Severity
@@ -273,7 +274,7 @@ async def get_published_spec() -> dict[str, Any]:
         spec = await graph_spec.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
-    return spec_store.spec_to_dict(spec)
+    return spec_to_dict(spec)
 
 
 @router.get("/published/classes", response_model=list[ClassSummary])
@@ -343,7 +344,7 @@ async def get_revision_spec(revision: int) -> dict[str, Any]:
             spec = await graph_spec.get_revision(conn, revision)
         except graph_spec.DraftNotFoundError as exc:
             raise HTTPException(404, f"Revision {revision} not found.") from exc
-    return spec_store.spec_to_dict(spec)
+    return spec_to_dict(spec)
 
 
 # ─── Drafts ─────────────────────────────────────────────────────────────────
@@ -381,7 +382,7 @@ async def get_draft(draft_id: int) -> dict[str, Any]:
             spec = await graph_spec.get_draft(conn, draft_id)
         except graph_spec.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
-    return spec_store.spec_to_dict(spec)
+    return spec_to_dict(spec)
 
 
 @router.delete("/drafts/{draft_id}", dependencies=[Depends(require_user)])

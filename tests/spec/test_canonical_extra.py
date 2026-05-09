@@ -8,7 +8,7 @@ Tests cover:
 
 from __future__ import annotations
 
-from knot.db.spec_store import spec_from_dict, spec_to_dict
+from knot.spec.serialization import spec_from_dict, spec_to_dict
 from knot.spec import (
     OntologyClass,
     Slot,

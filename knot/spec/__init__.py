@@ -12,6 +12,7 @@ from knot.spec.errors import (
     DraftNotFoundError,
     PublishGateError,
 )
+from knot.spec.serialization import spec_from_dict, spec_to_dict
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -80,6 +81,9 @@ __all__ = [
     # canonical
     "compute_content_hash",
     "canonical_dump",
+    # serialization (full-fidelity round-trip)
+    "spec_from_dict",
+    "spec_to_dict",
     # effective-slot helpers
     "effective_slots",
     "is_stored",
