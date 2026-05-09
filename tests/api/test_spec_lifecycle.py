@@ -8,7 +8,6 @@ so every test starts with an empty slate.
 from __future__ import annotations
 
 import pytest
-import psycopg
 
 from knot import db
 from knot.db.spec_store import (
@@ -19,8 +18,6 @@ from knot.db.spec_store import (
     get_revision,
     list_drafts,
     publish_draft,
-    spec_from_dict,
-    spec_to_dict,
     update_draft,
 )
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
@@ -29,7 +26,6 @@ from knot.spec.errors import (
     DraftNotFoundError,
     PublishGateError,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal valid spec factory

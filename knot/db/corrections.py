@@ -33,7 +33,9 @@ async def record_audit_entry(
     return row[0]
 
 
-async def list_audit_log(conn: psycopg.AsyncConnection, *, limit: int = 100) -> list[dict[str, Any]]:
+async def list_audit_log(
+    conn: psycopg.AsyncConnection, *, limit: int = 100
+) -> list[dict[str, Any]]:
     """Newest-first slice of the audit log."""
     rows = await (
         await conn.execute(

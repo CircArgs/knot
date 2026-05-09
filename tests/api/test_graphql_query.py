@@ -24,7 +24,6 @@ Tests run against the live postgres stack; isolation via per-test truncation.
 
 from __future__ import annotations
 
-import json
 import os
 
 import pytest
@@ -36,10 +35,10 @@ from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
-
 # ---------------------------------------------------------------------------
 # Spec + data builders
 # ---------------------------------------------------------------------------
+
 
 def _build_spec() -> tuple[Spec, OntologyClass, Source]:
     st = TypeDefinition(name="string", base="str")
@@ -74,6 +73,7 @@ def _sample_rows() -> list[dict]:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def gql_db(pg_conn):
     """Publish a Movie spec and insert sample rows. Yields (conn, spec, src, rev)."""
@@ -93,7 +93,10 @@ async def gql_db(pg_conn):
 
     _rows = _sample_rows()
     await graph_store.insert_rows(
-        pg_conn, source=src, spec_revision=rev, rows=_rows,
+        pg_conn,
+        source=src,
+        spec_revision=rev,
+        rows=_rows,
         canonical_ids=[str(r["imdb_id"]) for r in _rows],
     )
     yield pg_conn, spec, src, rev
@@ -103,6 +106,7 @@ async def gql_db(pg_conn):
 def gql_client(gql_db):
     """TestClient with KNOT_AUTH_DEV_MODE=1 bypass active."""
     from knot.api.main import app
+
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
     try:
         yield TestClient(app, raise_server_exceptions=True)
@@ -123,9 +127,10 @@ def _post(client: TestClient, query: str, variables: dict | None = None) -> dict
 # 1. Schema regenerates on new publish
 # ---------------------------------------------------------------------------
 
+
 async def test_schema_cache_changes_on_new_publish(gql_db):
     """Content hash changes after a new publish → schema cache miss → new schema."""
-    from knot.spec.compile.graphql import _schema_cache, get_or_build_schema
+    from knot.spec.compile.graphql import get_or_build_schema
 
     conn, spec, src, rev = gql_db
 
@@ -151,6 +156,7 @@ async def test_schema_cache_changes_on_new_publish(gql_db):
 # 2. Query without filter → all rows (page shape)
 # ---------------------------------------------------------------------------
 
+
 def test_query_no_filter_returns_all_rows(gql_client):
     result = _post(gql_client, "{ movie { imdbId title year canonicalId } movieCount }")
     assert "data" in result
@@ -163,6 +169,7 @@ def test_query_no_filter_returns_all_rows(gql_client):
 # ---------------------------------------------------------------------------
 # 3. Compare filter: year >= 1990
 # ---------------------------------------------------------------------------
+
 
 def test_query_filter_year_gte(gql_client):
     query = (
@@ -181,6 +188,7 @@ def test_query_filter_year_gte(gql_client):
 # 4. Multiple Compare filters (AND): 1990 <= year <= 2000
 # ---------------------------------------------------------------------------
 
+
 def test_query_filter_year_range(gql_client):
     query = (
         "{ movie(where: { year: { gte: 1990, lte: 2000 } }) { imdbId title year } "
@@ -197,6 +205,7 @@ def test_query_filter_year_range(gql_client):
 # ---------------------------------------------------------------------------
 # 5. Pagination: limit / offset
 # ---------------------------------------------------------------------------
+
 
 def test_query_limit(gql_client):
     query = "{ movie(limit: 2) { imdbId title year } movieCount }"
@@ -220,6 +229,7 @@ def test_query_offset(gql_client):
 # 6. as_of revision pin
 # ---------------------------------------------------------------------------
 
+
 def test_query_as_of_past_revision_returns_empty(gql_db, gql_client):
     """Rows inserted at spec_revision=rev; as_of=rev-1 returns nothing."""
     conn, spec, src, rev = gql_db
@@ -241,6 +251,7 @@ def test_query_as_of_current_revision_returns_rows(gql_db, gql_client):
 # 7. Class with no rows returns empty list
 # ---------------------------------------------------------------------------
 
+
 def test_query_class_with_no_rows(gql_client):
     query = (
         "{ movie(where: { year: { gt: 9999 } }) { imdbId } "
@@ -254,6 +265,7 @@ def test_query_class_with_no_rows(gql_client):
 # ---------------------------------------------------------------------------
 # 8. LIKE / Matches predicate
 # ---------------------------------------------------------------------------
+
 
 def test_query_like_filter(gql_client):
     query = (
@@ -272,12 +284,16 @@ def test_query_like_filter(gql_client):
 # 9. Auth paths
 # ---------------------------------------------------------------------------
 
+
 def test_graphql_no_auth_returns_401_when_enforced():
     """Without KNOT_AUTH_DEV_MODE=1, missing token → 401."""
+    from fastapi import Header, HTTPException
+
+    from knot.api.auth.security import Principal as _Principal
+    from knot.api.auth.security import _strip_bearer
+    from knot.api.auth.security import require_user as _require_user
     from knot.api.main import app
-    from knot.api.auth.security import require_user as _require_user, Principal as _Principal, _strip_bearer
     from knot.db import users
-    from fastapi import HTTPException, Header
 
     async def strict_require_user(
         authorization: str | None = Header(default=None),
@@ -301,10 +317,13 @@ def test_graphql_no_auth_returns_401_when_enforced():
 
 def test_graphql_wrong_token_returns_403_when_enforced():
     """Wrong token → 403."""
+    from fastapi import Header, HTTPException
+
+    from knot.api.auth.security import Principal as _Principal
+    from knot.api.auth.security import _strip_bearer
+    from knot.api.auth.security import require_user as _require_user
     from knot.api.main import app
-    from knot.api.auth.security import require_user as _require_user, Principal as _Principal, _strip_bearer
     from knot.db import users
-    from fastapi import HTTPException, Header
 
     async def strict_require_user(
         authorization: str | None = Header(default=None),
@@ -341,6 +360,7 @@ def test_graphql_dev_mode_bypass(gql_client):
 # 10. No published spec → 409
 # ---------------------------------------------------------------------------
 
+
 async def test_graphql_no_spec_returns_409(pg_conn):
     """When no spec is published, /graph/query returns 409."""
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
@@ -348,6 +368,7 @@ async def test_graphql_no_spec_returns_409(pg_conn):
     await db.apply_schema()
 
     from knot.api.main import app
+
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
     try:
         client = TestClient(app, raise_server_exceptions=False)
@@ -362,6 +383,7 @@ async def test_graphql_no_spec_returns_409(pg_conn):
 # ---------------------------------------------------------------------------
 # 11. Pagination metadata fields
 # ---------------------------------------------------------------------------
+
 
 def test_pagination_window(gql_client):
     """limit and offset honour the requested window; movieCount returns total."""
@@ -393,6 +415,7 @@ def test_as_of_propagates_through_count(gql_db, gql_client):
 # ---------------------------------------------------------------------------
 # 12. orderBy: numeric field ASC / DESC
 # ---------------------------------------------------------------------------
+
 
 def test_order_by_year_asc(gql_client):
     query = "{ movie(orderBy: [{ field: year, direction: ASC }]) { imdbId title year } }"
@@ -474,6 +497,7 @@ def test_by_canonical_id_as_of_current_returns_record(gql_db, gql_client):
 # 14. Resolved view: movieResolved
 # ---------------------------------------------------------------------------
 
+
 def test_resolved_found(gql_client):
     query = f'{{ movieResolved(canonicalId: "tt0050083") {_BY_ID_FIELDS} }}'
     result = _post(gql_client, query)
@@ -512,6 +536,7 @@ def test_resolved_as_of_current_returns_record(gql_db, gql_client):
 # 15. count_rows predicate filtering (unit-level via graph_store directly)
 # ---------------------------------------------------------------------------
 
+
 async def test_count_rows_with_predicate(gql_db):
     """count_rows should honour the predicate and return filtered count."""
     from knot.spec.compile.postgres import CompileContext, compile_predicate
@@ -530,8 +555,10 @@ async def test_count_rows_with_predicate(gql_db):
     assert total_unfiltered == 5
 
     total_filtered = await graph_store.count_rows(
-        conn, cls=movie_cls,
-        predicate_sql=pred_sql, predicate_params=ctx.params,
+        conn,
+        cls=movie_cls,
+        predicate_sql=pred_sql,
+        predicate_params=ctx.params,
     )
     assert total_filtered == 3  # 1994, 1993, 2003
 
@@ -544,13 +571,16 @@ async def test_count_rows_with_predicate(gql_db):
 # Fixtures: Movie + Credit spec with a derived slot (credit_count)
 # ---------------------------------------------------------------------------
 
+
 def _build_derived_spec():
     """Movie + Credit spec.  Movie.credit_count is a derived slot
     (RelationCount over Credit rows whose movie FK = movie canonical_id).
     """
     from knot.spec.metaschema import (
-        RelationCount, ReverseRelation,
+        RelationCount,
+        ReverseRelation,
     )
+
     st = TypeDefinition(name="string", base="str")
     it = TypeDefinition(name="integer", base="int")
     imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
@@ -602,33 +632,43 @@ async def derived_db(pg_conn):
 
     # Ingest 3 movies.
     await graph_store.insert_rows(
-        pg_conn, source=movie_src, spec_revision=rev,
+        pg_conn,
+        source=movie_src,
+        spec_revision=rev,
         rows=[
-            {"imdb_id": "m1", "title": "Film One",   "year": 1990},
-            {"imdb_id": "m2", "title": "Film Two",   "year": 2000},
+            {"imdb_id": "m1", "title": "Film One", "year": 1990},
+            {"imdb_id": "m2", "title": "Film Two", "year": 2000},
             {"imdb_id": "m3", "title": "Film Three", "year": 2010},
         ],
-        canonical_ids=[str(r["imdb_id"]) for r in [
-            {"imdb_id": "m1", "title": "Film One",   "year": 1990},
-            {"imdb_id": "m2", "title": "Film Two",   "year": 2000},
-            {"imdb_id": "m3", "title": "Film Three", "year": 2010},
-        ]]
+        canonical_ids=[
+            str(r["imdb_id"])
+            for r in [
+                {"imdb_id": "m1", "title": "Film One", "year": 1990},
+                {"imdb_id": "m2", "title": "Film Two", "year": 2000},
+                {"imdb_id": "m3", "title": "Film Three", "year": 2010},
+            ]
+        ],
     )
     # m1 has 3 credits; m2 has 1 credit; m3 has 0
     await graph_store.insert_rows(
-        pg_conn, source=credit_src, spec_revision=rev,
+        pg_conn,
+        source=credit_src,
+        spec_revision=rev,
         rows=[
             {"credit_id": "c1", "movie": "m1", "role": "director"},
             {"credit_id": "c2", "movie": "m1", "role": "actor"},
             {"credit_id": "c3", "movie": "m1", "role": "writer"},
             {"credit_id": "c4", "movie": "m2", "role": "director"},
         ],
-        canonical_ids=[str(r["credit_id"]) for r in [
-            {"credit_id": "c1", "movie": "m1", "role": "director"},
-            {"credit_id": "c2", "movie": "m1", "role": "actor"},
-            {"credit_id": "c3", "movie": "m1", "role": "writer"},
-            {"credit_id": "c4", "movie": "m2", "role": "director"},
-        ]]
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "movie": "m1", "role": "director"},
+                {"credit_id": "c2", "movie": "m1", "role": "actor"},
+                {"credit_id": "c3", "movie": "m1", "role": "writer"},
+                {"credit_id": "c4", "movie": "m2", "role": "director"},
+            ]
+        ],
     )
     yield pg_conn, spec, movie_src, credit_src, rev
 
@@ -636,6 +676,7 @@ async def derived_db(pg_conn):
 @pytest.fixture
 def derived_client(derived_db):
     from knot.api.main import app
+
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
     try:
         yield TestClient(app, raise_server_exceptions=True)
@@ -646,6 +687,7 @@ def derived_client(derived_db):
 # ---------------------------------------------------------------------------
 # 16a. WHERE filter on a derived slot returns expected rows
 # ---------------------------------------------------------------------------
+
 
 def test_where_on_derived_slot_returns_matching_rows(derived_client):
     """WHERE credit_count >= 2 should return only m1 (3 credits)."""
@@ -686,6 +728,7 @@ def test_where_combined_derived_and_stored(derived_client):
 # 16b. ORDER BY derived slot ASC + DESC
 # ---------------------------------------------------------------------------
 
+
 def test_order_by_derived_slot_asc(derived_client):
     """ORDER BY credit_count ASC → m3(0), m2(1), m1(3)."""
     query = "{ movie(orderBy: [{ field: creditCount, direction: ASC }]) { imdbId creditCount } }"
@@ -711,6 +754,7 @@ def test_order_by_derived_slot_desc(derived_client):
 # ---------------------------------------------------------------------------
 # 16c. Aggregation queries — count, sum, avg, min, max
 # ---------------------------------------------------------------------------
+
 
 def test_aggregate_count(gql_client):
     """movieAggregate returns correct count of all rows."""

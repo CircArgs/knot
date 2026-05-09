@@ -29,41 +29,34 @@ Integration (live DB):
 
 from __future__ import annotations
 
-import json
 import os
-from typing import Any
 
 import pytest
 import pytest_asyncio
-from psycopg import sql
 
 from knot import db
-from knot.db import graph_store, spec_store
-from knot.spec import is_stored
-from knot.spec.compile.postgres._queries import (
-    derived_column_exprs as _derived_column_exprs,
-    select_with_derivations as _select_with_derivations,
-)
+from knot.db import graph_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
+from knot.spec import is_stored
 from knot.spec.compile.postgres import (
     CompileContext,
-    CompilerError,
     compile_predicate,
+)
+from knot.spec.compile.postgres._queries import (
+    derived_column_exprs as _derived_column_exprs,
+)
+from knot.spec.compile.postgres._queries import (
+    select_with_derivations as _select_with_derivations,
 )
 from knot.spec.metaschema import (
     AggFunc,
-    BoolExpr,
-    BoolOpKind,
     Compare,
     CompareOp,
     FilteredRelation,
     Literal_,
     OntologyClass,
     RelationAggregate,
-    RelationAll,
-    RelationAny,
     RelationCount,
-    RelationFirst,
     RelationProject,
     RelationRef,
     ReverseRelation,
@@ -73,7 +66,6 @@ from knot.spec.metaschema import (
     Spec,
     TypeDefinition,
 )
-
 
 # ---------------------------------------------------------------------------
 # Shared spec builder: Movie + Credit + Person
@@ -293,8 +285,9 @@ async def full_spec_db(clean_db):
 
 @pytest.fixture
 def gql_client_full(full_spec_db):
-    from knot.api.main import app
     from fastapi.testclient import TestClient
+
+    from knot.api.main import app
 
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
     try:
@@ -324,7 +317,6 @@ def test_relation_project_forward_fk_emits_array_agg():
     name_slot = Slot(name="name", range=str_t)
     person_cls = OntologyClass(name="Person", slots=[name_slot])
     fk_slot = Slot(name="person", range=person_cls)
-    credit_cls = OntologyClass(name="Credit", slots=[fk_slot, name_slot])
     movie_cls = OntologyClass(name="Movie", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -394,7 +386,6 @@ def test_relation_project_filtered_adds_where():
 
 # 4. RelationCount emits count(*)
 def test_relation_count_emits_count_star():
-    str_t = TypeDefinition(name="string", base="str")
     movie_cls = OntologyClass(name="Movie", slots=[])
     fk_slot = Slot(name="movie", range=movie_cls)
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
@@ -409,7 +400,6 @@ def test_relation_count_emits_count_star():
 
 # 5. RelationCount distinct emits DISTINCT
 def test_relation_count_distinct_emits_distinct():
-    str_t = TypeDefinition(name="string", base="str")
     movie_cls = OntologyClass(name="Movie", slots=[])
     fk_slot = Slot(name="movie", range=movie_cls)
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot])

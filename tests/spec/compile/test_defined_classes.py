@@ -35,7 +35,6 @@ Integration (DB):
 
 from __future__ import annotations
 
-import json
 import os
 
 import pytest
@@ -45,6 +44,7 @@ from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec.compile.postgres import CompileContext, compile_predicate, migration
 from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import (
     BoolExpr,
@@ -52,15 +52,11 @@ from knot.spec.metaschema import (
     Compare,
     CompareOp,
     Literal_,
-    RelationAny,
     RelationAll,
+    RelationAny,
     ReverseRelation,
     SlotPath,
 )
-from knot.spec.compile.postgres import CompileContext, compile_predicate
-from knot.spec.compile.postgres._dispatch import CompilerError
-from knot.spec.compile.postgres import migration
-
 
 # ---------------------------------------------------------------------------
 # Spec builders
@@ -133,7 +129,6 @@ def _build_person_credit_director_spec() -> tuple[
     # which exactly means: at least one credit has role='director'
 
     role_path = SlotPath(from_class=credit, slots=[role])
-    role_is_director = Compare(op=CompareOp.EQ, left=role_path, right=Literal_(value="director"))
 
     # Director definition: at least one Credit row (reverse-FK) has role='director'
     # = NOT (all Credits through reverse-FK have role != 'director')
@@ -194,8 +189,9 @@ async def dc_db(pg_conn):
 @pytest.fixture
 def dc_client(dc_db):
     """TestClient with KNOT_AUTH_DEV_MODE=1 bypass active."""
-    from knot.api.main import app
     from fastapi.testclient import TestClient
+
+    from knot.api.main import app
 
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
     try:
@@ -606,7 +602,8 @@ async def test_publish_gate_rejects_broken_definition(pg_conn):
     person = OntologyClass(name="Person", slots=[person_id])
 
     # Use a RecursiveTraversal as the definition — compile raises NotImplementedError
-    from knot.spec.metaschema import RecursiveTraversal, RelationRef, SlotPath as SP
+    from knot.spec.metaschema import RecursiveTraversal, RelationRef
+    from knot.spec.metaschema import SlotPath as SP
 
     is_a_slot = Slot(name="is_a", range=person)
     start = RelationRef(from_class=person, slot=is_a_slot)
@@ -978,7 +975,7 @@ def test_multi_slot_path_compile():
     node = Compare(op=CompareOp.EQ, left=path, right=Literal_(value="Alice"))
 
     ctx = CompileContext(primary_class=credit, alias="s")
-    result = compile_predicate(node, ctx)
+    compile_predicate(node, ctx)
 
     # The final expression references the joined alias, not the table name directly.
     # The JOIN fragments accumulated in ctx.joins should reference the person table.

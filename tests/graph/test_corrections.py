@@ -13,13 +13,13 @@ from knot.db import corrections as db_corrections
 from knot.db import graph_store, trust_posteriors
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
-from knot.graph.corrections import apply_merge, apply_property_correction, _values_match
+from knot.graph.corrections import _values_match, apply_merge, apply_property_correction
 from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
-
 
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def corrections_db(pg_conn):
@@ -53,12 +53,20 @@ async def corrections_db(pg_conn):
     await publish_draft(pg_conn, rev)
 
     # Insert rows from two sources for canonical_id "tt_canonical"
-    await graph_store.insert_rows(pg_conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_canonical", "title": "From A"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_canonical", "title": "From A"}]])
-    await graph_store.insert_rows(pg_conn, source=src_b, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_canonical", "title": "From B"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_canonical", "title": "From B"}]])
+    await graph_store.insert_rows(
+        pg_conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_canonical", "title": "From A"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_canonical", "title": "From A"}]],
+    )
+    await graph_store.insert_rows(
+        pg_conn,
+        source=src_b,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_canonical", "title": "From B"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_canonical", "title": "From B"}]],
+    )
 
     yield pg_conn, movie, src_a, src_b, rev
 
@@ -66,6 +74,7 @@ async def corrections_db(pg_conn):
 # ---------------------------------------------------------------------------
 # 1. apply_property_correction: audit row + data-plane row + bandit feedback
 # ---------------------------------------------------------------------------
+
 
 async def test_apply_property_correction_writes_audit_row(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
@@ -95,7 +104,9 @@ async def test_apply_property_correction_upserts_correction_row(corrections_db):
         value="Corrected Title",
         spec_revision=rev,
     )
-    contribs = await graph_store.get_canonical_contributions(conn, cls=movie, canonical_id="tt_canonical")
+    contribs = await graph_store.get_canonical_contributions(
+        conn, cls=movie, canonical_id="tt_canonical"
+    )
     correction_rows = [c for c in contribs if c["_source"] == "_user_corrections"]
     assert len(correction_rows) == 1
     assert correction_rows[0]["title"] == "Corrected Title"
@@ -104,8 +115,12 @@ async def test_apply_property_correction_upserts_correction_row(corrections_db):
 async def test_apply_property_correction_returns_int_id(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
     cid = await apply_property_correction(
-        conn, cls=movie, canonical_id="tt_canonical",
-        slot_name="title", value="X", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_canonical",
+        slot_name="title",
+        value="X",
+        spec_revision=rev,
     )
     assert isinstance(cid, int)
     assert cid >= 1
@@ -115,13 +130,18 @@ async def test_apply_property_correction_returns_int_id(corrections_db):
 # 2. Bandit feedback: agreement → α += 1; disagreement → β += 1
 # ---------------------------------------------------------------------------
 
+
 async def test_correction_agreement_increments_alpha(corrections_db):
     """Source whose contribution matches the correction → success → α++."""
     conn, movie, src_a, src_b, rev = corrections_db
     # src_a contributes "From A"; correct to "From A" → src_a agrees
     await apply_property_correction(
-        conn, cls=movie, canonical_id="tt_canonical",
-        slot_name="title", value="From A", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_canonical",
+        slot_name="title",
+        value="From A",
+        spec_revision=rev,
     )
     p_a = await trust_posteriors.get_posterior(conn, "source_a", "title")
     assert p_a.alpha > PRIOR_ALPHA  # agreement → α incremented
@@ -132,8 +152,12 @@ async def test_correction_disagreement_increments_beta(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
     # src_a contributes "From A"; correct to "From A" → src_b disagrees ("From B" ≠ "From A")
     await apply_property_correction(
-        conn, cls=movie, canonical_id="tt_canonical",
-        slot_name="title", value="From A", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_canonical",
+        slot_name="title",
+        value="From A",
+        spec_revision=rev,
     )
     p_b = await trust_posteriors.get_posterior(conn, "source_b", "title")
     assert p_b.beta > PRIOR_BETA  # disagreement → β incremented
@@ -142,6 +166,7 @@ async def test_correction_disagreement_increments_beta(corrections_db):
 # ---------------------------------------------------------------------------
 # 3. Multivalued equality is order-insensitive
 # ---------------------------------------------------------------------------
+
 
 def test_values_match_multivalued_order_insensitive():
     assert _values_match(["a", "b", "c"], ["c", "a", "b"])
@@ -167,12 +192,17 @@ def test_values_match_none_not_equal_to_value():
 # 4. apply_merge: bindings reassigned + lineage event written
 # ---------------------------------------------------------------------------
 
+
 async def test_apply_merge_writes_lineage_event(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
     # Insert a second canonical_id to merge into the first
-    await graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_secondary", "title": "Dup"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_secondary", "title": "Dup"}]])
+    await graph_store.insert_rows(
+        conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_secondary", "title": "Dup"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_secondary", "title": "Dup"}]],
+    )
 
     await apply_merge(
         conn,
@@ -192,11 +222,16 @@ async def test_apply_merge_writes_lineage_event(corrections_db):
 
 async def test_apply_merge_closes_secondary_canonical_id(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
-    await graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_sec2"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_sec2"}]])
+    await graph_store.insert_rows(
+        conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_sec2"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_sec2"}]],
+    )
     await apply_merge(
-        conn, cls=movie,
+        conn,
+        cls=movie,
         keep_canonical_id="tt_canonical",
         merge_canonical_ids=["tt_sec2"],
         spec_revision=rev,
@@ -206,11 +241,16 @@ async def test_apply_merge_closes_secondary_canonical_id(corrections_db):
 
 async def test_apply_merge_writes_audit_entry(corrections_db):
     conn, movie, src_a, src_b, rev = corrections_db
-    await graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_merge_audit"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_merge_audit"}]])
+    await graph_store.insert_rows(
+        conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_merge_audit"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_merge_audit"}]],
+    )
     cid = await apply_merge(
-        conn, cls=movie,
+        conn,
+        cls=movie,
         keep_canonical_id="tt_canonical",
         merge_canonical_ids=["tt_merge_audit"],
         spec_revision=rev,

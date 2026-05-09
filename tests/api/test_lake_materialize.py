@@ -19,9 +19,8 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.api.main import app
 from knot.api.auth.security import Principal, require_user
-from knot.db import spec_store
+from knot.api.main import app
 from knot.db.spec_store import (
     create_draft,
     publish_draft,
@@ -56,7 +55,8 @@ def _spec_with_concrete_and_abstract() -> Spec:
     )
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
-        id="lake_test", version="1.0.0",
+        id="lake_test",
+        version="1.0.0",
         types=[st, it],
         slots=[imdb_id, title, year, audited_at],
         classes=[movie, auditable],
@@ -99,6 +99,7 @@ async def published(clean):
 # 1. Endpoint shape: one entry per concrete class
 # ---------------------------------------------------------------------------
 
+
 def test_materialize_lists_concrete_classes(published, client):
     conn, rev = published
     r = client.get("/lake/materialize")
@@ -116,6 +117,7 @@ def test_materialize_lists_concrete_classes(published, client):
 # 2. Generated SQL is syntactically valid (EXPLAIN it)
 # ---------------------------------------------------------------------------
 
+
 async def test_generated_sql_is_valid(published, client):
     conn, rev = published
     r = client.get("/lake/materialize")
@@ -129,6 +131,7 @@ async def test_generated_sql_is_valid(published, client):
 # ---------------------------------------------------------------------------
 # 3. current filters to valid_to IS NULL; history does not
 # ---------------------------------------------------------------------------
+
 
 def test_current_filters_history_does_not(published, client):
     conn, rev = published
@@ -144,6 +147,7 @@ def test_current_filters_history_does_not(published, client):
 # ---------------------------------------------------------------------------
 # 4. Generated current-body returns the right rows after ingest
 # ---------------------------------------------------------------------------
+
 
 async def test_current_body_runs_against_real_data(published, client):
     conn, rev = published
@@ -172,6 +176,7 @@ async def test_current_body_runs_against_real_data(published, client):
 # 5. Mixin slot appears in the generated SELECT (audited_at)
 # ---------------------------------------------------------------------------
 
+
 def test_mixin_slot_in_materialized_view(published, client):
     r = client.get("/lake/materialize?class=Movie")
     movie = r.json()["classes"][0]
@@ -183,6 +188,7 @@ def test_mixin_slot_in_materialized_view(published, client):
 # 6. Unknown class → 404
 # ---------------------------------------------------------------------------
 
+
 def test_materialize_unknown_class_404(published, client):
     r = client.get("/lake/materialize?class=DoesNotExist")
     assert r.status_code == 404
@@ -192,6 +198,7 @@ def test_materialize_unknown_class_404(published, client):
 # ---------------------------------------------------------------------------
 # 7. No published spec → 409
 # ---------------------------------------------------------------------------
+
 
 def test_materialize_without_published_spec_409(clean, client):
     r = client.get("/lake/materialize")

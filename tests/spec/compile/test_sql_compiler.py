@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import pytest
 import pytest_asyncio
-import psycopg
 
 from knot import db
 from knot.db.spec_store import (
@@ -20,13 +19,13 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec.errors import PublishGateError
 from knot.spec.compile.postgres import (
     CompileContext,
     CompilerError,
     compile_constraint,
     compile_predicate,
 )
+from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import (
     Between,
     BoolExpr,
@@ -50,7 +49,6 @@ from knot.spec.metaschema import (
     TypeDefinition,
     Within,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -377,7 +375,6 @@ def test_matches_emits_like():
 
 def test_relation_all_no_body_raises_compiler_error():
     """RelationAll with body=None should raise CompilerError."""
-    str_t = TypeDefinition(name="string", base="str")
     credit_cls = OntologyClass(name="Credit", slots=[])
     fk_slot = Slot(name="credits", range=credit_cls)
     movie = OntologyClass(name="Movie", slots=[fk_slot])

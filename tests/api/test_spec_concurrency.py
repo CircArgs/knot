@@ -58,8 +58,6 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
     rev = await create_draft(pg_conn)
     await spec_store.update_draft(pg_conn, rev, _empty_spec())
 
-    started: list[float] = []
-    finished: list[float] = []
     errors: list[BaseException] = []
 
     async def worker(type_name: str) -> None:

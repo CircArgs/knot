@@ -21,8 +21,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.api.main import app
 from knot.api.auth.security import Principal, require_user
+from knot.api.main import app
 from knot.db.spec_store import (
     create_draft,
     get_published_revision,
@@ -104,6 +104,7 @@ def client():
 # 1. Storage-layer rollback: publish_draft on the older revision works
 # ---------------------------------------------------------------------------
 
+
 async def test_rollback_via_publish_draft(clean):
     """v1 → v2 → rollback to v1 by re-calling await publish_draft(v1)."""
     rev1 = await create_draft(clean)
@@ -111,35 +112,48 @@ async def test_rollback_via_publish_draft(clean):
     await publish_draft(clean, rev1)
     assert await get_published_revision(clean) == rev1
     # After v1, knot_data.movie has only imdb_id.
-    assert (await (await clean.execute(
-        "SELECT count(*) FROM information_schema.tables "
-        "WHERE table_schema = 'knot_data' AND table_name = 'person'"
-    )).fetchone())[0] == 0
+    assert (
+        await (
+            await clean.execute(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema = 'knot_data' AND table_name = 'person'"
+            )
+        ).fetchone()
+    )[0] == 0
 
     rev2 = await create_draft(clean, parent_revision=rev1)
     await update_draft(clean, rev2, _spec_v2())
     await publish_draft(clean, rev2)
     assert await get_published_revision(clean) == rev2
     # After v2, knot_data.person exists.
-    assert (await (await clean.execute(
-        "SELECT count(*) FROM information_schema.tables "
-        "WHERE table_schema = 'knot_data' AND table_name = 'person'"
-    )).fetchone())[0] == 1
+    assert (
+        await (
+            await clean.execute(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema = 'knot_data' AND table_name = 'person'"
+            )
+        ).fetchone()
+    )[0] == 1
 
     # Rollback to v1: requires allow_destructive because the diff drops
     # Person + the title slot.
     await publish_draft(clean, rev1, allow_destructive=True)
     assert await get_published_revision(clean) == rev1
     # Person table should be gone.
-    assert (await (await clean.execute(
-        "SELECT count(*) FROM information_schema.tables "
-        "WHERE table_schema = 'knot_data' AND table_name = 'person'"
-    )).fetchone())[0] == 0
+    assert (
+        await (
+            await clean.execute(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema = 'knot_data' AND table_name = 'person'"
+            )
+        ).fetchone()
+    )[0] == 0
 
 
 # ---------------------------------------------------------------------------
 # 2. API: rollback to a prior revision via the endpoint
 # ---------------------------------------------------------------------------
+
 
 async def test_api_rollback_promotes_target(clean, client):
     rev1 = await create_draft(clean)
@@ -160,6 +174,7 @@ async def test_api_rollback_promotes_target(clean, client):
 # 3. API: rollback to currently-published is a 400
 # ---------------------------------------------------------------------------
 
+
 async def test_api_rollback_to_current_is_rejected(clean, client):
     rev1 = await create_draft(clean)
     await update_draft(clean, rev1, _spec_v1())
@@ -174,6 +189,7 @@ async def test_api_rollback_to_current_is_rejected(clean, client):
 # 4. API: rollback to nonexistent revision is a 404
 # ---------------------------------------------------------------------------
 
+
 async def test_api_rollback_to_nonexistent_is_404(clean, client):
     rev1 = await create_draft(clean)
     await update_draft(clean, rev1, _spec_v1())
@@ -186,6 +202,7 @@ async def test_api_rollback_to_nonexistent_is_404(clean, client):
 # ---------------------------------------------------------------------------
 # 5. API: destructive rollback requires the flag
 # ---------------------------------------------------------------------------
+
 
 async def test_api_rollback_destructive_requires_flag(clean, client):
     rev1 = await create_draft(clean)
@@ -213,6 +230,7 @@ async def test_api_rollback_destructive_requires_flag(clean, client):
 # 6. Round-trip: v1 → v2 → v1 → v2 (re-promote a previously-published)
 # ---------------------------------------------------------------------------
 
+
 async def test_rollback_then_forward_again(clean):
     rev1 = await create_draft(clean)
     await update_draft(clean, rev1, _spec_v1())
@@ -230,7 +248,11 @@ async def test_rollback_then_forward_again(clean):
     await publish_draft(clean, rev2)
     assert await get_published_revision(clean) == rev2
     # Person table re-created.
-    assert (await (await clean.execute(
-        "SELECT count(*) FROM information_schema.tables "
-        "WHERE table_schema = 'knot_data' AND table_name = 'person'"
-    )).fetchone())[0] == 1
+    assert (
+        await (
+            await clean.execute(
+                "SELECT count(*) FROM information_schema.tables "
+                "WHERE table_schema = 'knot_data' AND table_name = 'person'"
+            )
+        ).fetchone()
+    )[0] == 1

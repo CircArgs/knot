@@ -13,19 +13,15 @@ Coverage:
 
 from __future__ import annotations
 
-from typing import Any
-
 import pytest
 from fastapi.testclient import TestClient
 
 from knot import db
 from knot.api.auth.security import Principal, require_user
-from knot.db import graph_store, spec_store
+from knot.db import graph_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 from knot.spec.metaschema import (
-    BoolExpr,
-    BoolOpKind,
     Compare,
     CompareOp,
     Constraint,
@@ -34,16 +30,18 @@ from knot.spec.metaschema import (
     SlotPath,
 )
 
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _dev_principal() -> Principal:
     return Principal(username="dev:default", is_admin=False)
 
 
-def _build_spec_with_constraints(constraints: list[Constraint]) -> tuple[Spec, OntologyClass, Source]:
+def _build_spec_with_constraints(
+    constraints: list[Constraint],
+) -> tuple[Spec, OntologyClass, Source]:
     st = TypeDefinition(name="string", base="str")
     it = TypeDefinition(name="integer", base="int")
     imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
@@ -62,8 +60,12 @@ def _build_spec_with_constraints(constraints: list[Constraint]) -> tuple[Spec, O
     return spec, movie, src
 
 
-def _year_gte_constraint(movie_cls: OntologyClass, threshold: int, name: str = "year_gte_1888",
-                          severity: Severity = Severity.ERROR) -> Constraint:
+def _year_gte_constraint(
+    movie_cls: OntologyClass,
+    threshold: int,
+    name: str = "year_gte_1888",
+    severity: Severity = Severity.ERROR,
+) -> Constraint:
     year_slot = next(s for s in movie_cls.slots if s.name == "year")
     path = SlotPath(from_class=movie_cls, slots=[year_slot])
     body = Compare(op=CompareOp.GTE, left=path, right=Literal_(value=threshold))
@@ -73,6 +75,7 @@ def _year_gte_constraint(movie_cls: OntologyClass, threshold: int, name: str = "
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def clean_db(pg_conn):
@@ -90,6 +93,7 @@ async def clean_db(pg_conn):
 @pytest.fixture
 def client():
     from knot.api.main import app
+
     app.dependency_overrides[require_user] = _dev_principal
     try:
         yield TestClient(app, raise_server_exceptions=True)
@@ -100,6 +104,7 @@ def client():
 @pytest.fixture
 def client_no_exc():
     from knot.api.main import app
+
     app.dependency_overrides[require_user] = _dev_principal
     try:
         yield TestClient(app, raise_server_exceptions=False)
@@ -117,6 +122,7 @@ async def _publish_spec(conn, spec: Spec) -> int:
 # ---------------------------------------------------------------------------
 # 1. Happy path: rows pass all constraints → ingest succeeds
 # ---------------------------------------------------------------------------
+
 
 async def test_valid_rows_with_flag_succeed(clean_db, client):
     """Rows that satisfy the constraint land successfully with the flag."""
@@ -137,7 +143,9 @@ async def test_valid_rows_with_flag_succeed(clean_db, client):
 
     # Row should be in the DB.
     async with db.connect() as conn2:
-        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+        rows = await graph_store.query_rows(
+            conn2, cls=movie, predicate_sql=None, predicate_params=[]
+        )
     assert len(rows) == 1
     assert rows[0]["imdb_id"] == "tt0000001"
 
@@ -145,6 +153,7 @@ async def test_valid_rows_with_flag_succeed(clean_db, client):
 # ---------------------------------------------------------------------------
 # 2. Violation path: row fails constraint with flag → 422, no rows land
 # ---------------------------------------------------------------------------
+
 
 async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, client_no_exc):
     """year=1500 violates year >= 1888 → 422, no row persisted."""
@@ -167,13 +176,16 @@ async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, clie
 
     # No rows should have landed.
     async with db.connect() as conn2:
-        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+        rows = await graph_store.query_rows(
+            conn2, cls=movie, predicate_sql=None, predicate_params=[]
+        )
     assert rows == [], f"expected no rows, got {rows}"
 
 
 # ---------------------------------------------------------------------------
 # 3. WARNING-severity constraint: never blocks ingest
 # ---------------------------------------------------------------------------
+
 
 async def test_warning_constraint_does_not_block_ingest(clean_db, client):
     """A WARNING constraint violation with validate_constraints=true still allows ingest."""
@@ -193,13 +205,16 @@ async def test_warning_constraint_does_not_block_ingest(clean_db, client):
 
     # Row landed.
     async with db.connect() as conn2:
-        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+        rows = await graph_store.query_rows(
+            conn2, cls=movie, predicate_sql=None, predicate_params=[]
+        )
     assert len(rows) == 1
 
 
 # ---------------------------------------------------------------------------
 # 4. Without the flag: violations do not block (existing behaviour)
 # ---------------------------------------------------------------------------
+
 
 async def test_violation_without_flag_does_not_block(clean_db, client):
     """Without validate_constraints=true, a violating row ingests without error."""
@@ -210,7 +225,7 @@ async def test_violation_without_flag_does_not_block(clean_db, client):
     await _publish_spec(conn, spec)
 
     resp = client.post(
-        "/graph/ingest/imdb",   # no ?validate_constraints
+        "/graph/ingest/imdb",  # no ?validate_constraints
         json={"rows": [{"imdb_id": "tt_old", "year": 1500}]},
     )
     assert resp.status_code == 200, resp.text
@@ -218,13 +233,16 @@ async def test_violation_without_flag_does_not_block(clean_db, client):
 
     # Row landed despite violating the constraint.
     async with db.connect() as conn2:
-        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+        rows = await graph_store.query_rows(
+            conn2, cls=movie, predicate_sql=None, predicate_params=[]
+        )
     assert len(rows) == 1
 
 
 # ---------------------------------------------------------------------------
 # 5. Multiple constraints, one violated → 422 with that constraint reported
 # ---------------------------------------------------------------------------
+
 
 async def test_multiple_constraints_one_violated_reports_violation(clean_db, client_no_exc):
     """Two constraints; year=1500 fails the first, passes the second (year <= 9999)."""
@@ -257,6 +275,7 @@ async def test_multiple_constraints_one_violated_reports_violation(clean_db, cli
 # 6. Multiple constraints, all pass → ingest succeeds
 # ---------------------------------------------------------------------------
 
+
 async def test_multiple_constraints_all_pass(clean_db, client):
     """Multiple constraints all satisfied → ingest succeeds."""
     conn = clean_db
@@ -282,6 +301,7 @@ async def test_multiple_constraints_all_pass(clean_db, client):
 # 7. Multiple violations in one batch → all reported
 # ---------------------------------------------------------------------------
 
+
 async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
     """Batch with two violating rows: both violations are reported."""
     conn = clean_db
@@ -292,10 +312,12 @@ async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
-        json={"rows": [
-            {"imdb_id": "tt_bad1", "year": 1000},
-            {"imdb_id": "tt_bad2", "year": 1500},
-        ]},
+        json={
+            "rows": [
+                {"imdb_id": "tt_bad1", "year": 1000},
+                {"imdb_id": "tt_bad2", "year": 1500},
+            ]
+        },
     )
     assert resp.status_code == 422, resp.text
     violations = resp.json()["detail"]["violations"]
@@ -305,13 +327,16 @@ async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
 
     # No rows landed.
     async with db.connect() as conn2:
-        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+        rows = await graph_store.query_rows(
+            conn2, cls=movie, predicate_sql=None, predicate_params=[]
+        )
     assert rows == []
 
 
 # ---------------------------------------------------------------------------
 # 8. Constraint on a different class does not block ingest
 # ---------------------------------------------------------------------------
+
 
 async def test_constraint_on_other_class_not_checked(clean_db, client):
     """A constraint on a class other than the source's class is not checked."""

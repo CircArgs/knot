@@ -27,7 +27,6 @@ from knot.spec import (
 )
 from knot.spec.canonical import CANONICAL_DUMP_VERSION
 
-
 PINNED_HASH = "7f3318722fb1bd00fd1e057be13f8a61ed61226382cfc83a1333c9da09d79e36"
 PINNED_VERSION = 3
 

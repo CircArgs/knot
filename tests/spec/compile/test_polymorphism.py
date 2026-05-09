@@ -16,11 +16,8 @@ Coverage:
 
 from __future__ import annotations
 
-import json
-
 import pytest
 import pytest_asyncio
-from fastapi.testclient import TestClient
 
 from knot import db
 from knot.db import graph_store, spec_store
@@ -39,7 +36,6 @@ from knot.spec import (
 )
 from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import DiscriminatedRef, IdentifierPattern
-
 
 # ---------------------------------------------------------------------------
 # Shared helpers
@@ -218,9 +214,7 @@ async def test_add_identifier_rows_and_query_by_discriminator(poly_db):
     )
 
     # Query via GraphQL.
-    from knot.api.main import app
     from knot.spec.compile.graphql import get_or_build_schema
-    from knot.spec.canonical import compute_content_hash
 
     published = await spec_store.get_published(conn)
     content_hash = await spec_store.get_published_content_hash(conn)

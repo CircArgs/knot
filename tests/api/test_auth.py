@@ -7,16 +7,12 @@ FastAPI-level auth dep tests (require_user / require_admin) use
 TestClient and override KNOT_AUTH_DEV_MODE as needed.
 """
 
-import os
-
 import pytest
-import psycopg
 from fastapi.testclient import TestClient
 
 from knot import db
 from knot.db import users
 from knot.db.users import (
-    PrincipalKind,
     User,
     bootstrap_admin_if_empty,
     create_user,
@@ -27,10 +23,10 @@ from knot.db.users import (
     rotate_key,
 )
 
-
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def auth_db(pg_conn):
@@ -43,6 +39,7 @@ async def auth_db(pg_conn):
 # 1. User CRUD
 # ---------------------------------------------------------------------------
 
+
 async def test_create_user_returns_user_and_raw_key(auth_db):
     user, raw_key = await create_user(auth_db, username="alice")
     assert isinstance(user, User)
@@ -53,18 +50,18 @@ async def test_create_user_returns_user_and_raw_key(auth_db):
 
 async def test_create_user_raw_key_not_stored_plaintext(auth_db):
     _, raw_key = await create_user(auth_db, username="bob")
-    row = await (await auth_db.execute(
-        "SELECT api_key_hash FROM users WHERE username = 'bob'"
-    )).fetchone()
+    row = await (
+        await auth_db.execute("SELECT api_key_hash FROM users WHERE username = 'bob'")
+    ).fetchone()
     assert row[0] != raw_key  # hash stored, not raw
 
 
 async def test_create_user_hash_is_sha256_of_raw_key(auth_db):
     _, raw_key = await create_user(auth_db, username="carol")
     expected_hash = hash_key(raw_key)
-    row = await (await auth_db.execute(
-        "SELECT api_key_hash FROM users WHERE username = 'carol'"
-    )).fetchone()
+    row = await (
+        await auth_db.execute("SELECT api_key_hash FROM users WHERE username = 'carol'")
+    ).fetchone()
     assert row[0] == expected_hash
 
 
@@ -129,6 +126,7 @@ async def test_delete_unknown_user_returns_false(auth_db):
 # 2. bootstrap_admin_if_empty
 # ---------------------------------------------------------------------------
 
+
 async def test_bootstrap_admin_if_empty_inserts_admin_when_table_empty(auth_db):
     result = await bootstrap_admin_if_empty(auth_db, "secret_key_123")
     assert result is True
@@ -175,14 +173,15 @@ async def test_bootstrap_admin_does_not_insert_when_users_exist(auth_db):
 # parameter (not a router-level dependency), making the override reliable.
 # ---------------------------------------------------------------------------
 
-from knot.api.auth.security import require_user as _require_user  # module-level for override key
-from knot.api.auth.security import Principal as _Principal
+from knot.api.auth.security import Principal as _Principal  # noqa: E402,I001  module-level for override key
+from knot.api.auth.security import require_user as _require_user  # noqa: E402,I001  module-level for override key
 
 
 def _make_strict_require_user():
     """Return a require_user replacement that always enforces the Bearer token."""
+    from fastapi import Header, HTTPException
+
     from knot.api.auth.security import _strip_bearer
-    from fastapi import HTTPException, Header
 
     async def strict_require_user(
         authorization: str | None = Header(default=None),
@@ -220,6 +219,7 @@ def test_dev_mode_auth_me_returns_dev_principal():
 def test_no_token_returns_401_when_auth_enforced():
     """Missing Authorization header → 401."""
     from knot.api.main import app
+
     app.dependency_overrides[_require_user] = _make_strict_require_user()
     try:
         client = TestClient(app, raise_server_exceptions=False)
@@ -232,6 +232,7 @@ def test_no_token_returns_401_when_auth_enforced():
 def test_wrong_token_returns_403_when_auth_enforced(auth_db):
     """Unrecognised token → 403."""
     from knot.api.main import app
+
     app.dependency_overrides[_require_user] = _make_strict_require_user()
     try:
         client = TestClient(app, raise_server_exceptions=False)
@@ -245,6 +246,7 @@ async def test_correct_token_returns_200_when_auth_enforced(auth_db):
     """Valid token → 200 and correct username in body."""
     _, raw_key = await create_user(auth_db, username="api_user")
     from knot.api.main import app
+
     app.dependency_overrides[_require_user] = _make_strict_require_user()
     try:
         client = TestClient(app, raise_server_exceptions=True)

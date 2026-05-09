@@ -166,9 +166,7 @@ async def bootstrap_admin_if_empty(
 ) -> bool:
     """Seed an admin user if there are no users yet. Idempotent: returns
     True if it inserted, False if a user already existed."""
-    existing = await (
-        await conn.execute("SELECT 1 FROM users LIMIT 1")
-    ).fetchone()
+    existing = await (await conn.execute("SELECT 1 FROM users LIMIT 1")).fetchone()
     if existing is not None:
         return False
     await conn.execute(

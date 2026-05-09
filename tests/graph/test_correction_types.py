@@ -26,10 +26,10 @@ from knot.graph.corrections import (
 )
 from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
 
-
 # ---------------------------------------------------------------------------
 # Shared fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def ct_db(pg_conn):
@@ -64,15 +64,33 @@ async def ct_db(pg_conn):
     await publish_draft(pg_conn, rev)
 
     # Two distinct canonical ids; both sources contribute to "tt_main".
-    await graph_store.insert_rows(pg_conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_main", "title": "Main A", "year": 2000}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_main", "title": "Main A", "year": 2000}]])
-    await graph_store.insert_rows(pg_conn, source=src_b, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_main", "title": "Main B", "year": 2001}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_main", "title": "Main B", "year": 2001}]])
-    await graph_store.insert_rows(pg_conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}]])
+    await graph_store.insert_rows(
+        pg_conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_main", "title": "Main A", "year": 2000}],
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt_main", "title": "Main A", "year": 2000}]
+        ],
+    )
+    await graph_store.insert_rows(
+        pg_conn,
+        source=src_b,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_main", "title": "Main B", "year": 2001}],
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt_main", "title": "Main B", "year": 2001}]
+        ],
+    )
+    await graph_store.insert_rows(
+        pg_conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}],
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}]
+        ],
+    )
 
     yield pg_conn, movie, src_a, src_b, rev
 
@@ -80,6 +98,7 @@ async def ct_db(pg_conn):
 # ---------------------------------------------------------------------------
 # Split
 # ---------------------------------------------------------------------------
+
 
 def _split_partitions(src_a, src_b):
     """Helper: partition tt_main so source_a -> tt_split_1, source_b -> tt_split_2."""
@@ -170,6 +189,7 @@ async def test_split_returns_int_correction_id(ct_db):
 # Add
 # ---------------------------------------------------------------------------
 
+
 async def test_add_creates_canonical_id(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     await apply_add(
@@ -192,7 +212,9 @@ async def test_add_source_is_user_corrections(ct_db):
         values={"imdb_id": "tt_synthetic", "title": "Synthetic Movie"},
         spec_revision=rev,
     )
-    contribs = await graph_store.get_canonical_contributions(conn, cls=movie, canonical_id="tt_synthetic")
+    contribs = await graph_store.get_canonical_contributions(
+        conn, cls=movie, canonical_id="tt_synthetic"
+    )
     assert len(contribs) == 1
     assert contribs[0]["_source"] == "_user_corrections"
 
@@ -206,7 +228,9 @@ async def test_add_slot_values_stored(ct_db):
         values={"imdb_id": "tt_syn2", "title": "Has Title", "year": 1985},
         spec_revision=rev,
     )
-    contribs = await graph_store.get_canonical_contributions(conn, cls=movie, canonical_id="tt_syn2")
+    contribs = await graph_store.get_canonical_contributions(
+        conn, cls=movie, canonical_id="tt_syn2"
+    )
     assert contribs[0]["title"] == "Has Title"
     assert contribs[0]["year"] == 1985
 
@@ -248,6 +272,7 @@ async def test_add_writes_lineage_event(ct_db):
 # Tombstone
 # ---------------------------------------------------------------------------
 
+
 async def test_tombstone_entity_excluded_from_default_reads(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     await apply_tombstone(conn, cls=movie, canonical_id="tt_extra", spec_revision=rev)
@@ -287,8 +312,12 @@ async def test_tombstone_contributions_with_include_tombstoned(ct_db):
 async def test_tombstone_writes_audit_entry(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     cid = await apply_tombstone(
-        conn, cls=movie, canonical_id="tt_extra", spec_revision=rev,
-        reason="test removal", applied_by="gravekeeper",
+        conn,
+        cls=movie,
+        canonical_id="tt_extra",
+        spec_revision=rev,
+        reason="test removal",
+        applied_by="gravekeeper",
     )
     log = await db_corrections.list_audit_log(conn)
     matching = [e for e in log if e["id"] == cid]
@@ -310,13 +339,20 @@ async def test_tombstone_writes_lineage_event(ct_db):
 # RejectContribution
 # ---------------------------------------------------------------------------
 
+
 async def test_reject_contribution_removes_source_from_reads(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     # tt_main has both source_a and source_b; reject source_b.
     await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_b", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_b",
+        spec_revision=rev,
     )
-    contribs = await graph_store.get_canonical_contributions(conn, cls=movie, canonical_id="tt_main")
+    contribs = await graph_store.get_canonical_contributions(
+        conn, cls=movie, canonical_id="tt_main"
+    )
     sources = [c["_source"] for c in contribs]
     assert "source_b" not in sources
     assert "source_a" in sources
@@ -325,7 +361,11 @@ async def test_reject_contribution_removes_source_from_reads(ct_db):
 async def test_reject_contribution_canonical_id_still_exists(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_b", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_b",
+        spec_revision=rev,
     )
     # canonical_id still exists because source_a still contributes.
     assert await graph_store.canonical_id_exists(conn, cls=movie, canonical_id="tt_main")
@@ -335,20 +375,30 @@ async def test_reject_contribution_source_row_preserved(ct_db):
     """Source row stays in knot_data for audit; only binding is closed."""
     conn, movie, src_a, src_b, rev = ct_db
     await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_b", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_b",
+        spec_revision=rev,
     )
     # The raw source row is still in the table (no valid_to IS NULL binding for it).
-    row = await (await conn.execute(
-        "SELECT _source, _source_row_id FROM knot_data.movie WHERE _source = 'source_b' AND _source_row_id = 'tt_main'"
-    )).fetchone()
+    row = await (
+        await conn.execute(
+            "SELECT _source, _source_row_id FROM knot_data.movie WHERE _source = 'source_b' AND _source_row_id = 'tt_main'"
+        )
+    ).fetchone()
     assert row is not None
 
 
 async def test_reject_contribution_writes_audit_entry(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     cid = await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_b",
-        spec_revision=rev, applied_by="rejector",
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_b",
+        spec_revision=rev,
+        applied_by="rejector",
     )
     log = await db_corrections.list_audit_log(conn)
     matching = [e for e in log if e["id"] == cid]
@@ -361,7 +411,11 @@ async def test_reject_contribution_no_lineage_event(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     lineage_before = await graph_store.list_lineage(conn, class_name="Movie")
     await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_b", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_b",
+        spec_revision=rev,
     )
     lineage_after = await graph_store.list_lineage(conn, class_name="Movie")
     assert len(lineage_after) == len(lineage_before)
@@ -371,10 +425,18 @@ async def test_reject_both_sources_leaves_no_current_binding(ct_db):
     """Rejecting all sources leaves no current binding; entity effectively tombstoned in reads."""
     conn, movie, src_a, src_b, rev = ct_db
     await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_a", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_a",
+        spec_revision=rev,
     )
     await apply_reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="source_b", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="source_b",
+        spec_revision=rev,
     )
     assert not await graph_store.canonical_id_exists(conn, cls=movie, canonical_id="tt_main")
     rows = await graph_store.list_rows(conn, cls=movie)
@@ -384,6 +446,7 @@ async def test_reject_both_sources_leaves_no_current_binding(ct_db):
 # ---------------------------------------------------------------------------
 # Validation / error paths
 # ---------------------------------------------------------------------------
+
 
 async def test_split_requires_nonexistent_new_canonical_ids(ct_db):
     """If a new_canonical_id already exists, split_canonical_id must not
@@ -399,21 +462,31 @@ async def test_split_requires_nonexistent_new_canonical_ids(ct_db):
 async def test_add_idempotency_fails_on_duplicate(ct_db):
     """insert_synthetic_row on duplicate (_source, _source_row_id) raises — no ON CONFLICT."""
     conn, movie, src_a, src_b, rev = ct_db
-    await apply_add(conn, cls=movie, new_canonical_id="tt_dup", values={"imdb_id": "tt_dup"}, spec_revision=rev)
+    await apply_add(
+        conn, cls=movie, new_canonical_id="tt_dup", values={"imdb_id": "tt_dup"}, spec_revision=rev
+    )
     import psycopg
+
     with pytest.raises(psycopg.errors.UniqueViolation):
         async with conn.transaction():
             await graph_store.insert_synthetic_row(
-                conn, cls=movie, new_canonical_id="tt_dup",
-                values={"imdb_id": "tt_dup"}, spec_revision=rev,
+                conn,
+                cls=movie,
+                new_canonical_id="tt_dup",
+                values={"imdb_id": "tt_dup"},
+                spec_revision=rev,
             )
 
 
 async def test_tombstone_nonexistent_returns_zero_closed(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     from knot.db import graph_store as gs
+
     closed = await gs.tombstone_canonical_id(
-        conn, cls=movie, canonical_id="tt_nonexistent", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_nonexistent",
+        spec_revision=rev,
     )
     assert closed == 0
 
@@ -421,6 +494,10 @@ async def test_tombstone_nonexistent_returns_zero_closed(ct_db):
 async def test_reject_contribution_nonexistent_pair_returns_false(ct_db):
     conn, movie, src_a, src_b, rev = ct_db
     result = await graph_store.reject_contribution(
-        conn, cls=movie, canonical_id="tt_main", source="no_such_source", spec_revision=rev,
+        conn,
+        cls=movie,
+        canonical_id="tt_main",
+        source="no_such_source",
+        spec_revision=rev,
     )
     assert result is False

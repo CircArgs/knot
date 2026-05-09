@@ -7,9 +7,15 @@ DDL changes are applied against the running postgres docker stack.
 from __future__ import annotations
 
 import pytest
-import psycopg
 
 from knot import db
+from knot.db._naming import schema
+from knot.db.spec_store import (
+    create_draft,
+    publish_draft,
+    update_draft,
+)
+from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 from knot.spec.compile.postgres.migration import (
     AddClass,
     AddSlot,
@@ -17,19 +23,10 @@ from knot.spec.compile.postgres.migration import (
     DropClass,
     DropSlot,
     apply_changes,
-    apply_migration,
     diff_specs,
     is_destructive,
 )
-from knot.db._naming import schema
-from knot.db.spec_store import (
-    create_draft,
-    publish_draft,
-    update_draft,
-)
-from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
 from knot.spec.errors import PublishGateError
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -219,7 +216,6 @@ def test_drop_slot_is_destructive():
 
 
 def test_change_slot_type_is_destructive():
-    st = _str_type()
     int_t = _int_type()
     cls = OntologyClass(name="Movie", slots=[])
     slot = Slot(name="year", range=int_t)

@@ -18,9 +18,9 @@ import pytest
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.api.main import app
 from knot.api.auth.security import Principal, require_user
-from knot.db import dq, spec_store
+from knot.api.main import app
+from knot.db import dq
 from knot.db._naming import user_corrections_source
 from knot.db.spec_store import (
     create_draft,
@@ -44,7 +44,8 @@ def _spec() -> tuple[Spec, OntologyClass, Source]:
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
-        id="dq", version="1.0.0",
+        id="dq",
+        version="1.0.0",
         types=[st, it],
         slots=[imdb_id, title, year],
         classes=[movie],
@@ -88,6 +89,7 @@ async def published(clean):
 # ---------------------------------------------------------------------------
 # 1. Ingest emits one observation per stored slot
 # ---------------------------------------------------------------------------
+
 
 async def test_ingest_emits_dq_observations(published, client):
     conn, movie, src, rev = published
@@ -137,6 +139,7 @@ async def test_ingest_emits_dq_observations(published, client):
 # 2. Add correction emits obs under _user_corrections
 # ---------------------------------------------------------------------------
 
+
 async def test_add_correction_emits_dq(published):
     conn, movie, src, rev = published
     await apply_add(
@@ -156,6 +159,7 @@ async def test_add_correction_emits_dq(published):
 # ---------------------------------------------------------------------------
 # 3. Property correction emits obs ONLY for the touched slot
 # ---------------------------------------------------------------------------
+
 
 async def test_property_correction_emits_dq_for_one_slot(published):
     conn, movie, src, rev = published
@@ -191,6 +195,7 @@ async def test_property_correction_emits_dq_for_one_slot(published):
 # 4. Full scan aggregates from the per-class table
 # ---------------------------------------------------------------------------
 
+
 async def test_full_scan_writes_full_scan_rows(published, client):
     conn, movie, src, rev = published
     r = client.post(
@@ -224,6 +229,7 @@ async def test_full_scan_writes_full_scan_rows(published, client):
 # 5. GET /dq/observations API surface (filters + limit)
 # ---------------------------------------------------------------------------
 
+
 def test_api_observations_endpoint(published, client):
     conn, movie, src, rev = published
     r = client.post(
@@ -244,6 +250,7 @@ def test_api_observations_endpoint(published, client):
 # ---------------------------------------------------------------------------
 # 6. GET /dq/observations/summary — null_rate computation
 # ---------------------------------------------------------------------------
+
 
 def test_api_summary_null_rate(published, client):
     conn, movie, src, rev = published
@@ -270,6 +277,7 @@ def test_api_summary_null_rate(published, client):
 # ---------------------------------------------------------------------------
 # 7. /dq/scan rejects when no spec is published
 # ---------------------------------------------------------------------------
+
 
 def test_scan_rejected_without_published_spec(clean, client):
     r = client.post("/dq/scan")

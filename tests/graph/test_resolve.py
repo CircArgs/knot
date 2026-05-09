@@ -9,10 +9,11 @@ from __future__ import annotations
 
 import pytest
 
-from knot.db import trust_config, trust_posteriors
+from knot import db
+from knot.db import graph_store, trust_config, trust_posteriors
+from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA, Posterior
 from knot.graph.resolve import (
-    LCB_K,
     _argmax_trust,
     _lcb,
     _posterior_mean,
@@ -27,17 +28,15 @@ from knot.spec import (
     Spec,
     TypeDefinition,
 )
-from knot import db
-from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.db import graph_store
-
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _slot(name: str, policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST,
-          multivalued: bool = False) -> Slot:
+
+def _slot(
+    name: str, policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST, multivalued: bool = False
+) -> Slot:
     st = TypeDefinition(name="string", base="str")
     return Slot(name=name, range=st, resolution_policy=policy, multivalued=multivalued)
 
@@ -49,6 +48,7 @@ def _post(source: str, slot: str, alpha: float, beta: float) -> Posterior:
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def resolve_db(pg_conn):
@@ -88,6 +88,7 @@ async def resolve_db(pg_conn):
 # 1. ARGMAX_TRUST — pure logic
 # ---------------------------------------------------------------------------
 
+
 def test_argmax_trust_returns_highest_trust_value():
     non_null = [("low_src", "bad_value"), ("high_src", "good_value")]
     scores = {"low_src": 0.3, "high_src": 0.9}
@@ -105,6 +106,7 @@ def test_argmax_trust_tiebreak_alphabetical():
 
 def test_argmax_trust_missing_source_uses_default():
     from knot.db.trust_config import DEFAULT_TRUST
+
     non_null = [("known", "known_val"), ("unknown", "unknown_val")]
     scores = {"known": DEFAULT_TRUST - 0.1}  # known is worse than default
     result = _argmax_trust(non_null, scores)
@@ -123,6 +125,7 @@ def test_argmax_trust_returns_none_if_no_contributions():
 # 2. POSTERIOR_MEAN — pure logic
 # ---------------------------------------------------------------------------
 
+
 def test_posterior_mean_deterministic_same_state():
     slot = _slot("title", ResolutionPolicy.POSTERIOR_MEAN)
     non_null = [("src_a", "val_a"), ("src_b", "val_b")]
@@ -140,8 +143,8 @@ def test_posterior_mean_argmax_over_mean():
     non_null = [("s1", "v1"), ("s2", "v2")]
     # s2 has higher mean
     posts = {
-        ("s1", "f"): _post("s1", "f", 1.0, 9.0),   # mean 0.1
-        ("s2", "f"): _post("s2", "f", 9.0, 1.0),   # mean 0.9
+        ("s1", "f"): _post("s1", "f", 1.0, 9.0),  # mean 0.1
+        ("s2", "f"): _post("s2", "f", 9.0, 1.0),  # mean 0.9
     }
     assert _posterior_mean(slot, non_null, posts) == "v2"
 
@@ -158,9 +161,9 @@ def test_posterior_mean_tiebreak_alphabetical():
 # 3. LCB — penalises high-uncertainty sources
 # ---------------------------------------------------------------------------
 
+
 def test_lcb_penalises_low_observation_count():
     """Source with 1 observation has high uncertainty → LCB penalises it."""
-    import math
     slot = _slot("f", ResolutionPolicy.LCB)
     # s1: high mean but only 1 obs → large stddev → LCB penalty
     # s2: slightly lower mean but many obs → low stddev → better LCB
@@ -193,6 +196,7 @@ def test_lcb_deterministic():
 # 4. Multivalued union
 # ---------------------------------------------------------------------------
 
+
 def test_union_multivalued_deduplicates():
     slot = _slot("tags", multivalued=True)
     contribs = [
@@ -221,6 +225,7 @@ def test_union_multivalued_handles_empty_contributions():
 # 5. record_feedback — atomic UPSERT delta (DB-backed)
 # ---------------------------------------------------------------------------
 
+
 async def test_record_feedback_increments_alpha_on_success(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
     p1 = await trust_posteriors.record_feedback(conn, "source_a", "title", success=True)
@@ -247,6 +252,7 @@ async def test_record_feedback_accumulates_across_calls(resolve_db):
 # 6. resolve_entity — integration (DB-backed)
 # ---------------------------------------------------------------------------
 
+
 async def test_resolve_entity_returns_none_for_unknown_canonical_id(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
     result = await resolve_entity(conn, cls=movie, canonical_id="not_here")
@@ -255,12 +261,24 @@ async def test_resolve_entity_returns_none_for_unknown_canonical_id(resolve_db):
 
 async def test_resolve_entity_argmax_trust_picks_highest_trust_source(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
-    await graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_res1", "title": "Title from A"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from A"}]])
-    await graph_store.insert_rows(conn, source=src_b, spec_revision=rev,
-                        rows=[{"imdb_id": "tt_res1", "title": "Title from B"}],
-                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from B"}]])
+    await graph_store.insert_rows(
+        conn,
+        source=src_a,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_res1", "title": "Title from A"}],
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from A"}]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=src_b,
+        spec_revision=rev,
+        rows=[{"imdb_id": "tt_res1", "title": "Title from B"}],
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from B"}]
+        ],
+    )
     # Set source_a higher trust
     await trust_config.set_score(conn, "source_a", 0.9)
     await trust_config.set_score(conn, "source_b", 0.1)
