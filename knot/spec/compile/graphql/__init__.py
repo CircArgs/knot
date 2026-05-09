@@ -42,7 +42,10 @@ import json
 import logging
 import sys
 import types
-from typing import Any, Optional  # noqa: UP035 — Optional referenced by generated resolver code (line ~697)
+from typing import (  # noqa: UP035 — Optional referenced by generated resolver code (line ~697)
+    Any,
+    Optional,
+)
 
 import strawberry
 from psycopg import sql
