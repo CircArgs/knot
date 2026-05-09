@@ -84,10 +84,15 @@ def build_row_model(source: Source) -> type[BaseModel]:
     - ``pattern``, ``minimum_value``, ``maximum_value`` map to Pydantic
       ``Field(pattern=, ge=, le=)`` constraints.
     - ``extra="forbid"`` so unknown keys raise.
+
+    Uses ``effective_slots`` so mixin-contributed slots are accepted
+    (they live on the class's own table per the storage contract).
     """
+    from knot.db._naming import effective_slots
+
     cls = source.entity_class
     fields: dict[str, Any] = {}
-    for slot in cls.slots:
+    for slot in effective_slots(cls):
         if not _is_stored(slot):
             continue
         fields[slot.name] = _field_spec(slot)
@@ -103,9 +108,14 @@ def build_row_model_for_class(cls: OntologyClass) -> type[BaseModel]:
     """Strict Pydantic model for a class whose fields are all stored slots,
     all optional (suitable for synthetic / user-correction rows where only
     a subset of slots may be supplied). Unlike ``build_row_model``, this is
-    not tied to a specific Source and does not require identifier slots."""
+    not tied to a specific Source and does not require identifier slots.
+
+    Uses ``effective_slots`` so mixin-contributed slots are accepted (they
+    live on the class's own table per the storage contract)."""
+    from knot.db._naming import effective_slots
+
     fields: dict[str, Any] = {}
-    for slot in cls.slots:
+    for slot in effective_slots(cls):
         if not _is_stored(slot):
             continue
         fields[slot.name] = _field_spec(slot, force_optional=True)
