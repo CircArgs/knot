@@ -13,8 +13,7 @@ from pydantic import BaseModel
 
 from knot import db
 from knot.api.auth.security import require_user
-from knot.db import spec_store
-from knot.spec.compile.postgres import lake
+from knot.graph import lake as graph_lake
 
 router = APIRouter(prefix="/lake", tags=["lake"])
 
@@ -49,29 +48,17 @@ async def materialize(
     (full timeline). Caller wraps these in their target dialect.
     """
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
-        if spec is None:
-            raise HTTPException(409, "No spec is published yet.")
-        revision = await spec_store.get_published_revision(conn) or 0
-
-        classes = [c for c in spec.classes if lake.is_materializable(c)]
-        if class_name is not None:
-            classes = [c for c in classes if c.name == class_name]
-            if not classes:
-                raise HTTPException(
-                    404,
-                    f"Class {class_name!r} is not on the published spec or "
-                    "is not materializable (abstract / defined-class view).",
-                )
+        try:
+            revision, materializations = await graph_lake.materialize(conn, class_filter=class_name)
+        except graph_lake.NoSpecPublishedError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        except graph_lake.ClassNotMaterializableError as exc:
+            raise HTTPException(404, str(exc)) from exc
 
     return MaterializeResponse(
         spec_revision=revision,
         classes=[
-            ClassMaterialization(
-                name=c.name,
-                current=lake.materialize_current(c),
-                history=lake.materialize_history(c),
-            )
-            for c in classes
+            ClassMaterialization(name=m.name, current=m.current, history=m.history)
+            for m in materializations
         ],
     )
