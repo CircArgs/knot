@@ -56,44 +56,44 @@ def _posterior_view(p: trust_posteriors.Posterior) -> PosteriorView:
 
 
 @router.get("/trust", response_model=list[TrustScore])
-def list_trust_scores() -> list[TrustScore]:
+async def list_trust_scores() -> list[TrustScore]:
     """All configured per-source trust scores. Sources without an entry use
     ``trust_config.DEFAULT_TRUST``."""
-    with db.connect() as conn:
-        scores = trust_config.list_scores(conn)
+    async with db.connect() as conn:
+        scores = await trust_config.list_scores(conn)
     return [TrustScore(source=s, trust_score=v) for s, v in scores.items()]
 
 
 @router.get("/trust/posteriors", response_model=list[PosteriorView])
-def list_posteriors() -> list[PosteriorView]:
+async def list_posteriors() -> list[PosteriorView]:
     """All Beta posteriors recorded so far. Pairs without a row use the
     uniform prior (Beta(1, 1))."""
-    with db.connect() as conn:
-        return [_posterior_view(p) for p in trust_posteriors.list_posteriors(conn)]
+    async with db.connect() as conn:
+        return [_posterior_view(p) for p in await trust_posteriors.list_posteriors(conn)]
 
 
 @router.get(
     "/trust/posteriors/{source_name}/{slot_name}",
     response_model=PosteriorView,
 )
-def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+async def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         if not any(s.name == source_name for s in spec.sources):
             raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
         if not any(s.name == slot_name for s in spec.slots):
             raise HTTPException(404, f"Slot {slot_name!r} not on the published spec.")
-        return _posterior_view(trust_posteriors.get_posterior(conn, source_name, slot_name))
+        return _posterior_view(await trust_posteriors.get_posterior(conn, source_name, slot_name))
 
 
 @router.delete(
     "/trust/posteriors/{source_name}/{slot_name}",
     dependencies=[Depends(require_user)],
 )
-def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
+async def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     """Drop the per-(source, slot) posterior, reverting it to the uniform prior."""
-    with db.connect() as conn:
-        existed = trust_posteriors.reset_posterior(conn, source_name, slot_name)
+    async with db.connect() as conn:
+        existed = await trust_posteriors.reset_posterior(conn, source_name, slot_name)
     return {"reset": existed, "source": source_name, "slot": slot_name}
 
 
@@ -102,16 +102,16 @@ def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     response_model=PosteriorView,
     dependencies=[Depends(require_user)],
 )
-def submit_feedback(body: FeedbackBody) -> PosteriorView:
+async def submit_feedback(body: FeedbackBody) -> PosteriorView:
     """Record one Bernoulli observation (source, slot, success) — increments
     α on success, β on failure. Source and slot must be on the published spec."""
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         if not any(s.name == body.source for s in spec.sources):
             raise HTTPException(404, f"Source {body.source!r} not on the published spec.")
         if not any(s.name == body.slot for s in spec.slots):
             raise HTTPException(404, f"Slot {body.slot!r} not on the published spec.")
-        post = trust_posteriors.record_feedback(conn, body.source, body.slot, body.success)
+        post = await trust_posteriors.record_feedback(conn, body.source, body.slot, body.success)
     return _posterior_view(post)
 
 
@@ -120,12 +120,12 @@ def submit_feedback(body: FeedbackBody) -> PosteriorView:
 
 
 @router.get("/trust/{source_name}", response_model=TrustScore)
-def get_trust_score(source_name: str) -> TrustScore:
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+async def get_trust_score(source_name: str) -> TrustScore:
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         if not any(s.name == source_name for s in spec.sources):
             raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
-        score = trust_config.get_score(conn, source_name)
+        score = await trust_config.get_score(conn, source_name)
     return TrustScore(source=source_name, trust_score=score)
 
 
@@ -134,10 +134,10 @@ def get_trust_score(source_name: str) -> TrustScore:
     response_model=TrustScore,
     dependencies=[Depends(require_user)],
 )
-def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+async def set_trust_score(source_name: str, body: TrustUpdate) -> TrustScore:
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         if not any(s.name == source_name for s in spec.sources):
             raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
-        trust_config.set_score(conn, source_name, body.trust_score)
+        await trust_config.set_score(conn, source_name, body.trust_score)
     return TrustScore(source=source_name, trust_score=body.trust_score)

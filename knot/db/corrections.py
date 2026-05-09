@@ -13,8 +13,8 @@ from typing import Any
 import psycopg
 
 
-def record_audit_entry(
-    conn: psycopg.Connection,
+async def record_audit_entry(
+    conn: psycopg.AsyncConnection,
     *,
     correction_type: str,
     payload: dict[str, Any],
@@ -22,20 +22,25 @@ def record_audit_entry(
     applied_revision: int,
 ) -> int:
     """Insert one row into ``_user_corrections``. Returns the new row id."""
-    return conn.execute(
-        "INSERT INTO _user_corrections "
-        "(correction_type, payload, applied_by, applied_revision) "
-        "VALUES (%s, %s, %s, %s) RETURNING id",
-        (correction_type, json.dumps(payload), applied_by, applied_revision),
-    ).fetchone()[0]
+    row = await (
+        await conn.execute(
+            "INSERT INTO _user_corrections "
+            "(correction_type, payload, applied_by, applied_revision) "
+            "VALUES (%s, %s, %s, %s) RETURNING id",
+            (correction_type, json.dumps(payload), applied_by, applied_revision),
+        )
+    ).fetchone()
+    return row[0]
 
 
-def list_audit_log(conn: psycopg.Connection, *, limit: int = 100) -> list[dict[str, Any]]:
+async def list_audit_log(conn: psycopg.AsyncConnection, *, limit: int = 100) -> list[dict[str, Any]]:
     """Newest-first slice of the audit log."""
-    rows = conn.execute(
-        "SELECT id, correction_type, payload, applied_by, applied_revision, created_at "
-        "FROM _user_corrections ORDER BY id DESC LIMIT %s",
-        (limit,),
+    rows = await (
+        await conn.execute(
+            "SELECT id, correction_type, payload, applied_by, applied_revision, created_at "
+            "FROM _user_corrections ORDER BY id DESC LIMIT %s",
+            (limit,),
+        )
     ).fetchall()
     return [
         {

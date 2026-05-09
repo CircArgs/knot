@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
@@ -57,7 +58,7 @@ def _build_movie_spec() -> tuple[Spec, OntologyClass, Source]:
 # ---------------------------------------------------------------------------
 
 
-def test_dispatcher_priority_ordering():
+async def test_dispatcher_priority_ordering():
     """Lower priority number runs first."""
     d = _Dispatcher()
     order: list[int] = []
@@ -80,7 +81,7 @@ def test_dispatcher_priority_ordering():
     src = Source(name="s", entity_class=movie, identifier_slot=imdb_id)
 
     ev = IngestResolveCanonical(cls=movie, source=src, incoming=[])
-    d.dispatch(ev)
+    await d.dispatch(ev)
 
     assert order == [10, 100, 200]
 
@@ -90,7 +91,7 @@ def test_dispatcher_priority_ordering():
 # ---------------------------------------------------------------------------
 
 
-def test_dispatcher_multiple_handlers_all_run():
+async def test_dispatcher_multiple_handlers_all_run():
     d = _Dispatcher()
     calls: list[str] = []
 
@@ -108,7 +109,7 @@ def test_dispatcher_multiple_handlers_all_run():
     src = Source(name="s", entity_class=movie, identifier_slot=imdb_id)
     ev = IngestResolveCanonical(cls=movie, source=src, incoming=[])
 
-    d.dispatch(ev)
+    await d.dispatch(ev)
     assert "a" in calls
     assert "b" in calls
     assert len(calls) == 2
@@ -119,7 +120,7 @@ def test_dispatcher_multiple_handlers_all_run():
 # ---------------------------------------------------------------------------
 
 
-def test_dispatcher_isinstance_matches_subclass():
+async def test_dispatcher_isinstance_matches_subclass():
     """A handler registered on a base class fires for subclass events."""
     d = _Dispatcher()
     fired: list[bool] = []
@@ -134,7 +135,7 @@ def test_dispatcher_isinstance_matches_subclass():
     def _base_handler(ev):
         fired.append(True)
 
-    d.dispatch(DerivedEvent())
+    await d.dispatch(DerivedEvent())
     assert fired == [True]
 
 
@@ -143,7 +144,7 @@ def test_dispatcher_isinstance_matches_subclass():
 # ---------------------------------------------------------------------------
 
 
-def test_dispatcher_no_handler_is_noop():
+async def test_dispatcher_no_handler_is_noop():
     d = _Dispatcher()
 
     class UnrelatedEvent:
@@ -158,7 +159,7 @@ def test_dispatcher_no_handler_is_noop():
     def _target(ev):
         calls.append("fired")
 
-    d.dispatch(UnrelatedEvent())
+    await d.dispatch(UnrelatedEvent())
     assert calls == []
 
 
@@ -192,7 +193,7 @@ def test_er_default_resolver_returns_id_slot_values():
 # ---------------------------------------------------------------------------
 
 
-def test_er_class_specific_resolver_overrides_default():
+async def test_er_class_specific_resolver_overrides_default():
     """Registering a resolver for a class name routes to that resolver."""
     from knot.extensions import er as er_module
 
@@ -215,7 +216,7 @@ def test_er_class_specific_resolver_overrides_default():
         ev = IngestResolveCanonical(cls=cls, source=src, incoming=rows)
         # Dispatch via the global dispatcher so the ER handler fires
         from knot.extensions import dispatch
-        dispatch.dispatch(ev)
+        await dispatch.dispatch(ev)
 
         assert ev.canonical_ids == ["custom:x1", "custom:x2"]
     finally:
@@ -241,21 +242,21 @@ def test_er_register_duplicate_raises():
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def ingest_db(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+@pytest_asyncio.fixture
+async def ingest_db(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
     spec, movie, src = _build_movie_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
     yield pg_conn, movie, src, rev
 
@@ -270,7 +271,7 @@ def ingest_client():
         app.dependency_overrides.pop(require_user, None)
 
 
-def test_ingest_route_canonical_id_from_default_er(ingest_db, ingest_client):
+async def test_ingest_route_canonical_id_from_default_er(ingest_db, ingest_client):
     """Ingest one row via the route; verify _canonical_id equals the imdb_id value."""
     conn, movie, src, rev = ingest_db
 
@@ -282,7 +283,7 @@ def test_ingest_route_canonical_id_from_default_er(ingest_db, ingest_client):
     data = resp.json()
     assert data["accepted"] == 1
 
-    rows = graph_store.list_rows(conn, cls=movie)
+    rows = await graph_store.list_rows(conn, cls=movie)
     matching = [r for r in rows if r.get("_canonical_id") == "tt9999999"]
     assert matching, f"Row with _canonical_id='tt9999999' not found; got {rows}"
     assert matching[0]["title"] == "Test Film"

@@ -15,6 +15,7 @@ materializable class. This file verifies:
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
@@ -63,17 +64,17 @@ def _spec_with_concrete_and_abstract() -> Spec:
     )
 
 
-@pytest.fixture
-def clean(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE dq_observations CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+@pytest_asyncio.fixture
+async def clean(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE dq_observations CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
@@ -86,11 +87,11 @@ def client():
         app.dependency_overrides.pop(require_user, None)
 
 
-@pytest.fixture
-def published(clean):
-    rev = create_draft(clean)
-    update_draft(clean, rev, _spec_with_concrete_and_abstract())
-    publish_draft(clean, rev)
+@pytest_asyncio.fixture
+async def published(clean):
+    rev = await create_draft(clean)
+    await update_draft(clean, rev, _spec_with_concrete_and_abstract())
+    await publish_draft(clean, rev)
     yield clean, rev
 
 
@@ -115,14 +116,14 @@ def test_materialize_lists_concrete_classes(published, client):
 # 2. Generated SQL is syntactically valid (EXPLAIN it)
 # ---------------------------------------------------------------------------
 
-def test_generated_sql_is_valid(published, client):
+async def test_generated_sql_is_valid(published, client):
     conn, rev = published
     r = client.get("/lake/materialize")
     movie = next(c for c in r.json()["classes"] if c["name"] == "Movie")
 
     # EXPLAIN runs the planner without executing. Syntax errors → exception.
-    conn.execute(f"EXPLAIN {movie['current']}")
-    conn.execute(f"EXPLAIN {movie['history']}")
+    await conn.execute(f"EXPLAIN {movie['current']}")
+    await conn.execute(f"EXPLAIN {movie['history']}")
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +145,7 @@ def test_current_filters_history_does_not(published, client):
 # 4. Generated current-body returns the right rows after ingest
 # ---------------------------------------------------------------------------
 
-def test_current_body_runs_against_real_data(published, client):
+async def test_current_body_runs_against_real_data(published, client):
     conn, rev = published
     r = client.post(
         "/graph/ingest/imdb",
@@ -161,7 +162,8 @@ def test_current_body_runs_against_real_data(published, client):
     assert r.status_code == 200, r.text
     movie = r.json()["classes"][0]
 
-    rows = conn.execute(movie["current"]).fetchall()
+    cur = await conn.execute(movie["current"])
+    rows = await cur.fetchall()
     canonical_ids = {row[0] for row in rows}
     assert canonical_ids == {"tt1", "tt2"}
 

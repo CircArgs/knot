@@ -101,8 +101,8 @@ def _stringify(v: Any) -> str:
 # ---------------------------------------------------------------------------
 
 
-def record_incremental(
-    conn: psycopg.Connection,
+async def record_incremental(
+    conn: psycopg.AsyncConnection,
     *,
     source_name: str,
     cls: OntologyClass,
@@ -133,7 +133,7 @@ def record_incremental(
             continue
         values = [r.get(slot.name) for r in rows]
         stats = _slot_stats(values)
-        conn.execute(
+        await conn.execute(
             "INSERT INTO dq_observations "
             "(source_name, class_name, slot_name, kind, batch_id, "
             " row_count, null_count, distinct_count, min_value, max_value) "
@@ -159,8 +159,8 @@ def record_incremental(
 # ---------------------------------------------------------------------------
 
 
-def full_scan(
-    conn: psycopg.Connection,
+async def full_scan(
+    conn: psycopg.AsyncConnection,
     spec: Spec,
     *,
     source_filter: str | None = None,
@@ -191,7 +191,7 @@ def full_scan(
             continue  # defined-class views — skip
         if cls.abstract:
             continue
-        inserted += _full_scan_for(conn, source_name=src.name, cls=cls)
+        inserted += await _full_scan_for(conn, source_name=src.name, cls=cls)
         seen_class_source.add((cls.name, src.name))
 
     # Also scan the synthetic _user_corrections source against any class
@@ -204,7 +204,7 @@ def full_scan(
                 continue
             if (cls.name, user_corrections_source()) in seen_class_source:
                 continue
-            inserted += _full_scan_for(
+            inserted += await _full_scan_for(
                 conn,
                 source_name=user_corrections_source(),
                 cls=cls,
@@ -213,8 +213,8 @@ def full_scan(
     return inserted
 
 
-def _full_scan_for(
-    conn: psycopg.Connection,
+async def _full_scan_for(
+    conn: psycopg.AsyncConnection,
     *,
     source_name: str,
     cls: OntologyClass,
@@ -238,7 +238,7 @@ def _full_scan_for(
             "FROM {tbl} WHERE _source = %s"
         ).format(col=col, tbl=table)
         try:
-            row = conn.execute(stmt, (source_name,)).fetchone()
+            row = await (await conn.execute(stmt, (source_name,))).fetchone()
         except psycopg.errors.UndefinedTable:
             return inserted  # class table not yet migrated
         except psycopg.errors.UndefinedColumn:
@@ -248,7 +248,7 @@ def _full_scan_for(
         row_count, null_count, distinct_count, min_value, max_value = row
         if row_count == 0:
             continue  # nothing of this source/class in the table
-        conn.execute(
+        await conn.execute(
             "INSERT INTO dq_observations "
             "(source_name, class_name, slot_name, kind, batch_id, "
             " row_count, null_count, distinct_count, min_value, max_value) "
@@ -273,8 +273,8 @@ def _full_scan_for(
 # ---------------------------------------------------------------------------
 
 
-def query_observations(
-    conn: psycopg.Connection,
+async def query_observations(
+    conn: psycopg.AsyncConnection,
     *,
     source: str | None = None,
     class_name: str | None = None,
@@ -316,7 +316,7 @@ def query_observations(
     ).format(where=where)
     params.append(limit)
 
-    rows = conn.execute(stmt, params).fetchall()
+    rows = await (await conn.execute(stmt, params)).fetchall()
     return [
         {
             "observed_at": r[0].isoformat(),
@@ -336,8 +336,8 @@ def query_observations(
     ]
 
 
-def summarize(
-    conn: psycopg.Connection,
+async def summarize(
+    conn: psycopg.AsyncConnection,
     *,
     since: datetime | None = None,
     until: datetime | None = None,
@@ -365,7 +365,7 @@ def summarize(
         "ORDER BY total_nulls DESC NULLS LAST"
     ).format(where=where)
 
-    rows = conn.execute(stmt, params).fetchall()
+    rows = await (await conn.execute(stmt, params)).fetchall()
     out: list[dict[str, Any]] = []
     for r in rows:
         total_rows = int(r[3] or 0)

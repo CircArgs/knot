@@ -15,6 +15,7 @@ Coverage:
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 
 from knot import db
 from knot.db import spec_store
@@ -47,15 +48,15 @@ def _ts_type() -> TypeDefinition:
     return TypeDefinition(name="datetime", base="datetime")
 
 
-def _reset(conn):
-    conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    conn.execute("TRUNCATE TABLE users CASCADE")
-    conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+async def _reset(conn):
+    await conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await conn.execute("TRUNCATE TABLE users CASCADE")
+    await conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
 
 def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]:
@@ -94,18 +95,19 @@ def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]
 # 1. Mixin slot materializes as a column on the class's own table
 # ---------------------------------------------------------------------------
 
-def test_mixin_slot_becomes_column(pg_conn):
-    _reset(pg_conn)
+async def test_mixin_slot_becomes_column(pg_conn):
+    await _reset(pg_conn)
     spec, movie, _ = _build_timestamped_movie_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
-    cols = pg_conn.execute(
+    cur = await pg_conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_schema = 'knot_data' AND table_name = 'movie' "
         "ORDER BY column_name"
-    ).fetchall()
+    )
+    cols = await cur.fetchall()
     names = {r[0] for r in cols}
     assert "created_at" in names
     assert "updated_at" in names
@@ -117,14 +119,14 @@ def test_mixin_slot_becomes_column(pg_conn):
 # 2. Mixin slot is queryable via GraphQL
 # ---------------------------------------------------------------------------
 
-def test_mixin_slot_is_queryable_via_graphql(pg_conn):
-    _reset(pg_conn)
+async def test_mixin_slot_is_queryable_via_graphql(pg_conn):
+    await _reset(pg_conn)
     spec, movie, _ = _build_timestamped_movie_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
-    apply_add(
+    await apply_add(
         pg_conn,
         cls=movie,
         new_canonical_id="tt0111161",
@@ -136,12 +138,11 @@ def test_mixin_slot_is_queryable_via_graphql(pg_conn):
     from knot.spec.compile.graphql import get_or_build_schema
     from knot.spec.canonical import compute_content_hash
 
-    published = spec_store.get_published(pg_conn)
+    published = await spec_store.get_published(pg_conn)
     schema = get_or_build_schema(published, compute_content_hash(published))
 
-    result = schema.execute_sync(
+    result = await schema.execute(
         "{ movie { imdbId title createdAt } }",
-        context_value={"conn": pg_conn},
     )
     assert result.errors is None, result.errors
     rows = result.data["movie"]
@@ -152,8 +153,8 @@ def test_mixin_slot_is_queryable_via_graphql(pg_conn):
 # 3. Transitive mixins (Mixin includes Mixin)
 # ---------------------------------------------------------------------------
 
-def test_transitive_mixin_chain(pg_conn):
-    _reset(pg_conn)
+async def test_transitive_mixin_chain(pg_conn):
+    await _reset(pg_conn)
     st, dt = _string_type(), _ts_type()
 
     audited_at = Slot(name="audited_at", range=dt)
@@ -180,14 +181,15 @@ def test_transitive_mixin_chain(pg_conn):
         sources=[src],
     )
 
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
-    cols = pg_conn.execute(
+    cur = await pg_conn.execute(
         "SELECT column_name FROM information_schema.columns "
         "WHERE table_schema = 'knot_data' AND table_name = 'movie'"
-    ).fetchall()
+    )
+    cols = await cur.fetchall()
     names = {r[0] for r in cols}
     assert "created_at" in names
     assert "audited_at" in names
@@ -197,8 +199,8 @@ def test_transitive_mixin_chain(pg_conn):
 # 4. Own slot shadows mixin slot of same name
 # ---------------------------------------------------------------------------
 
-def test_own_slot_shadows_mixin_slot(pg_conn):
-    _reset(pg_conn)
+async def test_own_slot_shadows_mixin_slot(pg_conn):
+    await _reset(pg_conn)
     st, dt = _string_type(), _ts_type()
 
     # Mixin contributes a `name` slot of type datetime
@@ -223,16 +225,17 @@ def test_own_slot_shadows_mixin_slot(pg_conn):
         sources=[src],
     )
 
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)  # should NOT raise — own wins
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)  # should NOT raise — own wins
 
     # Verify the column is the own slot's type (TEXT), not the mixin's (TIMESTAMPTZ).
-    row = pg_conn.execute(
+    cur = await pg_conn.execute(
         "SELECT data_type FROM information_schema.columns "
         "WHERE table_schema = 'knot_data' AND table_name = 'movie' "
         "AND column_name = 'name'"
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row is not None
     assert row[0].lower() == "text"
 
@@ -241,8 +244,8 @@ def test_own_slot_shadows_mixin_slot(pg_conn):
 # 5. Slot name collision across mixins → PublishGateError
 # ---------------------------------------------------------------------------
 
-def test_mixin_slot_collision_rejected(pg_conn):
-    _reset(pg_conn)
+async def test_mixin_slot_collision_rejected(pg_conn):
+    await _reset(pg_conn)
     st = _string_type()
 
     a_label = Slot(name="label", range=st)
@@ -264,18 +267,18 @@ def test_mixin_slot_collision_rejected(pg_conn):
         sources=[src],
     )
 
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
     with pytest.raises(PublishGateError, match="collision"):
-        publish_draft(pg_conn, rev)
+        await publish_draft(pg_conn, rev)
 
 
 # ---------------------------------------------------------------------------
 # 6. Cyclic mixin chain → PublishGateError
 # ---------------------------------------------------------------------------
 
-def test_mixin_cycle_rejected(pg_conn):
-    _reset(pg_conn)
+async def test_mixin_cycle_rejected(pg_conn):
+    await _reset(pg_conn)
     st = _string_type()
 
     a = OntologyClass(name="A", slots=[], abstract=True)
@@ -295,10 +298,10 @@ def test_mixin_cycle_rejected(pg_conn):
         sources=[src],
     )
 
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
     with pytest.raises(PublishGateError, match="cyclic"):
-        publish_draft(pg_conn, rev)
+        await publish_draft(pg_conn, rev)
 
 
 # ---------------------------------------------------------------------------
@@ -399,14 +402,14 @@ def test_remove_mixin_emits_dropslot_diff():
 # 9. Mixin slot is read/written via apply_add
 # ---------------------------------------------------------------------------
 
-def test_mixin_slot_round_trip_via_apply_add(pg_conn):
-    _reset(pg_conn)
+async def test_mixin_slot_round_trip_via_apply_add(pg_conn):
+    await _reset(pg_conn)
     spec, movie, _ = _build_timestamped_movie_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
-    apply_add(
+    await apply_add(
         pg_conn,
         cls=movie,
         new_canonical_id="tt0068646",
@@ -418,11 +421,12 @@ def test_mixin_slot_round_trip_via_apply_add(pg_conn):
         },
         spec_revision=rev,
     )
-    row = pg_conn.execute(
+    cur = await pg_conn.execute(
         "SELECT created_at, updated_at FROM knot_data.movie "
         "WHERE imdb_id = %s",
         ("tt0068646",),
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row is not None
     assert row[0] is not None
     assert row[1] is not None

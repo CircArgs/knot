@@ -8,6 +8,7 @@ os.environ.setdefault("KNOT_DEV_MODE", "1")
 
 import psycopg
 import pytest
+import pytest_asyncio
 
 from knot import db
 from knot.config.config import get_dsn
@@ -21,11 +22,13 @@ def postgres_dsn():
 @pytest.fixture(scope="session", autouse=True)
 def _apply_control_schema(postgres_dsn):
     """Ensure the control-plane schema exists before any test touches postgres."""
-    db.apply_schema()
+    import asyncio
+
+    asyncio.run(db.apply_schema())
 
 
-@pytest.fixture
-def pg_conn(postgres_dsn):
-    conn = psycopg.connect(postgres_dsn, autocommit=True)
+@pytest_asyncio.fixture
+async def pg_conn(postgres_dsn):
+    conn = await psycopg.AsyncConnection.connect(postgres_dsn, autocommit=True)
     yield conn
-    conn.close()
+    await conn.close()

@@ -28,7 +28,7 @@ class ConstraintCheckResponse(StrictBase):
     response_model=ConstraintCheckResponse,
     dependencies=[Depends(require_user)],
 )
-def check_constraints() -> ConstraintCheckResponse:
+async def check_constraints() -> ConstraintCheckResponse:
     """Run every published constraint against the current data plane.
 
     Returns the union of offending rows across all constraints in the
@@ -39,8 +39,8 @@ def check_constraints() -> ConstraintCheckResponse:
 
     violations: list[ViolationRow] = []
 
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         classes_by_name = {c.name: c for c in spec.classes}
 
         for constraint in spec.constraints:
@@ -49,7 +49,7 @@ def check_constraints() -> ConstraintCheckResponse:
                 continue
             stmt, params = compile_constraint(constraint, cls)
             try:
-                rows = conn.execute(stmt, params).fetchall()
+                rows = await (await conn.execute(stmt, params)).fetchall()
             except Exception:
                 continue
             for row in rows:

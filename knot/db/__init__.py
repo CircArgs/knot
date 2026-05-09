@@ -19,6 +19,8 @@ through the rest of the codebase.
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 import psycopg
@@ -46,12 +48,14 @@ __all__ = [
 _CONTROL_SCHEMA_SQL = (Path(__file__).parent / "control_schema.sql").read_text()
 
 
-def connect(*, autocommit: bool = True) -> psycopg.Connection:
-    """Open a fresh postgres connection at the configured DSN."""
-    return psycopg.connect(get_dsn(), autocommit=autocommit)
+@asynccontextmanager
+async def connect(*, autocommit: bool = True) -> AsyncIterator[psycopg.AsyncConnection]:
+    """Open a fresh async postgres connection at the configured DSN."""
+    async with await psycopg.AsyncConnection.connect(get_dsn(), autocommit=autocommit) as conn:
+        yield conn
 
 
-def apply_schema() -> None:
+async def apply_schema() -> None:
     """Apply the control-plane schema (``control_schema.sql``). Idempotent."""
-    with connect() as conn:
-        conn.execute(_CONTROL_SCHEMA_SQL)
+    async with connect() as conn:
+        await conn.execute(_CONTROL_SCHEMA_SQL)

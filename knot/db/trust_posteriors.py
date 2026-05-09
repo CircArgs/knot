@@ -47,37 +47,43 @@ class Posterior:
         return max(self.alpha + self.beta - (PRIOR_ALPHA + PRIOR_BETA), 0.0)
 
 
-def get_posterior(conn: psycopg.Connection, source: str, slot: str) -> Posterior:
+async def get_posterior(conn: psycopg.AsyncConnection, source: str, slot: str) -> Posterior:
     """Posterior for ``(source, slot)``. Falls back to the uniform prior
     if no observations recorded yet."""
-    row = conn.execute(
-        "SELECT alpha, beta FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
-        (source, slot),
+    row = await (
+        await conn.execute(
+            "SELECT alpha, beta FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
+            (source, slot),
+        )
     ).fetchone()
     if row:
         return Posterior(source=source, slot=slot, alpha=row[0], beta=row[1])
     return Posterior(source=source, slot=slot, alpha=PRIOR_ALPHA, beta=PRIOR_BETA)
 
 
-def list_posteriors(conn: psycopg.Connection) -> list[Posterior]:
-    rows = conn.execute(
-        "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
-        "ORDER BY source_name, slot_name"
+async def list_posteriors(conn: psycopg.AsyncConnection) -> list[Posterior]:
+    rows = await (
+        await conn.execute(
+            "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
+            "ORDER BY source_name, slot_name"
+        )
     ).fetchall()
     return [Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows]
 
 
-def list_for_slot(conn: psycopg.Connection, slot: str) -> list[Posterior]:
-    rows = conn.execute(
-        "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
-        "WHERE slot_name = %s ORDER BY source_name",
-        (slot,),
+async def list_for_slot(conn: psycopg.AsyncConnection, slot: str) -> list[Posterior]:
+    rows = await (
+        await conn.execute(
+            "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
+            "WHERE slot_name = %s ORDER BY source_name",
+            (slot,),
+        )
     ).fetchall()
     return [Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows]
 
 
-def record_feedback(
-    conn: psycopg.Connection,
+async def record_feedback(
+    conn: psycopg.AsyncConnection,
     source: str,
     slot: str,
     success: bool,
@@ -89,33 +95,35 @@ def record_feedback(
     """
     delta_alpha = 1.0 if success else 0.0
     delta_beta = 0.0 if success else 1.0
-    row = conn.execute(
-        "INSERT INTO trust_posteriors (source_name, slot_name, alpha, beta) "
-        "VALUES (%s, %s, %s, %s) "
-        "ON CONFLICT (source_name, slot_name) DO UPDATE "
-        "SET alpha = trust_posteriors.alpha + %s, "
-        "    beta  = trust_posteriors.beta  + %s, "
-        "    updated_at = now() "
-        "RETURNING alpha, beta",
-        (
-            source,
-            slot,
-            PRIOR_ALPHA + delta_alpha,
-            PRIOR_BETA + delta_beta,
-            delta_alpha,
-            delta_beta,
-        ),
+    row = await (
+        await conn.execute(
+            "INSERT INTO trust_posteriors (source_name, slot_name, alpha, beta) "
+            "VALUES (%s, %s, %s, %s) "
+            "ON CONFLICT (source_name, slot_name) DO UPDATE "
+            "SET alpha = trust_posteriors.alpha + %s, "
+            "    beta  = trust_posteriors.beta  + %s, "
+            "    updated_at = now() "
+            "RETURNING alpha, beta",
+            (
+                source,
+                slot,
+                PRIOR_ALPHA + delta_alpha,
+                PRIOR_BETA + delta_beta,
+                delta_alpha,
+                delta_beta,
+            ),
+        )
     ).fetchone()
     return Posterior(source=source, slot=slot, alpha=row[0], beta=row[1])
 
 
-def reset_posterior(
-    conn: psycopg.Connection,
+async def reset_posterior(
+    conn: psycopg.AsyncConnection,
     source: str,
     slot: str,
 ) -> bool:
     """Drop the posterior row, reverting the pair to the uniform prior."""
-    cur = conn.execute(
+    cur = await conn.execute(
         "DELETE FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
         (source, slot),
     )

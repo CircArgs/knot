@@ -36,7 +36,6 @@ Diffing:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from functools import singledispatch
 
 import psycopg
 from psycopg import sql
@@ -284,148 +283,129 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
     return changes
 
 
-# ─── DDL emission (single-dispatch) ─────────────────────────────────────────
+# ─── DDL emission (async, type-dispatched) ──────────────────────────────────
 
 
-@singledispatch
-def emit_ddl(change: Change, conn: psycopg.Connection) -> None:
-    raise TypeError(f"No DDL emitter registered for {type(change).__name__}")
+async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
+    """Dispatch DDL execution for a single change against the async connection."""
+    if isinstance(change, AddClass):
+        await conn.execute(_create_source_table_sql(change.cls))
+        await conn.execute(_bindings_create_sql(change.cls))
+        await conn.execute(_bindings_index_sql(change.cls))
+        await conn.execute(_bindings_unique_current_sql(change.cls))
 
-
-@emit_ddl.register
-def _(change: AddClass, conn: psycopg.Connection) -> None:
-    # Source-row table + bindings table + bindings indexes.
-    conn.execute(_create_source_table_sql(change.cls))
-    conn.execute(_bindings_create_sql(change.cls))
-    conn.execute(_bindings_index_sql(change.cls))
-    conn.execute(_bindings_unique_current_sql(change.cls))
-
-
-@emit_ddl.register
-def _(change: DropClass, conn: psycopg.Connection) -> None:
-    # Drop bindings first to avoid FK-constraint-of-our-own-making.
-    cls_lower = change.class_name.lower()
-    if change.is_view:
-        conn.execute(
-            sql.SQL("DROP VIEW IF EXISTS {t} CASCADE").format(
+    elif isinstance(change, DropClass):
+        cls_lower = change.class_name.lower()
+        if change.is_view:
+            await conn.execute(
+                sql.SQL("DROP VIEW IF EXISTS {t} CASCADE").format(
+                    t=sql.Identifier(schema(), cls_lower),
+                )
+            )
+            return
+        await conn.execute(
+            sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
+                t=sql.Identifier(schema(), f"{cls_lower}_bindings"),
+            )
+        )
+        await conn.execute(
+            sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
                 t=sql.Identifier(schema(), cls_lower),
             )
         )
-        return
-    conn.execute(
-        sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
-            t=sql.Identifier(schema(), f"{cls_lower}_bindings"),
+
+    elif isinstance(change, AddDefinedClass):
+        """Create (or replace) a VIEW for the defined class.
+
+        The VIEW selects all rows from the parent class (is_a) that satisfy the
+        compiled definition predicate.  It JOINs source × bindings just like
+        concrete-class reads, so resolvers can query it identically.
+
+        Schema:
+            CREATE OR REPLACE VIEW knot_data.<cls> AS
+            SELECT s.*, b.canonical_id AS _canonical_id
+            FROM knot_data.<parent> s
+            JOIN knot_data.<parent>_bindings b
+              ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
+            WHERE (<compiled definition>)
+        """
+        from knot.spec.compile.postgres import CompileContext, compile_predicate
+
+        cls = change.cls
+        if cls.is_a is None:
+            raise ValueError(f"Defined class {cls.name!r} must have is_a set to a parent class.")
+        parent = cls.is_a
+
+        ctx = CompileContext(primary_class=parent, alias="s")
+        where_sql = compile_predicate(cls.definition, ctx)
+
+        if ctx.joins:
+            joins_sql = sql.SQL(" ") + sql.SQL(" ").join(ctx.joins)
+        else:
+            joins_sql = sql.SQL("")
+
+        view_stmt = sql.SQL(
+            "CREATE OR REPLACE VIEW {view} AS "
+            "SELECT s.*, {bind_alias}.canonical_id AS _canonical_id "
+            "FROM {parent_tbl} s "
+            "JOIN {parent_btbl} {bind_alias} "
+            "  ON {bind_alias}.knot_row_id = s._knot_row_id "
+            " AND {bind_alias}.valid_to IS NULL"
+            "{joins} "
+            "WHERE ({where})"
+        ).format(
+            view=_table_id(cls),
+            bind_alias=sql.Identifier("b"),
+            parent_tbl=_table_id(parent),
+            parent_btbl=_bindings_table_id(parent),
+            joins=joins_sql,
+            where=where_sql,
         )
-    )
-    conn.execute(
-        sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
-            t=sql.Identifier(schema(), cls_lower),
+        # CREATE VIEW DDL cannot use server-side parameters ($1, $2...) because
+        # PostgreSQL can't infer their types in a view body.  Use an
+        # AsyncClientCursor to mogrify (parameter values inlined as SQL
+        # literals by the psycopg client) and execute the fully-rendered DDL.
+        from psycopg import AsyncClientCursor
+
+        ccur = AsyncClientCursor(conn)
+        rendered = ccur.mogrify(view_stmt, ctx.params)
+        await conn.execute(rendered)
+
+    elif isinstance(change, DropDefinedClass):
+        await conn.execute(
+            sql.SQL("DROP VIEW IF EXISTS {t} CASCADE").format(
+                t=sql.Identifier(schema(), change.class_name.lower()),
+            )
         )
-    )
 
+    elif isinstance(change, AddSlot):
+        stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN {col} {pgtype} NULL").format(
+            table=_table_id(change.cls),
+            col=sql.Identifier(change.slot.name),
+            pgtype=sql.SQL(_slot_pg_type(change.slot)),
+        )
+        await conn.execute(stmt)
 
-@emit_ddl.register
-def _(change: AddDefinedClass, conn: psycopg.Connection) -> None:
-    """Create (or replace) a VIEW for the defined class.
+    elif isinstance(change, DropSlot):
+        stmt = sql.SQL("ALTER TABLE {table} DROP COLUMN {col}").format(
+            table=_table_id(change.cls),
+            col=sql.Identifier(change.slot_name),
+        )
+        await conn.execute(stmt)
 
-    The VIEW selects all rows from the parent class (is_a) that satisfy the
-    compiled definition predicate.  It JOINs source × bindings just like
-    concrete-class reads, so resolvers can query it identically.
+    elif isinstance(change, ChangeSlotType):
+        stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype}").format(
+            table=_table_id(change.cls),
+            col=sql.Identifier(change.slot.name),
+            pgtype=sql.SQL(change.new_pg_type),
+        )
+        await conn.execute(stmt)
 
-    Schema:
-        CREATE OR REPLACE VIEW knot_data.<cls> AS
-        SELECT s.*, b.canonical_id AS _canonical_id
-        FROM knot_data.<parent> s
-        JOIN knot_data.<parent>_bindings b
-          ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
-        WHERE (<compiled definition>)
-    """
-    from knot.spec.compile.postgres import CompileContext, compile_predicate
+    elif isinstance(change, ChangeSlotRequired):
+        return  # API-enforced; no DDL
 
-    cls = change.cls
-    if cls.is_a is None:
-        raise ValueError(f"Defined class {cls.name!r} must have is_a set to a parent class.")
-    parent = cls.is_a
-
-    ctx = CompileContext(primary_class=parent, alias="s")
-    where_sql = compile_predicate(cls.definition, ctx)
-
-    # Join fragments from multi-slot SlotPath traversal (rare in definitions
-    # but supported). Prepend to FROM clause.
-    if ctx.joins:
-        joins_sql = sql.SQL(" ") + sql.SQL(" ").join(ctx.joins)
     else:
-        joins_sql = sql.SQL("")
-
-    view_stmt = sql.SQL(
-        "CREATE OR REPLACE VIEW {view} AS "
-        "SELECT s.*, {bind_alias}.canonical_id AS _canonical_id "
-        "FROM {parent_tbl} s "
-        "JOIN {parent_btbl} {bind_alias} "
-        "  ON {bind_alias}.knot_row_id = s._knot_row_id "
-        " AND {bind_alias}.valid_to IS NULL"
-        "{joins} "
-        "WHERE ({where})"
-    ).format(
-        view=_table_id(cls),
-        bind_alias=sql.Identifier("b"),
-        parent_tbl=_table_id(parent),
-        parent_btbl=_bindings_table_id(parent),
-        joins=joins_sql,
-        where=where_sql,
-    )
-    # CREATE VIEW DDL cannot use server-side parameters ($1, $2...) because
-    # PostgreSQL can't infer their types in a view body.  Use a ClientCursor
-    # to mogrify the statement (parameter values inlined as SQL literals by
-    # the psycopg client) and execute the fully-rendered DDL string.
-    from psycopg import ClientCursor
-
-    ccur = ClientCursor(conn)
-    rendered = ccur.mogrify(view_stmt, ctx.params)
-    conn.execute(rendered)
-
-
-@emit_ddl.register
-def _(change: DropDefinedClass, conn: psycopg.Connection) -> None:
-    conn.execute(
-        sql.SQL("DROP VIEW IF EXISTS {t} CASCADE").format(
-            t=sql.Identifier(schema(), change.class_name.lower()),
-        )
-    )
-
-
-@emit_ddl.register
-def _(change: AddSlot, conn: psycopg.Connection) -> None:
-    stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN {col} {pgtype} NULL").format(
-        table=_table_id(change.cls),
-        col=sql.Identifier(change.slot.name),
-        pgtype=sql.SQL(_slot_pg_type(change.slot)),
-    )
-    conn.execute(stmt)
-
-
-@emit_ddl.register
-def _(change: DropSlot, conn: psycopg.Connection) -> None:
-    stmt = sql.SQL("ALTER TABLE {table} DROP COLUMN {col}").format(
-        table=_table_id(change.cls),
-        col=sql.Identifier(change.slot_name),
-    )
-    conn.execute(stmt)
-
-
-@emit_ddl.register
-def _(change: ChangeSlotType, conn: psycopg.Connection) -> None:
-    stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype}").format(
-        table=_table_id(change.cls),
-        col=sql.Identifier(change.slot.name),
-        pgtype=sql.SQL(change.new_pg_type),
-    )
-    conn.execute(stmt)
-
-
-@emit_ddl.register
-def _(change: ChangeSlotRequired, conn: psycopg.Connection) -> None:
-    return  # API-enforced; no DDL
+        raise TypeError(f"No DDL emitter registered for {type(change).__name__}")
 
 
 # ─── Apply ──────────────────────────────────────────────────────────────────
@@ -450,7 +430,7 @@ def is_destructive(change: Change) -> bool:
     return isinstance(change, _DESTRUCTIVE_CHANGE_TYPES)
 
 
-def apply_changes(conn: psycopg.Connection, changes: list[Change]) -> None:
+async def apply_changes(conn: psycopg.AsyncConnection, changes: list[Change]) -> None:
     """Apply a precomputed list of changes (used after diff + safety check).
 
     Order:
@@ -470,11 +450,11 @@ def apply_changes(conn: psycopg.Connection, changes: list[Change]) -> None:
     ]
     defined_adds = [c for c in changes if isinstance(c, AddDefinedClass)]
     for change in drops + concrete_adds + defined_adds:
-        emit_ddl(change, conn)
+        await emit_ddl(change, conn)
 
 
-def apply_migration(
-    conn: psycopg.Connection,
+async def apply_migration(
+    conn: psycopg.AsyncConnection,
     prev: Spec | None,
     candidate: Spec,
 ) -> list[Change]:
@@ -484,5 +464,5 @@ def apply_migration(
     ``is_destructive`` and ``apply_changes`` for the split-control variant.
     """
     changes = diff_specs(prev, candidate)
-    apply_changes(conn, changes)
+    await apply_changes(conn, changes)
     return changes

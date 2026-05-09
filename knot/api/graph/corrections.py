@@ -99,7 +99,7 @@ def _validate_property_value(slot: Slot, value: Any) -> Any:
 
 
 @router.post("/corrections", response_model=CorrectionResponse)
-def submit_correction(
+async def submit_correction(
     body: Correction,
     principal: Principal = Depends(require_user),
 ) -> CorrectionResponse:
@@ -107,8 +107,8 @@ def submit_correction(
     audit row + per-class data mutation + bandit feedback against
     disagreeing sources. 422 on payload type mismatch; 404 on unknown
     class/slot/canonical_id."""
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
 
         if isinstance(body, PropertyCorrection):
             cls = resolve_class(spec, body.class_name)
@@ -116,8 +116,8 @@ def submit_correction(
             if slot is None:
                 raise HTTPException(404, f"Slot {body.slot!r} not on class {cls.name!r}")
             value = _validate_property_value(slot, body.value)
-            spec_revision = spec_store.get_published_revision(conn)
-            correction_id = graph_corrections.apply_property_correction(
+            spec_revision = await spec_store.get_published_revision(conn)
+            correction_id = await graph_corrections.apply_property_correction(
                 conn,
                 cls=cls,
                 canonical_id=body.canonical_id,
@@ -148,7 +148,7 @@ def submit_correction(
                 if cid not in seen:
                     seen.add(cid)
                     deduped.append(cid)
-            if not graph_store.canonical_id_exists(
+            if not await graph_store.canonical_id_exists(
                 conn,
                 cls=cls,
                 canonical_id=body.keep_canonical_id,
@@ -159,7 +159,7 @@ def submit_correction(
                     f"contributions for class {cls.name!r}",
                 )
             for cid in deduped:
-                if not graph_store.canonical_id_exists(
+                if not await graph_store.canonical_id_exists(
                     conn,
                     cls=cls,
                     canonical_id=cid,
@@ -168,8 +168,8 @@ def submit_correction(
                         404,
                         f"merge_canonical_id {cid!r} has no contributions for class {cls.name!r}",
                     )
-            spec_revision = spec_store.get_published_revision(conn)
-            correction_id = graph_corrections.apply_merge(
+            spec_revision = await spec_store.get_published_revision(conn)
+            correction_id = await graph_corrections.apply_merge(
                 conn,
                 cls=cls,
                 keep_canonical_id=body.keep_canonical_id,
@@ -190,7 +190,7 @@ def submit_correction(
                 raise HTTPException(400, "split requires at least 2 partitions")
             if not body.partitions:
                 raise HTTPException(400, "partitions must be non-empty")
-            if not graph_store.canonical_id_exists(
+            if not await graph_store.canonical_id_exists(
                 conn,
                 cls=cls,
                 canonical_id=body.source_canonical_id,
@@ -201,7 +201,7 @@ def submit_correction(
                     f"current contributions for class {cls.name!r}",
                 )
             for new_cid in body.partitions:
-                if graph_store.canonical_id_exists(conn, cls=cls, canonical_id=new_cid):
+                if await graph_store.canonical_id_exists(conn, cls=cls, canonical_id=new_cid):
                     raise HTTPException(
                         409,
                         f"new_canonical_id {new_cid!r} already exists for class {cls.name!r}",
@@ -213,8 +213,8 @@ def submit_correction(
                 raise HTTPException(
                     400, "each (source, source_row_id) must appear in exactly one partition"
                 )
-            spec_revision = spec_store.get_published_revision(conn)
-            correction_id = graph_corrections.apply_split(
+            spec_revision = await spec_store.get_published_revision(conn)
+            correction_id = await graph_corrections.apply_split(
                 conn,
                 cls=cls,
                 source_canonical_id=body.source_canonical_id,
@@ -231,7 +231,7 @@ def submit_correction(
 
         if isinstance(body, Add):
             cls = resolve_class(spec, body.class_name)
-            if graph_store.canonical_id_exists(
+            if await graph_store.canonical_id_exists(
                 conn,
                 cls=cls,
                 canonical_id=body.new_canonical_id,
@@ -248,8 +248,8 @@ def submit_correction(
                 )
             except Exception as exc:
                 raise HTTPException(422, detail=str(exc)) from exc
-            spec_revision = spec_store.get_published_revision(conn)
-            correction_id = graph_corrections.apply_add(
+            spec_revision = await spec_store.get_published_revision(conn)
+            correction_id = await graph_corrections.apply_add(
                 conn,
                 cls=cls,
                 new_canonical_id=body.new_canonical_id,
@@ -266,7 +266,7 @@ def submit_correction(
 
         if isinstance(body, Tombstone):
             cls = resolve_class(spec, body.class_name)
-            if not graph_store.canonical_id_exists(
+            if not await graph_store.canonical_id_exists(
                 conn,
                 cls=cls,
                 canonical_id=body.canonical_id,
@@ -276,8 +276,8 @@ def submit_correction(
                     f"canonical_id {body.canonical_id!r} has no current "
                     f"contributions for class {cls.name!r}",
                 )
-            spec_revision = spec_store.get_published_revision(conn)
-            correction_id = graph_corrections.apply_tombstone(
+            spec_revision = await spec_store.get_published_revision(conn)
+            correction_id = await graph_corrections.apply_tombstone(
                 conn,
                 cls=cls,
                 canonical_id=body.canonical_id,
@@ -294,7 +294,7 @@ def submit_correction(
 
         if isinstance(body, RejectContribution):
             cls = resolve_class(spec, body.class_name)
-            if not graph_store.canonical_id_exists(
+            if not await graph_store.canonical_id_exists(
                 conn,
                 cls=cls,
                 canonical_id=body.canonical_id,
@@ -304,8 +304,8 @@ def submit_correction(
                     f"canonical_id {body.canonical_id!r} has no current "
                     f"contributions for class {cls.name!r}",
                 )
-            spec_revision = spec_store.get_published_revision(conn)
-            correction_id = graph_corrections.apply_reject_contribution(
+            spec_revision = await spec_store.get_published_revision(conn)
+            correction_id = await graph_corrections.apply_reject_contribution(
                 conn,
                 cls=cls,
                 canonical_id=body.canonical_id,
@@ -328,6 +328,6 @@ def submit_correction(
 
 
 @router.get("/corrections")
-def list_corrections(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, Any]]:
-    with db.connect() as conn:
-        return db.corrections.list_audit_log(conn, limit=limit)
+async def list_corrections(limit: int = Query(100, ge=1, le=1000)) -> list[dict[str, Any]]:
+    async with db.connect() as conn:
+        return await db.corrections.list_audit_log(conn, limit=limit)

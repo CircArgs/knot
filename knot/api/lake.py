@@ -35,7 +35,7 @@ class MaterializeResponse(BaseModel):
     response_model=MaterializeResponse,
     dependencies=[Depends(require_user)],
 )
-def materialize(
+async def materialize(
     class_name: str | None = Query(
         None,
         alias="class",
@@ -48,11 +48,11 @@ def materialize(
     a ``current`` body (resolved SCD2 snapshot) and a ``history`` body
     (full timeline). Caller wraps these in their target dialect.
     """
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
         if spec is None:
             raise HTTPException(409, "No spec is published yet.")
-        revision = spec_store.get_published_revision(conn) or 0
+        revision = await spec_store.get_published_revision(conn) or 0
 
         classes = [c for c in spec.classes if lake.is_materializable(c)]
         if class_name is not None:

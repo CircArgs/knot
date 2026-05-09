@@ -43,7 +43,7 @@ class _ConstraintViolationError(Exception):
     response_model=IngestResponse,
     dependencies=[Depends(require_user)],
 )
-def ingest(
+async def ingest(
     source_name: str,
     body: IngestBatch,
     validate_constraints: bool = Query(
@@ -70,13 +70,13 @@ def ingest(
     from knot.spec.compile.postgres import compile_constraint
     from knot.spec.metaschema import Severity
 
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         source = next((s for s in spec.sources if s.name == source_name), None)
         if source is None:
             raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
 
-        revision = spec_store.get_published_revision(conn)
+        revision = await spec_store.get_published_revision(conn)
         RowModel = build_row_model(source)
         validated: list[dict[str, Any]] = []
         errors: list[dict[str, Any]] = []
@@ -94,7 +94,7 @@ def ingest(
 
         cls = source.entity_class
         ev = IngestResolveCanonical(cls=cls, source=source, incoming=validated)
-        dispatch.dispatch(ev)
+        await dispatch.dispatch(ev)
         if ev.canonical_ids is None:
             raise RuntimeError("No handler set canonical_ids — default ER extension not registered")
 
@@ -106,8 +106,8 @@ def ingest(
                 and getattr(c, "severity", Severity.ERROR) == Severity.ERROR
             ]
             try:
-                with conn.transaction():
-                    count = graph_store.insert_rows(
+                async with conn.transaction():
+                    count = await graph_store.insert_rows(
                         conn,
                         source=source,
                         spec_revision=revision,
@@ -118,7 +118,7 @@ def ingest(
                     for constraint in relevant:
                         stmt, params = compile_constraint(constraint, cls)
                         try:
-                            rows = conn.execute(stmt, params).fetchall()
+                            rows = await (await conn.execute(stmt, params)).fetchall()
                         except Exception:
                             continue
                         for row in rows:
@@ -133,7 +133,7 @@ def ingest(
                             )
                     if violations:
                         raise _ConstraintViolationError(violations)
-                    dq.record_incremental(
+                    await dq.record_incremental(
                         conn,
                         source_name=source.name,
                         cls=cls,
@@ -143,14 +143,14 @@ def ingest(
             except _ConstraintViolationError as exc:
                 raise HTTPException(422, detail={"violations": exc.violations}) from exc
         else:
-            count = graph_store.insert_rows(
+            count = await graph_store.insert_rows(
                 conn,
                 source=source,
                 spec_revision=revision,
                 rows=validated,
                 canonical_ids=ev.canonical_ids,
             )
-            dq.record_incremental(
+            await dq.record_incremental(
                 conn,
                 source_name=source.name,
                 cls=cls,

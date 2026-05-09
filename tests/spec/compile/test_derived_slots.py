@@ -34,6 +34,7 @@ import os
 from typing import Any
 
 import pytest
+import pytest_asyncio
 from psycopg import sql
 
 from knot import db
@@ -180,21 +181,21 @@ def _build_full_spec() -> tuple[
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def clean_db(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+@pytest_asyncio.fixture
+async def clean_db(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
-@pytest.fixture
-def full_spec_db(clean_db):
+@pytest_asyncio.fixture
+async def full_spec_db(clean_db):
     """Publish the Movie+Credit spec and return (conn, spec, rev, entities...)."""
     conn = clean_db
     (
@@ -203,12 +204,12 @@ def full_spec_db(clean_db):
         credit_id, credit_movie, credit_role, credit_person_name,
         movie_src, credit_src,
     ) = _build_full_spec()
-    rev = create_draft(conn)
-    update_draft(conn, rev, spec)
-    publish_draft(conn, rev)
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
 
     # Ingest movies
-    graph_store.insert_rows(
+    await graph_store.insert_rows(
         conn, source=movie_src, spec_revision=rev,
         rows=[
             {"imdb_id": "tt0000001", "title": "Film A"},
@@ -220,7 +221,7 @@ def full_spec_db(clean_db):
         ]]
     )
     # Ingest credits: Film A has two directors; Film B has none
-    graph_store.insert_rows(
+    await graph_store.insert_rows(
         conn, source=credit_src, spec_revision=rev,
         rows=[
             {"credit_id": "c001", "movie": "tt0000001", "role": "director", "person_name": "Alice"},
@@ -545,7 +546,7 @@ def test_graphql_by_canonical_id_includes_derived(gql_client_full):
 
 
 # 17. Re-publishing with a new derived slot does not add a column (no destructive migration)
-def test_republish_with_new_derived_slot_no_destructive_migration(clean_db):
+async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db):
     """Adding a derived slot to an existing published spec should publish
     without raising PublishGateError or requiring allow_destructive=True.
     Derived slots have no column in the table — no DDL change needed.
@@ -570,11 +571,11 @@ def test_republish_with_new_derived_slot_no_destructive_migration(clean_db):
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v1, credit_src_v1],
     )
-    rev1 = create_draft(conn)
-    update_draft(conn, rev1, spec_v1)
-    publish_draft(conn, rev1)
+    rev1 = await create_draft(conn)
+    await update_draft(conn, rev1, spec_v1)
+    await publish_draft(conn, rev1)
 
-    graph_store.insert_rows(conn, source=movie_src_v1, spec_revision=rev1,
+    await graph_store.insert_rows(conn, source=movie_src_v1, spec_revision=rev1,
                             rows=[{"imdb_id": "tt0000001", "title": "Film A"}],
                             canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Film A"}]])
 
@@ -597,15 +598,15 @@ def test_republish_with_new_derived_slot_no_destructive_migration(clean_db):
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v2, credit_src_v2],
     )
-    rev2 = create_draft(conn)
-    update_draft(conn, rev2, spec_v2)
+    rev2 = await create_draft(conn)
+    await update_draft(conn, rev2, spec_v2)
     # Should not raise PublishGateError — derived slot adds no column
-    result = publish_draft(conn, rev2)
+    result = await publish_draft(conn, rev2)
     assert result == rev2
 
 
 # 18. RelationAggregate COLLECT derivation integration test
-def test_integration_relation_aggregate_collect(clean_db):
+async def test_integration_relation_aggregate_collect(clean_db):
     """Use a COLLECT derivation directly via graph_store.query_rows."""
     conn = clean_db
 
@@ -636,14 +637,14 @@ def test_integration_relation_aggregate_collect(clean_db):
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],
     )
-    rev = create_draft(conn)
-    update_draft(conn, rev, spec)
-    publish_draft(conn, rev)
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
 
-    graph_store.insert_rows(conn, source=movie_src, spec_revision=rev,
+    await graph_store.insert_rows(conn, source=movie_src, spec_revision=rev,
                             rows=[{"imdb_id": "m1", "title": "Test Film"}],
                             canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "m1", "title": "Test Film"}]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev,
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev,
                             rows=[
                                 {"credit_id": "x1", "movie": "m1", "role": "director"},
                                 {"credit_id": "x2", "movie": "m1", "role": "actor"},
@@ -653,7 +654,7 @@ def test_integration_relation_aggregate_collect(clean_db):
                                 {"credit_id": "x2", "movie": "m1", "role": "actor"},
                             ]])
 
-    rows = graph_store.query_rows(
+    rows = await graph_store.query_rows(
         conn, cls=movie_cls,
         predicate_sql=None, predicate_params=[],
     )
@@ -664,11 +665,11 @@ def test_integration_relation_aggregate_collect(clean_db):
 
 
 # 19. FilteredRelation filters correctly in derived slot (integration)
-def test_integration_filtered_relation_derivation(full_spec_db):
+async def test_integration_filtered_relation_derivation(full_spec_db):
     """directors derived slot only returns role='director' entries, not 'actor'."""
     conn, spec, rev, movie_cls, credit_cls, movie_src, credit_src = full_spec_db
 
-    rows = graph_store.query_rows(
+    rows = await graph_store.query_rows(
         conn, cls=movie_cls,
         predicate_sql=None, predicate_params=[],
     )

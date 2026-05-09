@@ -75,15 +75,15 @@ def _year_gte_constraint(movie_cls: OntologyClass, threshold: int, name: str = "
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def clean_db(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+async def clean_db(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
@@ -107,10 +107,10 @@ def client_no_exc():
         app.dependency_overrides.pop(require_user, None)
 
 
-def _publish_spec(conn, spec: Spec) -> int:
-    rev = create_draft(conn)
-    update_draft(conn, rev, spec)
-    publish_draft(conn, rev)
+async def _publish_spec(conn, spec: Spec) -> int:
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
     return rev
 
 
@@ -118,14 +118,14 @@ def _publish_spec(conn, spec: Spec) -> int:
 # 1. Happy path: rows pass all constraints → ingest succeeds
 # ---------------------------------------------------------------------------
 
-def test_valid_rows_with_flag_succeed(clean_db, client):
+async def test_valid_rows_with_flag_succeed(clean_db, client):
     """Rows that satisfy the constraint land successfully with the flag."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     # Add constraint: year >= 1888
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -136,8 +136,8 @@ def test_valid_rows_with_flag_succeed(clean_db, client):
     assert data["accepted"] == 1
 
     # Row should be in the DB.
-    with db.connect() as conn2:
-        rows = graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+    async with db.connect() as conn2:
+        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
     assert len(rows) == 1
     assert rows[0]["imdb_id"] == "tt0000001"
 
@@ -146,13 +146,13 @@ def test_valid_rows_with_flag_succeed(clean_db, client):
 # 2. Violation path: row fails constraint with flag → 422, no rows land
 # ---------------------------------------------------------------------------
 
-def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, client_no_exc):
+async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, client_no_exc):
     """year=1500 violates year >= 1888 → 422, no row persisted."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -166,8 +166,8 @@ def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, client_no_
     assert violations[0]["rule_id"] == "year_gte_1888"
 
     # No rows should have landed.
-    with db.connect() as conn2:
-        rows = graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+    async with db.connect() as conn2:
+        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
     assert rows == [], f"expected no rows, got {rows}"
 
 
@@ -175,13 +175,13 @@ def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, client_no_
 # 3. WARNING-severity constraint: never blocks ingest
 # ---------------------------------------------------------------------------
 
-def test_warning_constraint_does_not_block_ingest(clean_db, client):
+async def test_warning_constraint_does_not_block_ingest(clean_db, client):
     """A WARNING constraint violation with validate_constraints=true still allows ingest."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     warn_c = _year_gte_constraint(movie, 1888, name="year_warning", severity=Severity.WARNING)
     spec.constraints.append(warn_c)
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -192,8 +192,8 @@ def test_warning_constraint_does_not_block_ingest(clean_db, client):
     assert resp.json()["accepted"] == 1
 
     # Row landed.
-    with db.connect() as conn2:
-        rows = graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+    async with db.connect() as conn2:
+        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
     assert len(rows) == 1
 
 
@@ -201,13 +201,13 @@ def test_warning_constraint_does_not_block_ingest(clean_db, client):
 # 4. Without the flag: violations do not block (existing behaviour)
 # ---------------------------------------------------------------------------
 
-def test_violation_without_flag_does_not_block(clean_db, client):
+async def test_violation_without_flag_does_not_block(clean_db, client):
     """Without validate_constraints=true, a violating row ingests without error."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb",   # no ?validate_constraints
@@ -217,8 +217,8 @@ def test_violation_without_flag_does_not_block(clean_db, client):
     assert resp.json()["accepted"] == 1
 
     # Row landed despite violating the constraint.
-    with db.connect() as conn2:
-        rows = graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+    async with db.connect() as conn2:
+        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
     assert len(rows) == 1
 
 
@@ -226,7 +226,7 @@ def test_violation_without_flag_does_not_block(clean_db, client):
 # 5. Multiple constraints, one violated → 422 with that constraint reported
 # ---------------------------------------------------------------------------
 
-def test_multiple_constraints_one_violated_reports_violation(clean_db, client_no_exc):
+async def test_multiple_constraints_one_violated_reports_violation(clean_db, client_no_exc):
     """Two constraints; year=1500 fails the first, passes the second (year <= 9999)."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
@@ -240,7 +240,7 @@ def test_multiple_constraints_one_violated_reports_violation(clean_db, client_no
     c2 = Constraint(name="year_max", primary=movie, body=body2, severity=Severity.ERROR)
 
     spec.constraints.extend([c1, c2])
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -257,7 +257,7 @@ def test_multiple_constraints_one_violated_reports_violation(clean_db, client_no
 # 6. Multiple constraints, all pass → ingest succeeds
 # ---------------------------------------------------------------------------
 
-def test_multiple_constraints_all_pass(clean_db, client):
+async def test_multiple_constraints_all_pass(clean_db, client):
     """Multiple constraints all satisfied → ingest succeeds."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
@@ -268,7 +268,7 @@ def test_multiple_constraints_all_pass(clean_db, client):
     body2 = Compare(op=CompareOp.LTE, left=path, right=Literal_(value=9999))
     c2 = Constraint(name="year_max", primary=movie, body=body2, severity=Severity.ERROR)
     spec.constraints.extend([c1, c2])
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -282,13 +282,13 @@ def test_multiple_constraints_all_pass(clean_db, client):
 # 7. Multiple violations in one batch → all reported
 # ---------------------------------------------------------------------------
 
-def test_multiple_violating_rows_reported(clean_db, client_no_exc):
+async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
     """Batch with two violating rows: both violations are reported."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    _publish_spec(conn, spec)
+    await _publish_spec(conn, spec)
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -304,8 +304,8 @@ def test_multiple_violating_rows_reported(clean_db, client_no_exc):
     assert "tt_bad2" in offending_pks
 
     # No rows landed.
-    with db.connect() as conn2:
-        rows = graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
+    async with db.connect() as conn2:
+        rows = await graph_store.query_rows(conn2, cls=movie, predicate_sql=None, predicate_params=[])
     assert rows == []
 
 
@@ -313,7 +313,7 @@ def test_multiple_violating_rows_reported(clean_db, client_no_exc):
 # 8. Constraint on a different class does not block ingest
 # ---------------------------------------------------------------------------
 
-def test_constraint_on_other_class_not_checked(clean_db, client):
+async def test_constraint_on_other_class_not_checked(clean_db, client):
     """A constraint on a class other than the source's class is not checked."""
     conn = clean_db
 
@@ -346,9 +346,9 @@ def test_constraint_on_other_class_not_checked(clean_db, client):
         sources=[src, psrc],
         constraints=[person_constraint],
     )
-    rev = create_draft(conn)
-    update_draft(conn, rev, spec)
-    publish_draft(conn, rev)
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
 
     # Ingesting to Movie source — Person constraint must not interfere.
     resp = client.post(

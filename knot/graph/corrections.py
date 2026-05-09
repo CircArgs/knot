@@ -27,8 +27,8 @@ from knot.db._naming import user_corrections_source
 from knot.spec import OntologyClass
 
 
-def apply_merge(
-    conn: psycopg.Connection,
+async def apply_merge(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     keep_canonical_id: str,
@@ -56,15 +56,15 @@ def apply_merge(
         "keep_canonical_id": keep_canonical_id,
         "merge_canonical_ids": list(merge_canonical_ids),
     }
-    with conn.transaction():
-        correction_id = db_corrections.record_audit_entry(
+    async with conn.transaction():
+        correction_id = await db_corrections.record_audit_entry(
             conn,
             correction_type="merge",
             payload=log_payload,
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        graph_store.merge_canonical_ids(
+        await graph_store.merge_canonical_ids(
             conn,
             cls=cls,
             keep_canonical_id=keep_canonical_id,
@@ -73,7 +73,7 @@ def apply_merge(
             correction_id=correction_id,
             change_type="merge",
         )
-        graph_store.append_lineage_event(
+        await graph_store.append_lineage_event(
             conn,
             class_name=cls.name,
             change_type="merge",
@@ -85,8 +85,8 @@ def apply_merge(
         return correction_id
 
 
-def apply_property_correction(
-    conn: psycopg.Connection,
+async def apply_property_correction(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -104,15 +104,15 @@ def apply_property_correction(
         "slot": slot_name,
         "value": value,
     }
-    with conn.transaction():
-        correction_id = db_corrections.record_audit_entry(
+    async with conn.transaction():
+        correction_id = await db_corrections.record_audit_entry(
             conn,
             correction_type="property",
             payload=log_payload,
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        graph_store.upsert_user_correction_row(
+        await graph_store.upsert_user_correction_row(
             conn,
             cls=cls,
             canonical_id=canonical_id,
@@ -120,7 +120,7 @@ def apply_property_correction(
             value=value,
             spec_revision=spec_revision,
         )
-        dq.record_incremental(
+        await dq.record_incremental(
             conn,
             source_name=user_corrections_source(),
             cls=cls,
@@ -128,19 +128,19 @@ def apply_property_correction(
             rows=[{slot_name: value}],
             only_slots=[slot_name],
         )
-        for source, contributed in graph_store.get_disagreeing_contributions(
+        for source, contributed in await graph_store.get_disagreeing_contributions(
             conn,
             cls=cls,
             canonical_id=canonical_id,
             slot_name=slot_name,
         ):
             success = _values_match(contributed, value)
-            trust_posteriors.record_feedback(conn, source, slot_name, success)
+            await trust_posteriors.record_feedback(conn, source, slot_name, success)
         return correction_id
 
 
-def apply_split(
-    conn: psycopg.Connection,
+async def apply_split(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     source_canonical_id: str,
@@ -161,15 +161,15 @@ def apply_split(
         "source_canonical_id": source_canonical_id,
         "partitions": {k: v for k, v in partitions.items()},
     }
-    with conn.transaction():
-        correction_id = db_corrections.record_audit_entry(
+    async with conn.transaction():
+        correction_id = await db_corrections.record_audit_entry(
             conn,
             correction_type="split",
             payload=log_payload,
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        graph_store.split_canonical_id(
+        await graph_store.split_canonical_id(
             conn,
             cls=cls,
             source_canonical_id=source_canonical_id,
@@ -177,7 +177,7 @@ def apply_split(
             spec_revision=spec_revision,
             correction_id=correction_id,
         )
-        graph_store.append_lineage_event(
+        await graph_store.append_lineage_event(
             conn,
             class_name=cls.name,
             change_type="split",
@@ -189,8 +189,8 @@ def apply_split(
         return correction_id
 
 
-def apply_add(
-    conn: psycopg.Connection,
+async def apply_add(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     new_canonical_id: str,
@@ -210,15 +210,15 @@ def apply_add(
         "new_canonical_id": new_canonical_id,
         "values": values,
     }
-    with conn.transaction():
-        correction_id = db_corrections.record_audit_entry(
+    async with conn.transaction():
+        correction_id = await db_corrections.record_audit_entry(
             conn,
             correction_type="add",
             payload=log_payload,
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        graph_store.insert_synthetic_row(
+        await graph_store.insert_synthetic_row(
             conn,
             cls=cls,
             new_canonical_id=new_canonical_id,
@@ -226,7 +226,7 @@ def apply_add(
             spec_revision=spec_revision,
             correction_id=correction_id,
         )
-        graph_store.append_lineage_event(
+        await graph_store.append_lineage_event(
             conn,
             class_name=cls.name,
             change_type="add",
@@ -235,7 +235,7 @@ def apply_add(
             applied_revision=spec_revision,
             correction_id=correction_id,
         )
-        dq.record_incremental(
+        await dq.record_incremental(
             conn,
             source_name=user_corrections_source(),
             cls=cls,
@@ -245,8 +245,8 @@ def apply_add(
         return correction_id
 
 
-def apply_tombstone(
-    conn: psycopg.Connection,
+async def apply_tombstone(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -266,22 +266,22 @@ def apply_tombstone(
         "canonical_id": canonical_id,
         "reason": reason,
     }
-    with conn.transaction():
-        correction_id = db_corrections.record_audit_entry(
+    async with conn.transaction():
+        correction_id = await db_corrections.record_audit_entry(
             conn,
             correction_type="tombstone",
             payload=log_payload,
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        graph_store.tombstone_canonical_id(
+        await graph_store.tombstone_canonical_id(
             conn,
             cls=cls,
             canonical_id=canonical_id,
             spec_revision=spec_revision,
             correction_id=correction_id,
         )
-        graph_store.append_lineage_event(
+        await graph_store.append_lineage_event(
             conn,
             class_name=cls.name,
             change_type="tombstone",
@@ -293,8 +293,8 @@ def apply_tombstone(
         return correction_id
 
 
-def apply_reject_contribution(
-    conn: psycopg.Connection,
+async def apply_reject_contribution(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -315,15 +315,15 @@ def apply_reject_contribution(
         "canonical_id": canonical_id,
         "source": source,
     }
-    with conn.transaction():
-        correction_id = db_corrections.record_audit_entry(
+    async with conn.transaction():
+        correction_id = await db_corrections.record_audit_entry(
             conn,
             correction_type="reject_contribution",
             payload=log_payload,
             applied_by=applied_by,
             applied_revision=spec_revision,
         )
-        graph_store.reject_contribution(
+        await graph_store.reject_contribution(
             conn,
             cls=cls,
             canonical_id=canonical_id,

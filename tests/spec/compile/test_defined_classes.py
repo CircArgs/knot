@@ -39,6 +39,7 @@ import json
 import os
 
 import pytest
+import pytest_asyncio
 
 from knot import db
 from knot.db import graph_store, spec_store
@@ -167,22 +168,22 @@ def _build_person_credit_director_spec() -> tuple[
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def dc_db(pg_conn):
+@pytest_asyncio.fixture
+async def dc_db(pg_conn):
     """Publish the Person/Credit/Director spec. Yields (conn, spec, ..., rev)."""
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
     spec, person, credit, director, person_src, credit_src = _build_person_credit_director_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
     yield pg_conn, spec, person, credit, director, person_src, credit_src, rev
 
@@ -213,12 +214,13 @@ def _post(client, query: str, variables: dict | None = None) -> dict:
 # 1. Director view exists in postgres
 # ---------------------------------------------------------------------------
 
-def test_director_view_exists(dc_db):
+async def test_director_view_exists(dc_db):
     conn, *_ = dc_db
-    row = conn.execute(
+    cur = await conn.execute(
         "SELECT viewname FROM pg_views "
         "WHERE schemaname = 'knot_data' AND viewname = 'director'"
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row is not None, "knot_data.director VIEW was not created"
 
 
@@ -226,13 +228,14 @@ def test_director_view_exists(dc_db):
 # 2. Person table is a table, not a view
 # ---------------------------------------------------------------------------
 
-def test_person_is_table_not_view(dc_db):
+async def test_person_is_table_not_view(dc_db):
     conn, *_ = dc_db
     # Should be in pg_tables (concrete class)
-    row = conn.execute(
+    cur = await conn.execute(
         "SELECT tablename FROM pg_tables "
         "WHERE schemaname = 'knot_data' AND tablename = 'person'"
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row is not None, "knot_data.person TABLE was not created"
 
 
@@ -240,11 +243,11 @@ def test_person_is_table_not_view(dc_db):
 # 3. directorPage returns only director persons
 # ---------------------------------------------------------------------------
 
-def test_director_page_returns_only_directors(dc_db, dc_client):
+async def test_director_page_returns_only_directors(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
     # Insert persons
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
@@ -255,7 +258,7 @@ def test_director_page_returns_only_directors(dc_db, dc_client):
         {"person_id": "p3", "name": "Carol"},
     ]])
     # Insert credits: Alice is director, Bob is actor, Carol is director
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
         {"credit_id": "c3", "person": "p3", "role": "director"},
@@ -278,10 +281,10 @@ def test_director_page_returns_only_directors(dc_db, dc_client):
 # 4. personPage returns all persons
 # ---------------------------------------------------------------------------
 
-def test_person_page_returns_all_persons(dc_db, dc_client):
+async def test_person_page_returns_all_persons(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ],
@@ -289,7 +292,7 @@ def test_person_page_returns_all_persons(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
     ],
     canonical_ids=[str(r["credit_id"]) for r in [
@@ -305,10 +308,10 @@ def test_person_page_returns_all_persons(dc_db, dc_client):
 # 5. directorByCanonicalId for a director
 # ---------------------------------------------------------------------------
 
-def test_director_by_canonical_id_found(dc_db, dc_client):
+async def test_director_by_canonical_id_found(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ],
@@ -316,7 +319,7 @@ def test_director_by_canonical_id_found(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ],
@@ -337,10 +340,10 @@ def test_director_by_canonical_id_found(dc_db, dc_client):
 # 6. directorByCanonicalId for non-director returns null
 # ---------------------------------------------------------------------------
 
-def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
+async def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ],
@@ -348,7 +351,7 @@ def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ],
@@ -366,17 +369,17 @@ def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
 # 7. Changing credit role updates the director view (recomputed at query time)
 # ---------------------------------------------------------------------------
 
-def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
+async def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
     ],
     canonical_ids=[str(r["person_id"]) for r in [
         {"person_id": "p1", "name": "Alice"},
     ]])
     # Initially Alice is a director
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
     ],
     canonical_ids=[str(r["credit_id"]) for r in [
@@ -387,7 +390,7 @@ def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
     assert result["data"]["directorCount"] == 1
 
     # Re-ingest with role changed to actor
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "actor"},
     ],
     canonical_ids=[str(r["credit_id"]) for r in [
@@ -429,11 +432,11 @@ def test_reverse_relation_compiles():
 # 9. AddDefinedClass emits CREATE OR REPLACE VIEW
 # ---------------------------------------------------------------------------
 
-def test_add_defined_class_ddl(pg_conn):
+async def test_add_defined_class_ddl(pg_conn):
     """AddDefinedClass.emit_ddl calls CREATE OR REPLACE VIEW."""
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    db.apply_schema()
-    pg_conn.execute("CREATE SCHEMA IF NOT EXISTS knot_data")
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await db.apply_schema()
+    await pg_conn.execute("CREATE SCHEMA IF NOT EXISTS knot_data")
 
     string_t = TypeDefinition(name="string", base="str")
     person_id = Slot(name="person_id", range=string_t)
@@ -446,8 +449,8 @@ def test_add_defined_class_ddl(pg_conn):
     credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
 
     # Create parent table first
-    migration.emit_ddl(migration.AddClass(cls=person), pg_conn)
-    migration.emit_ddl(migration.AddClass(cls=credit), pg_conn)
+    await migration.emit_ddl(migration.AddClass(cls=person), pg_conn)
+    await migration.emit_ddl(migration.AddClass(cls=credit), pg_conn)
 
     role_path = SlotPath(from_class=credit, slots=[role])
     role_not_director = Compare(op=CompareOp.NEQ, left=role_path, right=Literal_(value="director"))
@@ -458,13 +461,14 @@ def test_add_defined_class_ddl(pg_conn):
     )
     director = OntologyClass(name="Director", is_a=person, slots=[], definition=definition)
 
-    migration.emit_ddl(migration.AddDefinedClass(cls=director), pg_conn)
+    await migration.emit_ddl(migration.AddDefinedClass(cls=director), pg_conn)
 
     # Verify VIEW exists
-    row = pg_conn.execute(
+    cur = await pg_conn.execute(
         "SELECT viewname FROM pg_views "
         "WHERE schemaname = 'knot_data' AND viewname = 'director'"
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row is not None, "Director VIEW was not created"
 
 
@@ -472,23 +476,21 @@ def test_add_defined_class_ddl(pg_conn):
 # 10. DropDefinedClass emits DROP VIEW
 # ---------------------------------------------------------------------------
 
-def test_drop_defined_class_ddl(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    db.apply_schema()
-    pg_conn.execute("CREATE SCHEMA IF NOT EXISTS knot_data")
+async def test_drop_defined_class_ddl(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await db.apply_schema()
+    await pg_conn.execute("CREATE SCHEMA IF NOT EXISTS knot_data")
 
     # Create a trivial view to drop
-    pg_conn.execute("CREATE VIEW knot_data.testview AS SELECT 1 AS x")
+    await pg_conn.execute("CREATE VIEW knot_data.testview AS SELECT 1 AS x")
 
-    class FakeDrop(migration.DropDefinedClass):
-        pass
+    await migration.emit_ddl(migration.DropDefinedClass(class_name="testview"), pg_conn)
 
-    migration.emit_ddl(migration.DropDefinedClass(class_name="testview"), pg_conn)
-
-    row = pg_conn.execute(
+    cur = await pg_conn.execute(
         "SELECT viewname FROM pg_views "
         "WHERE schemaname = 'knot_data' AND viewname = 'testview'"
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row is None, "testview VIEW was not dropped"
 
 
@@ -496,10 +498,10 @@ def test_drop_defined_class_ddl(pg_conn):
 # 11. Publish gate rejects defined class with broken predicate
 # ---------------------------------------------------------------------------
 
-def test_publish_gate_rejects_broken_definition(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+async def test_publish_gate_rejects_broken_definition(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
     string_t = TypeDefinition(name="string", base="str")
     person_id = Slot(name="person_id", range=string_t)
@@ -523,14 +525,14 @@ def test_publish_gate_rejects_broken_definition(pg_conn):
     )
 
     with pytest.raises(spec_store.PublishGateError, match="definition failed to compile"):
-        spec_store.publish_gate(spec)
+        await spec_store.publish_gate(spec)
 
 
 # ---------------------------------------------------------------------------
 # 12. Publish gate rejects defined class with no is_a
 # ---------------------------------------------------------------------------
 
-def test_publish_gate_rejects_defined_class_without_is_a(pg_conn):
+async def test_publish_gate_rejects_defined_class_without_is_a(pg_conn):
     string_t = TypeDefinition(name="string", base="str")
     person_id = Slot(name="person_id", range=string_t)
     person = OntologyClass(name="Person", slots=[person_id])
@@ -551,7 +553,7 @@ def test_publish_gate_rejects_defined_class_without_is_a(pg_conn):
     )
 
     with pytest.raises(spec_store.PublishGateError, match="must have is_a"):
-        spec_store.publish_gate(spec)
+        await spec_store.publish_gate(spec)
 
 
 # ---------------------------------------------------------------------------
@@ -652,10 +654,10 @@ def test_defined_class_redefinition_reemits_view():
 # 16. directorResolved returns record for a director
 # ---------------------------------------------------------------------------
 
-def test_director_resolved_found(dc_db, dc_client):
+async def test_director_resolved_found(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ],
@@ -663,7 +665,7 @@ def test_director_resolved_found(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ],
@@ -684,10 +686,10 @@ def test_director_resolved_found(dc_db, dc_client):
 # 17. directorResolved for non-director returns null
 # ---------------------------------------------------------------------------
 
-def test_director_resolved_non_director_is_null(dc_db, dc_client):
+async def test_director_resolved_non_director_is_null(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ],
@@ -695,7 +697,7 @@ def test_director_resolved_non_director_is_null(dc_db, dc_client):
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
     ],
@@ -713,10 +715,10 @@ def test_director_resolved_non_director_is_null(dc_db, dc_client):
 # 18. directorPage with where filter (by name)
 # ---------------------------------------------------------------------------
 
-def test_director_page_with_name_filter(dc_db, dc_client):
+async def test_director_page_with_name_filter(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
@@ -726,7 +728,7 @@ def test_director_page_with_name_filter(dc_db, dc_client):
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
         {"credit_id": "c2", "person": "p2", "role": "actor"},
         {"credit_id": "c3", "person": "p3", "role": "director"},
@@ -896,10 +898,10 @@ def test_diff_specs_both_defined_re_emits_view():
 # 25. Person count unchanged after Director view created
 # ---------------------------------------------------------------------------
 
-def test_person_count_unchanged_after_director_view(dc_db, dc_client):
+async def test_person_count_unchanged_after_director_view(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
         {"person_id": "p1", "name": "Alice"},
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
@@ -909,7 +911,7 @@ def test_person_count_unchanged_after_director_view(dc_db, dc_client):
         {"person_id": "p2", "name": "Bob"},
         {"person_id": "p3", "name": "Carol"},
     ]])
-    graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
+    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
         {"credit_id": "c1", "person": "p1", "role": "director"},
     ],
     canonical_ids=[str(r["credit_id"]) for r in [

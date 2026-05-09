@@ -11,6 +11,7 @@ Covers:
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 import psycopg
 
 from knot import db
@@ -56,17 +57,17 @@ from knot.spec.metaschema import (
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
-def clean_db(pg_conn):
+@pytest_asyncio.fixture
+async def clean_db(pg_conn):
     """Truncate all state, re-apply schema(), yield the connection."""
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
@@ -462,7 +463,7 @@ def test_compile_context_with_subquery_alias_shares_params():
 # ---------------------------------------------------------------------------
 
 
-def test_compile_constraint_catches_violating_rows(clean_db):
+async def test_compile_constraint_catches_violating_rows(clean_db):
     """Publish a spec with a year-in-range constraint, ingest a violating row,
     then compile + execute the constraint and verify the offending row is returned
     in the uniform violation shape.
@@ -509,13 +510,13 @@ def test_compile_constraint_catches_violating_rows(clean_db):
     )
 
     # Publish the spec (constraint check skipped on first publish — no prev).
-    rev = create_draft(conn)
-    update_draft(conn, rev, spec)
-    publish_draft(conn, rev)
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
 
     # Ingest one valid and one violating row directly via the store.
     from knot.db.graph_store import insert_rows
-    insert_rows(
+    await insert_rows(
         conn,
         source=src,
         spec_revision=rev,
@@ -531,7 +532,8 @@ def test_compile_constraint_catches_violating_rows(clean_db):
 
     # Compile the constraint and execute it.
     stmt, params = compile_constraint(constraint, movie)
-    rows = conn.execute(stmt, params).fetchall()
+    cur = await conn.execute(stmt, params)
+    rows = await cur.fetchall()
 
     assert len(rows) == 1
     rule_id, class_name, slot_name, offending_pk, detail = rows[0]
@@ -541,7 +543,7 @@ def test_compile_constraint_catches_violating_rows(clean_db):
     assert offending_pk == "tt0000002"
 
 
-def test_compile_constraint_no_violations(clean_db):
+async def test_compile_constraint_no_violations(clean_db):
     """All rows valid → constraint returns zero offending rows."""
     conn = clean_db
 
@@ -573,12 +575,12 @@ def test_compile_constraint_no_violations(clean_db):
         constraints=[constraint],
     )
 
-    rev = create_draft(conn)
-    update_draft(conn, rev, spec)
-    publish_draft(conn, rev)
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
 
     from knot.db.graph_store import insert_rows
-    insert_rows(
+    await insert_rows(
         conn,
         source=src,
         spec_revision=rev,
@@ -587,7 +589,8 @@ def test_compile_constraint_no_violations(clean_db):
     )
 
     stmt, params = compile_constraint(constraint, movie)
-    rows = conn.execute(stmt, params).fetchall()
+    cur = await conn.execute(stmt, params)
+    rows = await cur.fetchall()
     assert rows == []
 
 
@@ -596,7 +599,7 @@ def test_compile_constraint_no_violations(clean_db):
 # ---------------------------------------------------------------------------
 
 
-def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
+async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     """Publish v1 (no constraints), ingest violating row, publish v2 with an
     ERROR constraint → PublishGateError raised.
     """
@@ -618,13 +621,13 @@ def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
         classes=[movie],
         sources=[src],
     )
-    rev1 = create_draft(conn)
-    update_draft(conn, rev1, spec_v1)
-    publish_draft(conn, rev1)
+    rev1 = await create_draft(conn)
+    await update_draft(conn, rev1, spec_v1)
+    await publish_draft(conn, rev1)
 
     # Ingest a row that will violate the upcoming constraint.
     from knot.db.graph_store import insert_rows
-    insert_rows(
+    await insert_rows(
         conn,
         source=src,
         spec_revision=rev1,
@@ -653,11 +656,11 @@ def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
         sources=[src],
         constraints=[constraint],
     )
-    rev2 = create_draft(conn)
-    update_draft(conn, rev2, spec_v2)
+    rev2 = await create_draft(conn)
+    await update_draft(conn, rev2, spec_v2)
 
     with pytest.raises(PublishGateError, match="year_gte_1888"):
-        publish_draft(conn, rev2)
+        await publish_draft(conn, rev2)
 
 
 # ---------------------------------------------------------------------------
@@ -665,7 +668,7 @@ def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
 # ---------------------------------------------------------------------------
 
 
-def test_publish_gate_warning_constraint_allows_publish(clean_db):
+async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     """Same setup but constraint is WARNING → publish succeeds."""
     conn = clean_db
 
@@ -684,12 +687,12 @@ def test_publish_gate_warning_constraint_allows_publish(clean_db):
         classes=[movie],
         sources=[src],
     )
-    rev1 = create_draft(conn)
-    update_draft(conn, rev1, spec_v1)
-    publish_draft(conn, rev1)
+    rev1 = await create_draft(conn)
+    await update_draft(conn, rev1, spec_v1)
+    await publish_draft(conn, rev1)
 
     from knot.db.graph_store import insert_rows
-    insert_rows(
+    await insert_rows(
         conn,
         source=src,
         spec_revision=rev1,
@@ -717,11 +720,11 @@ def test_publish_gate_warning_constraint_allows_publish(clean_db):
         sources=[src],
         constraints=[constraint],
     )
-    rev2 = create_draft(conn)
-    update_draft(conn, rev2, spec_v2)
+    rev2 = await create_draft(conn)
+    await update_draft(conn, rev2, spec_v2)
 
     # Should not raise.
-    result = publish_draft(conn, rev2)
+    result = await publish_draft(conn, rev2)
     assert result == rev2
 
 

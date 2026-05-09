@@ -44,7 +44,7 @@ class ScanResponse(BaseModel):
 
 
 @router.get("/observations", dependencies=[Depends(require_user)])
-def list_observations(
+async def list_observations(
     source: str | None = Query(None),
     class_name: str | None = Query(None, alias="class"),
     slot: str | None = Query(None),
@@ -54,8 +54,8 @@ def list_observations(
     limit: int = Query(1000, ge=1, le=10_000),
 ) -> list[dict[str, Any]]:
     """Time-series of DQ observations (newest first), with optional filters."""
-    with db.connect() as conn:
-        return dq.query_observations(
+    async with db.connect() as conn:
+        return await dq.query_observations(
             conn,
             source=source,
             class_name=class_name,
@@ -68,13 +68,13 @@ def list_observations(
 
 
 @router.get("/observations/summary", dependencies=[Depends(require_user)])
-def summary(
+async def summary(
     since: datetime | None = Query(None),
     until: datetime | None = Query(None),
 ) -> list[dict[str, Any]]:
     """Roll-up per (source, class, slot) over the time window."""
-    with db.connect() as conn:
-        return dq.summarize(conn, since=since, until=until)
+    async with db.connect() as conn:
+        return await dq.summarize(conn, since=since, until=until)
 
 
 @router.post(
@@ -82,7 +82,7 @@ def summary(
     response_model=ScanResponse,
     dependencies=[Depends(require_user)],
 )
-def scan(
+async def scan(
     source: str | None = Query(None, description="Restrict scan to one source name."),
     class_name: str | None = Query(
         None,
@@ -91,12 +91,12 @@ def scan(
     ),
 ) -> ScanResponse:
     """Snapshot per-(source, class, slot) stats from the current data plane."""
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
         if spec is None:
             raise HTTPException(409, "No spec is published yet.")
-        revision = spec_store.get_published_revision(conn)
-        inserted = dq.full_scan(
+        revision = await spec_store.get_published_revision(conn)
+        inserted = await dq.full_scan(
             conn,
             spec,
             source_filter=source,

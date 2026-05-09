@@ -44,8 +44,8 @@ from knot.spec import OntologyClass, ResolutionPolicy, Slot
 LCB_K = 1.0  # stddev multiplier for the Lower Confidence Bound penalty
 
 
-def resolve_entity(
-    conn: psycopg.Connection,
+async def resolve_entity(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -55,7 +55,7 @@ def resolve_entity(
 
     Returns None if the canonical_id has no contributions.
     """
-    contribs = graph_store.get_canonical_contributions(
+    contribs = await graph_store.get_canonical_contributions(
         conn,
         cls=cls,
         canonical_id=canonical_id,
@@ -64,8 +64,8 @@ def resolve_entity(
     if not contribs:
         return None
 
-    scalar_trust = trust_config.list_scores(conn)
-    posteriors = {(p.source, p.slot): p for p in trust_posteriors.list_posteriors(conn)}
+    scalar_trust = await trust_config.list_scores(conn)
+    posteriors = {(p.source, p.slot): p for p in await trust_posteriors.list_posteriors(conn)}
 
     # Walk the full slot set including inherited slots (is_a chain).
     # Defined classes (backed by VIEW) inherit all slots from their parent.

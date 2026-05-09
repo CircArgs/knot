@@ -58,17 +58,17 @@ def _minimal_spec(name: str = "test") -> Spec:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def clean_spec(pg_conn):
+async def clean_spec(pg_conn):
     """Truncate spec-related state and drop all knot_data tables."""
     # Drop knot_data schema + contents first (FK order matters)
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
@@ -76,39 +76,39 @@ def clean_spec(pg_conn):
 # 1. Basic draft create → update → publish flow
 # ---------------------------------------------------------------------------
 
-def test_create_draft_returns_revision_number(clean_spec):
-    rev = create_draft(clean_spec)
+async def test_create_draft_returns_revision_number(clean_spec):
+    rev = await create_draft(clean_spec)
     assert isinstance(rev, int)
     assert rev >= 1
 
 
-def test_draft_starts_unpublished(clean_spec):
-    rev = create_draft(clean_spec)
-    drafts = list_drafts(clean_spec)
+async def test_draft_starts_unpublished(clean_spec):
+    rev = await create_draft(clean_spec)
+    drafts = await list_drafts(clean_spec)
     assert any(d["revision"] == rev for d in drafts)
-    assert get_published(clean_spec) is None
+    assert await get_published(clean_spec) is None
 
 
-def test_update_draft_changes_content(clean_spec):
-    rev = create_draft(clean_spec)
+async def test_update_draft_changes_content(clean_spec):
+    rev = await create_draft(clean_spec)
     spec = _minimal_spec("updated")
-    update_draft(clean_spec, rev, spec)
-    reloaded = get_revision(clean_spec, rev)
+    await update_draft(clean_spec, rev, spec)
+    reloaded = await get_revision(clean_spec, rev)
     assert reloaded.id == "updated"
 
 
-def test_publish_draft_makes_it_published(clean_spec):
-    rev = create_draft(clean_spec)
-    update_draft(clean_spec, rev, _minimal_spec())
-    publish_draft(clean_spec, rev)
-    assert get_published_revision(clean_spec) == rev
+async def test_publish_draft_makes_it_published(clean_spec):
+    rev = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev, _minimal_spec())
+    await publish_draft(clean_spec, rev)
+    assert await get_published_revision(clean_spec) == rev
 
 
-def test_published_spec_not_in_draft_list(clean_spec):
-    rev = create_draft(clean_spec)
-    update_draft(clean_spec, rev, _minimal_spec())
-    publish_draft(clean_spec, rev)
-    drafts = list_drafts(clean_spec)
+async def test_published_spec_not_in_draft_list(clean_spec):
+    rev = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev, _minimal_spec())
+    await publish_draft(clean_spec, rev)
+    drafts = await list_drafts(clean_spec)
     assert not any(d["revision"] == rev for d in drafts)
 
 
@@ -116,17 +116,17 @@ def test_published_spec_not_in_draft_list(clean_spec):
 # 2. Draft from specific parent_revision
 # ---------------------------------------------------------------------------
 
-def test_draft_from_parent_revision(clean_spec):
-    rev1 = create_draft(clean_spec)
-    update_draft(clean_spec, rev1, _minimal_spec("v1"))
-    publish_draft(clean_spec, rev1)
+async def test_draft_from_parent_revision(clean_spec):
+    rev1 = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev1, _minimal_spec("v1"))
+    await publish_draft(clean_spec, rev1)
 
-    rev2 = create_draft(clean_spec, parent_revision=rev1)
-    loaded = get_revision(clean_spec, rev2)
+    rev2 = await create_draft(clean_spec, parent_revision=rev1)
+    loaded = await get_revision(clean_spec, rev2)
     # The draft inherits the parent's spec content
     assert loaded.id == "v1"
 
-    drafts = list_drafts(clean_spec)
+    drafts = await list_drafts(clean_spec)
     matching = [d for d in drafts if d["revision"] == rev2]
     assert matching[0]["parent_revision"] == rev1
 
@@ -135,34 +135,34 @@ def test_draft_from_parent_revision(clean_spec):
 # 3. Discard draft
 # ---------------------------------------------------------------------------
 
-def test_discard_draft_removes_it(clean_spec):
-    rev = create_draft(clean_spec)
-    discard_draft(clean_spec, rev)
+async def test_discard_draft_removes_it(clean_spec):
+    rev = await create_draft(clean_spec)
+    await discard_draft(clean_spec, rev)
     with pytest.raises(DraftNotFoundError):
-        get_revision(clean_spec, rev)
+        await get_revision(clean_spec, rev)
 
 
-def test_discard_published_draft_raises(clean_spec):
-    rev = create_draft(clean_spec)
-    update_draft(clean_spec, rev, _minimal_spec())
-    publish_draft(clean_spec, rev)
+async def test_discard_published_draft_raises(clean_spec):
+    rev = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev, _minimal_spec())
+    await publish_draft(clean_spec, rev)
     with pytest.raises(DraftAlreadyPublishedError):
-        discard_draft(clean_spec, rev)
+        await discard_draft(clean_spec, rev)
 
 
-def test_update_published_draft_raises(clean_spec):
-    rev = create_draft(clean_spec)
-    update_draft(clean_spec, rev, _minimal_spec())
-    publish_draft(clean_spec, rev)
+async def test_update_published_draft_raises(clean_spec):
+    rev = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev, _minimal_spec())
+    await publish_draft(clean_spec, rev)
     with pytest.raises(DraftAlreadyPublishedError):
-        update_draft(clean_spec, rev, _minimal_spec("mutated"))
+        await update_draft(clean_spec, rev, _minimal_spec("mutated"))
 
 
 # ---------------------------------------------------------------------------
 # 4. Publish gate — dangling refs rejected
 # ---------------------------------------------------------------------------
 
-def test_publish_gate_rejects_dangling_slot_range(clean_spec):
+async def test_publish_gate_rejects_dangling_slot_range(clean_spec):
     """A slot whose range OntologyClass is not on spec.classes fails gate."""
     st = _string_type()
     orphan_class = OntologyClass(name="Orphan", slots=[])
@@ -180,13 +180,13 @@ def test_publish_gate_rejects_dangling_slot_range(clean_spec):
         classes=[movie],  # Orphan intentionally missing
         sources=[src],
     )
-    rev = create_draft(clean_spec)
-    update_draft(clean_spec, rev, spec)
+    rev = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev, spec)
     with pytest.raises(PublishGateError):
-        publish_draft(clean_spec, rev)
+        await publish_draft(clean_spec, rev)
 
 
-def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
+async def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
     st = _string_type()
     id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
@@ -200,32 +200,32 @@ def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
         classes=[movie],  # ghost not here
         sources=[src],
     )
-    rev = create_draft(clean_spec)
-    update_draft(clean_spec, rev, spec)
+    rev = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev, spec)
     with pytest.raises(PublishGateError):
-        publish_draft(clean_spec, rev)
+        await publish_draft(clean_spec, rev)
 
 
 # ---------------------------------------------------------------------------
 # 5. Partial unique index: at-most-one published row
 # ---------------------------------------------------------------------------
 
-def test_only_one_published_revision_at_a_time(clean_spec):
+async def test_only_one_published_revision_at_a_time(clean_spec):
     # Publish rev1, then publish rev2 — rev1 must be demoted
-    rev1 = create_draft(clean_spec)
-    update_draft(clean_spec, rev1, _minimal_spec("v1"))
-    publish_draft(clean_spec, rev1)
+    rev1 = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev1, _minimal_spec("v1"))
+    await publish_draft(clean_spec, rev1)
 
-    rev2 = create_draft(clean_spec)
-    update_draft(clean_spec, rev2, _minimal_spec("v2"))
-    publish_draft(clean_spec, rev2)
+    rev2 = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev2, _minimal_spec("v2"))
+    await publish_draft(clean_spec, rev2)
 
-    assert get_published_revision(clean_spec) == rev2
+    assert await get_published_revision(clean_spec) == rev2
 
     # Directly check no two rows have published=TRUE
-    count = clean_spec.execute(
+    count = (await (await clean_spec.execute(
         "SELECT count(*) FROM spec_revisions WHERE published = TRUE"
-    ).fetchone()[0]
+    )).fetchone())[0]
     assert count == 1
 
 
@@ -233,9 +233,9 @@ def test_only_one_published_revision_at_a_time(clean_spec):
 # 6. Missing revision raises DraftNotFoundError
 # ---------------------------------------------------------------------------
 
-def test_get_revision_raises_for_unknown(clean_spec):
+async def test_get_revision_raises_for_unknown(clean_spec):
     with pytest.raises(DraftNotFoundError):
-        get_revision(clean_spec, 999999)
+        await get_revision(clean_spec, 999999)
 
 
 # ---------------------------------------------------------------------------
@@ -274,29 +274,29 @@ def test_case_twin_classes_can_be_constructed():
 # 9. Destructive change: publish refuses without allow_destructive
 # ---------------------------------------------------------------------------
 
-def test_publish_refuses_destructive_without_flag(clean_spec):
+async def test_publish_refuses_destructive_without_flag(clean_spec):
     """Dropping a class between revisions is destructive — gate must block."""
     # Publish v1 with Movie class
-    rev1 = create_draft(clean_spec)
-    update_draft(clean_spec, rev1, _minimal_spec("v1"))
-    publish_draft(clean_spec, rev1)
+    rev1 = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev1, _minimal_spec("v1"))
+    await publish_draft(clean_spec, rev1)
 
     # v2: empty spec (Movie class dropped → DropClass change)
-    rev2 = create_draft(clean_spec)
+    rev2 = await create_draft(clean_spec)
     empty_spec = Spec(id="v2", version="1.0.0")
-    update_draft(clean_spec, rev2, empty_spec)
+    await update_draft(clean_spec, rev2, empty_spec)
     with pytest.raises(PublishGateError, match="destructive"):
-        publish_draft(clean_spec, rev2)
+        await publish_draft(clean_spec, rev2)
 
 
-def test_publish_accepts_destructive_with_flag(clean_spec):
-    rev1 = create_draft(clean_spec)
-    update_draft(clean_spec, rev1, _minimal_spec("v1"))
-    publish_draft(clean_spec, rev1)
+async def test_publish_accepts_destructive_with_flag(clean_spec):
+    rev1 = await create_draft(clean_spec)
+    await update_draft(clean_spec, rev1, _minimal_spec("v1"))
+    await publish_draft(clean_spec, rev1)
 
-    rev2 = create_draft(clean_spec)
+    rev2 = await create_draft(clean_spec)
     empty_spec = Spec(id="v2", version="1.0.0")
-    update_draft(clean_spec, rev2, empty_spec)
-    result = publish_draft(clean_spec, rev2, allow_destructive=True)
+    await update_draft(clean_spec, rev2, empty_spec)
+    result = await publish_draft(clean_spec, rev2, allow_destructive=True)
     assert result == rev2
-    assert get_published_revision(clean_spec) == rev2
+    assert await get_published_revision(clean_spec) == rev2

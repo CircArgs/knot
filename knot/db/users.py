@@ -68,27 +68,33 @@ def _row_to_user(row: tuple) -> User:
     )
 
 
-def find_by_key_hash(conn: psycopg.Connection, key_hash: str) -> User | None:
-    row = conn.execute(
-        f"SELECT {_USER_COLS} FROM users WHERE api_key_hash = %s",
-        (key_hash,),
+async def find_by_key_hash(conn: psycopg.AsyncConnection, key_hash: str) -> User | None:
+    row = await (
+        await conn.execute(
+            f"SELECT {_USER_COLS} FROM users WHERE api_key_hash = %s",
+            (key_hash,),
+        )
     ).fetchone()
     return _row_to_user(row) if row else None
 
 
-def get_user(conn: psycopg.Connection, username: str) -> User | None:
-    row = conn.execute(
-        f"SELECT {_USER_COLS} FROM users WHERE username = %s",
-        (username,),
+async def get_user(conn: psycopg.AsyncConnection, username: str) -> User | None:
+    row = await (
+        await conn.execute(
+            f"SELECT {_USER_COLS} FROM users WHERE username = %s",
+            (username,),
+        )
     ).fetchone()
     return _row_to_user(row) if row else None
 
 
-def list_users(conn: psycopg.Connection) -> list[dict[str, Any]]:
-    rows = conn.execute(
-        "SELECT username, is_admin, kind, email, display_name, "
-        "       created_by, created_at "
-        "FROM users ORDER BY username"
+async def list_users(conn: psycopg.AsyncConnection) -> list[dict[str, Any]]:
+    rows = await (
+        await conn.execute(
+            "SELECT username, is_admin, kind, email, display_name, "
+            "       created_by, created_at "
+            "FROM users ORDER BY username"
+        )
     ).fetchall()
     return [
         {
@@ -104,8 +110,8 @@ def list_users(conn: psycopg.Connection) -> list[dict[str, Any]]:
     ]
 
 
-def create_user(
-    conn: psycopg.Connection,
+async def create_user(
+    conn: psycopg.AsyncConnection,
     *,
     username: str,
     is_admin: bool = False,
@@ -117,7 +123,7 @@ def create_user(
     """Insert a new user; returns (User, raw_api_key). The raw key is shown
     only here — store it client-side."""
     raw = generate_key()
-    conn.execute(
+    await conn.execute(
         "INSERT INTO users "
         "(username, api_key_hash, is_admin, kind, email, display_name, created_by) "
         "VALUES (%s, %s, %s, %s, %s, %s, %s)",
@@ -136,9 +142,9 @@ def create_user(
     )
 
 
-def rotate_key(conn: psycopg.Connection, *, username: str) -> str:
+async def rotate_key(conn: psycopg.AsyncConnection, *, username: str) -> str:
     raw = generate_key()
-    cur = conn.execute(
+    cur = await conn.execute(
         "UPDATE users SET api_key_hash = %s WHERE username = %s",
         (hash_key(raw), username),
     )
@@ -147,23 +153,25 @@ def rotate_key(conn: psycopg.Connection, *, username: str) -> str:
     return raw
 
 
-def delete_user(conn: psycopg.Connection, *, username: str) -> bool:
-    cur = conn.execute("DELETE FROM users WHERE username = %s", (username,))
+async def delete_user(conn: psycopg.AsyncConnection, *, username: str) -> bool:
+    cur = await conn.execute("DELETE FROM users WHERE username = %s", (username,))
     return cur.rowcount > 0
 
 
-def bootstrap_admin_if_empty(
-    conn: psycopg.Connection,
+async def bootstrap_admin_if_empty(
+    conn: psycopg.AsyncConnection,
     raw_admin_key: str,
     *,
     username: str = "admin",
 ) -> bool:
     """Seed an admin user if there are no users yet. Idempotent: returns
     True if it inserted, False if a user already existed."""
-    existing = conn.execute("SELECT 1 FROM users LIMIT 1").fetchone()
+    existing = await (
+        await conn.execute("SELECT 1 FROM users LIMIT 1")
+    ).fetchone()
     if existing is not None:
         return False
-    conn.execute(
+    await conn.execute(
         "INSERT INTO users "
         "(username, api_key_hash, is_admin, kind, display_name) "
         "VALUES (%s, %s, TRUE, 'user', %s)",

@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from typing import Any
 
@@ -560,10 +560,12 @@ def _now() -> datetime:
     return datetime.now(tz=UTC)
 
 
-def get_published(conn: psycopg.Connection) -> Spec | None:
+async def get_published(conn: psycopg.AsyncConnection) -> Spec | None:
     """Return the currently-published spec, or None if none is published."""
-    row = conn.execute(
-        "SELECT spec FROM spec_revisions WHERE published = TRUE",
+    row = await (
+        await conn.execute(
+            "SELECT spec FROM spec_revisions WHERE published = TRUE",
+        )
     ).fetchone()
     if row is None:
         return None
@@ -571,11 +573,13 @@ def get_published(conn: psycopg.Connection) -> Spec | None:
     return spec_from_dict(payload)
 
 
-def get_revision(conn: psycopg.Connection, revision: int) -> Spec:
+async def get_revision(conn: psycopg.AsyncConnection, revision: int) -> Spec:
     """Return the spec at a specific revision (draft or published)."""
-    row = conn.execute(
-        "SELECT spec FROM spec_revisions WHERE revision = %s",
-        (revision,),
+    row = await (
+        await conn.execute(
+            "SELECT spec FROM spec_revisions WHERE revision = %s",
+            (revision,),
+        )
     ).fetchone()
     if row is None:
         raise DraftNotFoundError(f"spec_revisions {revision} not found")
@@ -583,12 +587,14 @@ def get_revision(conn: psycopg.Connection, revision: int) -> Spec:
     return spec_from_dict(payload)
 
 
-def list_drafts(conn: psycopg.Connection) -> list[dict[str, Any]]:
+async def list_drafts(conn: psycopg.AsyncConnection) -> list[dict[str, Any]]:
     """Summary rows for all unpublished drafts."""
-    rows = conn.execute(
-        "SELECT revision, label, parent_revision, content_hash, created_at "
-        "FROM spec_revisions WHERE published = FALSE "
-        "ORDER BY revision DESC",
+    rows = await (
+        await conn.execute(
+            "SELECT revision, label, parent_revision, content_hash, created_at "
+            "FROM spec_revisions WHERE published = FALSE "
+            "ORDER BY revision DESC",
+        )
     ).fetchall()
     return [
         {
@@ -602,13 +608,15 @@ def list_drafts(conn: psycopg.Connection) -> list[dict[str, Any]]:
     ]
 
 
-def list_published(conn: psycopg.Connection) -> list[dict[str, Any]]:
+async def list_published(conn: psycopg.AsyncConnection) -> list[dict[str, Any]]:
     """All published revisions, newest first.  Immortal."""
-    rows = conn.execute(
-        "SELECT revision, content_hash, parent_revision, label, "
-        "created_at, published_at "
-        "FROM spec_revisions WHERE published_at IS NOT NULL "
-        "ORDER BY published_at DESC",
+    rows = await (
+        await conn.execute(
+            "SELECT revision, content_hash, parent_revision, label, "
+            "created_at, published_at "
+            "FROM spec_revisions WHERE published_at IS NOT NULL "
+            "ORDER BY published_at DESC",
+        )
     ).fetchall()
     return [
         {
@@ -623,8 +631,8 @@ def list_published(conn: psycopg.Connection) -> list[dict[str, Any]]:
     ]
 
 
-def create_draft(
-    conn: psycopg.Connection,
+async def create_draft(
+    conn: psycopg.AsyncConnection,
     *,
     parent_revision: int | None = None,
     label: str | None = None,
@@ -636,26 +644,28 @@ def create_draft(
     Returns the new draft's revision number.
     """
     if parent_revision is not None:
-        parent = get_revision(conn, parent_revision)
+        parent = await get_revision(conn, parent_revision)
     else:
-        parent = get_published(conn) or Spec(id="", version="0.0.0")
+        parent = await get_published(conn) or Spec(id="", version="0.0.0")
 
     payload = spec_to_dict(parent)
     content_hash = compute_content_hash(parent)
 
-    row = conn.execute(
-        """
-        INSERT INTO spec_revisions
-            (spec, content_hash, published, parent_revision, label, created_at)
-        VALUES (%s, %s, FALSE, %s, %s, %s)
-        RETURNING revision
-        """,
-        (json.dumps(payload), content_hash, parent_revision, label, _now()),
+    row = await (
+        await conn.execute(
+            """
+            INSERT INTO spec_revisions
+                (spec, content_hash, published, parent_revision, label, created_at)
+            VALUES (%s, %s, FALSE, %s, %s, %s)
+            RETURNING revision
+            """,
+            (json.dumps(payload), content_hash, parent_revision, label, _now()),
+        )
     ).fetchone()
     return row[0]
 
 
-def update_draft(conn: psycopg.Connection, draft_id: int, spec: Spec) -> None:
+async def update_draft(conn: psycopg.AsyncConnection, draft_id: int, spec: Spec) -> None:
     """Overwrite a draft's spec content. Drafts are mutable; published rows are not.
 
     NOTE: this primitive is *not* concurrency-safe on its own — two parallel
@@ -664,9 +674,11 @@ def update_draft(conn: psycopg.Connection, draft_id: int, spec: Spec) -> None:
     in ``api/spec.py``), use :func:`edit_draft` instead, which holds a row
     lock for the full read-modify-write window.
     """
-    row = conn.execute(
-        "SELECT published FROM spec_revisions WHERE revision = %s",
-        (draft_id,),
+    row = await (
+        await conn.execute(
+            "SELECT published FROM spec_revisions WHERE revision = %s",
+            (draft_id,),
+        )
     ).fetchone()
     if row is None:
         raise DraftNotFoundError(f"spec_revisions {draft_id} not found")
@@ -678,14 +690,14 @@ def update_draft(conn: psycopg.Connection, draft_id: int, spec: Spec) -> None:
 
     payload = spec_to_dict(spec)
     content_hash = compute_content_hash(spec)
-    conn.execute(
+    await conn.execute(
         "UPDATE spec_revisions SET spec = %s, content_hash = %s WHERE revision = %s",
         (json.dumps(payload), content_hash, draft_id),
     )
 
 
-@contextmanager
-def edit_draft(conn: psycopg.Connection, draft_id: int) -> Iterator[Spec]:
+@asynccontextmanager
+async def edit_draft(conn: psycopg.AsyncConnection, draft_id: int) -> AsyncIterator[Spec]:
     """Atomic read-modify-write of a draft.
 
     Opens a transaction, locks the ``spec_revisions`` row with FOR UPDATE,
@@ -697,10 +709,12 @@ def edit_draft(conn: psycopg.Connection, draft_id: int) -> Iterator[Spec]:
     Raises ``DraftNotFoundError`` if the revision doesn't exist and
     ``DraftAlreadyPublishedError`` if it's already published.
     """
-    with conn.transaction():
-        row = conn.execute(
-            "SELECT spec, published FROM spec_revisions WHERE revision = %s FOR UPDATE",
-            (draft_id,),
+    async with conn.transaction():
+        row = await (
+            await conn.execute(
+                "SELECT spec, published FROM spec_revisions WHERE revision = %s FOR UPDATE",
+                (draft_id,),
+            )
         ).fetchone()
         if row is None:
             raise DraftNotFoundError(f"spec_revisions {draft_id} not found")
@@ -717,30 +731,34 @@ def edit_draft(conn: psycopg.Connection, draft_id: int) -> Iterator[Spec]:
 
         new_payload = spec_to_dict(spec)
         new_hash = compute_content_hash(spec)
-        conn.execute(
+        await conn.execute(
             "UPDATE spec_revisions SET spec = %s, content_hash = %s WHERE revision = %s",
             (json.dumps(new_payload), new_hash, draft_id),
         )
 
 
-def get_published_revision(conn: psycopg.Connection) -> int | None:
+async def get_published_revision(conn: psycopg.AsyncConnection) -> int | None:
     """Revision number of the currently-published spec, or None."""
-    row = conn.execute(
-        "SELECT revision FROM spec_revisions WHERE published = TRUE",
+    row = await (
+        await conn.execute(
+            "SELECT revision FROM spec_revisions WHERE published = TRUE",
+        )
     ).fetchone()
     return row[0] if row else None
 
 
-def get_published_content_hash(conn: psycopg.Connection) -> str | None:
+async def get_published_content_hash(conn: psycopg.AsyncConnection) -> str | None:
     """Content hash of the currently-published spec, or None."""
-    row = conn.execute(
-        "SELECT content_hash FROM spec_revisions WHERE published = TRUE",
+    row = await (
+        await conn.execute(
+            "SELECT content_hash FROM spec_revisions WHERE published = TRUE",
+        )
     ).fetchone()
     return row[0] if row else None
 
 
-def publish_draft(
-    conn: psycopg.Connection,
+async def publish_draft(
+    conn: psycopg.AsyncConnection,
     draft_id: int,
     *,
     allow_destructive: bool = False,
@@ -765,10 +783,10 @@ def publish_draft(
         is_destructive,
     )
 
-    with conn.transaction():
-        candidate = get_revision(conn, draft_id)
+    async with conn.transaction():
+        candidate = await get_revision(conn, draft_id)
         publish_gate(candidate)
-        prev = get_published(conn)
+        prev = await get_published(conn)
 
         changes = diff_specs(prev, candidate)
         destructive = [type(c).__name__ for c in changes if is_destructive(c)]
@@ -812,7 +830,7 @@ def publish_draft(
             cls = con.primary
             stmt, params = compile_constraint(con, cls)
             try:
-                violations = conn.execute(stmt, params).fetchall()
+                violations = await (await conn.execute(stmt, params)).fetchall()
             except Exception as exc:
                 raise PublishGateError(
                     f"Constraint {con.name!r} SQL execution failed: {exc}"
@@ -836,24 +854,26 @@ def publish_draft(
         # Demote → promote in two statements so the partial unique index
         # `(published) WHERE published = TRUE` doesn't see two TRUE rows
         # transiently (postgres validates per-row, not per-statement).
-        conn.execute(
+        await conn.execute(
             "UPDATE spec_revisions SET published = FALSE WHERE published = TRUE AND revision <> %s",
             (draft_id,),
         )
-        conn.execute(
+        await conn.execute(
             "UPDATE spec_revisions SET published = TRUE, published_at = %s WHERE revision = %s",
             (_now(), draft_id),
         )
-        apply_changes(conn, changes)
+        await apply_changes(conn, changes)
 
     return draft_id
 
 
-def discard_draft(conn: psycopg.Connection, draft_id: int) -> None:
+async def discard_draft(conn: psycopg.AsyncConnection, draft_id: int) -> None:
     """Delete an unpublished draft.  Published revisions are immortal."""
-    row = conn.execute(
-        "SELECT published FROM spec_revisions WHERE revision = %s",
-        (draft_id,),
+    row = await (
+        await conn.execute(
+            "SELECT published FROM spec_revisions WHERE revision = %s",
+            (draft_id,),
+        )
     ).fetchone()
     if row is None:
         raise DraftNotFoundError(f"spec_revisions {draft_id} not found")
@@ -861,4 +881,4 @@ def discard_draft(conn: psycopg.Connection, draft_id: int) -> None:
         raise DraftAlreadyPublishedError(
             f"spec_revisions {draft_id} is published; cannot be discarded."
         )
-    conn.execute("DELETE FROM spec_revisions WHERE revision = %s", (draft_id,))
+    await conn.execute("DELETE FROM spec_revisions WHERE revision = %s", (draft_id,))

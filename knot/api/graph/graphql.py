@@ -53,7 +53,7 @@ class GraphQLBody(StrictBase):
 
 
 @router.post("/query", dependencies=[Depends(require_user)], tags=["graph"])
-def graphql_query(body: GraphQLBody) -> dict[str, Any]:
+async def graphql_query(body: GraphQLBody) -> dict[str, Any]:
     """Execute a GraphQL query against the published graph.
 
     Schema is derived from the currently-published spec. Each OntologyClass
@@ -64,12 +64,12 @@ def graphql_query(body: GraphQLBody) -> dict[str, Any]:
     from knot.db import spec_store
     from knot.spec.compile.graphql import get_or_build_schema
 
-    with db.connect() as conn:
-        spec = published_or_409(conn)
-        content_hash = spec_store.get_published_content_hash(conn) or ""
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
+        content_hash = await spec_store.get_published_content_hash(conn) or ""
 
     schema = get_or_build_schema(spec, content_hash)
-    result = schema.execute_sync(
+    result = await schema.execute(
         body.query,
         variable_values=body.variables,
         operation_name=body.operation_name,

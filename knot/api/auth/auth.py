@@ -60,7 +60,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.get("/me", response_model=WhoAmI)
-def me(principal: Principal = Depends(require_user)) -> WhoAmI:
+async def me(principal: Principal = Depends(require_user)) -> WhoAmI:
     return WhoAmI(username=principal.username, is_admin=principal.is_admin)
 
 
@@ -69,9 +69,9 @@ def me(principal: Principal = Depends(require_user)) -> WhoAmI:
     response_model=list[UserRow],
     dependencies=[Depends(require_admin)],
 )
-def list_users() -> list[UserRow]:
-    with db.connect() as conn:
-        return [UserRow(**r) for r in users.list_users(conn)]
+async def list_users() -> list[UserRow]:
+    async with db.connect() as conn:
+        return [UserRow(**r) for r in await users.list_users(conn)]
 
 
 @router.post(
@@ -79,14 +79,14 @@ def list_users() -> list[UserRow]:
     response_model=CreatedUser,
     status_code=201,
 )
-def create_user(
+async def create_user(
     body: CreateUserBody,
     creator: Principal = Depends(require_admin),
 ) -> CreatedUser:
-    with db.connect() as conn:
-        if users.get_user(conn, body.username) is not None:
+    async with db.connect() as conn:
+        if await users.get_user(conn, body.username) is not None:
             raise HTTPException(409, f"User {body.username!r} already exists.")
-        user, raw = users.create_user(
+        user, raw = await users.create_user(
             conn,
             username=body.username,
             is_admin=body.is_admin,
@@ -108,12 +108,12 @@ def create_user(
     response_model=CreatedUser,
     dependencies=[Depends(require_admin)],
 )
-def rotate_key(username: str) -> CreatedUser:
-    with db.connect() as conn:
-        user = users.get_user(conn, username)
+async def rotate_key(username: str) -> CreatedUser:
+    async with db.connect() as conn:
+        user = await users.get_user(conn, username)
         if user is None:
             raise HTTPException(404, f"User {username!r} not found.")
-        raw = users.rotate_key(conn, username=username)
+        raw = await users.rotate_key(conn, username=username)
     return CreatedUser(
         username=user.username,
         is_admin=user.is_admin,
@@ -126,9 +126,9 @@ def rotate_key(username: str) -> CreatedUser:
     "/users/{username}",
     dependencies=[Depends(require_admin)],
 )
-def delete_user(username: str) -> dict[str, Any]:
-    with db.connect() as conn:
-        deleted = users.delete_user(conn, username=username)
+async def delete_user(username: str) -> dict[str, Any]:
+    async with db.connect() as conn:
+        deleted = await users.delete_user(conn, username=username)
     if not deleted:
         raise HTTPException(404, f"User {username!r} not found.")
     return {"deleted": username}

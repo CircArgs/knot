@@ -51,8 +51,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # — startup —
     configure_logging()
     logger.info("knot starting up", extra={"version": _VERSION})
-    db.apply_schema()
-    bootstrap_admin_from_env()
+    await db.apply_schema()
+    await bootstrap_admin_from_env()
     logger.info("knot ready")
     yield
     # — shutdown —

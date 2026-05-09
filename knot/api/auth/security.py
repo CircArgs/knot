@@ -50,7 +50,7 @@ def _strip_bearer(authorization: str | None) -> str:
     return authorization[len("Bearer ") :]
 
 
-def require_user(
+async def require_user(
     authorization: str | None = Header(default=None),
 ) -> Principal:
     """FastAPI dependency for any authenticated route.
@@ -63,8 +63,8 @@ def require_user(
         return Principal(username=DEV_PRINCIPAL, is_admin=False)
     token = _strip_bearer(authorization)
     key_hash = users.hash_key(token)
-    with db.connect() as conn:
-        user = users.find_by_key_hash(conn, key_hash)
+    async with db.connect() as conn:
+        user = await users.find_by_key_hash(conn, key_hash)
     if user is None:
         raise HTTPException(403, "Invalid bearer token")
     return Principal(username=user.username, is_admin=user.is_admin)
@@ -79,12 +79,12 @@ def require_admin(principal: Principal = Depends(require_user)) -> Principal:
     return principal
 
 
-def bootstrap_admin_from_env() -> None:
+async def bootstrap_admin_from_env() -> None:
     """If ``KNOT_BOOTSTRAP_ADMIN_KEY`` is set and the users table is empty,
     seed an ``admin`` user with that key. Called at app startup after
     ``apply_schema``."""
     raw = get_settings().bootstrap_admin_key
     if not raw:
         return
-    with db.connect() as conn:
-        users.bootstrap_admin_if_empty(conn, raw)
+    async with db.connect() as conn:
+        await users.bootstrap_admin_if_empty(conn, raw)

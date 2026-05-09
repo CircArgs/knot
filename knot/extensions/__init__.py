@@ -6,6 +6,7 @@ isinstance) runs in priority order (lower number = earlier).
 
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Callable
 
 
@@ -23,10 +24,12 @@ class _Dispatcher:
 
         return deco
 
-    def dispatch(self, event: object) -> None:
+    async def dispatch(self, event: object) -> None:
         for event_type, _, fn in self._handlers:
             if isinstance(event, event_type):
-                fn(event)
+                result = fn(event)
+                if asyncio.iscoroutine(result):
+                    await result
 
 
 dispatch = _Dispatcher()

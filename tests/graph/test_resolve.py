@@ -51,15 +51,15 @@ def _post(source: str, slot: str, alpha: float, beta: float) -> Posterior:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def resolve_db(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+async def resolve_db(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
     st = TypeDefinition(name="string", base="str")
     id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
@@ -78,9 +78,9 @@ def resolve_db(pg_conn):
         classes=[movie],
         sources=[src_a, src_b],
     )
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
     yield pg_conn, movie, src_a, src_b, rev
 
 
@@ -221,25 +221,25 @@ def test_union_multivalued_handles_empty_contributions():
 # 5. record_feedback — atomic UPSERT delta (DB-backed)
 # ---------------------------------------------------------------------------
 
-def test_record_feedback_increments_alpha_on_success(resolve_db):
+async def test_record_feedback_increments_alpha_on_success(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
-    p1 = trust_posteriors.record_feedback(conn, "source_a", "title", success=True)
+    p1 = await trust_posteriors.record_feedback(conn, "source_a", "title", success=True)
     assert p1.alpha == PRIOR_ALPHA + 1.0
     assert p1.beta == PRIOR_BETA
 
 
-def test_record_feedback_increments_beta_on_failure(resolve_db):
+async def test_record_feedback_increments_beta_on_failure(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
-    p1 = trust_posteriors.record_feedback(conn, "source_a", "pm_field", success=False)
+    p1 = await trust_posteriors.record_feedback(conn, "source_a", "pm_field", success=False)
     assert p1.alpha == PRIOR_ALPHA
     assert p1.beta == PRIOR_BETA + 1.0
 
 
-def test_record_feedback_accumulates_across_calls(resolve_db):
+async def test_record_feedback_accumulates_across_calls(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
-    trust_posteriors.record_feedback(conn, "source_b", "pm_field", success=True)
-    trust_posteriors.record_feedback(conn, "source_b", "pm_field", success=True)
-    p = trust_posteriors.get_posterior(conn, "source_b", "pm_field")
+    await trust_posteriors.record_feedback(conn, "source_b", "pm_field", success=True)
+    await trust_posteriors.record_feedback(conn, "source_b", "pm_field", success=True)
+    p = await trust_posteriors.get_posterior(conn, "source_b", "pm_field")
     assert p.alpha == PRIOR_ALPHA + 2.0
 
 
@@ -247,24 +247,24 @@ def test_record_feedback_accumulates_across_calls(resolve_db):
 # 6. resolve_entity — integration (DB-backed)
 # ---------------------------------------------------------------------------
 
-def test_resolve_entity_returns_none_for_unknown_canonical_id(resolve_db):
+async def test_resolve_entity_returns_none_for_unknown_canonical_id(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
-    result = resolve_entity(conn, cls=movie, canonical_id="not_here")
+    result = await resolve_entity(conn, cls=movie, canonical_id="not_here")
     assert result is None
 
 
-def test_resolve_entity_argmax_trust_picks_highest_trust_source(resolve_db):
+async def test_resolve_entity_argmax_trust_picks_highest_trust_source(resolve_db):
     conn, movie, src_a, src_b, rev = resolve_db
-    graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_res1", "title": "Title from A"}],
-                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from A"}]])
-    graph_store.insert_rows(conn, source=src_b, spec_revision=rev,
-                            rows=[{"imdb_id": "tt_res1", "title": "Title from B"}],
-                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from B"}]])
+    await graph_store.insert_rows(conn, source=src_a, spec_revision=rev,
+                        rows=[{"imdb_id": "tt_res1", "title": "Title from A"}],
+                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from A"}]])
+    await graph_store.insert_rows(conn, source=src_b, spec_revision=rev,
+                        rows=[{"imdb_id": "tt_res1", "title": "Title from B"}],
+                        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_res1", "title": "Title from B"}]])
     # Set source_a higher trust
-    trust_config.set_score(conn, "source_a", 0.9)
-    trust_config.set_score(conn, "source_b", 0.1)
+    await trust_config.set_score(conn, "source_a", 0.9)
+    await trust_config.set_score(conn, "source_b", 0.1)
 
-    result = resolve_entity(conn, cls=movie, canonical_id="tt_res1")
+    result = await resolve_entity(conn, cls=movie, canonical_id="tt_res1")
     assert result is not None
     assert result["title"] == "Title from A"

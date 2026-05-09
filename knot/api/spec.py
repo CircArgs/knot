@@ -275,54 +275,54 @@ router = APIRouter(prefix="/spec", tags=["spec"])
 
 
 @router.get("/published", summary="Full currently-published spec (cycle-safe JSON)")
-def get_published_spec() -> dict[str, Any]:
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+async def get_published_spec() -> dict[str, Any]:
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
     return spec_store.spec_to_dict(spec)
 
 
 @router.get("/published/classes", response_model=list[ClassSummary])
-def list_published_classes() -> list[ClassSummary]:
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+async def list_published_classes() -> list[ClassSummary]:
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
     if spec is None:
         return []
     return [_summarize_class(c) for c in spec.classes]
 
 
 @router.get("/published/classes/{name}", response_model=ClassSummary)
-def get_published_class(name: str) -> ClassSummary:
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+async def get_published_class(name: str) -> ClassSummary:
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
     return _summarize_class(_find_class(spec, name))
 
 
 @router.get("/published/slots", response_model=list[SlotSummary])
-def list_published_slots() -> list[SlotSummary]:
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+async def list_published_slots() -> list[SlotSummary]:
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
     if spec is None:
         return []
     return [_summarize_slot(s) for s in spec.slots]
 
 
 @router.get("/published/types", response_model=list[TypeSummary])
-def list_published_types() -> list[TypeSummary]:
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+async def list_published_types() -> list[TypeSummary]:
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
     if spec is None:
         return []
     return [_summarize_type(t) for t in spec.types]
 
 
 @router.get("/published/sources", response_model=list[SourceSummary])
-def list_published_sources() -> list[SourceSummary]:
-    with db.connect() as conn:
-        spec = spec_store.get_published(conn)
+async def list_published_sources() -> list[SourceSummary]:
+    async with db.connect() as conn:
+        spec = await spec_store.get_published(conn)
     if spec is None:
         return []
     return [_summarize_source(s) for s in spec.sources]
@@ -332,18 +332,18 @@ def list_published_sources() -> list[SourceSummary]:
 
 
 @router.get("/revisions", response_model=list[RevisionSummary])
-def list_revisions() -> list[RevisionSummary]:
+async def list_revisions() -> list[RevisionSummary]:
     """All published revisions, newest first (immortal audit chain)."""
-    with db.connect() as conn:
-        rows = spec_store.list_published(conn)
+    async with db.connect() as conn:
+        rows = await spec_store.list_published(conn)
     return [RevisionSummary(**r) for r in rows]
 
 
 @router.get("/revisions/{revision}")
-def get_revision_spec(revision: int) -> dict[str, Any]:
-    with db.connect() as conn:
+async def get_revision_spec(revision: int) -> dict[str, Any]:
+    async with db.connect() as conn:
         try:
-            spec = spec_store.get_revision(conn, revision)
+            spec = await spec_store.get_revision(conn, revision)
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(404, f"Revision {revision} not found.") from exc
     return spec_store.spec_to_dict(spec)
@@ -353,9 +353,9 @@ def get_revision_spec(revision: int) -> dict[str, Any]:
 
 
 @router.get("/drafts", response_model=list[DraftSummary])
-def list_drafts_endpoint() -> list[DraftSummary]:
-    with db.connect() as conn:
-        rows = spec_store.list_drafts(conn)
+async def list_drafts_endpoint() -> list[DraftSummary]:
+    async with db.connect() as conn:
+        rows = await spec_store.list_drafts(conn)
     return [DraftSummary(**r) for r in rows]
 
 
@@ -364,10 +364,10 @@ def list_drafts_endpoint() -> list[DraftSummary]:
     response_model=DraftSummary,
     dependencies=[Depends(require_user)],
 )
-def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
-    with db.connect() as conn:
+async def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
+    async with db.connect() as conn:
         try:
-            new_id = spec_store.create_draft(
+            new_id = await spec_store.create_draft(
                 conn,
                 parent_revision=body.parent_revision,
                 label=body.label,
@@ -377,26 +377,26 @@ def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
                 404,
                 f"Parent revision {body.parent_revision} not found.",
             ) from exc
-        rows = spec_store.list_drafts(conn)
+        rows = await spec_store.list_drafts(conn)
     row = next(r for r in rows if r["revision"] == new_id)
     return DraftSummary(**row)
 
 
 @router.get("/drafts/{draft_id}")
-def get_draft(draft_id: int) -> dict[str, Any]:
-    with db.connect() as conn:
+async def get_draft(draft_id: int) -> dict[str, Any]:
+    async with db.connect() as conn:
         try:
-            spec = spec_store.get_revision(conn, draft_id)
+            spec = await spec_store.get_revision(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
     return spec_store.spec_to_dict(spec)
 
 
 @router.delete("/drafts/{draft_id}", dependencies=[Depends(require_user)])
-def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
-    with db.connect() as conn:
+async def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
+    async with db.connect() as conn:
         try:
-            spec_store.discard_draft(conn, draft_id)
+            await spec_store.discard_draft(conn, draft_id)
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
         except spec_store.DraftAlreadyPublishedError as exc:
@@ -415,9 +415,9 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
-    with db.connect() as conn:
-        with spec_store.edit_draft(conn, draft_id) as spec:
+async def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
+    async with db.connect() as conn:
+        async with spec_store.edit_draft(conn, draft_id) as spec:
             if any(t.name.lower() == body.name.lower() for t in spec.types):
                 raise HTTPException(
                     409,
@@ -439,9 +439,9 @@ def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
-    with db.connect() as conn:
-        with spec_store.edit_draft(conn, draft_id) as spec:
+async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
+    async with db.connect() as conn:
+        async with spec_store.edit_draft(conn, draft_id) as spec:
             if any(s.name.lower() == body.name.lower() for s in spec.slots):
                 raise HTTPException(
                     409,
@@ -495,9 +495,9 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
-    with db.connect() as conn:
-        with spec_store.edit_draft(conn, draft_id) as spec:
+async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
+    async with db.connect() as conn:
+        async with spec_store.edit_draft(conn, draft_id) as spec:
             if any(c.name.lower() == body.name.lower() for c in spec.classes):
                 raise HTTPException(
                     409,
@@ -539,9 +539,9 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
-    with db.connect() as conn:
-        with spec_store.edit_draft(conn, draft_id) as spec:
+async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
+    async with db.connect() as conn:
+        async with spec_store.edit_draft(conn, draft_id) as spec:
             cls = _find_class(spec, name)
 
             if body.slot_names is not None:
@@ -563,9 +563,9 @@ def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationRespons
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
-    with db.connect() as conn:
-        with spec_store.edit_draft(conn, draft_id) as spec:
+async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
+    async with db.connect() as conn:
+        async with spec_store.edit_draft(conn, draft_id) as spec:
             if any(s.name.lower() == body.name.lower() for s in spec.sources):
                 raise HTTPException(
                     409,
@@ -596,9 +596,9 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
-    with db.connect() as conn:
-        with spec_store.edit_draft(conn, draft_id) as spec:
+async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
+    async with db.connect() as conn:
+        async with spec_store.edit_draft(conn, draft_id) as spec:
             if any(c.name.lower() == body.name.lower() for c in spec.constraints):
                 raise HTTPException(
                     409,
@@ -628,7 +628,7 @@ def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
     response_model=PublishResponse,
     dependencies=[Depends(require_user)],
 )
-def publish(
+async def publish(
     draft_id: int,
     allow_destructive: bool = Query(
         False,
@@ -639,9 +639,9 @@ def publish(
     ),
 ) -> PublishResponse:
     """Run the publish gate; on pass, atomically promote this draft to published."""
-    with db.connect() as conn:
+    async with db.connect() as conn:
         try:
-            spec_store.publish_draft(
+            await spec_store.publish_draft(
                 conn,
                 draft_id,
                 allow_destructive=allow_destructive,
@@ -651,8 +651,8 @@ def publish(
         except spec_store.PublishGateError as exc:
             raise HTTPException(400, f"Draft {draft_id} failed the publish gate: {exc}") from exc
 
-        spec_store.get_revision(conn, draft_id)
-        rows = spec_store.list_published(conn)
+        await spec_store.get_revision(conn, draft_id)
+        rows = await spec_store.list_published(conn)
     row = next(r for r in rows if r["revision"] == draft_id)
     return PublishResponse(
         revision=draft_id,
@@ -669,7 +669,7 @@ def publish(
     response_model=PublishResponse,
     dependencies=[Depends(require_user)],
 )
-def rollback(
+async def rollback(
     target_revision: int,
     allow_destructive: bool = Query(
         False,
@@ -687,8 +687,8 @@ def rollback(
     data, and the published flag flips atomically. Rejects an attempt to
     rollback to the currently-published revision (no-op).
     """
-    with db.connect() as conn:
-        current = spec_store.get_published_revision(conn)
+    async with db.connect() as conn:
+        current = await spec_store.get_published_revision(conn)
         if current == target_revision:
             raise HTTPException(
                 400,
@@ -696,7 +696,7 @@ def rollback(
                 "nothing to roll back to.",
             )
         try:
-            spec_store.publish_draft(
+            await spec_store.publish_draft(
                 conn,
                 target_revision,
                 allow_destructive=allow_destructive,
@@ -712,7 +712,7 @@ def rollback(
                 f"Rollback to revision {target_revision} failed the publish gate: {exc}",
             ) from exc
 
-        rows = spec_store.list_published(conn)
+        rows = await spec_store.list_published(conn)
     row = next(r for r in rows if r["revision"] == target_revision)
     return PublishResponse(
         revision=target_revision,

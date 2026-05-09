@@ -87,8 +87,8 @@ def _serialize_row(row: dict[str, Any]) -> dict[str, Any]:
 # ─── Ingest ─────────────────────────────────────────────────────────────────
 
 
-def insert_rows(
-    conn: psycopg.Connection,
+async def insert_rows(
+    conn: psycopg.AsyncConnection,
     *,
     source: Source,
     spec_revision: int,
@@ -138,7 +138,7 @@ def insert_rows(
     ).format(bindings=_bindings_id(cls))
 
     count = 0
-    with conn.transaction():
+    async with conn.transaction():
         for row, canonical_id in zip(rows, canonical_ids, strict=False):
             values: list[Any] = [
                 source.name,
@@ -147,8 +147,8 @@ def insert_rows(
             ]
             for slot_name in slot_names:
                 values.append(row.get(slot_name))
-            knot_row_id = conn.execute(upsert_stmt, values).fetchone()[0]
-            conn.execute(
+            knot_row_id = (await (await conn.execute(upsert_stmt, values)).fetchone())[0]
+            await conn.execute(
                 binding_insert_stmt,
                 (knot_row_id, canonical_id, spec_revision, knot_row_id),
             )
@@ -159,8 +159,8 @@ def insert_rows(
 # ─── User-correction-row upsert ─────────────────────────────────────────────
 
 
-def upsert_user_correction_row(
-    conn: psycopg.Connection,
+async def upsert_user_correction_row(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -208,8 +208,8 @@ def upsert_user_correction_row(
         ")"
     ).format(bindings=_bindings_id(cls))
 
-    knot_row_id = conn.execute(upsert_stmt, placeholder_values).fetchone()[0]
-    conn.execute(
+    knot_row_id = (await (await conn.execute(upsert_stmt, placeholder_values)).fetchone())[0]
+    await conn.execute(
         binding_insert_stmt,
         (knot_row_id, canonical_id, spec_revision, knot_row_id),
     )
@@ -224,8 +224,8 @@ def _is_defined_class(cls: OntologyClass) -> bool:
     return getattr(cls, "definition", None) is not None
 
 
-def list_rows(
-    conn: psycopg.Connection,
+async def list_rows(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     limit: int = 100,
@@ -242,13 +242,12 @@ def list_rows(
     if as_of is not None:
         params.append(as_of)
     params.extend([limit, offset])
-    cur = conn.cursor(row_factory=dict_row)
-    cur.execute(stmt, params)
-    return [_serialize_row(r) for r in cur.fetchall()]
+    cur = await conn.cursor(row_factory=dict_row).execute(stmt, params)
+    return [_serialize_row(r) for r in await cur.fetchall()]
 
 
-def query_rows(
-    conn: psycopg.Connection,
+async def query_rows(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     predicate_sql: sql.Composable | None,
@@ -319,13 +318,12 @@ def query_rows(
         params.extend(order_by_params)
     params.extend([limit, offset])
 
-    cur = conn.cursor(row_factory=dict_row)
-    cur.execute(stmt, params)
-    return [_serialize_row(r) for r in cur.fetchall()]
+    cur = await conn.cursor(row_factory=dict_row).execute(stmt, params)
+    return [_serialize_row(r) for r in await cur.fetchall()]
 
 
-def get_canonical_contributions(
-    conn: psycopg.Connection,
+async def get_canonical_contributions(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -341,9 +339,8 @@ def get_canonical_contributions(
         params: list[Any] = [canonical_id]
         if as_of is not None:
             params.append(as_of)
-        cur = conn.cursor(row_factory=dict_row)
-        cur.execute(stmt, params)
-        return [_serialize_row(r) for r in cur.fetchall()]
+        cur = await conn.cursor(row_factory=dict_row).execute(stmt, params)
+        return [_serialize_row(r) for r in await cur.fetchall()]
 
     base, derived_params = _select_with_derivations(cls, include_tombstoned=include_tombstoned)
     where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
@@ -354,13 +351,12 @@ def get_canonical_contributions(
     params: list[Any] = list(derived_params) + [canonical_id]
     if as_of is not None:
         params.append(as_of)
-    cur = conn.cursor(row_factory=dict_row)
-    cur.execute(stmt, params)
-    return [_serialize_row(r) for r in cur.fetchall()]
+    cur = await conn.cursor(row_factory=dict_row).execute(stmt, params)
+    return [_serialize_row(r) for r in await cur.fetchall()]
 
 
-def count_rows(
-    conn: psycopg.Connection,
+async def count_rows(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     as_of: int | None = None,
@@ -413,11 +409,11 @@ def count_rows(
             "  ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
             "{where}"
         ).format(source=_table_id(cls), bindings=_bindings_id(cls), where=where)
-    return conn.execute(stmt, params).fetchone()[0]
+    return (await (await conn.execute(stmt, params)).fetchone())[0]
 
 
-def aggregate_rows(
-    conn: psycopg.Connection,
+async def aggregate_rows(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     as_of: int | None = None,
@@ -492,7 +488,7 @@ def aggregate_rows(
             where=where,
         )
 
-    row = conn.execute(stmt, params).fetchone()
+    row = await (await conn.execute(stmt, params)).fetchone()
     if row is None:
         result: dict[str, Any] = {"count": 0}
         for _, _, result_key in agg_fields:
@@ -505,8 +501,8 @@ def aggregate_rows(
     return result
 
 
-def get_disagreeing_contributions(
-    conn: psycopg.Connection,
+async def get_disagreeing_contributions(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -528,12 +524,12 @@ def get_disagreeing_contributions(
         source=_table_id(cls),
         bindings=_bindings_id(cls),
     )
-    rows = conn.execute(stmt, (canonical_id, user_corrections_source())).fetchall()
+    rows = await (await conn.execute(stmt, (canonical_id, user_corrections_source()))).fetchall()
     return [(r[0], r[1]) for r in rows]
 
 
-def canonical_id_exists(
-    conn: psycopg.Connection,
+async def canonical_id_exists(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -542,14 +538,14 @@ def canonical_id_exists(
     stmt = sql.SQL(
         "SELECT 1 FROM {bindings} WHERE canonical_id = %s AND valid_to IS NULL LIMIT 1"
     ).format(bindings=_bindings_id(cls))
-    return conn.execute(stmt, (canonical_id,)).fetchone() is not None
+    return (await (await conn.execute(stmt, (canonical_id,))).fetchone()) is not None
 
 
 # ─── SCD2 binding mutations (used by Merge / Split / corrections) ───────────
 
 
-def merge_canonical_ids(
-    conn: psycopg.Connection,
+async def merge_canonical_ids(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     keep_canonical_id: str,
@@ -573,23 +569,25 @@ def merge_canonical_ids(
     """
     rewritten = 0
     for from_cid in from_canonical_ids:
-        rows = conn.execute(
-            sql.SQL(
-                "SELECT knot_row_id FROM {bindings} "
-                "WHERE canonical_id = %s AND valid_to IS NULL "
-                "FOR UPDATE"
-            ).format(bindings=_bindings_id(cls)),
-            (from_cid,),
+        rows = await (
+            await conn.execute(
+                sql.SQL(
+                    "SELECT knot_row_id FROM {bindings} "
+                    "WHERE canonical_id = %s AND valid_to IS NULL "
+                    "FOR UPDATE"
+                ).format(bindings=_bindings_id(cls)),
+                (from_cid,),
+            )
         ).fetchall()
         for (knot_row_id,) in rows:
-            conn.execute(
+            await conn.execute(
                 sql.SQL(
                     "UPDATE {bindings} SET valid_to = clock_timestamp() "
                     "WHERE knot_row_id = %s AND valid_to IS NULL"
                 ).format(bindings=_bindings_id(cls)),
                 (knot_row_id,),
             )
-            conn.execute(
+            await conn.execute(
                 sql.SQL(
                     "INSERT INTO {bindings} "
                     "(knot_row_id, canonical_id, valid_from, change_type, "
@@ -605,8 +603,8 @@ def merge_canonical_ids(
 # ─── Split ──────────────────────────────────────────────────────────────────
 
 
-def split_canonical_id(
-    conn: psycopg.Connection,
+async def split_canonical_id(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     source_canonical_id: str,
@@ -629,30 +627,32 @@ def split_canonical_id(
     rewritten = 0
     for new_cid, members in partitions.items():
         for source_name, source_row_id in members:
-            row = conn.execute(
-                sql.SQL(
-                    "SELECT b.knot_row_id FROM {bindings} b "
-                    "JOIN {source} s ON s._knot_row_id = b.knot_row_id "
-                    "WHERE b.canonical_id = %s AND b.valid_to IS NULL "
-                    "  AND s._source = %s AND s._source_row_id = %s "
-                    "FOR UPDATE"
-                ).format(
-                    bindings=_bindings_id(cls),
-                    source=_table_id(cls),
-                ),
-                (source_canonical_id, source_name, source_row_id),
+            row = await (
+                await conn.execute(
+                    sql.SQL(
+                        "SELECT b.knot_row_id FROM {bindings} b "
+                        "JOIN {source} s ON s._knot_row_id = b.knot_row_id "
+                        "WHERE b.canonical_id = %s AND b.valid_to IS NULL "
+                        "  AND s._source = %s AND s._source_row_id = %s "
+                        "FOR UPDATE"
+                    ).format(
+                        bindings=_bindings_id(cls),
+                        source=_table_id(cls),
+                    ),
+                    (source_canonical_id, source_name, source_row_id),
+                )
             ).fetchone()
             if row is None:
                 continue
             knot_row_id = row[0]
-            conn.execute(
+            await conn.execute(
                 sql.SQL(
                     "UPDATE {bindings} SET valid_to = clock_timestamp() "
                     "WHERE knot_row_id = %s AND valid_to IS NULL"
                 ).format(bindings=_bindings_id(cls)),
                 (knot_row_id,),
             )
-            conn.execute(
+            await conn.execute(
                 sql.SQL(
                     "INSERT INTO {bindings} "
                     "(knot_row_id, canonical_id, valid_from, change_type, "
@@ -668,8 +668,8 @@ def split_canonical_id(
 # ─── Add (synthetic entity) ─────────────────────────────────────────────────
 
 
-def insert_synthetic_row(
-    conn: psycopg.Connection,
+async def insert_synthetic_row(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     new_canonical_id: str,
@@ -695,16 +695,22 @@ def insert_synthetic_row(
     for sn in slot_names:
         placeholder_values.append(values.get(sn))
 
-    knot_row_id = conn.execute(
-        sql.SQL("INSERT INTO {table} ({cols}) VALUES ({ph}) RETURNING _knot_row_id").format(
-            table=_table_id(cls),
-            cols=cols_sql,
-            ph=placeholders,
-        ),
-        placeholder_values,
-    ).fetchone()[0]
+    knot_row_id = (
+        await (
+            await conn.execute(
+                sql.SQL(
+                    "INSERT INTO {table} ({cols}) VALUES ({ph}) RETURNING _knot_row_id"
+                ).format(
+                    table=_table_id(cls),
+                    cols=cols_sql,
+                    ph=placeholders,
+                ),
+                placeholder_values,
+            )
+        ).fetchone()
+    )[0]
 
-    conn.execute(
+    await conn.execute(
         sql.SQL(
             "INSERT INTO {bindings} "
             "(knot_row_id, canonical_id, valid_from, change_type, "
@@ -719,8 +725,8 @@ def insert_synthetic_row(
 # ─── Tombstone ───────────────────────────────────────────────────────────────
 
 
-def tombstone_canonical_id(
-    conn: psycopg.Connection,
+async def tombstone_canonical_id(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -734,17 +740,19 @@ def tombstone_canonical_id(
     SELECT FOR UPDATE serialises concurrent tombstones on the same rows.
     Returns the number of bindings closed.
     """
-    rows = conn.execute(
-        sql.SQL(
-            "SELECT knot_row_id FROM {bindings} "
-            "WHERE canonical_id = %s AND valid_to IS NULL "
-            "FOR UPDATE"
-        ).format(bindings=_bindings_id(cls)),
-        (canonical_id,),
+    rows = await (
+        await conn.execute(
+            sql.SQL(
+                "SELECT knot_row_id FROM {bindings} "
+                "WHERE canonical_id = %s AND valid_to IS NULL "
+                "FOR UPDATE"
+            ).format(bindings=_bindings_id(cls)),
+            (canonical_id,),
+        )
     ).fetchall()
     closed = 0
     for (knot_row_id,) in rows:
-        conn.execute(
+        await conn.execute(
             sql.SQL(
                 "UPDATE {bindings} "
                 "SET valid_to = clock_timestamp(), "
@@ -762,8 +770,8 @@ def tombstone_canonical_id(
 # ─── RejectContribution ──────────────────────────────────────────────────────
 
 
-def reject_contribution(
-    conn: psycopg.Connection,
+async def reject_contribution(
+    conn: psycopg.AsyncConnection,
     *,
     cls: OntologyClass,
     canonical_id: str,
@@ -777,23 +785,25 @@ def reject_contribution(
     True if a binding was found and closed, False if none matched.
     SELECT FOR UPDATE serialises concurrent rejections on the same row.
     """
-    row = conn.execute(
-        sql.SQL(
-            "SELECT b.knot_row_id FROM {bindings} b "
-            "JOIN {source_table} s ON s._knot_row_id = b.knot_row_id "
-            "WHERE b.canonical_id = %s AND b.valid_to IS NULL "
-            "  AND s._source = %s "
-            "FOR UPDATE"
-        ).format(
-            bindings=_bindings_id(cls),
-            source_table=_table_id(cls),
-        ),
-        (canonical_id, source),
+    row = await (
+        await conn.execute(
+            sql.SQL(
+                "SELECT b.knot_row_id FROM {bindings} b "
+                "JOIN {source_table} s ON s._knot_row_id = b.knot_row_id "
+                "WHERE b.canonical_id = %s AND b.valid_to IS NULL "
+                "  AND s._source = %s "
+                "FOR UPDATE"
+            ).format(
+                bindings=_bindings_id(cls),
+                source_table=_table_id(cls),
+            ),
+            (canonical_id, source),
+        )
     ).fetchone()
     if row is None:
         return False
     knot_row_id = row[0]
-    conn.execute(
+    await conn.execute(
         sql.SQL(
             "UPDATE {bindings} "
             "SET valid_to = clock_timestamp(), "
@@ -810,8 +820,8 @@ def reject_contribution(
 # ─── Lineage event log ──────────────────────────────────────────────────────
 
 
-def append_lineage_event(
-    conn: psycopg.Connection,
+async def append_lineage_event(
+    conn: psycopg.AsyncConnection,
     *,
     class_name: str,
     change_type: str,
@@ -821,42 +831,49 @@ def append_lineage_event(
     correction_id: int | None = None,
 ) -> int:
     """Append a row to ``canonical_id_lineage``. Returns the event_id."""
-    return conn.execute(
-        "INSERT INTO canonical_id_lineage "
-        "(class_name, change_type, from_canonical_ids, to_canonical_ids, "
-        " applied_revision, correction_id) "
-        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING event_id",
-        (
-            class_name,
-            change_type,
-            from_canonical_ids,
-            to_canonical_ids,
-            applied_revision,
-            correction_id,
-        ),
-    ).fetchone()[0]
+    row = await (
+        await conn.execute(
+            "INSERT INTO canonical_id_lineage "
+            "(class_name, change_type, from_canonical_ids, to_canonical_ids, "
+            " applied_revision, correction_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING event_id",
+            (
+                class_name,
+                change_type,
+                from_canonical_ids,
+                to_canonical_ids,
+                applied_revision,
+                correction_id,
+            ),
+        )
+    ).fetchone()
+    return row[0]
 
 
-def list_lineage(
-    conn: psycopg.Connection,
+async def list_lineage(
+    conn: psycopg.AsyncConnection,
     *,
     class_name: str | None = None,
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     if class_name is None:
-        rows = conn.execute(
-            "SELECT event_id, class_name, change_type, from_canonical_ids, "
-            "to_canonical_ids, applied_revision, correction_id, created_at "
-            "FROM canonical_id_lineage ORDER BY event_id DESC LIMIT %s",
-            (limit,),
+        rows = await (
+            await conn.execute(
+                "SELECT event_id, class_name, change_type, from_canonical_ids, "
+                "to_canonical_ids, applied_revision, correction_id, created_at "
+                "FROM canonical_id_lineage ORDER BY event_id DESC LIMIT %s",
+                (limit,),
+            )
         ).fetchall()
     else:
-        rows = conn.execute(
-            "SELECT event_id, class_name, change_type, from_canonical_ids, "
-            "to_canonical_ids, applied_revision, correction_id, created_at "
-            "FROM canonical_id_lineage WHERE class_name = %s "
-            "ORDER BY event_id DESC LIMIT %s",
-            (class_name, limit),
+        rows = await (
+            await conn.execute(
+                "SELECT event_id, class_name, change_type, from_canonical_ids, "
+                "to_canonical_ids, applied_revision, correction_id, created_at "
+                "FROM canonical_id_lineage WHERE class_name = %s "
+                "ORDER BY event_id DESC LIMIT %s",
+                (class_name, limit),
+            )
         ).fetchall()
     return [
         {

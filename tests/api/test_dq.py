@@ -54,16 +54,16 @@ def _spec() -> tuple[Spec, OntologyClass, Source]:
 
 
 @pytest.fixture
-def clean(pg_conn):
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE dq_observations CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+async def clean(pg_conn):
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE dq_observations CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
@@ -77,11 +77,11 @@ def client():
 
 
 @pytest.fixture
-def published(clean):
+async def published(clean):
     spec, movie, src = _spec()
-    rev = create_draft(clean)
-    update_draft(clean, rev, spec)
-    publish_draft(clean, rev)
+    rev = await create_draft(clean)
+    await update_draft(clean, rev, spec)
+    await publish_draft(clean, rev)
     yield clean, movie, src, rev
 
 
@@ -89,7 +89,7 @@ def published(clean):
 # 1. Ingest emits one observation per stored slot
 # ---------------------------------------------------------------------------
 
-def test_ingest_emits_dq_observations(published, client):
+async def test_ingest_emits_dq_observations(published, client):
     conn, movie, src, rev = published
     r = client.post(
         "/graph/ingest/imdb",
@@ -103,7 +103,7 @@ def test_ingest_emits_dq_observations(published, client):
     )
     assert r.status_code == 200, r.text
 
-    obs = dq.query_observations(conn, source="imdb")
+    obs = await dq.query_observations(conn, source="imdb")
     by_slot = {o["slot"]: o for o in obs}
     assert set(by_slot) == {"imdb_id", "title", "year"}
 
@@ -137,16 +137,16 @@ def test_ingest_emits_dq_observations(published, client):
 # 2. Add correction emits obs under _user_corrections
 # ---------------------------------------------------------------------------
 
-def test_add_correction_emits_dq(published):
+async def test_add_correction_emits_dq(published):
     conn, movie, src, rev = published
-    apply_add(
+    await apply_add(
         conn,
         cls=movie,
         new_canonical_id="tt_synth",
         values={"imdb_id": "tt_synth", "title": "Synthetic", "year": 2026},
         spec_revision=rev,
     )
-    obs = dq.query_observations(conn, source=user_corrections_source())
+    obs = await dq.query_observations(conn, source=user_corrections_source())
     by_slot = {o["slot"]: o for o in obs}
     assert by_slot["title"]["row_count"] == 1
     assert by_slot["title"]["null_count"] == 0
@@ -157,9 +157,9 @@ def test_add_correction_emits_dq(published):
 # 3. Property correction emits obs ONLY for the touched slot
 # ---------------------------------------------------------------------------
 
-def test_property_correction_emits_dq_for_one_slot(published):
+async def test_property_correction_emits_dq_for_one_slot(published):
     conn, movie, src, rev = published
-    apply_add(
+    await apply_add(
         conn,
         cls=movie,
         new_canonical_id="tt_prop",
@@ -169,9 +169,9 @@ def test_property_correction_emits_dq_for_one_slot(published):
 
     # Clear add-correction obs from the prior call so we isolate the
     # property-correction effect.
-    conn.execute("DELETE FROM dq_observations")
+    await conn.execute("DELETE FROM dq_observations")
 
-    apply_property_correction(
+    await apply_property_correction(
         conn,
         cls=movie,
         canonical_id="tt_prop",
@@ -180,7 +180,7 @@ def test_property_correction_emits_dq_for_one_slot(published):
         spec_revision=rev,
     )
 
-    obs = dq.query_observations(conn, source=user_corrections_source())
+    obs = await dq.query_observations(conn, source=user_corrections_source())
     assert {o["slot"] for o in obs} == {"title"}
     assert obs[0]["row_count"] == 1
     assert obs[0]["null_count"] == 0
@@ -191,7 +191,7 @@ def test_property_correction_emits_dq_for_one_slot(published):
 # 4. Full scan aggregates from the per-class table
 # ---------------------------------------------------------------------------
 
-def test_full_scan_writes_full_scan_rows(published, client):
+async def test_full_scan_writes_full_scan_rows(published, client):
     conn, movie, src, rev = published
     r = client.post(
         "/graph/ingest/imdb",
@@ -205,14 +205,14 @@ def test_full_scan_writes_full_scan_rows(published, client):
     )
     assert r.status_code == 200, r.text
     # Drop prior incremental obs so the scan rows are clearly distinguishable.
-    conn.execute("DELETE FROM dq_observations")
+    await conn.execute("DELETE FROM dq_observations")
 
     r = client.post("/dq/scan?source=imdb")
     assert r.status_code == 200, r.text
     body = r.json()
     assert body["observations_inserted"] >= 3  # one per stored slot
 
-    obs = dq.query_observations(conn, source="imdb", kind="full_scan")
+    obs = await dq.query_observations(conn, source="imdb", kind="full_scan")
     by_slot = {o["slot"]: o for o in obs}
     assert by_slot["title"]["row_count"] == 3
     assert by_slot["title"]["null_count"] == 1

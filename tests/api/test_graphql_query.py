@@ -28,6 +28,7 @@ import json
 import os
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
@@ -73,25 +74,25 @@ def _sample_rows() -> list[dict]:
 # Fixtures
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def gql_db(pg_conn):
+@pytest_asyncio.fixture
+async def gql_db(pg_conn):
     """Publish a Movie spec and insert sample rows. Yields (conn, spec, src, rev)."""
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
     spec, movie, src = _build_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
     _rows = _sample_rows()
-    graph_store.insert_rows(
+    await graph_store.insert_rows(
         pg_conn, source=src, spec_revision=rev, rows=_rows,
         canonical_ids=[str(r["imdb_id"]) for r in _rows],
     )
@@ -122,24 +123,24 @@ def _post(client: TestClient, query: str, variables: dict | None = None) -> dict
 # 1. Schema regenerates on new publish
 # ---------------------------------------------------------------------------
 
-def test_schema_cache_changes_on_new_publish(gql_db):
+async def test_schema_cache_changes_on_new_publish(gql_db):
     """Content hash changes after a new publish → schema cache miss → new schema."""
     from knot.spec.compile.graphql import _schema_cache, get_or_build_schema
 
     conn, spec, src, rev = gql_db
 
-    hash1 = spec_store.get_published_content_hash(conn)
+    hash1 = await spec_store.get_published_content_hash(conn)
     schema1 = get_or_build_schema(spec, hash1)
 
     # Publish a new (identical-content but new revision) draft.
     spec2, movie2, src2 = _build_spec()
     # Tweak version so content hash differs.
     spec2.version = "2.0.0"
-    rev2 = create_draft(conn)
-    update_draft(conn, rev2, spec2)
-    publish_draft(conn, rev2)
+    rev2 = await create_draft(conn)
+    await update_draft(conn, rev2, spec2)
+    await publish_draft(conn, rev2)
 
-    hash2 = spec_store.get_published_content_hash(conn)
+    hash2 = await spec_store.get_published_content_hash(conn)
     assert hash1 != hash2
 
     schema2 = get_or_build_schema(spec2, hash2)
@@ -278,13 +279,13 @@ def test_graphql_no_auth_returns_401_when_enforced():
     from knot.db import users
     from fastapi import HTTPException, Header
 
-    def strict_require_user(
+    async def strict_require_user(
         authorization: str | None = Header(default=None),
     ) -> _Principal:
         token = _strip_bearer(authorization)
         key_hash = users.hash_key(token)
-        with db.connect() as conn:
-            user = users.find_by_key_hash(conn, key_hash)
+        async with db.connect() as conn:
+            user = await users.find_by_key_hash(conn, key_hash)
         if user is None:
             raise HTTPException(403, "Invalid bearer token")
         return _Principal(username=user.username, is_admin=user.is_admin)
@@ -305,13 +306,13 @@ def test_graphql_wrong_token_returns_403_when_enforced():
     from knot.db import users
     from fastapi import HTTPException, Header
 
-    def strict_require_user(
+    async def strict_require_user(
         authorization: str | None = Header(default=None),
     ) -> _Principal:
         token = _strip_bearer(authorization)
         key_hash = users.hash_key(token)
-        with db.connect() as conn:
-            user = users.find_by_key_hash(conn, key_hash)
+        async with db.connect() as conn:
+            user = await users.find_by_key_hash(conn, key_hash)
         if user is None:
             raise HTTPException(403, "Invalid bearer token")
         return _Principal(username=user.username, is_admin=user.is_admin)
@@ -340,11 +341,11 @@ def test_graphql_dev_mode_bypass(gql_client):
 # 10. No published spec → 409
 # ---------------------------------------------------------------------------
 
-def test_graphql_no_spec_returns_409(pg_conn):
+async def test_graphql_no_spec_returns_409(pg_conn):
     """When no spec is published, /graph/query returns 409."""
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await db.apply_schema()
 
     from knot.api.main import app
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
@@ -355,7 +356,7 @@ def test_graphql_no_spec_returns_409(pg_conn):
     finally:
         os.environ.pop("KNOT_AUTH_DEV_MODE", None)
         # Re-apply schema for subsequent tests.
-        db.apply_schema()
+        await db.apply_schema()
 
 
 # ---------------------------------------------------------------------------
@@ -511,7 +512,7 @@ def test_resolved_as_of_current_returns_record(gql_db, gql_client):
 # 15. count_rows predicate filtering (unit-level via graph_store directly)
 # ---------------------------------------------------------------------------
 
-def test_count_rows_with_predicate(gql_db):
+async def test_count_rows_with_predicate(gql_db):
     """count_rows should honour the predicate and return filtered count."""
     from knot.spec.compile.postgres import CompileContext, compile_predicate
     from knot.spec.metaschema import Compare, CompareOp, Literal_, SlotPath
@@ -525,10 +526,10 @@ def test_count_rows_with_predicate(gql_db):
     ctx = CompileContext(primary_class=movie_cls, alias="s")
     pred_sql = compile_predicate(node, ctx)
 
-    total_unfiltered = graph_store.count_rows(conn, cls=movie_cls)
+    total_unfiltered = await graph_store.count_rows(conn, cls=movie_cls)
     assert total_unfiltered == 5
 
-    total_filtered = graph_store.count_rows(
+    total_filtered = await graph_store.count_rows(
         conn, cls=movie_cls,
         predicate_sql=pred_sql, predicate_params=ctx.params,
     )
@@ -582,25 +583,25 @@ def _build_derived_spec():
     return spec, movie_cls, credit_cls, movie_src, credit_src
 
 
-@pytest.fixture
-def derived_db(pg_conn):
+@pytest_asyncio.fixture
+async def derived_db(pg_conn):
     """Publish the Movie+Credit spec with derived credit_count, insert rows."""
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
     spec, movie_cls, credit_cls, movie_src, credit_src = _build_derived_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
     # Ingest 3 movies.
-    graph_store.insert_rows(
+    await graph_store.insert_rows(
         pg_conn, source=movie_src, spec_revision=rev,
         rows=[
             {"imdb_id": "m1", "title": "Film One",   "year": 1990},
@@ -614,7 +615,7 @@ def derived_db(pg_conn):
         ]]
     )
     # m1 has 3 credits; m2 has 1 credit; m3 has 0
-    graph_store.insert_rows(
+    await graph_store.insert_rows(
         pg_conn, source=credit_src, spec_revision=rev,
         rows=[
             {"credit_id": "c1", "movie": "m1", "role": "director"},

@@ -25,9 +25,9 @@ def resolve_class(spec: Spec, class_name: str) -> OntologyClass:
     return cls
 
 
-def published_or_409(conn) -> Spec:
+async def published_or_409(conn) -> Spec:
     """Return the currently-published Spec; 409 if no spec is published yet."""
-    spec = spec_store.get_published(conn)
+    spec = await spec_store.get_published(conn)
     if spec is None:
         raise HTTPException(409, "No spec is published yet.")
     return spec

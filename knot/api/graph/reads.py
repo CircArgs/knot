@@ -38,7 +38,7 @@ class ResolvedEntityResponse(StrictBase):
 
 
 @router.get("/classes/{class_name}", response_model=ListResponse)
-def list_class_rows(
+async def list_class_rows(
     class_name: str,
     limit: int = Query(100, ge=1, le=1000),
     offset: int = Query(0, ge=0),
@@ -46,10 +46,10 @@ def list_class_rows(
     include_tombstoned: bool = Query(False, description="Include tombstoned entities"),
 ) -> ListResponse:
     """List rows for a published class. One row per ``(_canonical_id, _source)``."""
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         cls = resolve_class(spec, class_name)
-        rows = graph_store.list_rows(
+        rows = await graph_store.list_rows(
             conn,
             cls=cls,
             limit=limit,
@@ -57,7 +57,7 @@ def list_class_rows(
             as_of=as_of,
             include_tombstoned=include_tombstoned,
         )
-        total = graph_store.count_rows(
+        total = await graph_store.count_rows(
             conn,
             cls=cls,
             as_of=as_of,
@@ -77,17 +77,17 @@ def list_class_rows(
     "/classes/{class_name}/{canonical_id}",
     response_model=EntityResponse,
 )
-def get_canonical_entity(
+async def get_canonical_entity(
     class_name: str,
     canonical_id: str,
     as_of: int | None = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
     include_tombstoned: bool = Query(False, description="Include tombstoned entities"),
 ) -> EntityResponse:
     """All per-source contributions for a single canonical entity."""
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         cls = resolve_class(spec, class_name)
-        contributions = graph_store.get_canonical_contributions(
+        contributions = await graph_store.get_canonical_contributions(
             conn,
             cls=cls,
             canonical_id=canonical_id,
@@ -112,16 +112,16 @@ def get_canonical_entity(
     "/classes/{class_name}/{canonical_id}/resolved",
     response_model=ResolvedEntityResponse,
 )
-def get_resolved_entity(
+async def get_resolved_entity(
     class_name: str,
     canonical_id: str,
     as_of: int | None = Query(None, ge=1, description="Pin to spec_revision ≤ N"),
 ) -> ResolvedEntityResponse:
     """One trust-resolved record for the canonical_id (per-slot resolution)."""
-    with db.connect() as conn:
-        spec = published_or_409(conn)
+    async with db.connect() as conn:
+        spec = await published_or_409(conn)
         cls = resolve_class(spec, class_name)
-        record = resolve.resolve_entity(
+        record = await resolve.resolve_entity(
             conn,
             cls=cls,
             canonical_id=canonical_id,

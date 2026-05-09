@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 
 import pytest
+import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
@@ -48,15 +49,15 @@ def _string_type() -> TypeDefinition:
     return TypeDefinition(name="string", base="str")
 
 
-def _reset(conn):
-    conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    conn.execute("TRUNCATE TABLE users CASCADE")
-    conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+async def _reset(conn):
+    await conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await conn.execute("TRUNCATE TABLE users CASCADE")
+    await conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
 
 
 def _build_identifier_spec() -> tuple[Spec, OntologyClass, OntologyClass]:
@@ -99,14 +100,14 @@ def _build_identifier_spec() -> tuple[Spec, OntologyClass, OntologyClass]:
 # Fixture: published polymorphic spec
 # ---------------------------------------------------------------------------
 
-@pytest.fixture
-def poly_db(pg_conn):
+@pytest_asyncio.fixture
+async def poly_db(pg_conn):
     """Reset, publish Movie + Identifier spec. Yields (conn, movie, identifier, rev)."""
-    _reset(pg_conn)
+    await _reset(pg_conn)
     spec, movie, identifier = _build_identifier_spec()
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
     yield pg_conn, movie, identifier, rev
 
 
@@ -114,12 +115,13 @@ def poly_db(pg_conn):
 # 1. Table is created for the polymorphic class
 # ---------------------------------------------------------------------------
 
-def test_polymorphic_class_table_created(poly_db):
+async def test_polymorphic_class_table_created(poly_db):
     conn, movie, identifier, rev = poly_db
     # If the table exists, we can query it without error.
-    row = conn.execute(
+    cur = await conn.execute(
         "SELECT count(*) FROM knot_data.identifier"
-    ).fetchone()
+    )
+    row = await cur.fetchone()
     assert row[0] == 0  # empty, but table exists
 
 
@@ -127,9 +129,9 @@ def test_polymorphic_class_table_created(poly_db):
 # 2. Source on a non-polymorphic class publishes fine
 # ---------------------------------------------------------------------------
 
-def test_source_on_normal_class_publishes(pg_conn):
+async def test_source_on_normal_class_publishes(pg_conn):
     """A Source targeting a normal (non-polymorphic) class goes through the gate."""
-    _reset(pg_conn)
+    await _reset(pg_conn)
     st = _string_type()
     id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
@@ -142,20 +144,20 @@ def test_source_on_normal_class_publishes(pg_conn):
         classes=[movie],
         sources=[src],
     )
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
     # Should not raise
-    publish_draft(pg_conn, rev)
-    assert spec_store.get_published(pg_conn) is not None
+    await publish_draft(pg_conn, rev)
+    assert await spec_store.get_published(pg_conn) is not None
 
 
 # ---------------------------------------------------------------------------
 # 3. Source targeting a polymorphic class is rejected at publish gate
 # ---------------------------------------------------------------------------
 
-def test_source_on_polymorphic_class_rejected(pg_conn):
+async def test_source_on_polymorphic_class_rejected(pg_conn):
     """Publish gate rejects a Source whose entity_class has identifier_pattern."""
-    _reset(pg_conn)
+    await _reset(pg_conn)
     st = _string_type()
     entity_class_slot = Slot(name="entity_class", range=st, required=True)
     entity_src_key = Slot(name="entity_src_key", range=st, required=True)
@@ -181,29 +183,29 @@ def test_source_on_polymorphic_class_rejected(pg_conn):
         classes=[identifier],
         sources=[bad_src],
     )
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
     with pytest.raises(PublishGateError, match="polymorphic"):
-        publish_draft(pg_conn, rev)
+        await publish_draft(pg_conn, rev)
 
 
 # ---------------------------------------------------------------------------
 # 4. Add rows via apply_add; retrieve via GraphQL byDiscriminator
 # ---------------------------------------------------------------------------
 
-def test_add_identifier_rows_and_query_by_discriminator(poly_db):
+async def test_add_identifier_rows_and_query_by_discriminator(poly_db):
     """Add an Identifier row and find it via identifierByDiscriminator."""
     conn, movie, identifier, rev = poly_db
 
     # Add two synthetic identifier rows.
-    apply_add(
+    await apply_add(
         conn,
         cls=identifier,
         new_canonical_id="Movie:tt0111161",
         values={"entity_class": "Movie", "entity_src_key": "tt0111161", "label": "Shawshank"},
         spec_revision=rev,
     )
-    apply_add(
+    await apply_add(
         conn,
         cls=identifier,
         new_canonical_id="Movie:tt0068646",
@@ -216,11 +218,11 @@ def test_add_identifier_rows_and_query_by_discriminator(poly_db):
     from knot.spec.compile.graphql import get_or_build_schema
     from knot.spec.canonical import compute_content_hash
 
-    published = spec_store.get_published(conn)
-    content_hash = spec_store.get_published_content_hash(conn)
+    published = await spec_store.get_published(conn)
+    content_hash = await spec_store.get_published_content_hash(conn)
     schema = get_or_build_schema(published, content_hash)
 
-    result = schema.execute_sync(
+    result = await schema.execute(
         """
         query {
             identifierByDiscriminator(targetClass: "Movie", key: "tt0111161") {
@@ -241,16 +243,16 @@ def test_add_identifier_rows_and_query_by_discriminator(poly_db):
 # 5. byDiscriminator with unknown key returns null
 # ---------------------------------------------------------------------------
 
-def test_by_discriminator_unknown_returns_null(poly_db):
+async def test_by_discriminator_unknown_returns_null(poly_db):
     conn, movie, identifier, rev = poly_db
 
     from knot.spec.compile.graphql import get_or_build_schema
 
-    published = spec_store.get_published(conn)
-    content_hash = spec_store.get_published_content_hash(conn)
+    published = await spec_store.get_published(conn)
+    content_hash = await spec_store.get_published_content_hash(conn)
     schema = get_or_build_schema(published, content_hash)
 
-    result = schema.execute_sync(
+    result = await schema.execute(
         """
         query {
             identifierByDiscriminator(targetClass: "Movie", key: "doesnotexist") {
@@ -267,7 +269,7 @@ def test_by_discriminator_unknown_returns_null(poly_db):
 # 6. Schema field presence: polymorphic vs non-polymorphic
 # ---------------------------------------------------------------------------
 
-def test_schema_fields_polymorphic_vs_normal(poly_db):
+async def test_schema_fields_polymorphic_vs_normal(poly_db):
     """Polymorphic class has byDiscriminator, NOT byCanonicalId or Resolved.
     Normal class has byCanonicalId and Resolved, NOT byDiscriminator.
     """
@@ -275,8 +277,8 @@ def test_schema_fields_polymorphic_vs_normal(poly_db):
 
     from knot.spec.compile.graphql import get_or_build_schema
 
-    published = spec_store.get_published(conn)
-    content_hash = spec_store.get_published_content_hash(conn)
+    published = await spec_store.get_published(conn)
+    content_hash = await spec_store.get_published_content_hash(conn)
     schema = get_or_build_schema(published, content_hash)
 
     # Introspect field names from the schema.
@@ -307,9 +309,9 @@ def test_schema_fields_polymorphic_vs_normal(poly_db):
 # 7. DiscriminatedRef with missing target_class → PublishGateError
 # ---------------------------------------------------------------------------
 
-def test_discriminated_ref_missing_target_class_rejected(pg_conn):
+async def test_discriminated_ref_missing_target_class_rejected(pg_conn):
     """DiscriminatedRef.target_class must be on spec.classes."""
-    _reset(pg_conn)
+    await _reset(pg_conn)
     st = _string_type()
 
     # A class that is NOT on the spec.
@@ -341,19 +343,19 @@ def test_discriminated_ref_missing_target_class_rejected(pg_conn):
         classes=[some_class],  # Orphan intentionally NOT included
         sources=[],
     )
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
     with pytest.raises(PublishGateError, match="target_class"):
-        publish_draft(pg_conn, rev)
+        await publish_draft(pg_conn, rev)
 
 
 # ---------------------------------------------------------------------------
 # 8. Regression: spec without IdentifierPattern works as before
 # ---------------------------------------------------------------------------
 
-def test_regression_no_identifier_pattern(pg_conn):
+async def test_regression_no_identifier_pattern(pg_conn):
     """A plain spec with no polymorphic classes publishes and queries normally."""
-    _reset(pg_conn)
+    await _reset(pg_conn)
     st = _string_type()
     it = TypeDefinition(name="integer", base="int")
     imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
@@ -369,11 +371,11 @@ def test_regression_no_identifier_pattern(pg_conn):
         classes=[movie],
         sources=[src],
     )
-    rev = create_draft(pg_conn)
-    update_draft(pg_conn, rev, spec)
-    publish_draft(pg_conn, rev)
+    rev = await create_draft(pg_conn)
+    await update_draft(pg_conn, rev, spec)
+    await publish_draft(pg_conn, rev)
 
-    graph_store.insert_rows(
+    await graph_store.insert_rows(
         pg_conn,
         source=src,
         spec_revision=rev,
@@ -381,7 +383,7 @@ def test_regression_no_identifier_pattern(pg_conn):
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}]]
     )
 
-    rows = graph_store.query_rows(
+    rows = await graph_store.query_rows(
         pg_conn,
         cls=movie,
         predicate_sql=None,

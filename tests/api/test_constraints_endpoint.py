@@ -56,16 +56,16 @@ def _dev_principal() -> Principal:
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def clean_db(pg_conn):
+async def clean_db(pg_conn):
     """Reset all spec-related state to a clean slate before each test."""
-    pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    db.apply_schema()
+    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
+    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
+    await db.apply_schema()
     yield pg_conn
 
 
@@ -90,11 +90,11 @@ def client_no_exc():
 
 
 @pytest.fixture
-def draft_with_movie(clean_db):
+async def draft_with_movie(clean_db):
     """Create a draft with the Movie spec; yield (conn, draft_id)."""
     conn = clean_db
-    rev = create_draft(conn)
-    update_draft(conn, rev, _make_spec())
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, _make_spec())
     return conn, rev
 
 
@@ -124,7 +124,7 @@ def test_add_compare_constraint_returns_mutation_response(draft_with_movie, clie
     assert data["spec_summary"]["constraints"] == 1
 
 
-def test_add_compare_constraint_persisted_on_spec(draft_with_movie, client):
+async def test_add_compare_constraint_persisted_on_spec(draft_with_movie, client):
     conn, draft_id = draft_with_movie
 
     body = {
@@ -139,7 +139,7 @@ def test_add_compare_constraint_persisted_on_spec(draft_with_movie, client):
     }
     client.post(f"/spec/drafts/{draft_id}/constraints", json=body)
 
-    spec = get_revision(conn, draft_id)
+    spec = await get_revision(conn, draft_id)
     assert len(spec.constraints) == 1
     con = spec.constraints[0]
     assert con.name == "year_not_before_cinema"
@@ -150,7 +150,7 @@ def test_add_compare_constraint_persisted_on_spec(draft_with_movie, client):
 # 2. BoolExpr(AND, [Compare>=1888, Compare<=2100])
 # ---------------------------------------------------------------------------
 
-def test_add_bool_expr_constraint(draft_with_movie, client):
+async def test_add_bool_expr_constraint(draft_with_movie, client):
     conn, draft_id = draft_with_movie
 
     body = {
@@ -182,7 +182,7 @@ def test_add_bool_expr_constraint(draft_with_movie, client):
     data = resp.json()
     assert data["spec_summary"]["constraints"] == 1
 
-    spec = get_revision(conn, draft_id)
+    spec = await get_revision(conn, draft_id)
     con = spec.constraints[0]
     assert con.name == "year_plausible_range"
     from knot.spec.metaschema import BoolExpr, BoolOpKind
