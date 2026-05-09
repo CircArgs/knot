@@ -20,19 +20,18 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
 from knot.api.auth.security import require_user
-from knot.api.constraint_translator import ExprJson, translate_expr
 from knot.db import spec_store
+from knot.graph import spec as graph_spec
 from knot.spec import (
     OntologyClass,
-    PermissibleValue,
     ResolutionPolicy,
     Slot,
     Source,
     Spec,
     TypeDefinition,
-    compute_content_hash,
 )
-from knot.spec.metaschema import Constraint, Severity
+from knot.spec.expressions import ExprJson
+from knot.spec.metaschema import Severity
 
 # ---------------------------------------------------------------------------
 # Request / response shapes
@@ -178,29 +177,8 @@ class PublishResponse(_StrictBase):
 
 
 # ---------------------------------------------------------------------------
-# Helpers — find entities in a draft Spec by name
+# HTTP-shape helpers
 # ---------------------------------------------------------------------------
-
-
-def _find_class(spec: Spec, name: str) -> OntologyClass:
-    for c in spec.classes:
-        if c.name == name:
-            return c
-    raise HTTPException(404, f"OntologyClass {name!r} not on this draft")
-
-
-def _find_slot(spec: Spec, name: str) -> Slot:
-    for s in spec.slots:
-        if s.name == name:
-            return s
-    raise HTTPException(404, f"Slot {name!r} not on this draft")
-
-
-def _find_type(spec: Spec, name: str) -> TypeDefinition:
-    for t in spec.types:
-        if t.name == name:
-            return t
-    raise HTTPException(404, f"TypeDefinition {name!r} not on this draft")
 
 
 def _spec_summary(spec: Spec) -> dict[str, int]:
@@ -214,10 +192,10 @@ def _spec_summary(spec: Spec) -> dict[str, int]:
 
 
 def _response(draft_id: int, spec: Spec) -> MutationResponse:
-    """Build the mutation response after ``edit_draft`` has written back."""
+    """Build the mutation response after the orchestration call has written back."""
     return MutationResponse(
         draft_revision=draft_id,
-        content_hash=compute_content_hash(spec),
+        content_hash=graph_spec.content_hash(spec),
         spec_summary=_spec_summary(spec),
     )
 
@@ -264,6 +242,21 @@ def _summarize_source(s: Source) -> SourceSummary:
     )
 
 
+# ─── Exception → HTTP mapping helpers ───────────────────────────────────────
+
+
+def _map_collision(exc: graph_spec.CollisionError) -> HTTPException:
+    return HTTPException(409, str(exc))
+
+
+def _map_entity_not_on_draft(exc: graph_spec.EntityNotOnDraftError) -> HTTPException:
+    return HTTPException(404, str(exc))
+
+
+def _map_invalid(exc: Exception) -> HTTPException:
+    return HTTPException(400, str(exc))
+
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -277,7 +270,7 @@ router = APIRouter(prefix="/spec", tags=["spec"])
 @router.get("/published", summary="Full currently-published spec (cycle-safe JSON)")
 async def get_published_spec() -> dict[str, Any]:
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
+        spec = await graph_spec.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
     return spec_store.spec_to_dict(spec)
@@ -286,7 +279,7 @@ async def get_published_spec() -> dict[str, Any]:
 @router.get("/published/classes", response_model=list[ClassSummary])
 async def list_published_classes() -> list[ClassSummary]:
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
+        spec = await graph_spec.get_published(conn)
     if spec is None:
         return []
     return [_summarize_class(c) for c in spec.classes]
@@ -295,16 +288,20 @@ async def list_published_classes() -> list[ClassSummary]:
 @router.get("/published/classes/{name}", response_model=ClassSummary)
 async def get_published_class(name: str) -> ClassSummary:
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
+        spec = await graph_spec.get_published(conn)
     if spec is None:
         raise HTTPException(404, "No spec is currently published.")
-    return _summarize_class(_find_class(spec, name))
+    try:
+        cls = next(c for c in spec.classes if c.name == name)
+    except StopIteration as exc:
+        raise HTTPException(404, f"OntologyClass {name!r} not on this draft") from exc
+    return _summarize_class(cls)
 
 
 @router.get("/published/slots", response_model=list[SlotSummary])
 async def list_published_slots() -> list[SlotSummary]:
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
+        spec = await graph_spec.get_published(conn)
     if spec is None:
         return []
     return [_summarize_slot(s) for s in spec.slots]
@@ -313,7 +310,7 @@ async def list_published_slots() -> list[SlotSummary]:
 @router.get("/published/types", response_model=list[TypeSummary])
 async def list_published_types() -> list[TypeSummary]:
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
+        spec = await graph_spec.get_published(conn)
     if spec is None:
         return []
     return [_summarize_type(t) for t in spec.types]
@@ -322,7 +319,7 @@ async def list_published_types() -> list[TypeSummary]:
 @router.get("/published/sources", response_model=list[SourceSummary])
 async def list_published_sources() -> list[SourceSummary]:
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
+        spec = await graph_spec.get_published(conn)
     if spec is None:
         return []
     return [_summarize_source(s) for s in spec.sources]
@@ -335,7 +332,7 @@ async def list_published_sources() -> list[SourceSummary]:
 async def list_revisions() -> list[RevisionSummary]:
     """All published revisions, newest first (immortal audit chain)."""
     async with db.connect() as conn:
-        rows = await spec_store.list_published(conn)
+        rows = await graph_spec.list_revisions(conn)
     return [RevisionSummary(**r) for r in rows]
 
 
@@ -343,8 +340,8 @@ async def list_revisions() -> list[RevisionSummary]:
 async def get_revision_spec(revision: int) -> dict[str, Any]:
     async with db.connect() as conn:
         try:
-            spec = await spec_store.get_revision(conn, revision)
-        except spec_store.DraftNotFoundError as exc:
+            spec = await graph_spec.get_revision(conn, revision)
+        except graph_spec.DraftNotFoundError as exc:
             raise HTTPException(404, f"Revision {revision} not found.") from exc
     return spec_store.spec_to_dict(spec)
 
@@ -355,7 +352,7 @@ async def get_revision_spec(revision: int) -> dict[str, Any]:
 @router.get("/drafts", response_model=list[DraftSummary])
 async def list_drafts_endpoint() -> list[DraftSummary]:
     async with db.connect() as conn:
-        rows = await spec_store.list_drafts(conn)
+        rows = await graph_spec.list_drafts(conn)
     return [DraftSummary(**r) for r in rows]
 
 
@@ -367,17 +364,12 @@ async def list_drafts_endpoint() -> list[DraftSummary]:
 async def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
     async with db.connect() as conn:
         try:
-            new_id = await spec_store.create_draft(
-                conn,
-                parent_revision=body.parent_revision,
-                label=body.label,
+            new_id = await graph_spec.create_draft(
+                conn, parent_revision=body.parent_revision, label=body.label
             )
-        except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(
-                404,
-                f"Parent revision {body.parent_revision} not found.",
-            ) from exc
-        rows = await spec_store.list_drafts(conn)
+        except graph_spec.DraftNotFoundError as exc:
+            raise HTTPException(404, f"Parent revision {body.parent_revision} not found.") from exc
+        rows = await graph_spec.list_drafts(conn)
     row = next(r for r in rows if r["revision"] == new_id)
     return DraftSummary(**row)
 
@@ -386,8 +378,8 @@ async def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
 async def get_draft(draft_id: int) -> dict[str, Any]:
     async with db.connect() as conn:
         try:
-            spec = await spec_store.get_revision(conn, draft_id)
-        except spec_store.DraftNotFoundError as exc:
+            spec = await graph_spec.get_draft(conn, draft_id)
+        except graph_spec.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
     return spec_store.spec_to_dict(spec)
 
@@ -396,10 +388,10 @@ async def get_draft(draft_id: int) -> dict[str, Any]:
 async def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
     async with db.connect() as conn:
         try:
-            await spec_store.discard_draft(conn, draft_id)
-        except spec_store.DraftNotFoundError as exc:
+            await graph_spec.discard_draft(conn, draft_id)
+        except graph_spec.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
-        except spec_store.DraftAlreadyPublishedError as exc:
+        except graph_spec.DraftAlreadyPublishedError as exc:
             raise HTTPException(
                 409,
                 f"Draft {draft_id} is already published and cannot be discarded.",
@@ -417,21 +409,18 @@ async def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 )
 async def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
     async with db.connect() as conn:
-        async with spec_store.edit_draft(conn, draft_id) as spec:
-            if any(t.name.lower() == body.name.lower() for t in spec.types):
-                raise HTTPException(
-                    409,
-                    f"TypeDefinition collides (case-insensitive) for name {body.name!r}.",
-                )
-            spec.types.append(
-                TypeDefinition(
-                    name=body.name,
-                    base=body.base,
-                    pattern=body.pattern,
-                    description=body.description,
-                )
+        try:
+            spec = await graph_spec.add_type(
+                conn,
+                draft_id,
+                name=body.name,
+                base=body.base,
+                pattern=body.pattern,
+                description=body.description,
             )
-        return _response(draft_id, spec)
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+    return _response(draft_id, spec)
 
 
 @router.post(
@@ -441,53 +430,33 @@ async def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationRespons
 )
 async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
     async with db.connect() as conn:
-        async with spec_store.edit_draft(conn, draft_id) as spec:
-            if any(s.name.lower() == body.name.lower() for s in spec.slots):
-                raise HTTPException(
-                    409,
-                    f"Slot collides (case-insensitive) for name {body.name!r}.",
-                )
-
-            range_obj: Any | None = None
-            if body.range_kind == "type":
-                if body.range_name is None:
-                    raise HTTPException(400, "range_kind='type' requires range_name")
-                range_obj = _find_type(spec, body.range_name)
-            elif body.range_kind == "class":
-                if body.range_name is None:
-                    raise HTTPException(400, "range_kind='class' requires range_name")
-                range_obj = _find_class(spec, body.range_name)
-            elif body.range_kind is not None:
-                raise HTTPException(
-                    400, f"range_kind must be 'type', 'class', or null; got {body.range_kind!r}"
-                )
-
-            permissible = None
-            if body.permissible_values is not None:
-                permissible = [PermissibleValue(text=t) for t in body.permissible_values]
-
-            derivation = None
-            if body.derivation is not None:
-                placeholder_primary = OntologyClass(name="__derivation_ctx__")
-                derivation = translate_expr(body.derivation, spec, placeholder_primary)
-
-            spec.slots.append(
-                Slot(
-                    name=body.name,
-                    range=range_obj,
-                    identifier=body.identifier,
-                    required=body.required,
-                    multivalued=body.multivalued,
-                    resolution_policy=body.resolution_policy,
-                    pattern=body.pattern,
-                    minimum_value=body.minimum_value,
-                    maximum_value=body.maximum_value,
-                    permissible_values=permissible,
-                    description=body.description,
-                    derivation=derivation,
-                )
+        try:
+            spec = await graph_spec.add_slot(
+                conn,
+                draft_id,
+                name=body.name,
+                range_kind=body.range_kind,
+                range_name=body.range_name,
+                identifier=body.identifier,
+                required=body.required,
+                multivalued=body.multivalued,
+                resolution_policy=body.resolution_policy,
+                pattern=body.pattern,
+                minimum_value=body.minimum_value,
+                maximum_value=body.maximum_value,
+                permissible_values=body.permissible_values,
+                description=body.description,
+                derivation=body.derivation,
             )
-        return _response(draft_id, spec)
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.InvalidRangeKindError as exc:
+            raise _map_invalid(exc) from exc
+        except graph_spec.ExprTranslationError as exc:
+            raise HTTPException(404, str(exc)) from exc
+    return _response(draft_id, spec)
 
 
 @router.post(
@@ -497,41 +466,25 @@ async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
 )
 async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
     async with db.connect() as conn:
-        async with spec_store.edit_draft(conn, draft_id) as spec:
-            if any(c.name.lower() == body.name.lower() for c in spec.classes):
-                raise HTTPException(
-                    409,
-                    f"OntologyClass collides (case-insensitive) with an existing "
-                    f"class for name {body.name!r}.",
-                )
-
-            slots = [_find_slot(spec, n) for n in body.slot_names]
-            is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
-            mixins = [_find_class(spec, n) for n in body.mixin_names]
-
-            definition = None
-            if body.definition is not None:
-                primary = (
-                    is_a
-                    if is_a is not None
-                    else _find_class(spec, body.name)
-                    if any(c.name == body.name for c in spec.classes)
-                    else OntologyClass(name=body.name)
-                )
-                definition = translate_expr(body.definition, spec, primary)
-
-            spec.classes.append(
-                OntologyClass(
-                    name=body.name,
-                    slots=slots,
-                    is_a=is_a,
-                    mixins=mixins,
-                    abstract=body.abstract,
-                    description=body.description,
-                    definition=definition,
-                )
+        try:
+            spec = await graph_spec.add_class(
+                conn,
+                draft_id,
+                name=body.name,
+                slot_names=body.slot_names,
+                is_a_name=body.is_a_name,
+                mixin_names=body.mixin_names,
+                abstract=body.abstract,
+                description=body.description,
+                definition=body.definition,
             )
-        return _response(draft_id, spec)
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.ExprTranslationError as exc:
+            raise HTTPException(404, str(exc)) from exc
+    return _response(draft_id, spec)
 
 
 @router.patch(
@@ -541,21 +494,20 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
 )
 async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
     async with db.connect() as conn:
-        async with spec_store.edit_draft(conn, draft_id) as spec:
-            cls = _find_class(spec, name)
-
-            if body.slot_names is not None:
-                cls.slots = [_find_slot(spec, n) for n in body.slot_names]
-            if body.is_a_name is not None:
-                cls.is_a = _find_class(spec, body.is_a_name) if body.is_a_name else None
-            if body.mixin_names is not None:
-                cls.mixins = [_find_class(spec, n) for n in body.mixin_names]
-            if body.abstract is not None:
-                cls.abstract = body.abstract
-            if body.description is not None:
-                cls.description = body.description
-
-        return _response(draft_id, spec)
+        try:
+            spec = await graph_spec.update_class(
+                conn,
+                draft_id,
+                name,
+                slot_names=body.slot_names,
+                is_a_name=body.is_a_name,
+                mixin_names=body.mixin_names,
+                abstract=body.abstract,
+                description=body.description,
+            )
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+    return _response(draft_id, spec)
 
 
 @router.post(
@@ -565,30 +517,22 @@ async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationR
 )
 async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
     async with db.connect() as conn:
-        async with spec_store.edit_draft(conn, draft_id) as spec:
-            if any(s.name.lower() == body.name.lower() for s in spec.sources):
-                raise HTTPException(
-                    409,
-                    f"Source collides (case-insensitive) for name {body.name!r}.",
-                )
-
-            cls = _find_class(spec, body.entity_class_name)
-            slot = next((s for s in cls.slots if s.name == body.identifier_slot_name), None)
-            if slot is None:
-                raise HTTPException(
-                    400,
-                    f"Slot {body.identifier_slot_name!r} is not on class {cls.name!r}",
-                )
-
-            spec.sources.append(
-                Source(
-                    name=body.name,
-                    entity_class=cls,
-                    identifier_slot=slot,
-                    description=body.description,
-                )
+        try:
+            spec = await graph_spec.add_source(
+                conn,
+                draft_id,
+                name=body.name,
+                entity_class_name=body.entity_class_name,
+                identifier_slot_name=body.identifier_slot_name,
+                description=body.description,
             )
-        return _response(draft_id, spec)
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.InvalidIdentifierSlotError as exc:
+            raise _map_invalid(exc) from exc
+    return _response(draft_id, spec)
 
 
 @router.post(
@@ -598,26 +542,23 @@ async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
 )
 async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
     async with db.connect() as conn:
-        async with spec_store.edit_draft(conn, draft_id) as spec:
-            if any(c.name.lower() == body.name.lower() for c in spec.constraints):
-                raise HTTPException(
-                    409,
-                    f"Constraint collides (case-insensitive) for name {body.name!r}.",
-                )
-
-            primary = _find_class(spec, body.primary_class_name)
-            expr = translate_expr(body.body, spec, primary)
-
-            spec.constraints.append(
-                Constraint(
-                    name=body.name,
-                    primary=primary,
-                    body=expr,
-                    severity=body.severity,
-                    message=body.message,
-                )
+        try:
+            spec = await graph_spec.add_constraint(
+                conn,
+                draft_id,
+                name=body.name,
+                primary_class_name=body.primary_class_name,
+                body=body.body,
+                severity=body.severity,
+                message=body.message,
             )
-        return _response(draft_id, spec)
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.ExprTranslationError as exc:
+            raise HTTPException(404, str(exc)) from exc
+    return _response(draft_id, spec)
 
 
 # ─── Publish ────────────────────────────────────────────────────────────────
@@ -641,24 +582,14 @@ async def publish(
     """Run the publish gate; on pass, atomically promote this draft to published."""
     async with db.connect() as conn:
         try:
-            await spec_store.publish_draft(
-                conn,
-                draft_id,
-                allow_destructive=allow_destructive,
+            result = await graph_spec.publish_draft(
+                conn, draft_id, allow_destructive=allow_destructive
             )
-        except spec_store.DraftNotFoundError as exc:
+        except graph_spec.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
-        except spec_store.PublishGateError as exc:
+        except graph_spec.PublishGateError as exc:
             raise HTTPException(400, f"Draft {draft_id} failed the publish gate: {exc}") from exc
-
-        await spec_store.get_revision(conn, draft_id)
-        rows = await spec_store.list_published(conn)
-    row = next(r for r in rows if r["revision"] == draft_id)
-    return PublishResponse(
-        revision=draft_id,
-        content_hash=row["content_hash"],
-        published_at=row["published_at"] or "",
-    )
+    return PublishResponse(**result)
 
 
 # ─── Rollback ───────────────────────────────────────────────────────────────
@@ -688,34 +619,17 @@ async def rollback(
     rollback to the currently-published revision (no-op).
     """
     async with db.connect() as conn:
-        current = await spec_store.get_published_revision(conn)
-        if current == target_revision:
-            raise HTTPException(
-                400,
-                f"Revision {target_revision} is already the published spec; "
-                "nothing to roll back to.",
-            )
         try:
-            await spec_store.publish_draft(
-                conn,
-                target_revision,
-                allow_destructive=allow_destructive,
+            result = await graph_spec.rollback(
+                conn, target_revision, allow_destructive=allow_destructive
             )
-        except spec_store.DraftNotFoundError as exc:
-            raise HTTPException(
-                404,
-                f"Revision {target_revision} not found.",
-            ) from exc
-        except spec_store.PublishGateError as exc:
+        except graph_spec.RollbackToCurrentError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        except graph_spec.DraftNotFoundError as exc:
+            raise HTTPException(404, f"Revision {target_revision} not found.") from exc
+        except graph_spec.PublishGateError as exc:
             raise HTTPException(
                 400,
                 f"Rollback to revision {target_revision} failed the publish gate: {exc}",
             ) from exc
-
-        rows = await spec_store.list_published(conn)
-    row = next(r for r in rows if r["revision"] == target_revision)
-    return PublishResponse(
-        revision=target_revision,
-        content_hash=row["content_hash"],
-        published_at=row["published_at"] or "",
-    )
+    return PublishResponse(**result)

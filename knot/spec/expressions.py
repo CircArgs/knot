@@ -1,26 +1,31 @@
 """JSON-shape Pydantic models for constraint expression trees + translator.
 
 Path (b) from the design: parallel JSON-wrapper models with ``kind``
-discriminator fields live here at the API boundary.  The metaschema stays
+discriminator fields live here at the API boundary. The metaschema stays
 Python-authoring-natural (no ``kind`` fields added); the JSON-shape concern
-is isolated in this module.
+is isolated here.
 
 Public surface
 --------------
 ExprJson
     Annotated Union — Pydantic dispatches on ``kind`` via discriminator.
 
-translate_expr(node_json, spec) -> ExprNode
-    Walk the JSON tree, resolve slot names against spec.slots,
+translate_expr(node_json, spec, primary_class) -> ExprNode
+    Walk the JSON tree, resolve slot/class names against ``spec``,
     return the corresponding metaschema object.
-    Raises HTTPException(404) on unknown slot reference.
+    Raises ``ExprTranslationError`` on unknown name or unsupported kind.
+
+This module previously lived in ``knot/api/constraint_translator.py``.
+It moved to ``knot/spec/`` because translation is a pure spec-graph
+primitive (JSON tree → metaschema tree); the API layer is just one
+caller. ``ExprTranslationError`` replaces the old ``HTTPException`` so
+non-API callers (graph/spec.py) can catch and remap.
 """
 
 from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 
 from knot.spec.metaschema import (
@@ -46,6 +51,13 @@ from knot.spec.metaschema import (
     Spec,
     Within,
 )
+
+
+class ExprTranslationError(Exception):
+    """Raised on unknown slot/class reference or unsupported kind during
+    JSON-to-metaschema translation. Caller (route or graph orchestrator)
+    decides how to surface the error (404 / 400)."""
+
 
 # ---------------------------------------------------------------------------
 # JSON-wrapper Pydantic models
@@ -222,19 +234,14 @@ def _find_slot(spec: Spec, name: str) -> Slot:
     for s in spec.slots:
         if s.name == name:
             return s
-    raise HTTPException(404, f"Slot {name!r} not on this draft")
+    raise ExprTranslationError(f"Slot {name!r} not on this draft")
 
 
 def _find_class(spec: Spec, name: str) -> OntologyClass:
     for c in spec.classes:
         if c.name == name:
             return c
-    raise HTTPException(404, f"OntologyClass {name!r} not on this draft")
-
-
-def _sentinel_from_class(spec: Spec, primary_class: OntologyClass) -> OntologyClass:
-    """Return the primary class object from the spec (for SlotPath.from_class)."""
-    return primary_class
+    raise ExprTranslationError(f"OntologyClass {name!r} not on this draft")
 
 
 def _relation_target_class(relation: Any, spec: Spec) -> OntologyClass:
@@ -250,13 +257,12 @@ def _relation_target_class(relation: Any, spec: Spec) -> OntologyClass:
         slot = relation.slot
         if isinstance(slot.range, OntologyClass):
             return slot.range
-        raise HTTPException(
-            400,
+        raise ExprTranslationError(
             f"RelationRef slot {slot.name!r} has no OntologyClass range; "
-            "cannot infer target class for projection.",
+            "cannot infer target class for projection."
         )
-    raise HTTPException(
-        400, f"Cannot determine target class from relation type {type(relation).__name__!r}."
+    raise ExprTranslationError(
+        f"Cannot determine target class from relation type {type(relation).__name__!r}."
     )
 
 
@@ -266,7 +272,8 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
     ``primary_class`` is the constraint's primary class; it is used as
     ``SlotPath.from_class`` for all slot-path nodes.
 
-    Raises ``HTTPException(404)`` on unknown slot reference.
+    Raises ``ExprTranslationError`` on unknown slot/class reference or
+    unsupported kind.
     """
     if isinstance(node_json, _LiteralJson):
         return Literal_(value=node_json.value)
@@ -361,4 +368,4 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
         )
 
     # Unreachable — discriminator exhausts all variants.
-    raise HTTPException(400, f"Unsupported expression kind: {type(node_json).__name__}")
+    raise ExprTranslationError(f"Unsupported expression kind: {type(node_json).__name__}")
