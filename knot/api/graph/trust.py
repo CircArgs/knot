@@ -8,10 +8,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import Field
 
 from knot import db
+from knot.api.auth.security import require_user
 from knot.api.graph._common import StrictBase, published_or_409
 from knot.db import trust_config, trust_posteriors
-from knot.api.auth.security import require_user
-
 
 router = APIRouter()
 
@@ -54,6 +53,7 @@ def _posterior_view(p: trust_posteriors.Posterior) -> PosteriorView:
 # NOTE: literal-path routes are declared BEFORE `{source_name}` so FastAPI
 # matches /trust/posteriors and /trust/feedback exactly rather than
 # treating them as source names.
+
 
 @router.get("/trust", response_model=list[TrustScore])
 def list_trust_scores() -> list[TrustScore]:
@@ -117,6 +117,7 @@ def submit_feedback(body: FeedbackBody) -> PosteriorView:
 
 # Parameterized `/trust/{source_name}` routes go LAST so the literal-path
 # routes above (/trust/posteriors, /trust/feedback) take precedence.
+
 
 @router.get("/trust/{source_name}", response_model=TrustScore)
 def get_trust_score(source_name: str) -> TrustScore:

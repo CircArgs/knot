@@ -14,16 +14,15 @@ from pydantic import BaseModel
 from knot import db
 from knot.api.auth.security import require_user
 from knot.db import spec_store
-from knot.spec.compile.sql.dialects.postgres import lake
-
+from knot.spec.compile.postgres import lake
 
 router = APIRouter(prefix="/lake", tags=["lake"])
 
 
 class ClassMaterialization(BaseModel):
     name: str
-    current: str   # SELECT body — flat current snapshot
-    history: str   # SELECT body — full SCD2 timeline
+    current: str  # SELECT body — flat current snapshot
+    history: str  # SELECT body — full SCD2 timeline
 
 
 class MaterializeResponse(BaseModel):

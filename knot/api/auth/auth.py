@@ -19,7 +19,6 @@ from knot import db
 from knot.api.auth.security import Principal, require_admin, require_user
 from knot.db import users
 
-
 _NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_-]{0,62}$"
 
 

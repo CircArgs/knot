@@ -27,9 +27,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timezone
-from typing import Any, Iterator
+from datetime import UTC, datetime
+from typing import Any
 
 import psycopg
 from pydantic import BaseModel
@@ -39,15 +40,12 @@ from knot.spec.canonical import compute_content_hash
 logger = logging.getLogger(__name__)
 from knot.spec.metaschema import (
     BoolExpr,
-    BoolOpKind,
     Compare,
-    CompareOp,
     Constraint,
     DirectRef,
     DiscriminatedRef,
     FilteredRelation,
     FormatDerivation,
-    GroupByMode,
     IdentifierPattern,
     Literal_,
     Matches,
@@ -61,10 +59,8 @@ from knot.spec.metaschema import (
     RelationFirst,
     RelationProject,
     RelationRef,
-    ResolutionPolicy,
     ReverseRelation,
     ScalarDerivation,
-    Severity,
     Slot,
     SlotOverride,
     SlotPath,
@@ -75,10 +71,10 @@ from knot.spec.metaschema import (
     Within,
 )
 
-
 # ---------------------------------------------------------------------------
 # Errors
 # ---------------------------------------------------------------------------
+
 
 class PublishGateError(Exception):
     """Raised when the publish gate rejects a candidate spec."""
@@ -354,6 +350,7 @@ def spec_from_dict(d: dict[str, Any]) -> Spec:
 # Publish gate
 # ---------------------------------------------------------------------------
 
+
 def _detect_mixin_cycle(start: OntologyClass) -> list[str] | None:
     """If ``start``'s mixin chain has a cycle, return the offending name path.
     Else None. Identity-compared (mixins are object refs, not name lookups)."""
@@ -493,6 +490,7 @@ def publish_gate(candidate: Spec) -> None:
     # DiscriminatedRef target_class validation: every DiscriminatedRef on any
     # slot must name a target_class that is present on spec.classes.
     from knot.spec.metaschema import DiscriminatedRef as _DiscriminatedRef
+
     for s in candidate.slots:
         ref = getattr(s, "reference", None)
         if isinstance(ref, _DiscriminatedRef) and ref.target_class is not None:
@@ -514,10 +512,7 @@ def publish_gate(candidate: Spec) -> None:
                 )
         cycle_path = _detect_mixin_cycle(c)
         if cycle_path is not None:
-            errors.append(
-                f"Class {c.name!r} has a cyclic mixin chain: "
-                + " -> ".join(cycle_path)
-            )
+            errors.append(f"Class {c.name!r} has a cyclic mixin chain: " + " -> ".join(cycle_path))
             continue
         collision = _detect_mixin_slot_collision(c)
         if collision is not None:
@@ -533,9 +528,7 @@ def publish_gate(candidate: Spec) -> None:
             continue
         # is_a must be set for defined classes.
         if c.is_a is None:
-            errors.append(
-                f"Defined class {c.name!r} must have is_a set to a parent class."
-            )
+            errors.append(f"Defined class {c.name!r} must have is_a set to a parent class.")
             continue
         if id(c.is_a) not in classes_by_id:
             errors.append(
@@ -544,15 +537,14 @@ def publish_gate(candidate: Spec) -> None:
             )
             continue
         # Definition must compile without error.
-        from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate
-        from knot.spec.compile.sql.dialects.postgres._dispatch import CompilerError
+        from knot.spec.compile.postgres import CompileContext, compile_predicate
+        from knot.spec.compile.postgres._dispatch import CompilerError
+
         try:
             ctx = CompileContext(primary_class=c.is_a, alias="s")
             compile_predicate(c.definition, ctx)
         except (CompilerError, NotImplementedError) as exc:
-            errors.append(
-                f"Defined class {c.name!r}.definition failed to compile: {exc}"
-            )
+            errors.append(f"Defined class {c.name!r}.definition failed to compile: {exc}")
 
     if errors:
         raise PublishGateError("Publish gate failed:\n  - " + "\n  - ".join(errors))
@@ -562,8 +554,9 @@ def publish_gate(candidate: Spec) -> None:
 # Postgres storage layer
 # ---------------------------------------------------------------------------
 
+
 def _now() -> datetime:
-    return datetime.now(tz=timezone.utc)
+    return datetime.now(tz=UTC)
 
 
 def get_published(conn: psycopg.Connection) -> Spec | None:
@@ -705,8 +698,7 @@ def edit_draft(conn: psycopg.Connection, draft_id: int) -> Iterator[Spec]:
     """
     with conn.transaction():
         row = conn.execute(
-            "SELECT spec, published FROM spec_revisions "
-            "WHERE revision = %s FOR UPDATE",
+            "SELECT spec, published FROM spec_revisions WHERE revision = %s FOR UPDATE",
             (draft_id,),
         ).fetchone()
         if row is None:
@@ -725,8 +717,7 @@ def edit_draft(conn: psycopg.Connection, draft_id: int) -> Iterator[Spec]:
         new_payload = spec_to_dict(spec)
         new_hash = compute_content_hash(spec)
         conn.execute(
-            "UPDATE spec_revisions SET spec = %s, content_hash = %s "
-            "WHERE revision = %s",
+            "UPDATE spec_revisions SET spec = %s, content_hash = %s WHERE revision = %s",
             (json.dumps(new_payload), new_hash, draft_id),
         )
 
@@ -766,12 +757,12 @@ def publish_draft(
     index in a transient state, and the data plane and the spec are
     never out of sync.
     """
-    from knot.spec.compile.sql.dialects.postgres.migration import (
+    from knot.spec.compile.postgres import compile_constraint
+    from knot.spec.compile.postgres.migration import (
         apply_changes,
         diff_specs,
         is_destructive,
     )
-    from knot.spec.compile.sql.dialects.postgres import compile_constraint
 
     with conn.transaction():
         candidate = get_revision(conn, draft_id)
@@ -802,8 +793,7 @@ def publish_draft(
 
         # Index defined classes by name for skip logic below.
         defined_class_names: set[str] = {
-            c.name for c in candidate.classes
-            if getattr(c, "definition", None) is not None
+            c.name for c in candidate.classes if getattr(c, "definition", None) is not None
         }
 
         for con in candidate.constraints:
@@ -846,13 +836,11 @@ def publish_draft(
         # `(published) WHERE published = TRUE` doesn't see two TRUE rows
         # transiently (postgres validates per-row, not per-statement).
         conn.execute(
-            "UPDATE spec_revisions SET published = FALSE "
-            "WHERE published = TRUE AND revision <> %s",
+            "UPDATE spec_revisions SET published = FALSE WHERE published = TRUE AND revision <> %s",
             (draft_id,),
         )
         conn.execute(
-            "UPDATE spec_revisions SET published = TRUE, published_at = %s "
-            "WHERE revision = %s",
+            "UPDATE spec_revisions SET published = TRUE, published_at = %s WHERE revision = %s",
             (_now(), draft_id),
         )
         apply_changes(conn, changes)
@@ -873,5 +861,3 @@ def discard_draft(conn: psycopg.Connection, draft_id: int) -> None:
             f"spec_revisions {draft_id} is published; cannot be discarded."
         )
     conn.execute("DELETE FROM spec_revisions WHERE revision = %s", (draft_id,))
-
-

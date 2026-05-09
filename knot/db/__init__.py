@@ -33,9 +33,13 @@ from knot.db import (
 )
 
 __all__ = [
-    "connect", "apply_schema",
-    "spec_store", "graph_store", "corrections",
-    "trust_config", "trust_posteriors",
+    "connect",
+    "apply_schema",
+    "spec_store",
+    "graph_store",
+    "corrections",
+    "trust_config",
+    "trust_posteriors",
 ]
 
 

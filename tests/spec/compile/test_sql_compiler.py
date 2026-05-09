@@ -20,7 +20,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec.compile.sql.dialects.postgres import (
+from knot.spec.compile.postgres import (
     CompileContext,
     CompilerError,
     compile_constraint,

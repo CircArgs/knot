@@ -129,7 +129,10 @@ def apply_property_correction(
             only_slots=[slot_name],
         )
         for source, contributed in graph_store.get_disagreeing_contributions(
-            conn, cls=cls, canonical_id=canonical_id, slot_name=slot_name,
+            conn,
+            cls=cls,
+            canonical_id=canonical_id,
+            slot_name=slot_name,
         ):
             success = _values_match(contributed, value)
             trust_posteriors.record_feedback(conn, source, slot_name, success)

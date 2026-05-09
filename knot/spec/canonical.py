@@ -25,7 +25,6 @@ import jcs
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
-
 CANONICAL_DUMP_VERSION: int = 3
 
 
@@ -34,30 +33,34 @@ CANONICAL_DUMP_VERSION: int = 3
 # Pulled from `spec-versioning.md` § "RUNTIME vs CANONICAL field taxonomy".
 # ---------------------------------------------------------------------------
 
-_RUNTIME_FIELDS: frozenset[tuple[str, str]] = frozenset({
-    # description is RUNTIME on these display-bearing classes
-    ("OntologyClass", "description"),
-    ("Slot", "description"),
-    ("SlotOverride", "description"),
-    ("PermissibleValue", "description"),
-    ("TypeDefinition", "description"),
-    ("Constraint", "description"),
-    ("Source", "description"),
-    # Spec envelope authoring metadata
-    ("Spec", "created_at"),
-    ("Spec", "last_modified"),
-    ("Spec", "author"),
-    ("Spec", "revision_id"),
-    ("Spec", "display_label"),
-})
+_RUNTIME_FIELDS: frozenset[tuple[str, str]] = frozenset(
+    {
+        # description is RUNTIME on these display-bearing classes
+        ("OntologyClass", "description"),
+        ("Slot", "description"),
+        ("SlotOverride", "description"),
+        ("PermissibleValue", "description"),
+        ("TypeDefinition", "description"),
+        ("Constraint", "description"),
+        ("Source", "description"),
+        # Spec envelope authoring metadata
+        ("Spec", "created_at"),
+        ("Spec", "last_modified"),
+        ("Spec", "author"),
+        ("Spec", "revision_id"),
+        ("Spec", "display_label"),
+    }
+)
 
 
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
 
+
 class _Sentinel:
     """Marker for "no field default available"."""
+
     __slots__ = ()
 
 
@@ -186,6 +189,7 @@ def _strip_defaults(data: Any, model_class: type[BaseModel] | None) -> Any:
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
+
 
 def canonical_dump(spec: BaseModel) -> bytes:
     """Pydantic model → strip RUNTIME → strip defaults → JCS bytes.

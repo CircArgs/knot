@@ -1,15 +1,14 @@
+"""Shared test fixtures."""
+
 import os
 
-# Tests run against the local docker-compose stack with the dev DSN.
-# Setting this before `knot.config` is imported avoids the fail-closed
-# guard rejecting a missing KNOT_CONTROL_DSN.
+# Set KNOT_DEV_MODE before knot.config is imported so the fail-closed DSN
+# guard falls back to the local docker-compose default.
 os.environ.setdefault("KNOT_DEV_MODE", "1")
 
-import pytest
 import psycopg
-from neo4j import GraphDatabase
+import pytest
 
-from tests.test_env import TestEnv
 from knot import db
 from knot.config.config import get_dsn
 
@@ -21,13 +20,8 @@ def postgres_dsn():
 
 @pytest.fixture(scope="session", autouse=True)
 def _apply_control_schema(postgres_dsn):
-    """Ensure the control-plane schema exists before any test that touches postgres."""
+    """Ensure the control-plane schema exists before any test touches postgres."""
     db.apply_schema()
-
-
-@pytest.fixture(scope="session")
-def neo4j_uri():
-    return "bolt://localhost:7687"
 
 
 @pytest.fixture
@@ -35,22 +29,3 @@ def pg_conn(postgres_dsn):
     conn = psycopg.connect(postgres_dsn, autocommit=True)
     yield conn
     conn.close()
-
-
-@pytest.fixture(scope="session")
-def neo4j_driver(neo4j_uri):
-    driver = GraphDatabase.driver(neo4j_uri, auth=("neo4j", "knottest"))
-    yield driver
-    driver.close()
-
-
-@pytest.fixture
-def lake_dir(tmp_path):
-    return tmp_path / "lake"
-
-
-@pytest.fixture
-def env(postgres_dsn, neo4j_uri, lake_dir, request):
-    e = TestEnv(postgres_dsn, neo4j_uri, ("neo4j", "knottest"), lake_dir)
-    yield e
-    e.teardown()

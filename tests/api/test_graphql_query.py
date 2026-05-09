@@ -513,7 +513,7 @@ def test_resolved_as_of_current_returns_record(gql_db, gql_client):
 
 def test_count_rows_with_predicate(gql_db):
     """count_rows should honour the predicate and return filtered count."""
-    from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate
+    from knot.spec.compile.postgres import CompileContext, compile_predicate
     from knot.spec.metaschema import Compare, CompareOp, Literal_, SlotPath
 
     conn, spec, src, rev = gql_db

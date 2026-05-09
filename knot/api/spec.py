@@ -15,7 +15,6 @@ from __future__ import annotations
 
 from typing import Any
 
-import psycopg
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,16 +34,17 @@ from knot.spec import (
 )
 from knot.spec.metaschema import Constraint, Severity
 
-
 # ---------------------------------------------------------------------------
 # Request / response shapes
 # ---------------------------------------------------------------------------
+
 
 class _StrictBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
 # ─── Read summaries ─────────────────────────────────────────────────────────
+
 
 class TypeSummary(_StrictBase):
     name: str
@@ -54,7 +54,7 @@ class TypeSummary(_StrictBase):
 
 class SlotSummary(_StrictBase):
     name: str
-    range_kind: str | None   # "type" | "class" | None
+    range_kind: str | None  # "type" | "class" | None
     range_name: str | None
     identifier: bool
     required: bool
@@ -100,7 +100,7 @@ class TypeDefinitionCreate(_StrictBase):
 
 class SlotCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    range_kind: str | None = None    # "type" | "class" | None
+    range_kind: str | None = None  # "type" | "class" | None
     range_name: str | None = None
     identifier: bool = False
     required: bool = False
@@ -111,7 +111,7 @@ class SlotCreate(_StrictBase):
     maximum_value: float | None = None
     permissible_values: list[str] | None = None
     description: str | None = None
-    derivation: "ExprJson | None" = None
+    derivation: ExprJson | None = None
 
 
 class ClassCreate(_StrictBase):
@@ -121,7 +121,7 @@ class ClassCreate(_StrictBase):
     mixin_names: list[str] = Field(default_factory=list)
     abstract: bool = False
     description: str | None = None
-    definition: "ExprJson | None" = None
+    definition: ExprJson | None = None
 
 
 class ClassUpdate(_StrictBase):
@@ -154,6 +154,7 @@ class DraftCreate(_StrictBase):
 
 # ─── Response shapes ────────────────────────────────────────────────────────
 
+
 class DraftSummary(_StrictBase):
     revision: int
     label: str | None
@@ -167,7 +168,7 @@ class MutationResponse(_StrictBase):
 
     draft_revision: int
     content_hash: str
-    spec_summary: dict[str, int]   # {classes: n, slots: n, types: n, sources: n}
+    spec_summary: dict[str, int]  # {classes: n, slots: n, types: n, sources: n}
 
 
 class PublishResponse(_StrictBase):
@@ -179,6 +180,7 @@ class PublishResponse(_StrictBase):
 # ---------------------------------------------------------------------------
 # Helpers — find entities in a draft Spec by name
 # ---------------------------------------------------------------------------
+
 
 def _find_class(spec: Spec, name: str) -> OntologyClass:
     for c in spec.classes:
@@ -271,6 +273,7 @@ router = APIRouter(prefix="/spec", tags=["spec"])
 
 # ─── Published reads ────────────────────────────────────────────────────────
 
+
 @router.get("/published", summary="Full currently-published spec (cycle-safe JSON)")
 def get_published_spec() -> dict[str, Any]:
     with db.connect() as conn:
@@ -327,6 +330,7 @@ def list_published_sources() -> list[SourceSummary]:
 
 # ─── Revision history ───────────────────────────────────────────────────────
 
+
 @router.get("/revisions", response_model=list[RevisionSummary])
 def list_revisions() -> list[RevisionSummary]:
     """All published revisions, newest first (immortal audit chain)."""
@@ -347,6 +351,7 @@ def get_revision_spec(revision: int) -> dict[str, Any]:
 
 # ─── Drafts ─────────────────────────────────────────────────────────────────
 
+
 @router.get("/drafts", response_model=list[DraftSummary])
 def list_drafts_endpoint() -> list[DraftSummary]:
     with db.connect() as conn:
@@ -363,11 +368,14 @@ def create_draft_endpoint(body: DraftCreate) -> DraftSummary:
     with db.connect() as conn:
         try:
             new_id = spec_store.create_draft(
-                conn, parent_revision=body.parent_revision, label=body.label,
+                conn,
+                parent_revision=body.parent_revision,
+                label=body.label,
             )
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(
-                404, f"Parent revision {body.parent_revision} not found.",
+                404,
+                f"Parent revision {body.parent_revision} not found.",
             ) from exc
         rows = spec_store.list_drafts(conn)
     row = next(r for r in rows if r["revision"] == new_id)
@@ -393,12 +401,14 @@ def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
         except spec_store.DraftAlreadyPublishedError as exc:
             raise HTTPException(
-                409, f"Draft {draft_id} is already published and cannot be discarded.",
+                409,
+                f"Draft {draft_id} is already published and cannot be discarded.",
             ) from exc
     return {"discarded": str(draft_id)}
 
 
 # ─── Draft mutations ────────────────────────────────────────────────────────
+
 
 @router.post(
     "/drafts/{draft_id}/types",
@@ -413,12 +423,14 @@ def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
                     409,
                     f"TypeDefinition collides (case-insensitive) for name {body.name!r}.",
                 )
-            spec.types.append(TypeDefinition(
-                name=body.name,
-                base=body.base,
-                pattern=body.pattern,
-                description=body.description,
-            ))
+            spec.types.append(
+                TypeDefinition(
+                    name=body.name,
+                    base=body.base,
+                    pattern=body.pattern,
+                    description=body.description,
+                )
+            )
         return _response(draft_id, spec)
 
 
@@ -446,7 +458,9 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
                     raise HTTPException(400, "range_kind='class' requires range_name")
                 range_obj = _find_class(spec, body.range_name)
             elif body.range_kind is not None:
-                raise HTTPException(400, f"range_kind must be 'type', 'class', or null; got {body.range_kind!r}")
+                raise HTTPException(
+                    400, f"range_kind must be 'type', 'class', or null; got {body.range_kind!r}"
+                )
 
             permissible = None
             if body.permissible_values is not None:
@@ -457,20 +471,22 @@ def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
                 placeholder_primary = OntologyClass(name="__derivation_ctx__")
                 derivation = translate_expr(body.derivation, spec, placeholder_primary)
 
-            spec.slots.append(Slot(
-                name=body.name,
-                range=range_obj,
-                identifier=body.identifier,
-                required=body.required,
-                multivalued=body.multivalued,
-                resolution_policy=body.resolution_policy,
-                pattern=body.pattern,
-                minimum_value=body.minimum_value,
-                maximum_value=body.maximum_value,
-                permissible_values=permissible,
-                description=body.description,
-                derivation=derivation,
-            ))
+            spec.slots.append(
+                Slot(
+                    name=body.name,
+                    range=range_obj,
+                    identifier=body.identifier,
+                    required=body.required,
+                    multivalued=body.multivalued,
+                    resolution_policy=body.resolution_policy,
+                    pattern=body.pattern,
+                    minimum_value=body.minimum_value,
+                    maximum_value=body.maximum_value,
+                    permissible_values=permissible,
+                    description=body.description,
+                    derivation=derivation,
+                )
+            )
         return _response(draft_id, spec)
 
 
@@ -495,18 +511,26 @@ def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
 
             definition = None
             if body.definition is not None:
-                primary = is_a if is_a is not None else _find_class(spec, body.name) if any(c.name == body.name for c in spec.classes) else OntologyClass(name=body.name)
+                primary = (
+                    is_a
+                    if is_a is not None
+                    else _find_class(spec, body.name)
+                    if any(c.name == body.name for c in spec.classes)
+                    else OntologyClass(name=body.name)
+                )
                 definition = translate_expr(body.definition, spec, primary)
 
-            spec.classes.append(OntologyClass(
-                name=body.name,
-                slots=slots,
-                is_a=is_a,
-                mixins=mixins,
-                abstract=body.abstract,
-                description=body.description,
-                definition=definition,
-            ))
+            spec.classes.append(
+                OntologyClass(
+                    name=body.name,
+                    slots=slots,
+                    is_a=is_a,
+                    mixins=mixins,
+                    abstract=body.abstract,
+                    description=body.description,
+                    definition=definition,
+                )
+            )
         return _response(draft_id, spec)
 
 
@@ -556,12 +580,14 @@ def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
                     f"Slot {body.identifier_slot_name!r} is not on class {cls.name!r}",
                 )
 
-            spec.sources.append(Source(
-                name=body.name,
-                entity_class=cls,
-                identifier_slot=slot,
-                description=body.description,
-            ))
+            spec.sources.append(
+                Source(
+                    name=body.name,
+                    entity_class=cls,
+                    identifier_slot=slot,
+                    description=body.description,
+                )
+            )
         return _response(draft_id, spec)
 
 
@@ -582,17 +608,20 @@ def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
             primary = _find_class(spec, body.primary_class_name)
             expr = translate_expr(body.body, spec, primary)
 
-            spec.constraints.append(Constraint(
-                name=body.name,
-                primary=primary,
-                body=expr,
-                severity=body.severity,
-                message=body.message,
-            ))
+            spec.constraints.append(
+                Constraint(
+                    name=body.name,
+                    primary=primary,
+                    body=expr,
+                    severity=body.severity,
+                    message=body.message,
+                )
+            )
         return _response(draft_id, spec)
 
 
 # ─── Publish ────────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/drafts/{draft_id}/publish",
@@ -613,7 +642,9 @@ def publish(
     with db.connect() as conn:
         try:
             spec_store.publish_draft(
-                conn, draft_id, allow_destructive=allow_destructive,
+                conn,
+                draft_id,
+                allow_destructive=allow_destructive,
             )
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(404, f"Draft {draft_id} not found.") from exc
@@ -631,6 +662,7 @@ def publish(
 
 
 # ─── Rollback ───────────────────────────────────────────────────────────────
+
 
 @router.post(
     "/rollback/{target_revision}",
@@ -665,17 +697,19 @@ def rollback(
             )
         try:
             spec_store.publish_draft(
-                conn, target_revision, allow_destructive=allow_destructive,
+                conn,
+                target_revision,
+                allow_destructive=allow_destructive,
             )
         except spec_store.DraftNotFoundError as exc:
             raise HTTPException(
-                404, f"Revision {target_revision} not found.",
+                404,
+                f"Revision {target_revision} not found.",
             ) from exc
         except spec_store.PublishGateError as exc:
             raise HTTPException(
                 400,
-                f"Rollback to revision {target_revision} failed the publish "
-                f"gate: {exc}",
+                f"Rollback to revision {target_revision} failed the publish gate: {exc}",
             ) from exc
 
         rows = spec_store.list_published(conn)

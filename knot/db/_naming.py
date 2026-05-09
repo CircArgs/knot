@@ -8,7 +8,7 @@ Single source of truth for:
   - effective-slot walk (own + transitive mixins)
 
 Imported by ``knot.db.graph_store`` (DML) and by the postgres compile
-dialect (``knot.spec.compile.sql.dialects.postgres``) so naming stays in
+dialect (``knot.spec.compile.postgres``) so naming stays in
 lockstep. Postgres-specific compilation (``slot.range`` → postgres column
 type) lives in the compile dialect, not here.
 """

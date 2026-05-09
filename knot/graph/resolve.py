@@ -41,7 +41,6 @@ from knot.db import graph_store, trust_config, trust_posteriors
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA, Posterior
 from knot.spec import OntologyClass, ResolutionPolicy, Slot
 
-
 LCB_K = 1.0  # stddev multiplier for the Lower Confidence Bound penalty
 
 
@@ -57,15 +56,16 @@ def resolve_entity(
     Returns None if the canonical_id has no contributions.
     """
     contribs = graph_store.get_canonical_contributions(
-        conn, cls=cls, canonical_id=canonical_id, as_of=as_of,
+        conn,
+        cls=cls,
+        canonical_id=canonical_id,
+        as_of=as_of,
     )
     if not contribs:
         return None
 
     scalar_trust = trust_config.list_scores(conn)
-    posteriors = {
-        (p.source, p.slot): p for p in trust_posteriors.list_posteriors(conn)
-    }
+    posteriors = {(p.source, p.slot): p for p in trust_posteriors.list_posteriors(conn)}
 
     # Walk the full slot set including inherited slots (is_a chain).
     # Defined classes (backed by VIEW) inherit all slots from their parent.
@@ -87,7 +87,10 @@ def resolve_entity(
             resolved[slot.name] = _union_multivalued(slot, contribs)
         else:
             resolved[slot.name] = _resolve_scalar(
-                slot, contribs, scalar_trust, posteriors,
+                slot,
+                contribs,
+                scalar_trust,
+                posteriors,
             )
     return resolved
 
@@ -98,11 +101,7 @@ def _resolve_scalar(
     scalar_trust: dict[str, float],
     posteriors: dict[tuple[str, str], Posterior],
 ) -> Any:
-    non_null = [
-        (c["_source"], c[slot.name])
-        for c in contribs
-        if c.get(slot.name) is not None
-    ]
+    non_null = [(c["_source"], c[slot.name]) for c in contribs if c.get(slot.name) is not None]
     if not non_null:
         return None
 
@@ -148,8 +147,7 @@ def _posterior_mean(
     """Argmax over per-(source, slot) Beta posterior mean. Deterministic;
     same state → same answer."""
     scored = [
-        (_post_for(posteriors, source, slot.name).mean, source, value)
-        for source, value in non_null
+        (_post_for(posteriors, source, slot.name).mean, source, value) for source, value in non_null
     ]
     scored.sort(key=lambda t: (-t[0], t[1]))
     return scored[0][2]

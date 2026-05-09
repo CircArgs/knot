@@ -21,7 +21,6 @@ from knot import db
 from knot.api.auth.security import require_user
 from knot.db import dq, spec_store
 
-
 router = APIRouter(prefix="/dq", tags=["dq"])
 
 
@@ -33,6 +32,7 @@ router = APIRouter(prefix="/dq", tags=["dq"])
 # Python keyword if modeled as a Pydantic field, and the alias dance for
 # round-tripping is more friction than it earns on an internal surface.
 
+
 class ScanResponse(BaseModel):
     observations_inserted: int
     spec_revision: int
@@ -41,6 +41,7 @@ class ScanResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @router.get("/observations", dependencies=[Depends(require_user)])
 def list_observations(
@@ -82,11 +83,11 @@ def summary(
     dependencies=[Depends(require_user)],
 )
 def scan(
-    source: str | None = Query(
-        None, description="Restrict scan to one source name."
-    ),
+    source: str | None = Query(None, description="Restrict scan to one source name."),
     class_name: str | None = Query(
-        None, alias="class", description="Restrict scan to one class.",
+        None,
+        alias="class",
+        description="Restrict scan to one class.",
     ),
 ) -> ScanResponse:
     """Snapshot per-(source, class, slot) stats from the current data plane."""
@@ -96,6 +97,9 @@ def scan(
             raise HTTPException(409, "No spec is published yet.")
         revision = spec_store.get_published_revision(conn)
         inserted = dq.full_scan(
-            conn, spec, source_filter=source, class_filter=class_name,
+            conn,
+            spec,
+            source_filter=source,
+            class_filter=class_name,
         )
     return ScanResponse(observations_inserted=inserted, spec_revision=revision or 0)

@@ -2,19 +2,18 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, ValidationError
 
 from knot import db
+from knot.api.auth.security import Principal, require_user
 from knot.api.graph._common import StrictBase, published_or_409, resolve_class
 from knot.api.row_models import build_row_model_for_class, build_value_model_for_slot
 from knot.db import graph_store, spec_store
 from knot.graph import corrections as graph_corrections
 from knot.spec import Slot
-from knot.api.auth.security import Principal, require_user
-
 
 router = APIRouter()
 
@@ -66,7 +65,7 @@ class RejectContribution(StrictBase):
 
 
 Correction = Annotated[
-    Union[PropertyCorrection, Merge, Split, Add, Tombstone, RejectContribution],
+    PropertyCorrection | Merge | Split | Add | Tombstone | RejectContribution,
     Field(discriminator="type"),
 ]
 
@@ -115,9 +114,7 @@ def submit_correction(
             cls = resolve_class(spec, body.class_name)
             slot = next((s for s in cls.slots if s.name == body.slot), None)
             if slot is None:
-                raise HTTPException(
-                    404, f"Slot {body.slot!r} not on class {cls.name!r}"
-                )
+                raise HTTPException(404, f"Slot {body.slot!r} not on class {cls.name!r}")
             value = _validate_property_value(slot, body.value)
             spec_revision = spec_store.get_published_revision(conn)
             correction_id = graph_corrections.apply_property_correction(
@@ -152,7 +149,9 @@ def submit_correction(
                     seen.add(cid)
                     deduped.append(cid)
             if not graph_store.canonical_id_exists(
-                conn, cls=cls, canonical_id=body.keep_canonical_id,
+                conn,
+                cls=cls,
+                canonical_id=body.keep_canonical_id,
             ):
                 raise HTTPException(
                     404,
@@ -161,12 +160,13 @@ def submit_correction(
                 )
             for cid in deduped:
                 if not graph_store.canonical_id_exists(
-                    conn, cls=cls, canonical_id=cid,
+                    conn,
+                    cls=cls,
+                    canonical_id=cid,
                 ):
                     raise HTTPException(
                         404,
-                        f"merge_canonical_id {cid!r} has no contributions "
-                        f"for class {cls.name!r}",
+                        f"merge_canonical_id {cid!r} has no contributions for class {cls.name!r}",
                     )
             spec_revision = spec_store.get_published_revision(conn)
             correction_id = graph_corrections.apply_merge(
@@ -191,7 +191,9 @@ def submit_correction(
             if not body.partitions:
                 raise HTTPException(400, "partitions must be non-empty")
             if not graph_store.canonical_id_exists(
-                conn, cls=cls, canonical_id=body.source_canonical_id,
+                conn,
+                cls=cls,
+                canonical_id=body.source_canonical_id,
             ):
                 raise HTTPException(
                     404,
@@ -202,8 +204,7 @@ def submit_correction(
                 if graph_store.canonical_id_exists(conn, cls=cls, canonical_id=new_cid):
                     raise HTTPException(
                         409,
-                        f"new_canonical_id {new_cid!r} already exists for "
-                        f"class {cls.name!r}",
+                        f"new_canonical_id {new_cid!r} already exists for class {cls.name!r}",
                     )
             all_members: list[tuple[str, str]] = []
             for members in body.partitions.values():
@@ -231,7 +232,9 @@ def submit_correction(
         if isinstance(body, Add):
             cls = resolve_class(spec, body.class_name)
             if graph_store.canonical_id_exists(
-                conn, cls=cls, canonical_id=body.new_canonical_id,
+                conn,
+                cls=cls,
+                canonical_id=body.new_canonical_id,
             ):
                 raise HTTPException(
                     409,
@@ -264,7 +267,9 @@ def submit_correction(
         if isinstance(body, Tombstone):
             cls = resolve_class(spec, body.class_name)
             if not graph_store.canonical_id_exists(
-                conn, cls=cls, canonical_id=body.canonical_id,
+                conn,
+                cls=cls,
+                canonical_id=body.canonical_id,
             ):
                 raise HTTPException(
                     404,
@@ -290,7 +295,9 @@ def submit_correction(
         if isinstance(body, RejectContribution):
             cls = resolve_class(spec, body.class_name)
             if not graph_store.canonical_id_exists(
-                conn, cls=cls, canonical_id=body.canonical_id,
+                conn,
+                cls=cls,
+                canonical_id=body.canonical_id,
             ):
                 raise HTTPException(
                     404,

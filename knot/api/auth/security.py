@@ -26,12 +26,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, Header, HTTPException
 
 from knot import db
 from knot.config.config import get_settings
 from knot.db import users
-
 
 DEV_PRINCIPAL = "dev:default"
 
@@ -48,7 +47,7 @@ class Principal:
 def _strip_bearer(authorization: str | None) -> str:
     if not authorization or not authorization.startswith("Bearer "):
         raise HTTPException(401, "Bearer token required")
-    return authorization[len("Bearer "):]
+    return authorization[len("Bearer ") :]
 
 
 def require_user(

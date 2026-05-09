@@ -20,17 +20,16 @@ from pydantic import BaseModel, ConfigDict, Field, create_model
 
 from knot.spec import OntologyClass, Slot, Source, TypeDefinition
 
-
 _PY_TYPE_FOR_BASE: dict[str, type] = {
-    "str":      str,
-    "string":   str,
-    "int":      int,
-    "integer":  int,
-    "float":    float,
-    "bool":     bool,
-    "boolean":  bool,
+    "str": str,
+    "string": str,
+    "int": int,
+    "integer": int,
+    "float": float,
+    "bool": bool,
+    "boolean": bool,
     "datetime": datetime,
-    "date":     date,
+    "date": date,
 }
 
 

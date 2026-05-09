@@ -18,7 +18,7 @@ translate_expr(node_json, spec) -> ExprNode
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal
 
 from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -47,10 +47,10 @@ from knot.spec.metaschema import (
     Within,
 )
 
-
 # ---------------------------------------------------------------------------
 # JSON-wrapper Pydantic models
 # ---------------------------------------------------------------------------
+
 
 class _JsonBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -71,45 +71,45 @@ class _SlotPathJson(_JsonBase):
 class _CompareJson(_JsonBase):
     kind: Literal["compare"]
     op: CompareOp
-    left: "ExprJson"
-    right: "ExprJson | None" = None
+    left: ExprJson
+    right: ExprJson | None = None
 
 
 class _BoolExprJson(_JsonBase):
     kind: Literal["bool_expr"]
     op: BoolOpKind
-    args: list["ExprJson"]
+    args: list[ExprJson]
 
 
 class _WithinJson(_JsonBase):
     kind: Literal["within"]
-    slot: str          # slot name; resolved against spec.slots
+    slot: str  # slot name; resolved against spec.slots
     values: list[Any]
 
 
 class _BetweenJson(_JsonBase):
     kind: Literal["between"]
-    slot: str          # slot name; resolved against spec.slots
+    slot: str  # slot name; resolved against spec.slots
     low: Any
     high: Any
 
 
 class _MatchesJson(_JsonBase):
     kind: Literal["matches"]
-    slot: str          # slot name; resolved against spec.slots
+    slot: str  # slot name; resolved against spec.slots
     pattern: str
 
 
 class _RelationAllJson(_JsonBase):
     kind: Literal["relation_all"]
-    relation: "ExprJson"
-    predicate: "ExprJson"
+    relation: ExprJson
+    predicate: ExprJson
 
 
 class _RelationAnyJson(_JsonBase):
     kind: Literal["relation_any"]
-    relation: "ExprJson"
-    predicate: "ExprJson"
+    relation: ExprJson
+    predicate: ExprJson
 
 
 class _ReverseRelationJson(_JsonBase):
@@ -142,8 +142,8 @@ class _FilteredRelationJson(_JsonBase):
     """A relation with a row-level filter predicate applied."""
 
     kind: Literal["filtered_relation"]
-    relation: "ExprJson"
-    predicate: "ExprJson"
+    relation: ExprJson
+    predicate: ExprJson
 
 
 class _RelationProjectJson(_JsonBase):
@@ -155,7 +155,7 @@ class _RelationProjectJson(_JsonBase):
     """
 
     kind: Literal["relation_project"]
-    relation: "ExprJson"
+    relation: ExprJson
     slot_name: str
 
 
@@ -163,7 +163,7 @@ class _RelationCountJson(_JsonBase):
     """Count rows in the relation → integer scalar."""
 
     kind: Literal["relation_count"]
-    relation: "ExprJson"
+    relation: ExprJson
     distinct: bool = False
 
 
@@ -176,7 +176,7 @@ class _RelationAggregateJson(_JsonBase):
     """
 
     kind: Literal["relation_aggregate"]
-    relation: "ExprJson"
+    relation: ExprJson
     func: AggFunc
     slot_name: str | None = None
     distinct: bool = False
@@ -184,23 +184,21 @@ class _RelationAggregateJson(_JsonBase):
 
 # Annotated union — Pydantic dispatches on the ``kind`` field automatically.
 ExprJson = Annotated[
-    Union[
-        _LiteralJson,
-        _SlotPathJson,
-        _CompareJson,
-        _BoolExprJson,
-        _WithinJson,
-        _BetweenJson,
-        _MatchesJson,
-        _RelationAllJson,
-        _RelationAnyJson,
-        _ReverseRelationJson,
-        _RelationRefJson,
-        _FilteredRelationJson,
-        _RelationProjectJson,
-        _RelationCountJson,
-        _RelationAggregateJson,
-    ],
+    _LiteralJson
+    | _SlotPathJson
+    | _CompareJson
+    | _BoolExprJson
+    | _WithinJson
+    | _BetweenJson
+    | _MatchesJson
+    | _RelationAllJson
+    | _RelationAnyJson
+    | _ReverseRelationJson
+    | _RelationRefJson
+    | _FilteredRelationJson
+    | _RelationProjectJson
+    | _RelationCountJson
+    | _RelationAggregateJson,
     Field(discriminator="kind"),
 ]
 
@@ -218,6 +216,7 @@ _RelationAggregateJson.model_rebuild()
 # ---------------------------------------------------------------------------
 # Translator — JSON tree → metaschema expression tree
 # ---------------------------------------------------------------------------
+
 
 def _find_slot(spec: Spec, name: str) -> Slot:
     for s in spec.slots:
@@ -254,11 +253,10 @@ def _relation_target_class(relation: Any, spec: Spec) -> OntologyClass:
         raise HTTPException(
             400,
             f"RelationRef slot {slot.name!r} has no OntologyClass range; "
-            "cannot infer target class for projection."
+            "cannot infer target class for projection.",
         )
     raise HTTPException(
-        400,
-        f"Cannot determine target class from relation type {type(relation).__name__!r}."
+        400, f"Cannot determine target class from relation type {type(relation).__name__!r}."
     )
 
 

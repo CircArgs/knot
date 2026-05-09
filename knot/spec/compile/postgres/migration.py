@@ -42,14 +42,22 @@ import psycopg
 from psycopg import sql
 
 from knot.db._naming import (
-    schema,
     bindings_table_id as _bindings_table_id,
+)
+from knot.db._naming import (
     effective_slots as _effective_slots,
+)
+from knot.db._naming import (
     is_stored as _is_stored,
+)
+from knot.db._naming import (
+    schema,
+)
+from knot.db._naming import (
     table_id as _table_id,
 )
-from knot.spec.compile.sql.dialects.postgres._types import slot_pg_type as _slot_pg_type
 from knot.spec import OntologyClass, Slot, Spec
+from knot.spec.compile.postgres._types import slot_pg_type as _slot_pg_type
 
 
 def _is_defined(cls: OntologyClass) -> bool:
@@ -97,8 +105,7 @@ def _bindings_index_sql(cls: OntologyClass) -> sql.Composable:
     # Partial index for the "current binding by canonical_id" lookup —
     # the hottest read path for the data plane.
     return sql.SQL(
-        "CREATE INDEX IF NOT EXISTS {idx} ON {table} (canonical_id) "
-        "WHERE valid_to IS NULL"
+        "CREATE INDEX IF NOT EXISTS {idx} ON {table} (canonical_id) WHERE valid_to IS NULL"
     ).format(idx=_bindings_index_id(cls), table=_bindings_table_id(cls))
 
 
@@ -111,8 +118,7 @@ def _bindings_unique_current_sql(cls: OntologyClass) -> sql.Composable:
     # knot_row_id. Catches any race in merge / split / correction that
     # escapes FOR UPDATE locking.
     return sql.SQL(
-        "CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table} (knot_row_id) "
-        "WHERE valid_to IS NULL"
+        "CREATE UNIQUE INDEX IF NOT EXISTS {idx} ON {table} (knot_row_id) WHERE valid_to IS NULL"
     ).format(idx=_bindings_unique_current_id(cls), table=_bindings_table_id(cls))
 
 
@@ -129,7 +135,8 @@ def _create_source_table_sql(cls: OntologyClass) -> sql.Composable:
         )
     body = sql.SQL(", ").join([_SYSTEM_COLUMNS_SQL, *user_cols])
     return sql.SQL("CREATE TABLE IF NOT EXISTS {table} ({body})").format(
-        table=_table_id(cls), body=body,
+        table=_table_id(cls),
+        body=body,
     )
 
 
@@ -155,12 +162,14 @@ class DropClass(Change):
 @dataclass
 class AddDefinedClass(Change):
     """Create a VIEW for a defined class (equivalentClass / OWL DL defined)."""
+
     cls: OntologyClass
 
 
 @dataclass
 class DropDefinedClass(Change):
     """Drop the VIEW for a defined class."""
+
     class_name: str
 
 
@@ -188,6 +197,7 @@ class ChangeSlotType(Change):
 class ChangeSlotRequired(Change):
     """No-op DDL today — slot.required is API-enforced (user-correction
     rows are partial). Kept on the change-event surface for completeness."""
+
     cls: OntologyClass
     slot_name: str
     new_required: bool
@@ -330,13 +340,11 @@ def _(change: AddDefinedClass, conn: psycopg.Connection) -> None:
           ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
         WHERE (<compiled definition>)
     """
-    from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate
+    from knot.spec.compile.postgres import CompileContext, compile_predicate
 
     cls = change.cls
     if cls.is_a is None:
-        raise ValueError(
-            f"Defined class {cls.name!r} must have is_a set to a parent class."
-        )
+        raise ValueError(f"Defined class {cls.name!r} must have is_a set to a parent class.")
     parent = cls.is_a
 
     ctx = CompileContext(primary_class=parent, alias="s")
@@ -371,6 +379,7 @@ def _(change: AddDefinedClass, conn: psycopg.Connection) -> None:
     # to mogrify the statement (parameter values inlined as SQL literals by
     # the psycopg client) and execute the fully-rendered DDL string.
     from psycopg import ClientCursor
+
     ccur = ClientCursor(conn)
     rendered = ccur.mogrify(view_stmt, ctx.params)
     conn.execute(rendered)
@@ -454,7 +463,11 @@ def apply_changes(conn: psycopg.Connection, changes: list[Change]) -> None:
          all parent tables are in place.
     """
     drops = [c for c in changes if isinstance(c, (DropClass, DropSlot, DropDefinedClass))]
-    concrete_adds = [c for c in changes if not isinstance(c, (DropClass, DropSlot, DropDefinedClass, AddDefinedClass))]
+    concrete_adds = [
+        c
+        for c in changes
+        if not isinstance(c, (DropClass, DropSlot, DropDefinedClass, AddDefinedClass))
+    ]
     defined_adds = [c for c in changes if isinstance(c, AddDefinedClass)]
     for change in drops + concrete_adds + defined_adds:
         emit_ddl(change, conn)

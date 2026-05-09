@@ -44,32 +44,50 @@ from __future__ import annotations
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from knot.config.config import get_settings
 
-
 # ── JSON formatter ────────────────────────────────────────────────────────────
+
 
 class _JsonFormatter(logging.Formatter):
     """Emit one JSON object per log record on a single line."""
 
     # Fields that are part of every LogRecord but clutter JSON output.
-    _SKIP = frozenset({
-        "args", "created", "exc_info", "exc_text", "filename", "funcName",
-        "levelname", "levelno", "lineno", "message", "module", "msecs",
-        "msg", "name", "pathname", "process", "processName", "relativeCreated",
-        "stack_info", "taskName", "thread", "threadName",
-    })
+    _SKIP = frozenset(
+        {
+            "args",
+            "created",
+            "exc_info",
+            "exc_text",
+            "filename",
+            "funcName",
+            "levelname",
+            "levelno",
+            "lineno",
+            "message",
+            "module",
+            "msecs",
+            "msg",
+            "name",
+            "pathname",
+            "process",
+            "processName",
+            "relativeCreated",
+            "stack_info",
+            "taskName",
+            "thread",
+            "threadName",
+        }
+    )
 
     def format(self, record: logging.LogRecord) -> str:
         record.message = record.getMessage()
         if record.exc_info:
             record.exc_text = self.formatException(record.exc_info)
 
-        ts = datetime.fromtimestamp(record.created, tz=timezone.utc).strftime(
-            "%Y-%m-%dT%H:%M:%S.%f"
-        ) + "Z"
+        ts = datetime.fromtimestamp(record.created, tz=UTC).strftime("%Y-%m-%dT%H:%M:%S.%f") + "Z"
 
         obj: dict = {
             "timestamp": ts,
@@ -97,6 +115,7 @@ _TEXT_DATEFMT = "%Y-%m-%dT%H:%M:%S"
 
 # ── Public entry point ─────────────────────────────────────────────────────────
 
+
 def configure_logging() -> None:
     """Apply knot's logging configuration to the root logger.
 
@@ -107,8 +126,9 @@ def configure_logging() -> None:
     root = logging.getLogger()
 
     # Idempotency guard — don't add a second handler on re-import.
-    if any(isinstance(h, logging.StreamHandler) and getattr(h, "_knot", False)
-           for h in root.handlers):
+    if any(
+        isinstance(h, logging.StreamHandler) and getattr(h, "_knot", False) for h in root.handlers
+    ):
         return
 
     settings = get_settings()

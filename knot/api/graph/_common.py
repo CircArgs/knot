@@ -11,6 +11,7 @@ from knot.spec import OntologyClass, Spec
 
 class StrictBase(BaseModel):
     """Forbid-extra base for every request/response model in the graph router."""
+
     model_config = ConfigDict(extra="forbid")
 
 
@@ -20,9 +21,7 @@ def resolve_class(spec: Spec, class_name: str) -> OntologyClass:
     if cls is None:
         raise HTTPException(404, f"Class {class_name!r} not on the published spec.")
     if cls.abstract:
-        raise HTTPException(
-            400, f"Class {class_name!r} is abstract; no rows are stored."
-        )
+        raise HTTPException(400, f"Class {class_name!r} is abstract; no rows are stored.")
     return cls
 
 

@@ -55,9 +55,9 @@ from knot.spec.metaschema import (
     ReverseRelation,
     SlotPath,
 )
-from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate
-from knot.spec.compile.sql.dialects.postgres._dispatch import CompilerError
-from knot.spec.compile.sql.dialects.postgres import migration
+from knot.spec.compile.postgres import CompileContext, compile_predicate
+from knot.spec.compile.postgres._dispatch import CompilerError
+from knot.spec.compile.postgres import migration
 
 
 # ---------------------------------------------------------------------------

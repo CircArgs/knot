@@ -8,14 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import Field, ValidationError
 
 from knot import db
+from knot.api.auth.security import require_user
 from knot.api.graph._common import StrictBase, published_or_409
+from knot.api.middleware import get_request_id
 from knot.api.row_models import build_row_model
 from knot.db import dq, graph_store, spec_store
 from knot.extensions import dispatch
 from knot.extensions.events import IngestResolveCanonical
-from knot.api.middleware import get_request_id
-from knot.api.auth.security import require_user
-
 
 router = APIRouter()
 
@@ -68,16 +67,14 @@ def ingest(
     When ``validate_constraints=true``, post-INSERT constraint check runs
     inside a transaction; violations roll back the batch.
     """
-    from knot.spec.compile.sql.dialects.postgres import compile_constraint
+    from knot.spec.compile.postgres import compile_constraint
     from knot.spec.metaschema import Severity
 
     with db.connect() as conn:
         spec = published_or_409(conn)
         source = next((s for s in spec.sources if s.name == source_name), None)
         if source is None:
-            raise HTTPException(
-                404, f"Source {source_name!r} not on the published spec."
-            )
+            raise HTTPException(404, f"Source {source_name!r} not on the published spec.")
 
         revision = spec_store.get_published_revision(conn)
         RowModel = build_row_model(source)
@@ -99,21 +96,23 @@ def ingest(
         ev = IngestResolveCanonical(cls=cls, source=source, incoming=validated)
         dispatch.dispatch(ev)
         if ev.canonical_ids is None:
-            raise RuntimeError(
-                "No handler set canonical_ids — default ER extension not registered"
-            )
+            raise RuntimeError("No handler set canonical_ids — default ER extension not registered")
 
         if validate_constraints:
             relevant = [
-                c for c in spec.constraints
+                c
+                for c in spec.constraints
                 if c.primary.name == cls.name
                 and getattr(c, "severity", Severity.ERROR) == Severity.ERROR
             ]
             try:
                 with conn.transaction():
                     count = graph_store.insert_rows(
-                        conn, source=source, spec_revision=revision,
-                        rows=validated, canonical_ids=ev.canonical_ids,
+                        conn,
+                        source=source,
+                        spec_revision=revision,
+                        rows=validated,
+                        canonical_ids=ev.canonical_ids,
                     )
                     violations: list[dict[str, Any]] = []
                     for constraint in relevant:
@@ -123,13 +122,15 @@ def ingest(
                         except Exception:
                             continue
                         for row in rows:
-                            violations.append({
-                                "rule_id": row[0],
-                                "class_name": row[1],
-                                "slot_name": row[2],
-                                "offending_pk": str(row[3]),
-                                "detail": row[4] or "",
-                            })
+                            violations.append(
+                                {
+                                    "rule_id": row[0],
+                                    "class_name": row[1],
+                                    "slot_name": row[2],
+                                    "offending_pk": str(row[3]),
+                                    "detail": row[4] or "",
+                                }
+                            )
                     if violations:
                         raise _ConstraintViolationError(violations)
                     dq.record_incremental(
@@ -143,8 +144,11 @@ def ingest(
                 raise HTTPException(422, detail={"violations": exc.violations})
         else:
             count = graph_store.insert_rows(
-                conn, source=source, spec_revision=revision,
-                rows=validated, canonical_ids=ev.canonical_ids,
+                conn,
+                source=source,
+                spec_revision=revision,
+                rows=validated,
+                canonical_ids=ev.canonical_ids,
             )
             dq.record_incremental(
                 conn,

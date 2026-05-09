@@ -1,44 +1,75 @@
 [project]
 name = "knot"
 version = "0.0.0"
-description = "Knowledge graph orchestration and entity resolution toolkit"
+description = "Knowledge graph + ontology platform; API-first, postgres data plane"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5",
     "pydantic-settings>=2.0",
+    "jcs>=0.2",
 ]
 
 [project.optional-dependencies]
 runtime = [
-    "sqlglot>=23",
-    "pyiceberg>=0.6",
-    "duckdb>=1.0",
-    "jcs>=0.2",
     "fastapi>=0.110",
     "uvicorn>=0.29",
-    "rapidfuzz>=3.0",
     "strawberry-graphql[fastapi]>=0.200",
-]
-dev = [
-    "mkdocs-material",
-    "pymdown-extensions",
 ]
 test = [
     "pytest>=8",
     "pytest-asyncio",
     "psycopg[binary]>=3.1",
-    "neo4j>=5.20",
-    "pyyaml>=6.0",
+    "httpx",  # required by fastapi.testclient
 ]
 notebook = [
     "marimo>=0.10",
     "pandas>=2.0",
     "sqlalchemy>=2.0",
 ]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.10",
+    "mkdocs-material",
+    "pymdown-extensions",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "TID", # flake8-tidy-imports
+]
+ignore = [
+    "E501",  # line too long — formatter handles wrapping
+    "B008",  # function calls in defaults (FastAPI Depends pattern)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["B011"]  # assert False is fine in tests
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.11"
+strict = false
+warn_unused_ignores = true
+warn_redundant_casts = true
+ignore_missing_imports = true
+exclude = "^(notebooks|tests)"
 
 [build-system]
 requires = ["hatchling"]

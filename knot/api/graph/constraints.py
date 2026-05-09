@@ -5,9 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends
 
 from knot import db
-from knot.api.graph._common import StrictBase, published_or_409
 from knot.api.auth.security import require_user
-
+from knot.api.graph._common import StrictBase, published_or_409
 
 router = APIRouter()
 
@@ -36,7 +35,7 @@ def check_constraints() -> ConstraintCheckResponse:
     uniform violation shape: (rule_id, class_name, slot_name, offending_pk,
     detail). An empty ``violations`` list means all constraints pass.
     """
-    from knot.spec.compile.sql.dialects.postgres import compile_constraint
+    from knot.spec.compile.postgres import compile_constraint
 
     violations: list[ViolationRow] = []
 
@@ -54,12 +53,14 @@ def check_constraints() -> ConstraintCheckResponse:
             except Exception:
                 continue
             for row in rows:
-                violations.append(ViolationRow(
-                    rule_id=row[0],
-                    class_name=row[1],
-                    slot_name=row[2],
-                    offending_pk=str(row[3]),
-                    detail=row[4] or "",
-                ))
+                violations.append(
+                    ViolationRow(
+                        rule_id=row[0],
+                        class_name=row[1],
+                        slot_name=row[2],
+                        offending_pk=str(row[3]),
+                        detail=row[4] or "",
+                    )
+                )
 
     return ConstraintCheckResponse(violations=violations)

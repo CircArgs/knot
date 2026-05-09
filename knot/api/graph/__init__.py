@@ -22,7 +22,7 @@ Endpoints under ``/graph``:
   - ``graphql.py``     POST  /graph/query                            ontology-shaped query
   - ``constraints.py`` POST  /graph/constraints/check                run all constraints
 
-Storage shape (locked, see ``knot.spec.compile.sql.dialects.postgres.migration``): per-class postgres
+Storage shape (locked, see ``knot.spec.compile.postgres.migration``): per-class postgres
 tables; columns mirror stored slots; primary key
 ``(_source, _source_row_id)``; SCD2 bindings carry ``canonical_id``,
 ``valid_from``, ``valid_to``, ``change_type``, ``applied_revision``.
@@ -33,7 +33,6 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from knot.api.graph import constraints, corrections, graphql, ingest, reads, trust
-
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 router.include_router(ingest.router)

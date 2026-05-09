@@ -20,24 +20,29 @@ the dq_observations table. Same rule as everywhere else in ``db/``.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from datetime import datetime
-from typing import Any, Iterable
+from typing import Any
 
 import psycopg
 from psycopg import sql
 
 from knot.db._naming import (
-    schema,
-    user_corrections_source,
-    is_stored as _is_stored,
     effective_slots as _effective_slots,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec
-
+from knot.db._naming import (
+    is_stored as _is_stored,
+)
+from knot.db._naming import (
+    schema,
+    user_corrections_source,
+)
+from knot.spec import OntologyClass, Spec
 
 # ---------------------------------------------------------------------------
 # Stats computation — pure functions, no DB access
 # ---------------------------------------------------------------------------
+
 
 def _slot_stats(values: list[Any]) -> dict[str, Any]:
     """Compute (row_count, null_count, distinct_count, min, max) for a list.
@@ -94,6 +99,7 @@ def _stringify(v: Any) -> str:
 # ---------------------------------------------------------------------------
 # Incremental write path — called from ingest + corrections
 # ---------------------------------------------------------------------------
+
 
 def record_incremental(
     conn: psycopg.Connection,
@@ -152,6 +158,7 @@ def record_incremental(
 # Full-scan write path — called from POST /dq/scan
 # ---------------------------------------------------------------------------
 
+
 def full_scan(
     conn: psycopg.Connection,
     spec: Spec,
@@ -198,14 +205,19 @@ def full_scan(
             if (cls.name, user_corrections_source()) in seen_class_source:
                 continue
             inserted += _full_scan_for(
-                conn, source_name=user_corrections_source(), cls=cls,
+                conn,
+                source_name=user_corrections_source(),
+                cls=cls,
             )
 
     return inserted
 
 
 def _full_scan_for(
-    conn: psycopg.Connection, *, source_name: str, cls: OntologyClass,
+    conn: psycopg.Connection,
+    *,
+    source_name: str,
+    cls: OntologyClass,
 ) -> int:
     """Aggregate stats for one (source, class) pair across every stored slot."""
     inserted = 0
@@ -242,8 +254,14 @@ def _full_scan_for(
             " row_count, null_count, distinct_count, min_value, max_value) "
             "VALUES (%s, %s, %s, 'full_scan', NULL, %s, %s, %s, %s, %s)",
             (
-                source_name, cls.name, slot.name,
-                row_count, null_count, distinct_count, min_value, max_value,
+                source_name,
+                cls.name,
+                slot.name,
+                row_count,
+                null_count,
+                distinct_count,
+                min_value,
+                max_value,
             ),
         )
         inserted += 1
@@ -253,6 +271,7 @@ def _full_scan_for(
 # ---------------------------------------------------------------------------
 # Read paths — called from the management REST router
 # ---------------------------------------------------------------------------
+
 
 def query_observations(
     conn: psycopg.Connection,
@@ -352,13 +371,15 @@ def summarize(
         total_rows = int(r[3] or 0)
         total_nulls = int(r[4] or 0)
         null_rate = (total_nulls / total_rows) if total_rows > 0 else None
-        out.append({
-            "source": r[0],
-            "class": r[1],
-            "slot": r[2],
-            "total_rows": total_rows,
-            "total_nulls": total_nulls,
-            "null_rate": null_rate,
-            "last_seen": r[5].isoformat() if r[5] else None,
-        })
+        out.append(
+            {
+                "source": r[0],
+                "class": r[1],
+                "slot": r[2],
+                "total_rows": total_rows,
+                "total_nulls": total_nulls,
+                "null_rate": null_rate,
+                "last_seen": r[5].isoformat() if r[5] else None,
+            }
+        )
     return out

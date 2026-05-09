@@ -6,7 +6,7 @@ Override per class: @er.register("Movie") def my_resolver(ev): ...
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from knot.extensions import dispatch
 from knot.extensions.events import IngestResolveCanonical
@@ -17,11 +17,13 @@ _RESOLVERS: dict[str, Callable[[IngestResolveCanonical], list[str]]] = {}
 
 def register(class_name: str) -> Callable:
     """Decorator: register a class-specific ER resolver."""
+
     def deco(fn: Callable) -> Callable:
         if class_name in _RESOLVERS:
             raise ValueError(f"Resolver already registered for {class_name!r}")
         _RESOLVERS[class_name] = fn
         return fn
+
     return deco
 
 

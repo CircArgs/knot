@@ -29,14 +29,13 @@ from typing import Any
 
 from psycopg import sql
 
-from knot.db._naming import bindings_table_id, table_id
-from knot.spec.compile.sql.dialects.postgres._context import CompileContext
-from knot.spec.compile.sql.dialects.postgres._dispatch import CompilerError, compile_predicate
-from knot.spec.metaschema import Constraint, OntologyClass
-
 # Register all handlers by importing the handler modules.
-import knot.spec.compile.sql.dialects.postgres._predicate  # noqa: F401
-import knot.spec.compile.sql.dialects.postgres._relation   # noqa: F401
+import knot.spec.compile.postgres._predicate  # noqa: F401
+import knot.spec.compile.postgres._relation  # noqa: F401
+from knot.db._naming import bindings_table_id, table_id
+from knot.spec.compile.postgres._context import CompileContext
+from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
+from knot.spec.metaschema import Constraint, OntologyClass
 
 
 def compile_order_by(
@@ -60,9 +59,7 @@ def compile_order_by(
     for field_name, direction in order_terms:
         dir_upper = direction.upper()
         if dir_upper not in ("ASC", "DESC"):
-            raise CompilerError(
-                f"Invalid ORDER BY direction {direction!r}; expected ASC or DESC."
-            )
+            raise CompilerError(f"Invalid ORDER BY direction {direction!r}; expected ASC or DESC.")
         parts.append(
             sql.SQL("{alias}.{col} {dir}").format(
                 alias=sql.Identifier(alias),

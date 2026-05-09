@@ -48,7 +48,7 @@ import strawberry
 from psycopg import sql
 from strawberry import Schema
 
-from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate, compile_value
+from knot.spec.compile.postgres import CompileContext, compile_predicate, compile_value
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -84,14 +84,14 @@ def get_or_build_schema(spec: Spec, content_hash: str) -> Schema:
 # ---------------------------------------------------------------------------
 
 _RANGE_TO_PYTHON: dict[str, type] = {
-    "str":      str,
-    "string":   str,
-    "int":      int,
-    "integer":  int,
-    "float":    float,
-    "number":   float,
-    "bool":     bool,
-    "boolean":  bool,
+    "str": str,
+    "string": str,
+    "int": int,
+    "integer": int,
+    "float": float,
+    "number": float,
+    "bool": bool,
+    "boolean": bool,
     "datetime": str,  # ISO-8601 string
 }
 
@@ -137,23 +137,24 @@ def _slot_python_type(slot: Slot) -> type:
 # WhereInput type construction
 # ---------------------------------------------------------------------------
 
+
 def _make_slot_where_type(slot: Slot, class_name: str) -> type:
     """Build a strawberry.input type for one slot's comparison ops."""
     py = _slot_python_type(slot)
     type_name = f"WhereInput_{class_name}_{slot.name}"
 
     annotations: dict[str, Any] = {
-        "eq":          Optional[py],
-        "neq":         Optional[py],
-        "gt":          Optional[py],
-        "gte":         Optional[py],
-        "lt":          Optional[py],
-        "lte":         Optional[py],
-        "in_":         Optional[list[py]],
-        "not_in":      Optional[list[py]],
-        "is_null":     Optional[bool],
+        "eq": Optional[py],
+        "neq": Optional[py],
+        "gt": Optional[py],
+        "gte": Optional[py],
+        "lt": Optional[py],
+        "lte": Optional[py],
+        "in_": Optional[list[py]],
+        "not_in": Optional[list[py]],
+        "is_null": Optional[bool],
         "is_not_null": Optional[bool],
-        "like":        Optional[str],
+        "like": Optional[str],
     }
     ns: dict[str, Any] = {k: strawberry.UNSET for k in annotations}
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
@@ -173,9 +174,7 @@ def _make_class_where_type(oc: OntologyClass) -> type:
     type_name = f"WhereInput_{oc.name}"
     all_s = _all_slots(oc)
     slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in all_s}
-    annotations: dict[str, Any] = {
-        name: Optional[t] for name, t in slot_types.items()
-    }
+    annotations: dict[str, Any] = {name: Optional[t] for name, t in slot_types.items()}
     ns: dict[str, Any] = {name: strawberry.UNSET for name in annotations}
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
     return strawberry.input(cls)
@@ -184,6 +183,7 @@ def _make_class_where_type(oc: OntologyClass) -> type:
 # ---------------------------------------------------------------------------
 # Per-class object type: one field per slot (+ canonical_id), all Optional
 # ---------------------------------------------------------------------------
+
 
 def _make_class_object_type(oc: OntologyClass) -> type:
     """Strawberry object type with one Optional field per slot.
@@ -231,6 +231,7 @@ def _row_to_typed(class_type: type, oc: OntologyClass, row: Any) -> Any:
 # OrderBy input: { field: <ClassField>, direction: ASC | DESC }
 # ---------------------------------------------------------------------------
 
+
 @strawberry.enum
 class OrderDirection(enum.Enum):
     ASC = "ASC"
@@ -264,11 +265,11 @@ def _make_order_by_input(oc: OntologyClass, field_enum: type) -> type:
     """Build the OrderBy input type for a class."""
     type_name = f"OrderBy_{oc.name}"
     annotations: dict[str, Any] = {
-        "field":     field_enum,
+        "field": field_enum,
         "direction": OrderDirection,
     }
     ns: dict[str, Any] = {
-        "field":     strawberry.UNSET,
+        "field": strawberry.UNSET,
         "direction": OrderDirection.ASC,
     }
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
@@ -280,15 +281,15 @@ def _make_order_by_input(oc: OntologyClass, field_enum: type) -> type:
 # ---------------------------------------------------------------------------
 
 _OP_MAP: dict[str, CompareOp] = {
-    "eq":          CompareOp.EQ,
-    "neq":         CompareOp.NEQ,
-    "gt":          CompareOp.GT,
-    "gte":         CompareOp.GTE,
-    "lt":          CompareOp.LT,
-    "lte":         CompareOp.LTE,
-    "in_":         CompareOp.IN,
-    "not_in":      CompareOp.NOT_IN,
-    "is_null":     CompareOp.IS_NULL,
+    "eq": CompareOp.EQ,
+    "neq": CompareOp.NEQ,
+    "gt": CompareOp.GT,
+    "gte": CompareOp.GTE,
+    "lt": CompareOp.LT,
+    "lte": CompareOp.LTE,
+    "in_": CompareOp.IN,
+    "not_in": CompareOp.NOT_IN,
+    "is_null": CompareOp.IS_NULL,
     "is_not_null": CompareOp.IS_NOT_NULL,
 }
 
@@ -316,13 +317,9 @@ def _slot_where_to_predicates(
             if val:
                 predicates.append(Compare(op=op, left=path))
         elif op in (CompareOp.IN, CompareOp.NOT_IN):
-            predicates.append(
-                Compare(op=op, left=path, right=Literal_(value=list(val)))
-            )
+            predicates.append(Compare(op=op, left=path, right=Literal_(value=list(val))))
         else:
-            predicates.append(
-                Compare(op=op, left=path, right=Literal_(value=val))
-            )
+            predicates.append(Compare(op=op, left=path, right=Literal_(value=val)))
 
     like_val = getattr(slot_where, "like", strawberry.UNSET)
     if like_val is not strawberry.UNSET and like_val is not None:
@@ -356,11 +353,11 @@ def _derived_slot_where_to_sql(
     fragments: list[sql.Composable] = []
 
     _BINARY_OP_SQL_LOCAL: dict[CompareOp, str] = {
-        CompareOp.EQ:  "=",
+        CompareOp.EQ: "=",
         CompareOp.NEQ: "<>",
-        CompareOp.GT:  ">",
+        CompareOp.GT: ">",
         CompareOp.GTE: ">=",
-        CompareOp.LT:  "<",
+        CompareOp.LT: "<",
         CompareOp.LTE: "<=",
     }
 
@@ -405,10 +402,7 @@ def _derived_slot_where_to_sql(
     like_val = getattr(slot_where, "like", strawberry.UNSET)
     if like_val is not strawberry.UNSET and like_val is not None:
         ctx.params.append(like_val)
-        fragments.append(
-            sql.SQL("({deriv}) LIKE ").format(deriv=deriv_sql)
-            + sql.Placeholder()
-        )
+        fragments.append(sql.SQL("({deriv}) LIKE ").format(deriv=deriv_sql) + sql.Placeholder())
 
     return fragments
 
@@ -471,9 +465,7 @@ def build_predicate_sql(
     if len(all_fragments) == 1:
         fragment = all_fragments[0]
     else:
-        fragment = sql.SQL(" AND ").join(
-            sql.SQL("(") + f + sql.SQL(")") for f in all_fragments
-        )
+        fragment = sql.SQL(" AND ").join(sql.SQL("(") + f + sql.SQL(")") for f in all_fragments)
 
     return fragment, ctx.params
 
@@ -491,7 +483,7 @@ def _build_order_by_sql(
     For derived slots, inlines the derivation expression as the sort key —
     the derivation subquery is compiled and used directly in ORDER BY.
     """
-    from knot.spec.compile.sql.dialects.postgres import compile_order_by
+    from knot.spec.compile.postgres import compile_order_by
 
     if order_by_list is strawberry.UNSET or not order_by_list:
         return None, []
@@ -570,6 +562,7 @@ def _build_order_by_sql(
 # Single-entity merge: multiple contributions → one dict (alpha-source tiebreak)
 # ---------------------------------------------------------------------------
 
+
 def _merge_contributions(
     contribs: list[dict[str, Any]],
     oc: OntologyClass,
@@ -622,6 +615,7 @@ def _merge_contributions(
 # Aggregate result type per class
 # ---------------------------------------------------------------------------
 
+
 def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str, str, str]]]:
     """Build the AggregateResult strawberry type for a class.
 
@@ -632,7 +626,7 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
     of ``(agg_func, slot_name, result_key)`` triples passed to
     ``graph_store.aggregate_rows``.
     """
-    from knot.spec.compile.sql.dialects.postgres._types import PG_TYPE_FOR_BASE, slot_pg_type
+    from knot.spec.compile.postgres._types import PG_TYPE_FOR_BASE, slot_pg_type
 
     type_name = f"AggregateResult_{oc.name}"
 
@@ -663,6 +657,7 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
 # ---------------------------------------------------------------------------
 # Schema builder
 # ---------------------------------------------------------------------------
+
 
 def _build_schema(spec: Spec) -> Schema:
     """Build a Strawberry Schema from the published Spec.
@@ -815,7 +810,7 @@ def _build_schema(spec: Spec) -> Schema:
                 f"    key: str,\n"
                 f"    as_of: Optional[int] = None,\n"
                 f") -> Optional[{ctype_name}]:\n"
-                f"    from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_predicate\n"
+                f"    from knot.spec.compile.postgres import CompileContext, compile_predicate\n"
                 f"    from knot.spec.metaschema import BoolExpr, BoolOpKind, Compare, CompareOp, Literal_, SlotPath\n"
                 f"    oc = {oc_key}\n"
                 f"    class_slot = next(s for s in oc.slots if s.name == {_disc_class_slot_name!r})\n"
@@ -854,9 +849,7 @@ def _build_schema(spec: Spec) -> Schema:
                 fn = mod.__dict__[fn_name]
                 fn.__module__ = mod_name
 
-            query_fields[cls_lower] = strawberry.field(
-                resolver=mod.__dict__[list_fn_name]
-            )
+            query_fields[cls_lower] = strawberry.field(resolver=mod.__dict__[list_fn_name])
             query_fields[f"{cls_lower}Count"] = strawberry.field(
                 resolver=mod.__dict__[count_fn_name]
             )
@@ -939,9 +932,7 @@ def _build_schema(spec: Spec) -> Schema:
                 fn = mod.__dict__[fn_name]
                 fn.__module__ = mod_name
 
-            query_fields[cls_lower] = strawberry.field(
-                resolver=mod.__dict__[list_fn_name]
-            )
+            query_fields[cls_lower] = strawberry.field(resolver=mod.__dict__[list_fn_name])
             query_fields[f"{cls_lower}Count"] = strawberry.field(
                 resolver=mod.__dict__[count_fn_name]
             )

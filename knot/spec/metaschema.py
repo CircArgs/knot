@@ -24,10 +24,9 @@ the SDK; no two-class generation per `auto-generated-sdk.md` simplification.
 from __future__ import annotations
 
 from enum import Enum
-from typing import Any, ClassVar, Literal, Optional, Union
+from typing import Any, ClassVar, Literal, Union
 
 from pydantic import BaseModel, ConfigDict, Field
-
 
 # ---------------------------------------------------------------------------
 # 1. SpecBase — shared Pydantic configuration
@@ -60,35 +59,36 @@ class SpecBase(BaseModel):
 # 2. Enums
 # ---------------------------------------------------------------------------
 
+
 class ResolutionPolicy(str, Enum):
     """Per-slot reduction under a `RESOLVED`-stance protocol
     (per `multi-valued-semantics.md`).
     """
 
-    ARGMAX_TRUST   = "argmax_trust"     # scalar trust_config, deterministic
-    POSTERIOR_MEAN = "posterior_mean"   # Beta posterior, argmax α/(α+β)
-    LCB            = "lcb"              # Beta posterior, mean − k·stddev (conservative)
+    ARGMAX_TRUST = "argmax_trust"  # scalar trust_config, deterministic
+    POSTERIOR_MEAN = "posterior_mean"  # Beta posterior, argmax α/(α+β)
+    LCB = "lcb"  # Beta posterior, mean − k·stddev (conservative)
 
 
 class Severity(str, Enum):
     """Constraint failure severity."""
 
-    ERROR   = "error"
+    ERROR = "error"
     WARNING = "warning"
 
 
 class CompareOp(str, Enum):
     """Comparison operators for `Compare` nodes."""
 
-    EQ          = "eq"
-    NEQ         = "neq"
-    GT          = "gt"
-    GTE         = "gte"
-    LT          = "lt"
-    LTE         = "lte"
-    IN          = "in"
-    NOT_IN      = "not_in"
-    IS_NULL     = "is_null"
+    EQ = "eq"
+    NEQ = "neq"
+    GT = "gt"
+    GTE = "gte"
+    LT = "lt"
+    LTE = "lte"
+    IN = "in"
+    NOT_IN = "not_in"
+    IS_NULL = "is_null"
     IS_NOT_NULL = "is_not_null"
 
 
@@ -96,33 +96,33 @@ class BoolOpKind(str, Enum):
     """Boolean composition kinds for `BoolExpr` nodes."""
 
     AND = "and"
-    OR  = "or"
+    OR = "or"
     NOT = "not"
 
 
 class AggFunc(str, Enum):
     """Aggregation functions for `RelationAggregate`."""
 
-    COUNT   = "count"
-    SUM     = "sum"
-    AVG     = "avg"
-    MIN     = "min"
-    MAX     = "max"
+    COUNT = "count"
+    SUM = "sum"
+    AVG = "avg"
+    MIN = "min"
+    MAX = "max"
     COLLECT = "collect"
-    FIRST   = "first"
+    FIRST = "first"
 
 
 class GroupByMode(str, Enum):
     """Grouping mode for `RelationAggregate`."""
 
-    NONE   = "none"
+    NONE = "none"
     SOURCE = "source"
 
 
 class ReferenceKind(str, Enum):
     """Discriminator for ReferencePattern variants."""
 
-    DIRECT        = "direct"
+    DIRECT = "direct"
     DISCRIMINATED = "discriminated"
 
 
@@ -130,13 +130,14 @@ class ReferenceKind(str, Enum):
 # 3. Leaf entities
 # ---------------------------------------------------------------------------
 
+
 class TypeDefinition(SpecBase):
     """A primitive or named type referenced by `Slot.range`."""
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    base: Optional[str] = None
-    pattern: Optional[str] = None
-    description: Optional[str] = None
+    base: str | None = None
+    pattern: str | None = None
+    description: str | None = None
 
     def __hash__(self) -> int:
         return id(self)
@@ -146,8 +147,8 @@ class PermissibleValue(SpecBase):
     """One legal value for an enum-typed slot."""
 
     text: str
-    description: Optional[str] = None
-    meaning: Optional[str] = None
+    description: str | None = None
+    meaning: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -164,6 +165,7 @@ class PermissibleValue(SpecBase):
 #     (Movie.year > 1900) & (Movie.runtime > 90)
 # ---------------------------------------------------------------------------
 
+
 class Literal_(SpecBase):
     """A constant value node."""
 
@@ -173,21 +175,22 @@ class Literal_(SpecBase):
 class SlotPath(SpecBase):
     """Walk from a class through an ordered chain of slots to a terminal value."""
 
-    from_class: "OntologyClass"
-    slots: list["Slot"] = Field(default_factory=list)
+    from_class: OntologyClass
+    slots: list[Slot] = Field(default_factory=list)
 
 
 # Boolean composition mixin — applied to every node that should support
 # `&`/`|`/`~` so authors compose predicates fluidly.
 
+
 class _BoolComposable:
-    def __and__(self, other: Any) -> "BoolExpr":
+    def __and__(self, other: Any) -> BoolExpr:
         return BoolExpr(op=BoolOpKind.AND, operands=[self, other])
 
-    def __or__(self, other: Any) -> "BoolExpr":
+    def __or__(self, other: Any) -> BoolExpr:
         return BoolExpr(op=BoolOpKind.OR, operands=[self, other])
 
-    def __invert__(self) -> "BoolExpr":
+    def __invert__(self) -> BoolExpr:
         return BoolExpr(op=BoolOpKind.NOT, operands=[self])
 
 
@@ -195,25 +198,25 @@ class Compare(SpecBase, _BoolComposable):
     """Comparison predicate: `left op right`."""
 
     op: CompareOp
-    left: Union["SlotPath", "Literal_"]
-    right: Optional[Union["SlotPath", "Literal_"]] = None  # None for unary ops
+    left: SlotPath | Literal_
+    right: SlotPath | Literal_ | None = None  # None for unary ops
 
 
 class Within(SpecBase, _BoolComposable):
     """Set-membership predicate — emits SQL `IN (...)`."""
 
     op: ClassVar[Literal["within"]] = "within"
-    left: "SlotPath"
-    values: list["Literal_"] = Field(default_factory=list)
+    left: SlotPath
+    values: list[Literal_] = Field(default_factory=list)
 
 
 class Between(SpecBase, _BoolComposable):
     """Range predicate: `lower ≤ value ≤ upper`."""
 
     op: ClassVar[Literal["between"]] = "between"
-    left: "SlotPath"
-    lower: "Literal_"
-    upper: "Literal_"
+    left: SlotPath
+    lower: Literal_
+    upper: Literal_
     inclusive: bool = True
 
 
@@ -221,7 +224,7 @@ class Matches(SpecBase, _BoolComposable):
     """String pattern predicate — emits SQL `LIKE` or regex."""
 
     op: ClassVar[Literal["matches"]] = "matches"
-    left: "SlotPath"
+    left: SlotPath
     pattern: str
 
 
@@ -237,30 +240,30 @@ class BoolExpr(SpecBase, _BoolComposable):
 class RelationRef(SpecBase):
     """Follow a slot whose range is another class — `Movie.credits`."""
 
-    from_class: "OntologyClass"
-    slot: "Slot"
+    from_class: OntologyClass
+    slot: Slot
 
     def transitive(
         self,
         *,
-        until: Optional["BoolExpr"] = None,
-        max_depth: Optional[int] = None,
-    ) -> "RecursiveTraversal":
+        until: BoolExpr | None = None,
+        max_depth: int | None = None,
+    ) -> RecursiveTraversal:
         """Walk this relation recursively: `Person.knows.transitive(max_depth=3)`."""
         step = SlotPath(from_class=self.from_class, slots=[self.slot])
         return RecursiveTraversal(start=self, step=step, until=until, max_depth=max_depth)
 
-    def where(self, predicate: Any) -> "FilteredRelation":
+    def where(self, predicate: Any) -> FilteredRelation:
         return FilteredRelation(relation=self, filter=predicate)
 
 
 class FilteredRelation(SpecBase):
     """A relation with a row-level predicate."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
+    relation: RelationRef | FilteredRelation | ReverseRelation
     filter: Any  # Compare | BoolExpr | Within | Between | Matches
 
-    def where(self, predicate: Any) -> "FilteredRelation":
+    def where(self, predicate: Any) -> FilteredRelation:
         return FilteredRelation(
             relation=self.relation,
             filter=BoolExpr(op=BoolOpKind.AND, operands=[self.filter, predicate]),
@@ -270,48 +273,48 @@ class FilteredRelation(SpecBase):
 class RelationProject(SpecBase):
     """Surface a slot value from each row of the relation."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
-    project: "SlotPath"
+    relation: RelationRef | FilteredRelation | ReverseRelation
+    project: SlotPath
 
 
 class RelationCount(SpecBase):
     """Count rows in the relation."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
+    relation: RelationRef | FilteredRelation | ReverseRelation
     distinct: bool = False
 
 
 class RelationAggregate(SpecBase):
     """Aggregate over rows in the relation (SUM, AVG, COLLECT, etc.)."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
+    relation: RelationRef | FilteredRelation | ReverseRelation
     func: AggFunc
-    operand: Optional["SlotPath"] = None
+    operand: SlotPath | None = None
     distinct: bool = False
     group_by: GroupByMode = GroupByMode.NONE
-    order_by: list["SlotPath"] = Field(default_factory=list)
+    order_by: list[SlotPath] = Field(default_factory=list)
     pivot: bool = False  # only valid when group_by == SOURCE
 
 
 class RelationAny(SpecBase):
     """Boolean: `EXISTS` — any row in the relation matches."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
+    relation: RelationRef | FilteredRelation | ReverseRelation
 
 
 class RelationAll(SpecBase):
     """Boolean: `NOT EXISTS (NOT body)` — every row satisfies a predicate."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
-    body: Optional[Any] = None  # Compare | BoolExpr
+    relation: RelationRef | FilteredRelation | ReverseRelation
+    body: Any | None = None  # Compare | BoolExpr
 
 
 class RelationFirst(SpecBase):
     """Surface the first row's projection by an ordering."""
 
-    relation: Union["RelationRef", "FilteredRelation", "ReverseRelation"]
-    project: "SlotPath"
-    order_by: list["SlotPath"] = Field(default_factory=list)
+    relation: RelationRef | FilteredRelation | ReverseRelation
+    project: SlotPath
+    order_by: list[SlotPath] = Field(default_factory=list)
     assert_unique: bool = False
 
 
@@ -323,10 +326,10 @@ class RecursiveTraversal(SpecBase):
     """
 
     op: ClassVar[Literal["recursive"]] = "recursive"
-    start: "RelationRef"
-    step: "SlotPath"
-    until: Optional[Any] = None  # Compare | BoolExpr
-    max_depth: Optional[int] = None
+    start: RelationRef
+    step: SlotPath
+    until: Any | None = None  # Compare | BoolExpr
+    max_depth: int | None = None
 
 
 class ReverseRelation(SpecBase):
@@ -342,8 +345,8 @@ class ReverseRelation(SpecBase):
                        the primary class (e.g. Credit.person).
     """
 
-    target_class: "OntologyClass"
-    fk_slot: "Slot"
+    target_class: OntologyClass
+    fk_slot: Slot
 
 
 class ScalarDerivation(SpecBase):
@@ -356,7 +359,7 @@ class FormatDerivation(SpecBase):
     """Pattern-string serialization: `'{last}, {first}'`."""
 
     template: str
-    slots: list["SlotPath"] = Field(default_factory=list)
+    slots: list[SlotPath] = Field(default_factory=list)
 
 
 # Union type for the `derivation` field on Slot.
@@ -381,12 +384,13 @@ DerivationExpr = Union[
 # fulfill time, so the sentinel is a placeholder, not a runtime defect.
 # ---------------------------------------------------------------------------
 
+
 class _SourceFilteredSlot:
     """Intermediate from `Slot.from_source(source)` — exposes `.is_null()` /
     `.is_not_null()` so impl writers can spell per-source predicates fluidly.
     """
 
-    def __init__(self, slot: "Slot", source: Any) -> None:
+    def __init__(self, slot: Slot, source: Any) -> None:
         self._slot = slot
         self._source = source
 
@@ -399,7 +403,7 @@ class _SourceFilteredSlot:
         return Compare(op=CompareOp.IS_NOT_NULL, left=path)
 
 
-def _coerce_right(other: Any) -> Union[SlotPath, Literal_]:
+def _coerce_right(other: Any) -> SlotPath | Literal_:
     """Coerce a comparison RHS into a tree node — slots/paths/literals all welcomed."""
     if isinstance(other, (SlotPath, Literal_)):
         return other
@@ -417,18 +421,18 @@ class Slot(SpecBase):
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    range: Optional[Union[TypeDefinition, "OntologyClass"]] = None
+    range: TypeDefinition | OntologyClass | None = None
     identifier: bool = False
     required: bool = False
     multivalued: bool = False
     resolution_policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST
-    pattern: Optional[str] = None
-    minimum_value: Optional[float] = None
-    maximum_value: Optional[float] = None
-    permissible_values: Optional[list[PermissibleValue]] = None
-    derivation: Optional[Any] = None  # DerivationExpr
-    reference: Optional[Any] = None  # DirectRef | DiscriminatedRef
-    description: Optional[str] = None
+    pattern: str | None = None
+    minimum_value: float | None = None
+    maximum_value: float | None = None
+    permissible_values: list[PermissibleValue] | None = None
+    derivation: Any | None = None  # DerivationExpr
+    reference: Any | None = None  # DirectRef | DiscriminatedRef
+    description: str | None = None
 
     # ------------------------------------------------------------------
     # Comparison operators — each returns a Compare node
@@ -519,25 +523,26 @@ DerivedSlot = Slot
 class SlotOverride(SpecBase):
     """Per-class refinement of a shared Slot's metadata."""
 
-    slot: "Slot"
-    required: Optional[bool] = None
-    range: Optional[Union[TypeDefinition, "OntologyClass"]] = None
-    pattern: Optional[str] = None
-    minimum_value: Optional[float] = None
-    maximum_value: Optional[float] = None
-    description: Optional[str] = None
+    slot: Slot
+    required: bool | None = None
+    range: TypeDefinition | OntologyClass | None = None
+    pattern: str | None = None
+    minimum_value: float | None = None
+    maximum_value: float | None = None
+    description: str | None = None
 
 
 # ---------------------------------------------------------------------------
 # 6. Reference patterns & identifier patterns
 # ---------------------------------------------------------------------------
 
+
 class DirectRef(SpecBase):
     """Plain FK — `target_class` + the slot on this class holding the FK value."""
 
     ref_kind: ClassVar[ReferenceKind] = ReferenceKind.DIRECT
-    target_class: Optional["OntologyClass"] = None
-    fk_slot: "Slot"
+    target_class: OntologyClass | None = None
+    fk_slot: Slot
 
 
 class DiscriminatedRef(SpecBase):
@@ -549,28 +554,29 @@ class DiscriminatedRef(SpecBase):
     """
 
     ref_kind: ClassVar[ReferenceKind] = ReferenceKind.DISCRIMINATED
-    target_class: Optional["OntologyClass"] = None
-    class_slot: "Slot"
-    key_slot: "Slot"
+    target_class: OntologyClass | None = None
+    class_slot: Slot
+    key_slot: Slot
 
 
 class IdentifierPattern(SpecBase):
     """Class-level: declares the polymorphic identifier shape on a reified class."""
 
-    class_slot: "Slot"
-    key_slot: "Slot"
-    scope: Optional["OntologyClass"] = None
+    class_slot: Slot
+    key_slot: Slot
+    scope: OntologyClass | None = None
 
 
 class UniqueKey(SpecBase):
     """Multi-slot uniqueness constraint on an OntologyClass."""
 
-    slots: list["Slot"] = Field(default_factory=list)
+    slots: list[Slot] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
 # 7. OntologyClass
 # ---------------------------------------------------------------------------
+
 
 class OntologyClass(SpecBase):
     """A typed entity class in the ontology.
@@ -594,17 +600,19 @@ class OntologyClass(SpecBase):
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    is_a: Optional["OntologyClass"] = None
-    mixins: list["OntologyClass"] = Field(default_factory=list)
-    slots: list["Slot"] = Field(default_factory=list)
-    slot_overrides: list["SlotOverride"] = Field(default_factory=list)
-    unique_keys: list["UniqueKey"] = Field(default_factory=list)
+    is_a: OntologyClass | None = None
+    mixins: list[OntologyClass] = Field(default_factory=list)
+    slots: list[Slot] = Field(default_factory=list)
+    slot_overrides: list[SlotOverride] = Field(default_factory=list)
+    unique_keys: list[UniqueKey] = Field(default_factory=list)
     abstract: bool = False
-    identifier_pattern: Optional["IdentifierPattern"] = None
-    description: Optional[str] = None
-    definition: Optional[Any] = None  # BoolExpr | RelationAll | RelationAny | Compare | ReverseRelation
+    identifier_pattern: IdentifierPattern | None = None
+    description: str | None = None
+    definition: Any | None = (
+        None  # BoolExpr | RelationAll | RelationAny | Compare | ReverseRelation
+    )
 
-    def __getattr__(self, item: str) -> "Slot":
+    def __getattr__(self, item: str) -> Slot:
         # Pydantic and Python internals probe for sentinel attributes; raise
         # AttributeError without searching slots so they fall back cleanly.
         if item.startswith("_") or item.startswith("model_"):
@@ -615,7 +623,9 @@ class OntologyClass(SpecBase):
             except Exception:
                 pass
             try:
-                slots_list = type.__getattribute__(type(cls), "model_fields") and getattr(cls, "slots", None)
+                slots_list = type.__getattribute__(type(cls), "model_fields") and getattr(
+                    cls, "slots", None
+                )
             except Exception:
                 slots_list = getattr(cls, "slots", None)
             if not slots_list:
@@ -623,14 +633,12 @@ class OntologyClass(SpecBase):
             for slot in slots_list:
                 if getattr(slot, "name", None) == item:
                     return slot
-        raise AttributeError(
-            f"OntologyClass {self.name!r} has no slot {item!r}"
-        )
+        raise AttributeError(f"OntologyClass {self.name!r} has no slot {item!r}")
 
     def __hash__(self) -> int:
         return id(self)
 
-    def _class_chain(self) -> list["OntologyClass"]:
+    def _class_chain(self) -> list[OntologyClass]:
         """Self + is_a ancestors + mixins, breadth-first."""
         seen: list[OntologyClass] = []
         queue: list[OntologyClass] = [self]
@@ -644,7 +652,7 @@ class OntologyClass(SpecBase):
             queue.extend(current.mixins)
         return seen
 
-    def descendants(self, *, max_depth: Optional[int] = None) -> "RecursiveTraversal":
+    def descendants(self, *, max_depth: int | None = None) -> RecursiveTraversal:
         """Walk the is_a chain downward."""
         is_a_slot = Slot(name="is_a", range=self)
         start = RelationRef(from_class=self, slot=is_a_slot)
@@ -662,6 +670,7 @@ _sentinel_class = OntologyClass(name="__sentinel__")
 # 8. Constraint
 # ---------------------------------------------------------------------------
 
+
 class Constraint(SpecBase):
     """Cross-row / cross-class invariant.
 
@@ -672,15 +681,16 @@ class Constraint(SpecBase):
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    primary: "OntologyClass"
+    primary: OntologyClass
     body: Any  # BoolExpr | Compare | RelationAll | RelationAny
     severity: Severity = Severity.ERROR
-    message: Optional[str] = None
+    message: str | None = None
 
 
 # ---------------------------------------------------------------------------
 # 9. Source
 # ---------------------------------------------------------------------------
+
 
 class Source(SpecBase):
     """A team-owned lake declaration.
@@ -692,9 +702,9 @@ class Source(SpecBase):
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    entity_class: "OntologyClass"
-    identifier_slot: "Slot"
-    description: Optional[str] = None
+    entity_class: OntologyClass
+    identifier_slot: Slot
+    description: str | None = None
 
     def __hash__(self) -> int:
         return id(self)
@@ -704,18 +714,19 @@ class Source(SpecBase):
 # 10. Spec root
 # ---------------------------------------------------------------------------
 
+
 class Spec(SpecBase):
     """The ontology declaration — the input to compile()."""
 
     id: str
     version: str
-    classes: list["OntologyClass"] = Field(default_factory=list)
-    slots: list["Slot"] = Field(default_factory=list)
-    types: list["TypeDefinition"] = Field(default_factory=list)
-    sources: list["Source"] = Field(default_factory=list)
-    constraints: list["Constraint"] = Field(default_factory=list)
+    classes: list[OntologyClass] = Field(default_factory=list)
+    slots: list[Slot] = Field(default_factory=list)
+    types: list[TypeDefinition] = Field(default_factory=list)
+    sources: list[Source] = Field(default_factory=list)
+    constraints: list[Constraint] = Field(default_factory=list)
     prefixes: dict[str, str] = Field(default_factory=dict)
-    default_range: Optional["TypeDefinition"] = None
+    default_range: TypeDefinition | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -757,20 +768,49 @@ Spec.model_rebuild()
 __all__ = [
     "SpecBase",
     # enums
-    "ResolutionPolicy", "Severity", "CompareOp", "BoolOpKind", "AggFunc",
-    "GroupByMode", "ReferenceKind",
+    "ResolutionPolicy",
+    "Severity",
+    "CompareOp",
+    "BoolOpKind",
+    "AggFunc",
+    "GroupByMode",
+    "ReferenceKind",
     # leaf
-    "TypeDefinition", "PermissibleValue",
+    "TypeDefinition",
+    "PermissibleValue",
     # expression tree
-    "Literal_", "SlotPath", "Compare", "BoolExpr", "Within", "Between",
-    "Matches", "RelationRef", "FilteredRelation", "RelationProject",
-    "RelationCount", "RelationAggregate", "RelationAny", "RelationAll",
-    "RelationFirst", "RecursiveTraversal", "ReverseRelation",
-    "ScalarDerivation", "FormatDerivation", "DerivationExpr",
+    "Literal_",
+    "SlotPath",
+    "Compare",
+    "BoolExpr",
+    "Within",
+    "Between",
+    "Matches",
+    "RelationRef",
+    "FilteredRelation",
+    "RelationProject",
+    "RelationCount",
+    "RelationAggregate",
+    "RelationAny",
+    "RelationAll",
+    "RelationFirst",
+    "RecursiveTraversal",
+    "ReverseRelation",
+    "ScalarDerivation",
+    "FormatDerivation",
+    "DerivationExpr",
     # slots + classes
-    "Slot", "DerivedSlot", "SlotOverride", "OntologyClass",
+    "Slot",
+    "DerivedSlot",
+    "SlotOverride",
+    "OntologyClass",
     # references
-    "DirectRef", "DiscriminatedRef", "IdentifierPattern", "UniqueKey",
+    "DirectRef",
+    "DiscriminatedRef",
+    "IdentifierPattern",
+    "UniqueKey",
     # constraints + sources + root
-    "Constraint", "Source", "Spec",
+    "Constraint",
+    "Source",
+    "Spec",
 ]

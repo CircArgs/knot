@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import psycopg
 
-
 DEFAULT_TRUST = 0.5
 
 
@@ -39,9 +38,7 @@ def list_scores(conn: psycopg.Connection) -> dict[str, float]:
     Sources without a row are absent from this dict (caller substitutes
     ``DEFAULT_TRUST``).
     """
-    rows = conn.execute(
-        "SELECT source_name, trust_score FROM trust_config"
-    ).fetchall()
+    rows = conn.execute("SELECT source_name, trust_score FROM trust_config").fetchall()
     return {r[0]: r[1] for r in rows}
 
 

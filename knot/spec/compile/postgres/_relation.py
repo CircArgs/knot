@@ -23,6 +23,9 @@ from __future__ import annotations
 
 from psycopg import sql
 
+from knot.db._naming import bindings_table_id, table_id
+from knot.spec.compile.postgres._context import CompileContext
+from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
 from knot.spec.metaschema import (
     AggFunc,
     FilteredRelation,
@@ -40,14 +43,10 @@ from knot.spec.metaschema import (
     ScalarDerivation,
 )
 
-from knot.db._naming import bindings_table_id, table_id
-from knot.spec.compile.sql.dialects.postgres._context import CompileContext
-from knot.spec.compile.sql.dialects.postgres._dispatch import CompilerError, compile_predicate
-
-
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_relation_ref(
     relation: RelationRef | FilteredRelation,
@@ -188,6 +187,7 @@ def _build_reverse_subquery_body(
 # RelationAll — NOT EXISTS (... WHERE NOT predicate)
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_relation_all(node: RelationAll, ctx: CompileContext) -> sql.Composable:
     if node.body is None:
@@ -202,13 +202,15 @@ def _compile_relation_all(node: RelationAll, ctx: CompileContext) -> sql.Composa
         inner_ctx = ctx.with_subquery_alias(target_cls, "t")
         body_sql = compile_predicate(node.body, inner_ctx)
         core = _build_reverse_subquery_body(
-            rev, ctx,
+            rev,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             outer_bind_alias="ob",
         )
         return sql.SQL("NOT EXISTS ({core} AND NOT ({body}))").format(
-            core=core, body=body_sql,
+            core=core,
+            body=body_sql,
         )
 
     ref, filter_node = _resolve_relation_ref(node.relation)
@@ -218,7 +220,8 @@ def _compile_relation_all(node: RelationAll, ctx: CompileContext) -> sql.Composa
     body_sql = compile_predicate(node.body, inner_ctx)
 
     core = _build_subquery_body(
-        ref, ctx,
+        ref,
+        ctx,
         row_alias="t",
         bind_alias="tb",
         filter_node=filter_node,
@@ -234,12 +237,14 @@ def _compile_relation_all(node: RelationAll, ctx: CompileContext) -> sql.Composa
 # RelationAny — EXISTS (... WHERE predicate)
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_relation_any(node: RelationAny, ctx: CompileContext) -> sql.Composable:
     if isinstance(node.relation, ReverseRelation):
         rev = node.relation
         core = _build_reverse_subquery_body(
-            rev, ctx,
+            rev,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             outer_bind_alias="ob",
@@ -250,7 +255,8 @@ def _compile_relation_any(node: RelationAny, ctx: CompileContext) -> sql.Composa
     target_cls = _target_class(ref)
 
     core = _build_subquery_body(
-        ref, ctx,
+        ref,
+        ctx,
         row_alias="t",
         bind_alias="tb",
         filter_node=filter_node,
@@ -264,13 +270,15 @@ def _compile_relation_any(node: RelationAny, ctx: CompileContext) -> sql.Composa
 # RelationFirst — EXISTS (SELECT * FROM (...LIMIT 1) f WHERE predicate)
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_relation_first(node: RelationFirst, ctx: CompileContext) -> sql.Composable:
     ref, filter_node = _resolve_relation_ref(node.relation)
     target_cls = _target_class(ref)
 
     core = _build_subquery_body(
-        ref, ctx,
+        ref,
+        ctx,
         row_alias="t",
         bind_alias="tb",
         filter_node=filter_node,
@@ -294,9 +302,7 @@ def _compile_relation_first(node: RelationFirst, ctx: CompileContext) -> sql.Com
     proj_ctx = ctx.with_subquery_alias(target_cls, "f")
     proj_sql = compile_predicate(node.project, proj_ctx)
 
-    return sql.SQL(
-        "EXISTS (SELECT 1 FROM ({inner}) f WHERE ({proj}))"
-    ).format(
+    return sql.SQL("EXISTS (SELECT 1 FROM ({inner}) f WHERE ({proj}))").format(
         inner=inner_select,
         proj=proj_sql,
     )
@@ -306,9 +312,10 @@ def _compile_relation_first(node: RelationFirst, ctx: CompileContext) -> sql.Com
 # Value-projection helpers — shared subquery body builders
 # ---------------------------------------------------------------------------
 
+
 def _resolve_relation_and_filter(
-    relation: "RelationRef | FilteredRelation | ReverseRelation",
-) -> "tuple[RelationRef | ReverseRelation, FilteredRelation | None]":
+    relation: RelationRef | FilteredRelation | ReverseRelation,
+) -> tuple[RelationRef | ReverseRelation, FilteredRelation | None]:
     """Unwrap a (possibly filtered) relation into (core, filter_or_None).
 
     Only one level of FilteredRelation is supported; deeper nesting raises.
@@ -316,9 +323,7 @@ def _resolve_relation_and_filter(
     if isinstance(relation, FilteredRelation):
         inner = relation.relation
         if isinstance(inner, FilteredRelation):
-            raise CompilerError(
-                "Nested FilteredRelation (depth > 1) is not supported."
-            )
+            raise CompilerError("Nested FilteredRelation (depth > 1) is not supported.")
         return inner, relation
     return relation, None
 
@@ -329,7 +334,7 @@ def _build_forward_value_body(
     *,
     row_alias: str,
     bind_alias: str,
-    filter_node: "FilteredRelation | None",
+    filter_node: FilteredRelation | None,
     select_expr: sql.Composable,
 ) -> sql.Composable:
     """Emit a complete scalar/array subquery for a forward-FK RelationRef.
@@ -377,7 +382,7 @@ def _build_reverse_value_body(
     row_alias: str,
     bind_alias: str,
     outer_bind_alias: str,
-    filter_node: "FilteredRelation | None",
+    filter_node: FilteredRelation | None,
     select_expr: sql.Composable,
 ) -> sql.Composable:
     """Emit a complete scalar/array subquery for a ReverseRelation.
@@ -431,6 +436,7 @@ def _build_reverse_value_body(
 # RelationProject — (SELECT array_agg(t.<slot>) FROM ... WHERE ...)
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_relation_project(
     node: RelationProject,
@@ -457,7 +463,8 @@ def _compile_relation_project(
 
     if isinstance(core, ReverseRelation):
         inner = _build_reverse_value_body(
-            core, ctx,
+            core,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             outer_bind_alias="ob",
@@ -466,7 +473,8 @@ def _compile_relation_project(
         )
     else:
         inner = _build_forward_value_body(
-            core, ctx,
+            core,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             filter_node=filter_node,
@@ -479,6 +487,7 @@ def _compile_relation_project(
 # ---------------------------------------------------------------------------
 # RelationCount — (SELECT count(*) FROM ... WHERE ...)
 # ---------------------------------------------------------------------------
+
 
 @compile_predicate.register
 def _compile_relation_count(
@@ -495,7 +504,8 @@ def _compile_relation_count(
 
     if isinstance(core, ReverseRelation):
         inner = _build_reverse_value_body(
-            core, ctx,
+            core,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             outer_bind_alias="ob",
@@ -504,7 +514,8 @@ def _compile_relation_count(
         )
     else:
         inner = _build_forward_value_body(
-            core, ctx,
+            core,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             filter_node=filter_node,
@@ -519,13 +530,13 @@ def _compile_relation_count(
 # ---------------------------------------------------------------------------
 
 _AGG_FUNC_SQL: dict[AggFunc, str] = {
-    AggFunc.COUNT:   "count",
-    AggFunc.SUM:     "sum",
-    AggFunc.AVG:     "avg",
-    AggFunc.MIN:     "min",
-    AggFunc.MAX:     "max",
-    AggFunc.COLLECT: "array_agg",   # COLLECT → array_agg
-    AggFunc.FIRST:   None,           # handled specially
+    AggFunc.COUNT: "count",
+    AggFunc.SUM: "sum",
+    AggFunc.AVG: "avg",
+    AggFunc.MIN: "min",
+    AggFunc.MAX: "max",
+    AggFunc.COLLECT: "array_agg",  # COLLECT → array_agg
+    AggFunc.FIRST: None,  # handled specially
 }
 
 
@@ -544,9 +555,7 @@ def _compile_relation_aggregate(
     if node.func == AggFunc.FIRST:
         # FIRST: ORDER BY tb.canonical_id LIMIT 1 with optional operand slot.
         if node.operand is None or len(node.operand.slots) != 1:
-            raise CompilerError(
-                "RelationAggregate(FIRST) requires a single-slot operand SlotPath."
-            )
+            raise CompilerError("RelationAggregate(FIRST) requires a single-slot operand SlotPath.")
         proj_slot = node.operand.slots[0]
 
         if isinstance(core, ReverseRelation):
@@ -638,7 +647,8 @@ def _compile_relation_aggregate(
 
     if isinstance(core, ReverseRelation):
         inner = _build_reverse_value_body(
-            core, ctx,
+            core,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             outer_bind_alias="ob",
@@ -647,7 +657,8 @@ def _compile_relation_aggregate(
         )
     else:
         inner = _build_forward_value_body(
-            core, ctx,
+            core,
+            ctx,
             row_alias="t",
             bind_alias="tb",
             filter_node=filter_node,
@@ -661,6 +672,7 @@ def _compile_relation_aggregate(
 # Stubs for nodes that remain unimplemented
 # ---------------------------------------------------------------------------
 
+
 def _stub(name: str, hint: str = ""):
     default_hint = (
         f"{name} compilation lands with /graph/query (cross-class JOIN "
@@ -671,6 +683,7 @@ def _stub(name: str, hint: str = ""):
 
     def _handler(node, ctx: CompileContext) -> sql.Composable:
         raise NotImplementedError(msg)
+
     return _handler
 
 

@@ -13,6 +13,9 @@ from __future__ import annotations
 
 from psycopg import sql
 
+from knot.db._naming import bindings_table_id, table_id
+from knot.spec.compile.postgres._context import CompileContext
+from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
 from knot.spec.metaschema import (
     Between,
     BoolExpr,
@@ -26,29 +29,23 @@ from knot.spec.metaschema import (
     Within,
 )
 
-from knot.db._naming import bindings_table_id, table_id
-
-from knot.spec.compile.sql.dialects.postgres._context import CompileContext
-from knot.spec.compile.sql.dialects.postgres._dispatch import CompilerError, compile_predicate
-
-
 # ---------------------------------------------------------------------------
 # CompareOp → SQL operator fragment (binary)
 # ---------------------------------------------------------------------------
 
 _BINARY_OP_SQL: dict[CompareOp, str] = {
-    CompareOp.EQ:      "=",
-    CompareOp.NEQ:     "<>",
-    CompareOp.GT:      ">",
-    CompareOp.GTE:     ">=",
-    CompareOp.LT:      "<",
-    CompareOp.LTE:     "<=",
-    CompareOp.IN:      "= ANY(%s)",   # handled specially
-    CompareOp.NOT_IN:  "!= ALL(%s)",  # handled specially
+    CompareOp.EQ: "=",
+    CompareOp.NEQ: "<>",
+    CompareOp.GT: ">",
+    CompareOp.GTE: ">=",
+    CompareOp.LT: "<",
+    CompareOp.LTE: "<=",
+    CompareOp.IN: "= ANY(%s)",  # handled specially
+    CompareOp.NOT_IN: "!= ALL(%s)",  # handled specially
 }
 
 _UNARY_OP_SQL: dict[CompareOp, str] = {
-    CompareOp.IS_NULL:     "IS NULL",
+    CompareOp.IS_NULL: "IS NULL",
     CompareOp.IS_NOT_NULL: "IS NOT NULL",
 }
 
@@ -56,6 +53,7 @@ _UNARY_OP_SQL: dict[CompareOp, str] = {
 # ---------------------------------------------------------------------------
 # Literal_
 # ---------------------------------------------------------------------------
+
 
 @compile_predicate.register
 def _compile_literal(node: Literal_, ctx: CompileContext) -> sql.Composable:
@@ -66,6 +64,7 @@ def _compile_literal(node: Literal_, ctx: CompileContext) -> sql.Composable:
 # ---------------------------------------------------------------------------
 # SlotPath  (single-slot, within-primary-class only)
 # ---------------------------------------------------------------------------
+
 
 @compile_predicate.register
 def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
@@ -141,6 +140,7 @@ def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
 # Compare
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_compare(node: Compare, ctx: CompileContext) -> sql.Composable:
     left_sql = compile_predicate(node.left, ctx)
@@ -155,9 +155,7 @@ def _compile_compare(node: Compare, ctx: CompileContext) -> sql.Composable:
     # IN / NOT_IN: right operand is a list literal → = ANY(%s) / != ALL(%s).
     if node.op in (CompareOp.IN, CompareOp.NOT_IN):
         if node.right is None:
-            raise CompilerError(
-                f"Compare(op={node.op!r}) requires a right operand."
-            )
+            raise CompilerError(f"Compare(op={node.op!r}) requires a right operand.")
         op_fragment = "= ANY(" if node.op == CompareOp.IN else "!= ALL("
         # Right should be a Literal_ holding a list; push the list as one param.
         if isinstance(node.right, Literal_):
@@ -178,9 +176,7 @@ def _compile_compare(node: Compare, ctx: CompileContext) -> sql.Composable:
 
     # Binary scalar operators.
     if node.right is None:
-        raise CompilerError(
-            f"Compare(op={node.op!r}) requires a right operand."
-        )
+        raise CompilerError(f"Compare(op={node.op!r}) requires a right operand.")
     right_sql = compile_predicate(node.right, ctx)
     op_str = _BINARY_OP_SQL.get(node.op)
     if op_str is None:
@@ -197,21 +193,19 @@ def _compile_compare(node: Compare, ctx: CompileContext) -> sql.Composable:
 # BoolExpr  (AND / OR / NOT)
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_bool_expr(node: BoolExpr, ctx: CompileContext) -> sql.Composable:
     if node.op == BoolOpKind.NOT:
         if len(node.operands) != 1:
             raise CompilerError(
-                f"BoolExpr(NOT) must have exactly 1 operand, "
-                f"got {len(node.operands)}."
+                f"BoolExpr(NOT) must have exactly 1 operand, got {len(node.operands)}."
             )
         inner = compile_predicate(node.operands[0], ctx)
         return sql.SQL("NOT ({inner})").format(inner=inner)
 
     if not node.operands:
-        raise CompilerError(
-            f"BoolExpr({node.op!r}) must have at least one operand."
-        )
+        raise CompilerError(f"BoolExpr({node.op!r}) must have at least one operand.")
 
     sep = sql.SQL(" AND ") if node.op == BoolOpKind.AND else sql.SQL(" OR ")
     parts = [compile_predicate(operand, ctx) for operand in node.operands]
@@ -222,6 +216,7 @@ def _compile_bool_expr(node: BoolExpr, ctx: CompileContext) -> sql.Composable:
 # ---------------------------------------------------------------------------
 # Within  (s.<col> = ANY(%s))
 # ---------------------------------------------------------------------------
+
 
 @compile_predicate.register
 def _compile_within(node: Within, ctx: CompileContext) -> sql.Composable:
@@ -235,6 +230,7 @@ def _compile_within(node: Within, ctx: CompileContext) -> sql.Composable:
 # Between  (s.<col> BETWEEN %s AND %s)
 # ---------------------------------------------------------------------------
 
+
 @compile_predicate.register
 def _compile_between(node: Between, ctx: CompileContext) -> sql.Composable:
     # Compile left first (typically a SlotPath — no params pushed).
@@ -244,7 +240,9 @@ def _compile_between(node: Between, ctx: CompileContext) -> sql.Composable:
     high_sql = compile_predicate(node.upper, ctx)
     if node.inclusive:
         return sql.SQL("({col}) BETWEEN ({low}) AND ({high})").format(
-            col=col_sql, low=low_sql, high=high_sql,
+            col=col_sql,
+            low=low_sql,
+            high=high_sql,
         )
     # Non-inclusive: col > low AND col < high  (two separate comparisons)
     gt_part = sql.SQL("({col}) > ({low})").format(col=col_sql, low=low_sql)
@@ -255,6 +253,7 @@ def _compile_between(node: Between, ctx: CompileContext) -> sql.Composable:
 # ---------------------------------------------------------------------------
 # Matches  (s.<col> LIKE %s)
 # ---------------------------------------------------------------------------
+
 
 @compile_predicate.register
 def _compile_matches(node: Matches, ctx: CompileContext) -> sql.Composable:

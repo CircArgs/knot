@@ -11,7 +11,7 @@ from typing import Any
 
 from psycopg import sql
 
-from knot.spec.compile.sql.dialects.postgres._context import CompileContext
+from knot.spec.compile.postgres._context import CompileContext
 
 
 class CompilerError(Exception):

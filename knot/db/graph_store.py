@@ -34,20 +34,24 @@ from psycopg import sql
 from psycopg.rows import dict_row
 
 from knot.db._naming import (
-    user_corrections_source,
     bindings_table_id as _bindings_id,
-    effective_slots as _effective_slots,
-    is_stored as _is_stored,
+)
+from knot.db._naming import (
     stored_slot_names as _stored_slot_names,
+)
+from knot.db._naming import (
     table_id as _table_id,
 )
+from knot.db._naming import (
+    user_corrections_source,
+)
 from knot.spec import OntologyClass, Source
-from knot.spec.compile.sql.dialects.postgres._queries import (
-    derived_column_exprs as _derived_column_exprs,
+from knot.spec.compile.postgres._queries import (
     select_with_binding as _select_with_binding,
+)
+from knot.spec.compile.postgres._queries import (
     select_with_derivations as _select_with_derivations,
 )
-
 
 __all__ = (
     "user_corrections_source",
@@ -220,7 +224,6 @@ def _is_defined_class(cls: OntologyClass) -> bool:
     return getattr(cls, "definition", None) is not None
 
 
-
 def list_rows(
     conn: psycopg.Connection,
     *,
@@ -232,9 +235,9 @@ def list_rows(
 ) -> list[dict[str, Any]]:
     base = _select_with_binding(cls, include_tombstoned=include_tombstoned)
     where = sql.SQL("WHERE s._spec_revision <= %s") if as_of is not None else sql.SQL("")
-    stmt = sql.SQL(
-        "{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s"
-    ).format(base=base, where=where)
+    stmt = sql.SQL("{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s").format(
+        base=base, where=where
+    )
     params: list[Any] = []
     if as_of is not None:
         params.append(as_of)
@@ -248,13 +251,13 @@ def query_rows(
     conn: psycopg.Connection,
     *,
     cls: OntologyClass,
-    predicate_sql: "sql.Composable | None",
-    predicate_params: "list[Any]",
+    predicate_sql: sql.Composable | None,
+    predicate_params: list[Any],
     limit: int = 100,
     offset: int = 0,
     as_of: int | None = None,
-    order_by_sql: "sql.Composable | None" = None,
-    order_by_params: "list[Any] | None" = None,
+    order_by_sql: sql.Composable | None = None,
+    order_by_params: list[Any] | None = None,
 ) -> list[dict[str, Any]]:
     """List rows with an optional compiled predicate fragment.
 
@@ -307,9 +310,9 @@ def query_rows(
     else:
         order_clause = sql.SQL("ORDER BY ") + canonical_order
 
-    stmt = sql.SQL(
-        "{base} {where} {order} LIMIT %s OFFSET %s"
-    ).format(base=base, where=where, order=order_clause)
+    stmt = sql.SQL("{base} {where} {order} LIMIT %s OFFSET %s").format(
+        base=base, where=where, order=order_clause
+    )
 
     # ORDER BY params (from derived-slot sort expressions) go after WHERE params.
     if order_by_params:
@@ -333,8 +336,7 @@ def get_canonical_contributions(
         # VIEW exposes _canonical_id directly; filter on it.
         where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
         stmt = sql.SQL(
-            "SELECT s.* FROM {view} s"
-            " WHERE s._canonical_id = %s{where_extra} ORDER BY s._source"
+            "SELECT s.* FROM {view} s WHERE s._canonical_id = %s{where_extra} ORDER BY s._source"
         ).format(view=_table_id(cls), where_extra=where_extra)
         params: list[Any] = [canonical_id]
         if as_of is not None:
@@ -345,9 +347,9 @@ def get_canonical_contributions(
 
     base, derived_params = _select_with_derivations(cls, include_tombstoned=include_tombstoned)
     where_extra = sql.SQL(" AND s._spec_revision <= %s") if as_of is not None else sql.SQL("")
-    stmt = sql.SQL(
-        "{base} WHERE b.canonical_id = %s{where_extra} ORDER BY s._source"
-    ).format(base=base, where_extra=where_extra)
+    stmt = sql.SQL("{base} WHERE b.canonical_id = %s{where_extra} ORDER BY s._source").format(
+        base=base, where_extra=where_extra
+    )
     # derived_params bind SELECT subqueries; canonical_id + as_of bind WHERE.
     params: list[Any] = list(derived_params) + [canonical_id]
     if as_of is not None:
@@ -362,8 +364,8 @@ def count_rows(
     *,
     cls: OntologyClass,
     as_of: int | None = None,
-    predicate_sql: "sql.Composable | None" = None,
-    predicate_params: "list[Any] | None" = None,
+    predicate_sql: sql.Composable | None = None,
+    predicate_params: list[Any] | None = None,
     include_tombstoned: bool = False,
 ) -> int:
     """Count rows matching optional predicate (same filter as query_rows)."""
@@ -387,9 +389,9 @@ def count_rows(
 
     if _is_defined_class(cls):
         # VIEW already embeds the source×bindings join; query it directly.
-        stmt = sql.SQL(
-            "SELECT count(*) FROM {view} s {where}"
-        ).format(view=_table_id(cls), where=where)
+        stmt = sql.SQL("SELECT count(*) FROM {view} s {where}").format(
+            view=_table_id(cls), where=where
+        )
     elif include_tombstoned:
         stmt = sql.SQL(
             "SELECT count(*) FROM {source} s "
@@ -419,9 +421,9 @@ def aggregate_rows(
     *,
     cls: OntologyClass,
     as_of: int | None = None,
-    predicate_sql: "sql.Composable | None" = None,
-    predicate_params: "list[Any] | None" = None,
-    agg_fields: "list[tuple[str, str, str]]",
+    predicate_sql: sql.Composable | None = None,
+    predicate_params: list[Any] | None = None,
+    agg_fields: list[tuple[str, str, str]],
 ) -> dict[str, Any]:
     """Run one SELECT with COUNT(*) plus requested aggregates over filtered rows.
 
@@ -474,9 +476,9 @@ def aggregate_rows(
     select_sql = sql.SQL(", ").join(select_parts)
 
     if _is_defined_class(cls):
-        stmt = sql.SQL(
-            "SELECT {select} FROM {view} s {where}"
-        ).format(select=select_sql, view=_table_id(cls), where=where)
+        stmt = sql.SQL("SELECT {select} FROM {view} s {where}").format(
+            select=select_sql, view=_table_id(cls), where=where
+        )
     else:
         stmt = sql.SQL(
             "SELECT {select} FROM {source} s "
@@ -538,8 +540,7 @@ def canonical_id_exists(
 ) -> bool:
     """True iff at least one current binding has this canonical_id."""
     stmt = sql.SQL(
-        "SELECT 1 FROM {bindings} "
-        "WHERE canonical_id = %s AND valid_to IS NULL LIMIT 1"
+        "SELECT 1 FROM {bindings} WHERE canonical_id = %s AND valid_to IS NULL LIMIT 1"
     ).format(bindings=_bindings_id(cls))
     return conn.execute(stmt, (canonical_id,)).fetchone() is not None
 
@@ -695,10 +696,7 @@ def insert_synthetic_row(
         placeholder_values.append(values.get(sn))
 
     knot_row_id = conn.execute(
-        sql.SQL(
-            "INSERT INTO {table} ({cols}) VALUES ({ph}) "
-            "RETURNING _knot_row_id"
-        ).format(
+        sql.SQL("INSERT INTO {table} ({cols}) VALUES ({ph}) RETURNING _knot_row_id").format(
             table=_table_id(cls),
             cols=cols_sql,
             ph=placeholders,
@@ -828,8 +826,14 @@ def append_lineage_event(
         "(class_name, change_type, from_canonical_ids, to_canonical_ids, "
         " applied_revision, correction_id) "
         "VALUES (%s, %s, %s, %s, %s, %s) RETURNING event_id",
-        (class_name, change_type, from_canonical_ids, to_canonical_ids,
-         applied_revision, correction_id),
+        (
+            class_name,
+            change_type,
+            from_canonical_ids,
+            to_canonical_ids,
+            applied_revision,
+            correction_id,
+        ),
     ).fetchone()[0]
 
 

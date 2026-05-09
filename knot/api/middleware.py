@@ -33,8 +33,8 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from contextvars import ContextVar
-from typing import Callable
 
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
@@ -85,9 +85,8 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
             # Principal is set by the auth dependency and stored in request.state
             # (populated by the optional helper below); fall back to "-".
             principal = getattr(request.state, "principal", "-")
-            client_ip = (
-                request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                or (request.client.host if request.client else "-")
+            client_ip = request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or (
+                request.client.host if request.client else "-"
             )
 
             if self._json:

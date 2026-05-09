@@ -27,7 +27,6 @@ from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-
 _DEV_DEFAULT_DSN = "postgresql://knot:knot@localhost:5432/knot_control"
 
 

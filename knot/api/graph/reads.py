@@ -11,7 +11,6 @@ from knot.api.graph._common import StrictBase, published_or_409, resolve_class
 from knot.db import graph_store
 from knot.graph import resolve
 
-
 router = APIRouter()
 
 
@@ -51,11 +50,18 @@ def list_class_rows(
         spec = published_or_409(conn)
         cls = resolve_class(spec, class_name)
         rows = graph_store.list_rows(
-            conn, cls=cls, limit=limit, offset=offset, as_of=as_of,
+            conn,
+            cls=cls,
+            limit=limit,
+            offset=offset,
+            as_of=as_of,
             include_tombstoned=include_tombstoned,
         )
         total = graph_store.count_rows(
-            conn, cls=cls, as_of=as_of, include_tombstoned=include_tombstoned,
+            conn,
+            cls=cls,
+            as_of=as_of,
+            include_tombstoned=include_tombstoned,
         )
     return ListResponse(
         entity_class=cls.name,
@@ -82,7 +88,10 @@ def get_canonical_entity(
         spec = published_or_409(conn)
         cls = resolve_class(spec, class_name)
         contributions = graph_store.get_canonical_contributions(
-            conn, cls=cls, canonical_id=canonical_id, as_of=as_of,
+            conn,
+            cls=cls,
+            canonical_id=canonical_id,
+            as_of=as_of,
             include_tombstoned=include_tombstoned,
         )
     if not contributions:
@@ -113,12 +122,13 @@ def get_resolved_entity(
         spec = published_or_409(conn)
         cls = resolve_class(spec, class_name)
         record = resolve.resolve_entity(
-            conn, cls=cls, canonical_id=canonical_id, as_of=as_of,
+            conn,
+            cls=cls,
+            canonical_id=canonical_id,
+            as_of=as_of,
         )
     if record is None:
-        raise HTTPException(
-            404, f"No contributions for {class_name}/{canonical_id}"
-        )
+        raise HTTPException(404, f"No contributions for {class_name}/{canonical_id}")
     return ResolvedEntityResponse(
         entity_class=cls.name,
         canonical_id=canonical_id,

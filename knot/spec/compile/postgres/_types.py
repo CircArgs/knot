@@ -9,17 +9,16 @@ from __future__ import annotations
 
 from knot.spec.metaschema import OntologyClass, Slot, TypeDefinition
 
-
 PG_TYPE_FOR_BASE: dict[str, str] = {
-    "str":      "TEXT",
-    "string":   "TEXT",
-    "int":      "BIGINT",
-    "integer":  "BIGINT",
-    "float":    "DOUBLE PRECISION",
-    "bool":     "BOOLEAN",
-    "boolean":  "BOOLEAN",
+    "str": "TEXT",
+    "string": "TEXT",
+    "int": "BIGINT",
+    "integer": "BIGINT",
+    "float": "DOUBLE PRECISION",
+    "bool": "BOOLEAN",
+    "boolean": "BOOLEAN",
     "datetime": "TIMESTAMPTZ",
-    "date":     "DATE",
+    "date": "DATE",
 }
 
 

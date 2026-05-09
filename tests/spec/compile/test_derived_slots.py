@@ -39,9 +39,12 @@ from psycopg import sql
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db._naming import is_stored
-from knot.db.graph_store import _derived_column_exprs, _select_with_derivations
+from knot.spec.compile.postgres._queries import (
+    derived_column_exprs as _derived_column_exprs,
+    select_with_derivations as _select_with_derivations,
+)
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.spec.compile.sql.dialects.postgres import (
+from knot.spec.compile.postgres import (
     CompileContext,
     CompilerError,
     compile_predicate,

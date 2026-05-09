@@ -6,7 +6,7 @@ isinstance) runs in priority order (lower number = earlier).
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 
 class _Dispatcher:
@@ -20,6 +20,7 @@ class _Dispatcher:
             self._handlers.append((event_type, priority, fn))
             self._handlers.sort(key=lambda h: h[1])
             return fn
+
         return deco
 
     def dispatch(self, event: object) -> None:

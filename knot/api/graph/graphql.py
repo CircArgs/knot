@@ -15,9 +15,8 @@ from fastapi.responses import HTMLResponse
 from pydantic import ConfigDict, Field
 
 from knot import db
-from knot.api.graph._common import StrictBase, published_or_409
 from knot.api.auth.security import require_user
-
+from knot.api.graph._common import StrictBase, published_or_409
 
 router = APIRouter()
 
@@ -30,6 +29,7 @@ def _graphiql_html() -> str:
     global _GRAPHIQL_HTML
     if _GRAPHIQL_HTML is None:
         import strawberry
+
         path = Path(strawberry.__file__).parent / "static" / "graphiql.html"
         _GRAPHIQL_HTML = path.read_text(encoding="utf-8")
     return _GRAPHIQL_HTML
@@ -61,8 +61,8 @@ def graphql_query(body: GraphQLBody) -> dict[str, Any]:
     ``as_of`` arguments. Returns ``{data: ..., errors: ...}`` in the
     standard GraphQL response envelope.
     """
-    from knot.spec.compile.graphql import get_or_build_schema
     from knot.db import spec_store
+    from knot.spec.compile.graphql import get_or_build_schema
 
     with db.connect() as conn:
         spec = published_or_409(conn)
@@ -79,7 +79,6 @@ def graphql_query(body: GraphQLBody) -> dict[str, Any]:
         response["data"] = result.data
     if result.errors:
         response["errors"] = [
-            {"message": str(e), "locations": getattr(e, "locations", None)}
-            for e in result.errors
+            {"message": str(e), "locations": getattr(e, "locations", None)} for e in result.errors
         ]
     return response

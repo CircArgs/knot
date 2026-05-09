@@ -26,23 +26,22 @@ Until then, /metrics is not exposed.
 from __future__ import annotations
 
 import logging
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import AsyncIterator
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
+from knot import __version__ as _VERSION
 from knot import db
-from knot.api.auth import auth as auth_router_mod
 from knot.api import dq as dq_router_mod
 from knot.api import graph as graph_router_mod
 from knot.api import lake as lake_router_mod
 from knot.api import spec as spec_router_mod
+from knot.api.auth import auth as auth_router_mod
 from knot.api.auth.security import bootstrap_admin_from_env
-from knot.logging_config import configure_logging
 from knot.api.middleware import RequestIDMiddleware
-
-from knot import __version__ as _VERSION
+from knot.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
 
@@ -76,6 +75,7 @@ app.include_router(lake_router_mod.router)
 
 
 # ── /healthz — liveness probe (no auth, no router prefix) ─────────────────────
+
 
 @app.get("/healthz", include_in_schema=False)
 def healthz() -> JSONResponse:

@@ -54,9 +54,7 @@ def generate_key() -> str:
     return secrets.token_urlsafe(32)
 
 
-_USER_COLS = (
-    "username, is_admin, kind, email, display_name, created_by"
-)
+_USER_COLS = "username, is_admin, kind, email, display_name, created_by"
 
 
 def _row_to_user(row: tuple) -> User:

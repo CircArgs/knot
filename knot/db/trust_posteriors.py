@@ -16,7 +16,6 @@ from dataclasses import dataclass
 
 import psycopg
 
-
 PRIOR_ALPHA = 1.0
 PRIOR_BETA = 1.0
 
@@ -52,8 +51,7 @@ def get_posterior(conn: psycopg.Connection, source: str, slot: str) -> Posterior
     """Posterior for ``(source, slot)``. Falls back to the uniform prior
     if no observations recorded yet."""
     row = conn.execute(
-        "SELECT alpha, beta FROM trust_posteriors "
-        "WHERE source_name = %s AND slot_name = %s",
+        "SELECT alpha, beta FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
         (source, slot),
     ).fetchone()
     if row:
@@ -66,9 +64,7 @@ def list_posteriors(conn: psycopg.Connection) -> list[Posterior]:
         "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
         "ORDER BY source_name, slot_name"
     ).fetchall()
-    return [
-        Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows
-    ]
+    return [Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows]
 
 
 def list_for_slot(conn: psycopg.Connection, slot: str) -> list[Posterior]:
@@ -77,9 +73,7 @@ def list_for_slot(conn: psycopg.Connection, slot: str) -> list[Posterior]:
         "WHERE slot_name = %s ORDER BY source_name",
         (slot,),
     ).fetchall()
-    return [
-        Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows
-    ]
+    return [Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows]
 
 
 def record_feedback(
@@ -104,7 +98,8 @@ def record_feedback(
         "    updated_at = now() "
         "RETURNING alpha, beta",
         (
-            source, slot,
+            source,
+            slot,
             PRIOR_ALPHA + delta_alpha,
             PRIOR_BETA + delta_beta,
             delta_alpha,
@@ -121,8 +116,7 @@ def reset_posterior(
 ) -> bool:
     """Drop the posterior row, reverting the pair to the uniform prior."""
     cur = conn.execute(
-        "DELETE FROM trust_posteriors "
-        "WHERE source_name = %s AND slot_name = %s",
+        "DELETE FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
         (source, slot),
     )
     return cur.rowcount > 0

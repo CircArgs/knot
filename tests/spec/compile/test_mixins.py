@@ -18,7 +18,7 @@ import pytest
 
 from knot import db
 from knot.db import spec_store
-from knot.spec.compile.sql.dialects.postgres import migration
+from knot.spec.compile.postgres import migration
 from knot.db.spec_store import (
     PublishGateError,
     create_draft,

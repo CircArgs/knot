@@ -16,8 +16,14 @@ from psycopg import sql
 
 from knot.db._naming import (
     bindings_table_id as _bindings_id,
+)
+from knot.db._naming import (
     effective_slots as _effective_slots,
+)
+from knot.db._naming import (
     is_stored as _is_stored,
+)
+from knot.db._naming import (
     table_id as _table_id,
 )
 from knot.spec.metaschema import OntologyClass
@@ -41,9 +47,7 @@ def select_with_binding(
     ``_canonical_id`` directly; query it without the extra JOIN.
     """
     if _is_defined_class(cls):
-        return sql.SQL(
-            "SELECT s.* FROM {view} s"
-        ).format(view=_table_id(cls))
+        return sql.SQL("SELECT s.* FROM {view} s").format(view=_table_id(cls))
     if include_tombstoned:
         return sql.SQL(
             "SELECT s.*, b.canonical_id AS _canonical_id "
@@ -79,7 +83,7 @@ def derived_column_exprs(
     Parameters must be prepended to the outer query's parameter list because
     the derived columns appear in the SELECT clause before any WHERE params.
     """
-    from knot.spec.compile.sql.dialects.postgres import CompileContext, compile_value
+    from knot.spec.compile.postgres import CompileContext, compile_value
 
     derived_cols: list[sql.Composable] = []
     derived_params: list[Any] = []
@@ -118,9 +122,7 @@ def select_with_derivations(
         return base, []
     extra = sql.SQL(", ").join(derived_cols)
     if _is_defined_class(cls):
-        stmt = sql.SQL(
-            "SELECT s.*, {extra} FROM {view} s"
-        ).format(extra=extra, view=_table_id(cls))
+        stmt = sql.SQL("SELECT s.*, {extra} FROM {view} s").format(extra=extra, view=_table_id(cls))
     elif include_tombstoned:
         stmt = sql.SQL(
             "SELECT s.*, b.canonical_id AS _canonical_id, {extra} "

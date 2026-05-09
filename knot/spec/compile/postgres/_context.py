@@ -31,7 +31,7 @@ class CompileContext:
         self,
         target_cls: OntologyClass,
         alias: str,
-    ) -> "CompileContext":
+    ) -> CompileContext:
         """Return a child context for compiling a predicate inside a subquery.
 
         The child shares the *same* ``params`` list so parameters accumulate

@@ -10,7 +10,7 @@ import pytest
 import psycopg
 
 from knot import db
-from knot.spec.compile.sql.dialects.postgres.migration import (
+from knot.spec.compile.postgres.migration import (
     AddClass,
     AddSlot,
     ChangeSlotType,
