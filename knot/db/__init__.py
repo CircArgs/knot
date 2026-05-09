@@ -28,10 +28,12 @@ import psycopg
 from knot.config.config import get_dsn
 from knot.db import (
     corrections,
+    dq,
     graph_store,
     spec_store,
     trust_config,
     trust_posteriors,
+    users,
 )
 
 __all__ = [
@@ -40,8 +42,10 @@ __all__ = [
     "spec_store",
     "graph_store",
     "corrections",
+    "dq",
     "trust_config",
     "trust_posteriors",
+    "users",
 ]
 
 

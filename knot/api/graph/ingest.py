@@ -12,6 +12,7 @@ from knot.api.auth.security import require_user
 from knot.api.graph._common import StrictBase, published_or_409
 from knot.api.middleware import get_request_id
 from knot.db import spec_store
+from knot.extensions.constraint_validator import ConstraintViolations
 from knot.graph import ingest as graph_ingest
 
 router = APIRouter()
@@ -77,7 +78,7 @@ async def ingest(
             )
         except graph_ingest.IngestValidationError as exc:
             raise HTTPException(422, detail=exc.errors) from exc
-        except graph_ingest.ConstraintViolations as exc:
+        except ConstraintViolations as exc:
             raise HTTPException(422, detail={"violations": exc.violations}) from exc
 
     return IngestResponse(

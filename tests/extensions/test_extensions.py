@@ -55,10 +55,14 @@ def _make_ctx(conn) -> RequestContext:
     return RequestContext(db=Session(conn), spec_revision=0, request_id="test-req")
 
 
-def _make_event(src: Source, rows: list[dict] | None = None) -> RowsIngesting:
+def _make_event(
+    src: Source, rows: list[dict] | None = None, *, spec: Spec | None = None
+) -> RowsIngesting:
     RowModel = build_row_model(src)
     typed = [RowModel.model_validate(r) for r in (rows or [])]
-    return RowsIngesting(source=src, rows=typed)
+    if spec is None:
+        spec, _, _ = _build_movie_spec()
+    return RowsIngesting(source=src, spec=spec, rows=typed)
 
 
 # ---------------------------------------------------------------------------
@@ -136,11 +140,11 @@ async def test_dispatcher_isinstance_matches_subclass(pg_conn):
     async def _base_handler(ev, ctx):
         fired.append(type(ev))
 
-    _spec, _movie, src = _build_movie_spec()
+    spec, _movie, src = _build_movie_spec()
     ctx = _make_ctx(pg_conn)
-    await d.dispatch(_make_event(src), ctx)
+    await d.dispatch(_make_event(src, spec=spec), ctx)
     await d.dispatch(
-        RowsIngested(source=src, rows=[], inserted_count=0, canonical_ids=[]),
+        RowsIngested(source=src, spec=spec, rows=[], inserted_count=0, canonical_ids=[]),
         ctx,
     )
 
@@ -209,10 +213,18 @@ async def test_er_source_specific_resolver_overrides_default(pg_conn):
         id_slot = Slot(name="id", range=st, identifier=True, required=True)
         cls = OntologyClass(name="X", slots=[id_slot])
         src = Source(name=test_source_name, entity_class=cls, identifier_slot=id_slot)
+        spec = Spec(
+            id="custom_resolver_test",
+            version="1.0.0",
+            types=[st],
+            slots=[id_slot],
+            classes=[cls],
+            sources=[src],
+        )
         RowModel = build_row_model(src)
         typed = [RowModel.model_validate({"id": "x1"}), RowModel.model_validate({"id": "x2"})]
 
-        ev = RowsIngesting(source=src, rows=typed)
+        ev = RowsIngesting(source=src, spec=spec, rows=typed)
         await dispatch.dispatch(ev, _make_ctx(pg_conn))
 
         assert ev.canonical_ids == ["custom:x1", "custom:x2"]

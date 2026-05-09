@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from knot.spec import Source
+from knot.spec import Source, Spec
 
 
 class Event(BaseModel):
@@ -22,6 +22,7 @@ class RowEvent(Event):
     """A batch of typed rows from one source."""
 
     source: Source
+    spec: Spec
     rows: list[BaseModel]  # typed via build_row_model(source); mutable for handlers
 
 
@@ -36,7 +37,12 @@ class RowsIngesting(RowEvent):
 class RowsIngested(RowEvent):
     """Post-insert. Read-only; for side-effect handlers (DQ, audit, trust
     feedback, etc.). Fires inside the route's transaction when one is active
-    so side-effects roll back consistently with the INSERT."""
+    so side-effects roll back consistently with the INSERT.
+
+    ``validate_constraints`` is the per-event opt-in for the constraint
+    validator extension (most ingests don't validate).
+    """
 
     inserted_count: int
     canonical_ids: list[str]
+    validate_constraints: bool = False
