@@ -12,8 +12,8 @@ from knot.api.auth.security import require_user
 from knot.api.graph._common import StrictBase, published_or_409
 from knot.api.middleware import get_request_id
 from knot.db import spec_store
-from knot.extensions.constraint_validator import ConstraintViolations
 from knot.graph import ingest as graph_ingest
+from knot.graph.ingest import ConstraintViolations
 
 router = APIRouter()
 

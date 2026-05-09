@@ -106,8 +106,4 @@ class _Dispatcher:
 dispatch = _Dispatcher()
 
 # Side-effect imports — register builtin extensions on the master dispatcher.
-from knot.extensions import (  # noqa: E402, F401
-    constraint_validator,
-    dq_observer,
-    er,
-)
+from knot.extensions import er  # noqa: E402, F401

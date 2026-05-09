@@ -1,13 +1,14 @@
-"""Tests for the master dispatcher + ER extension.
+"""Tests for the master dispatcher + ER extension scaffold.
 
 Coverage:
   1. Dispatcher priority ordering (lower number runs first)
   2. Multiple handlers on same event type all run
   3. isinstance matching works for subclasses
   4. No matching handler is a no-op (event unchanged)
-  5. ER default resolver returns identifier-slot values
-  6. ER source-specific resolver overrides the default
-  7. End-to-end via ingest route: _canonical_id set from default ER
+  5. ER source-specific resolver overrides the built-in default
+  6. ER register raises on duplicate registration
+  7. End-to-end via ingest route: built-in identifier-slot fallback sets
+     _canonical_id when no team resolver is registered.
 """
 
 from __future__ import annotations
@@ -171,32 +172,15 @@ async def test_dispatcher_no_handler_is_noop(pg_conn):
 
 
 # ---------------------------------------------------------------------------
-# 5. ER default resolver returns identifier-slot values
+# 5. ER source-specific resolver overrides the built-in default
 # ---------------------------------------------------------------------------
 
 
-def test_er_default_resolver_returns_id_slot_values():
-    """The default ER resolver returns ``str(getattr(row, identifier_slot.name))``."""
-    from knot.extensions import er
-
-    _spec, _movie, src = _build_movie_spec()
-    RowModel = build_row_model(src)
-    rows = [
-        RowModel.model_validate({"imdb_id": "tt0000001", "title": "Film A"}),
-        RowModel.model_validate({"imdb_id": "tt0000002", "title": "Film B"}),
-    ]
-    result = er._default(rows, src)
-
-    assert result == ["tt0000001", "tt0000002"]
-
-
-# ---------------------------------------------------------------------------
-# 6. ER source-specific resolver overrides the default
-# ---------------------------------------------------------------------------
-
-
-async def test_er_source_specific_resolver_overrides_default(pg_conn):
-    """Registering a resolver for a source name routes to that resolver."""
+async def test_er_source_specific_resolver_runs_when_registered(pg_conn):
+    """Registering a resolver for a source name routes to that resolver via
+    the master dispatcher. The ER scaffold's RowsIngesting handler picks
+    it up and sets canonical_ids.
+    """
     from knot.extensions import dispatch
     from knot.extensions import er as er_module
 
@@ -232,6 +216,11 @@ async def test_er_source_specific_resolver_overrides_default(pg_conn):
         del er_module._RESOLVERS[test_source_name]
 
 
+# ---------------------------------------------------------------------------
+# 6. ER register raises on duplicate registration
+# ---------------------------------------------------------------------------
+
+
 def test_er_register_duplicate_raises():
     from knot.extensions import er as er_module
 
@@ -248,7 +237,7 @@ def test_er_register_duplicate_raises():
 
 
 # ---------------------------------------------------------------------------
-# 7. End-to-end via ingest route: _canonical_id set from default ER
+# 7. End-to-end via ingest route: built-in identifier-slot fallback
 # ---------------------------------------------------------------------------
 
 
@@ -282,8 +271,9 @@ def ingest_client():
         app.dependency_overrides.pop(require_user, None)
 
 
-async def test_ingest_route_canonical_id_from_default_er(ingest_db, ingest_client):
-    """Ingest one row via the route; verify _canonical_id equals the imdb_id value."""
+async def test_ingest_route_canonical_id_from_builtin_fallback(ingest_db, ingest_client):
+    """No team resolver registered for 'imdb' → built-in identifier-slot
+    passthrough sets _canonical_id to the imdb_id value."""
     conn, movie, src, rev = ingest_db
 
     resp = ingest_client.post(

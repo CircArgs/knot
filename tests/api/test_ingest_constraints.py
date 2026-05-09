@@ -382,3 +382,51 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["accepted"] == 1
+
+
+# ---------------------------------------------------------------------------
+# 9. Compile failure surfaces as synthetic violation
+# ---------------------------------------------------------------------------
+
+
+async def test_compile_failure_surfaces_as_synthetic_violation(
+    clean_db, client_no_exc, monkeypatch
+):
+    """When compile_constraint raises, the built-in constraint check
+    reports it as a synthetic violation row (offending_pk='*', detail
+    starts 'compile failure: ...') and rolls back the INSERT.
+    """
+    conn = clean_db
+    spec, movie, src = _build_spec_with_constraints([])
+    spec.constraints.append(_year_gte_constraint(movie, 1888, name="year_min"))
+    await _publish_spec(conn, spec)
+
+    # Monkeypatch the compiler the ingest path calls, so any constraint
+    # compile blows up. The built-in check is expected to catch and
+    # surface it as synthetic.
+    from knot.spec.compile import postgres as postgres_compile
+
+    def _broken(constraint, cls):
+        raise RuntimeError("synthetic boom")
+
+    monkeypatch.setattr(postgres_compile, "compile_constraint", _broken)
+
+    resp = client_no_exc.post(
+        "/graph/ingest/imdb?validate_constraints=true",
+        json={"rows": [{"imdb_id": "tt_ok", "year": 2000}]},
+    )
+    assert resp.status_code == 422, resp.text
+    violations = resp.json()["detail"]["violations"]
+    assert len(violations) == 1
+    v = violations[0]
+    assert v["rule_id"] == "year_min"
+    assert v["offending_pk"] == "*"
+    assert v["detail"].startswith("compile failure:")
+    assert "synthetic boom" in v["detail"]
+
+    # Rollback: even on synthetic-violation surface, the txn rolls back.
+    async with db.connect() as conn2:
+        rows = await graph_store.query_rows(
+            conn2, cls=movie, predicate_sql=None, predicate_params=[]
+        )
+    assert rows == []

@@ -28,21 +28,18 @@ class RowEvent(Event):
 
 class RowsIngesting(RowEvent):
     """Pre-insert. Handlers can mutate rows in place (normalize, drop, augment)
-    and populate canonical_ids. Default ER handler fills canonical_ids if no
-    other handler did. Fires inside any active transaction."""
+    and populate canonical_ids. If no handler sets canonical_ids, the
+    built-in identifier-slot passthrough in graph.ingest_rows is used.
+    Fires inside any active transaction."""
 
     canonical_ids: list[str] | None = None
 
 
 class RowsIngested(RowEvent):
-    """Post-insert. Read-only; for side-effect handlers (DQ, audit, trust
-    feedback, etc.). Fires inside the route's transaction when one is active
-    so side-effects roll back consistently with the INSERT.
-
-    ``validate_constraints`` is the per-event opt-in for the constraint
-    validator extension (most ingests don't validate).
-    """
+    """Post-insert. Read-only; for side-effect handlers (audit, trust
+    feedback, push-to-Kafka, etc.). Fires inside the route's transaction
+    when one is active so side-effects roll back consistently with the
+    INSERT."""
 
     inserted_count: int
     canonical_ids: list[str]
-    validate_constraints: bool = False
