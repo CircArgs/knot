@@ -32,7 +32,7 @@ from psycopg import sql
 # Register all handlers by importing the handler modules.
 import knot.spec.compile.postgres._predicate  # noqa: F401
 import knot.spec.compile.postgres._relation  # noqa: F401
-from knot.db._naming import bindings_table_id, table_id
+from ._naming import bindings_table_id, table_id
 from knot.spec.compile.postgres._context import CompileContext
 from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
 from knot.spec.metaschema import Constraint, OntologyClass

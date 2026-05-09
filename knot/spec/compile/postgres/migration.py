@@ -40,13 +40,9 @@ from dataclasses import dataclass
 import psycopg
 from psycopg import sql
 
-from knot.db._naming import (
+from ._naming import (
     bindings_table_id as _bindings_table_id,
-)
-from knot.db._naming import (
     schema,
-)
-from knot.db._naming import (
     table_id as _table_id,
 )
 from knot.spec import OntologyClass, Slot, Spec

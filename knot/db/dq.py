@@ -27,7 +27,7 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
-from knot.db._naming import (
+from knot.spec.compile.postgres._naming import (
     schema,
     user_corrections_source,
 )

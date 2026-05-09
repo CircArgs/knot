@@ -27,7 +27,7 @@ from pydantic import ValidationError
 from knot.api.row_models import build_row_model_for_class, build_value_model_for_slot
 from knot.db import corrections as db_corrections
 from knot.db import dq, graph_store, trust_posteriors
-from knot.db._naming import user_corrections_source
+from knot.spec.compile.postgres._naming import user_corrections_source
 from knot.spec import OntologyClass, Slot
 
 # ---------------------------------------------------------------------------

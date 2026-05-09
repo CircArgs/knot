@@ -21,7 +21,7 @@ from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
 from knot.db import dq
-from knot.db._naming import user_corrections_source
+from knot.spec.compile.postgres._naming import user_corrections_source
 from knot.db.spec_store import (
     create_draft,
     publish_draft,

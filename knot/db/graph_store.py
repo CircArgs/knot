@@ -33,13 +33,9 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from knot.db._naming import (
+from knot.spec.compile.postgres._naming import (
     bindings_table_id as _bindings_id,
-)
-from knot.db._naming import (
     table_id as _table_id,
-)
-from knot.db._naming import (
     user_corrections_source,
 )
 from knot.spec import OntologyClass, Source

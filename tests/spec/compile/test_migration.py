@@ -9,7 +9,7 @@ from __future__ import annotations
 import pytest
 
 from knot import db
-from knot.db._naming import schema
+from knot.spec.compile.postgres._naming import schema
 from knot.db.spec_store import (
     create_draft,
     publish_draft,
