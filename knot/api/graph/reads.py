@@ -8,8 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from knot import db
 from knot.api.graph._common import StrictBase, published_or_409, resolve_class
-from knot.db import graph_store
-from knot.graph import resolve
+from knot.graph import reads
 
 router = APIRouter()
 
@@ -49,17 +48,11 @@ async def list_class_rows(
     async with db.connect() as conn:
         spec = await published_or_409(conn)
         cls = resolve_class(spec, class_name)
-        rows = await graph_store.list_rows(
+        rows, total = await reads.list_entities(
             conn,
             cls=cls,
             limit=limit,
             offset=offset,
-            as_of=as_of,
-            include_tombstoned=include_tombstoned,
-        )
-        total = await graph_store.count_rows(
-            conn,
-            cls=cls,
             as_of=as_of,
             include_tombstoned=include_tombstoned,
         )
@@ -87,19 +80,16 @@ async def get_canonical_entity(
     async with db.connect() as conn:
         spec = await published_or_409(conn)
         cls = resolve_class(spec, class_name)
-        contributions = await graph_store.get_canonical_contributions(
-            conn,
-            cls=cls,
-            canonical_id=canonical_id,
-            as_of=as_of,
-            include_tombstoned=include_tombstoned,
-        )
-    if not contributions:
-        raise HTTPException(
-            404,
-            f"No contributions for {class_name}/{canonical_id}"
-            + (f" as_of={as_of}" if as_of is not None else ""),
-        )
+        try:
+            contributions = await reads.get_entity_contributions(
+                conn,
+                cls=cls,
+                canonical_id=canonical_id,
+                as_of=as_of,
+                include_tombstoned=include_tombstoned,
+            )
+        except reads.CanonicalNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
     return EntityResponse(
         entity_class=cls.name,
         canonical_id=canonical_id,
@@ -121,14 +111,15 @@ async def get_resolved_entity(
     async with db.connect() as conn:
         spec = await published_or_409(conn)
         cls = resolve_class(spec, class_name)
-        record = await resolve.resolve_entity(
-            conn,
-            cls=cls,
-            canonical_id=canonical_id,
-            as_of=as_of,
-        )
-    if record is None:
-        raise HTTPException(404, f"No contributions for {class_name}/{canonical_id}")
+        try:
+            record = await reads.get_resolved_entity(
+                conn,
+                cls=cls,
+                canonical_id=canonical_id,
+                as_of=as_of,
+            )
+        except reads.CanonicalNotFoundError as exc:
+            raise HTTPException(404, str(exc)) from exc
     return ResolvedEntityResponse(
         entity_class=cls.name,
         canonical_id=canonical_id,
