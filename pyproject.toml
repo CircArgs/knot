@@ -25,6 +25,7 @@ notebook = [
     "marimo>=0.10",
     "pandas>=2.0",
     "sqlalchemy>=2.0",
+    "requests>=2.31",
 ]
 dev = [
     "ruff>=0.4",
