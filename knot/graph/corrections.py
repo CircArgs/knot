@@ -27,8 +27,8 @@ from pydantic import ValidationError
 from knot.api.row_models import build_row_model_for_class, build_value_model_for_slot
 from knot.db import corrections as db_corrections
 from knot.db import dq, graph_store, trust_posteriors
+from knot.spec import OntologyClass, Slot, Spec
 from knot.spec.compile.postgres._naming import user_corrections_source
-from knot.spec import OntologyClass, Slot
 
 # ---------------------------------------------------------------------------
 # Typed errors — every apply_* validates and raises one of these.
@@ -206,6 +206,7 @@ async def apply_merge(
     keep_canonical_id: str,
     merge_canonical_ids: list[str],
     spec_revision: int,
+    spec: Spec,
     applied_by: str | None = None,
     payload_for_log: dict[str, Any] | None = None,
 ) -> int:
@@ -258,6 +259,10 @@ async def apply_merge(
             spec_revision=spec_revision,
             correction_id=correction_id,
             change_type="merge",
+        )
+        id_remap = {old: keep_canonical_id for old in deduped}
+        await graph_store.update_cross_class_references(
+            conn, spec=spec, merged_class=cls, id_remap=id_remap,
         )
         await graph_store.append_lineage_event(
             conn,

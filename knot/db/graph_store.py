@@ -33,13 +33,17 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
+from knot.spec import OntologyClass, Source, Spec, effective_slots, is_stored
+from knot.spec import stored_slot_names as _stored_slot_names
 from knot.spec.compile.postgres._naming import (
     bindings_table_id as _bindings_id,
+)
+from knot.spec.compile.postgres._naming import (
     table_id as _table_id,
+)
+from knot.spec.compile.postgres._naming import (
     user_corrections_source,
 )
-from knot.spec import OntologyClass, Source
-from knot.spec import stored_slot_names as _stored_slot_names
 from knot.spec.compile.postgres._queries import (
     select_with_binding as _select_with_binding,
 )
@@ -58,6 +62,7 @@ __all__ = (
     "get_disagreeing_contributions",
     "canonical_id_exists",
     "merge_canonical_ids",
+    "update_cross_class_references",
     "upsert_user_correction_row",
     "split_canonical_id",
     "insert_synthetic_row",
@@ -592,6 +597,56 @@ async def merge_canonical_ids(
             )
             rewritten += 1
     return rewritten
+
+
+async def update_cross_class_references(
+    conn: psycopg.AsyncConnection,
+    *,
+    spec: Spec,
+    merged_class: OntologyClass,
+    id_remap: dict[str, str],
+) -> int:
+    """Rewrite cross-class FK references after a merge.
+
+    For each class on ``spec``, for each stored slot whose range is
+    ``merged_class``, UPDATE the per-class data table to rewrite values
+    in id_remap.keys() to id_remap.values(). Returns total rows updated.
+
+    Multivalued slots use array_replace; single-valued use scalar UPDATE.
+    Skipped: abstract classes (no table), defined classes (VIEWs not
+    base tables), and the merged class itself.
+    """
+    if not id_remap:
+        return 0
+
+    total = 0
+    for cls in spec.classes:
+        if cls is merged_class:
+            continue
+        if getattr(cls, "abstract", False):
+            continue
+        if getattr(cls, "definition", None) is not None:
+            continue
+        for slot in effective_slots(cls):
+            if not is_stored(slot):
+                continue
+            if slot.range is not merged_class:
+                continue
+            col = sql.Identifier(slot.name)
+            for old_id, new_id in id_remap.items():
+                if slot.multivalued:
+                    stmt = sql.SQL(
+                        "UPDATE {table} SET {col} = array_replace({col}, %s, %s) "
+                        "WHERE %s = ANY({col})"
+                    ).format(table=_table_id(cls), col=col)
+                    cur = await conn.execute(stmt, (old_id, new_id, old_id))
+                else:
+                    stmt = sql.SQL(
+                        "UPDATE {table} SET {col} = %s WHERE {col} = %s"
+                    ).format(table=_table_id(cls), col=col)
+                    cur = await conn.execute(stmt, (new_id, old_id))
+                total += cur.rowcount or 0
+    return total
 
 
 # ─── Split ──────────────────────────────────────────────────────────────────

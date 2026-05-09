@@ -125,6 +125,7 @@ async def _apply(
             keep_canonical_id=body.keep_canonical_id,
             merge_canonical_ids=body.merge_canonical_ids,
             spec_revision=spec_revision,
+            spec=spec,
             applied_by=principal.username,
             payload_for_log=body.model_dump(),
         )
