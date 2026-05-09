@@ -10,9 +10,12 @@ Env vars (all prefixed ``KNOT_``)
                       ``DEV_MODE=1``, which falls back to the local
                       docker-compose dev creds.
 ``DEV_MODE``          ``1`` enables the dev DSN fallback + dev defaults for
-                      logging.
+                      logging.  Also implies ``AUTH_DEV_MODE=1`` (see
+                      ``effective_auth_dev_mode``) so a single env var brings
+                      up the local stack with auth bypassed.
 ``AUTH_DEV_MODE``     ``1`` bypasses ``require_user`` (returns a synthetic
                       ``dev:default`` principal); used for local dev / tests.
+                      Implied by ``DEV_MODE=1``.
 ``BOOTSTRAP_ADMIN_KEY``  optional raw API key; if set and the users table is
                       empty, an ``admin`` user is seeded at startup.
 ``LOG_LEVEL``         ``DEBUG`` / ``INFO`` / ``WARNING`` / ``ERROR``.
@@ -61,6 +64,11 @@ class Settings(BaseSettings):
             "KNOT_CONTROL_DSN is not set. Set the env var, or set "
             "KNOT_DEV_MODE=1 to fall back to the dev docker-compose default."
         )
+
+    @property
+    def effective_auth_dev_mode(self) -> bool:
+        """Bypass auth when explicitly opted in OR when DEV_MODE is set."""
+        return self.auth_dev_mode or self.dev_mode
 
     @property
     def effective_log_format(self) -> Literal["json", "text"]:

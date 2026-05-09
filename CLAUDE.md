@@ -68,7 +68,10 @@ KNOT_DEV_MODE=1 .venv/bin/pytest tests/ -q
 ```
 
 `KNOT_DEV_MODE=1` is required for tests — the fail-closed DSN guard falls
-back to the docker-compose default only when this is set.
+back to the docker-compose default only when this is set. It also implies
+`KNOT_AUTH_DEV_MODE=1`, so mutation routes (`POST /spec/drafts/...`,
+`POST /graph/ingest/...`, `POST /graph/corrections`) bypass auth in the
+same single-env-var dev stack.
 
 ## Conventions (apply proactively)
 

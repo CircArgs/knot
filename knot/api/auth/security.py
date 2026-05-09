@@ -6,7 +6,9 @@ Two env knobs:
 
   - ``KNOT_AUTH_DEV_MODE=1``      — skip auth entirely; principal returned
                                     is ``"dev:default"``. For local dev /
-                                    notebooks / CI only.
+                                    notebooks / CI only. Implied by
+                                    ``KNOT_DEV_MODE=1`` so a single env var
+                                    brings up the dev stack.
   - ``KNOT_BOOTSTRAP_ADMIN_KEY``  — at startup, if no users exist, seed one
                                     named ``"admin"`` with this raw key
                                     (sha256 hashed at rest).
@@ -59,7 +61,7 @@ async def require_user(
     403 on no-such-user. In dev mode returns a synthetic non-admin
     principal without touching the DB.
     """
-    if get_settings().auth_dev_mode:
+    if get_settings().effective_auth_dev_mode:
         return Principal(username=DEV_PRINCIPAL, is_admin=False)
     token = _strip_bearer(authorization)
     key_hash = users.hash_key(token)

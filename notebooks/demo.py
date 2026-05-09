@@ -6,7 +6,7 @@ A single runnable narrative that drives knot through its `/spec/*` and
 
 Bring-up:
     ./scripts/up.sh
-    KNOT_DEV_MODE=1 KNOT_AUTH_DEV_MODE=1 .venv/bin/uvicorn knot.api.main:app \\
+    KNOT_DEV_MODE=1 .venv/bin/uvicorn knot.api.main:app \\
         --port 8000 --log-level warning &
     .venv/bin/marimo edit notebooks/demo.py
 
@@ -45,7 +45,7 @@ def _(mo):
 
     ```bash
     ./scripts/up.sh
-    KNOT_DEV_MODE=1 KNOT_AUTH_DEV_MODE=1 .venv/bin/uvicorn knot.api.main:app     --port 8000 --log-level warning &
+    KNOT_DEV_MODE=1 .venv/bin/uvicorn knot.api.main:app     --port 8000 --log-level warning &
     ```
     """)
     return
