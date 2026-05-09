@@ -651,7 +651,7 @@ def publish(
         except spec_store.PublishGateError as exc:
             raise HTTPException(400, f"Draft {draft_id} failed the publish gate: {exc}") from exc
 
-        spec = spec_store.get_revision(conn, draft_id)
+        spec_store.get_revision(conn, draft_id)
         rows = spec_store.list_published(conn)
     row = next(r for r in rows if r["revision"] == draft_id)
     return PublishResponse(

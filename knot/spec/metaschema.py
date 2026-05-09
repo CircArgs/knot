@@ -23,8 +23,8 @@ the SDK; no two-class generation per `auto-generated-sdk.md` simplification.
 
 from __future__ import annotations
 
-from enum import Enum
-from typing import Any, ClassVar, Literal, Union
+from enum import StrEnum
+from typing import Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -60,7 +60,7 @@ class SpecBase(BaseModel):
 # ---------------------------------------------------------------------------
 
 
-class ResolutionPolicy(str, Enum):
+class ResolutionPolicy(StrEnum):
     """Per-slot reduction under a `RESOLVED`-stance protocol
     (per `multi-valued-semantics.md`).
     """
@@ -70,14 +70,14 @@ class ResolutionPolicy(str, Enum):
     LCB = "lcb"  # Beta posterior, mean − k·stddev (conservative)
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     """Constraint failure severity."""
 
     ERROR = "error"
     WARNING = "warning"
 
 
-class CompareOp(str, Enum):
+class CompareOp(StrEnum):
     """Comparison operators for `Compare` nodes."""
 
     EQ = "eq"
@@ -92,7 +92,7 @@ class CompareOp(str, Enum):
     IS_NOT_NULL = "is_not_null"
 
 
-class BoolOpKind(str, Enum):
+class BoolOpKind(StrEnum):
     """Boolean composition kinds for `BoolExpr` nodes."""
 
     AND = "and"
@@ -100,7 +100,7 @@ class BoolOpKind(str, Enum):
     NOT = "not"
 
 
-class AggFunc(str, Enum):
+class AggFunc(StrEnum):
     """Aggregation functions for `RelationAggregate`."""
 
     COUNT = "count"
@@ -112,14 +112,14 @@ class AggFunc(str, Enum):
     FIRST = "first"
 
 
-class GroupByMode(str, Enum):
+class GroupByMode(StrEnum):
     """Grouping mode for `RelationAggregate`."""
 
     NONE = "none"
     SOURCE = "source"
 
 
-class ReferenceKind(str, Enum):
+class ReferenceKind(StrEnum):
     """Discriminator for ReferencePattern variants."""
 
     DIRECT = "direct"
@@ -363,16 +363,16 @@ class FormatDerivation(SpecBase):
 
 
 # Union type for the `derivation` field on Slot.
-DerivationExpr = Union[
-    RelationProject,
-    RelationCount,
-    RelationAggregate,
-    RelationAny,
-    RelationAll,
-    RelationFirst,
-    ScalarDerivation,
-    FormatDerivation,
-]
+DerivationExpr = (
+    RelationProject
+    | RelationCount
+    | RelationAggregate
+    | RelationAny
+    | RelationAll
+    | RelationFirst
+    | ScalarDerivation
+    | FormatDerivation
+)
 
 
 # ---------------------------------------------------------------------------

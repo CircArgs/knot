@@ -252,7 +252,7 @@ def _compile_relation_any(node: RelationAny, ctx: CompileContext) -> sql.Composa
         return sql.SQL("EXISTS ({core})").format(core=core)
 
     ref, filter_node = _resolve_relation_ref(node.relation)
-    target_cls = _target_class(ref)
+    _target_class(ref)
 
     core = _build_subquery_body(
         ref,
@@ -276,7 +276,7 @@ def _compile_relation_first(node: RelationFirst, ctx: CompileContext) -> sql.Com
     ref, filter_node = _resolve_relation_ref(node.relation)
     target_cls = _target_class(ref)
 
-    core = _build_subquery_body(
+    _build_subquery_body(
         ref,
         ctx,
         row_alias="t",

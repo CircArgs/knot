@@ -141,7 +141,7 @@ def ingest(
                         rows=validated,
                     )
             except _ConstraintViolationError as exc:
-                raise HTTPException(422, detail={"violations": exc.violations})
+                raise HTTPException(422, detail={"violations": exc.violations}) from exc
         else:
             count = graph_store.insert_rows(
                 conn,

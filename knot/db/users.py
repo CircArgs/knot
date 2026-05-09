@@ -24,13 +24,13 @@ from __future__ import annotations
 import hashlib
 import secrets
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from typing import Any
 
 import psycopg
 
 
-class PrincipalKind(str, Enum):
+class PrincipalKind(StrEnum):
     USER = "user"
     SERVICE_ACCOUNT = "service_account"
 

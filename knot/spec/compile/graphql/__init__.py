@@ -42,7 +42,7 @@ import json
 import logging
 import sys
 import types
-from typing import Any, Optional
+from typing import Any
 
 import strawberry
 from psycopg import sql
@@ -50,8 +50,6 @@ from strawberry import Schema
 
 from knot.spec.compile.postgres import CompileContext, compile_predicate, compile_value
 from knot.spec.metaschema import (
-    BoolExpr,
-    BoolOpKind,
     Compare,
     CompareOp,
     Literal_,
@@ -144,17 +142,17 @@ def _make_slot_where_type(slot: Slot, class_name: str) -> type:
     type_name = f"WhereInput_{class_name}_{slot.name}"
 
     annotations: dict[str, Any] = {
-        "eq": Optional[py],
-        "neq": Optional[py],
-        "gt": Optional[py],
-        "gte": Optional[py],
-        "lt": Optional[py],
-        "lte": Optional[py],
-        "in_": Optional[list[py]],
-        "not_in": Optional[list[py]],
-        "is_null": Optional[bool],
-        "is_not_null": Optional[bool],
-        "like": Optional[str],
+        "eq": py | None,
+        "neq": py | None,
+        "gt": py | None,
+        "gte": py | None,
+        "lt": py | None,
+        "lte": py | None,
+        "in_": list[py] | None,
+        "not_in": list[py] | None,
+        "is_null": bool | None,
+        "is_not_null": bool | None,
+        "like": str | None,
     }
     ns: dict[str, Any] = {k: strawberry.UNSET for k in annotations}
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
@@ -174,7 +172,7 @@ def _make_class_where_type(oc: OntologyClass) -> type:
     type_name = f"WhereInput_{oc.name}"
     all_s = _all_slots(oc)
     slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in all_s}
-    annotations: dict[str, Any] = {name: Optional[t] for name, t in slot_types.items()}
+    annotations: dict[str, Any] = {name: t | None for name, t in slot_types.items()}
     ns: dict[str, Any] = {name: strawberry.UNSET for name in annotations}
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
     return strawberry.input(cls)
@@ -199,12 +197,12 @@ def _make_class_object_type(oc: OntologyClass) -> type:
 
     for slot in _all_slots(oc):
         py = _slot_python_type(slot)
-        ann = Optional[list[py]] if slot.multivalued else Optional[py]
+        ann = list[py] | None if slot.multivalued else py | None
         annotations[slot.name] = ann
         ns[slot.name] = None
 
     if "canonical_id" not in annotations:
-        annotations["canonical_id"] = Optional[str]
+        annotations["canonical_id"] = str | None
         ns["canonical_id"] = None
 
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
@@ -483,8 +481,6 @@ def _build_order_by_sql(
     For derived slots, inlines the derivation expression as the sort key —
     the derivation subquery is compiled and used directly in ORDER BY.
     """
-    from knot.spec.compile.postgres import compile_order_by
-
     if order_by_list is strawberry.UNSET or not order_by_list:
         return None, []
 
@@ -526,7 +522,7 @@ def _build_order_by_sql(
 
     # Re-iterate to emit in input order.
     slot_by_name2: dict[str, Slot] = {s.name: s for s in _all_slots(oc)}
-    ctx2 = CompileContext(primary_class=storage_class, alias=alias, params=[])
+    CompileContext(primary_class=storage_class, alias=alias, params=[])
     for item in order_by_list:
         field_name = item.field.value
         direction = item.direction.value.upper()
@@ -626,7 +622,7 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
     of ``(agg_func, slot_name, result_key)`` triples passed to
     ``graph_store.aggregate_rows``.
     """
-    from knot.spec.compile.postgres._types import PG_TYPE_FOR_BASE, slot_pg_type
+    from knot.spec.compile.postgres._types import slot_pg_type
 
     type_name = f"AggregateResult_{oc.name}"
 
@@ -647,7 +643,7 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
             # Title-case the func for the GraphQL field name: sumYear, avgYear…
             gql_key = f"{func}{slot.name.capitalize()}"
             agg_fields.append((func, slot.name, result_key))
-            annotations[gql_key] = Optional[float]
+            annotations[gql_key] = float | None
             ns[gql_key] = None
 
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
@@ -754,10 +750,10 @@ def _build_schema(spec: Spec) -> Schema:
         list_fn_name = f"resolve_{cls_lower}"
         list_fn_src = (
             f"def {list_fn_name}(\n"
-            f"    where: Optional[{wtype_name}] = _UNSET,\n"
+            f"    where: {wtype_name} | None = _UNSET,\n"
             f"    limit: int = 100,\n"
             f"    offset: int = 0,\n"
-            f"    as_of: Optional[int] = None,\n"
+            f"    as_of: int | None = None,\n"
             f"    order_by: Optional[list[{ob_name}]] = _UNSET,\n"
             f") -> list[{ctype_name}]:\n"
             f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
@@ -778,8 +774,8 @@ def _build_schema(spec: Spec) -> Schema:
         count_fn_name = f"resolve_{cls_lower}_count"
         count_fn_src = (
             f"def {count_fn_name}(\n"
-            f"    where: Optional[{wtype_name}] = _UNSET,\n"
-            f"    as_of: Optional[int] = None,\n"
+            f"    where: {wtype_name} | None = _UNSET,\n"
+            f"    as_of: int | None = None,\n"
             f") -> int:\n"
             f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
             f"    with _db.connect() as conn:\n"
@@ -808,8 +804,8 @@ def _build_schema(spec: Spec) -> Schema:
                 f"def {by_disc_fn_name}(\n"
                 f"    target_class: str,\n"
                 f"    key: str,\n"
-                f"    as_of: Optional[int] = None,\n"
-                f") -> Optional[{ctype_name}]:\n"
+                f"    as_of: int | None = None,\n"
+                f") -> {ctype_name} | None:\n"
                 f"    from knot.spec.compile.postgres import CompileContext, compile_predicate\n"
                 f"    from knot.spec.metaschema import BoolExpr, BoolOpKind, Compare, CompareOp, Literal_, SlotPath\n"
                 f"    oc = {oc_key}\n"
@@ -865,8 +861,8 @@ def _build_schema(spec: Spec) -> Schema:
             by_id_fn_src = (
                 f"def {by_id_fn_name}(\n"
                 f"    canonical_id: str,\n"
-                f"    as_of: Optional[int] = None,\n"
-                f") -> Optional[{ctype_name}]:\n"
+                f"    as_of: int | None = None,\n"
+                f") -> {ctype_name} | None:\n"
                 f"    with _db.connect() as conn:\n"
                 f"        contribs = _gs.get_canonical_contributions(\n"
                 f"            conn, cls={oc_key},\n"
@@ -884,8 +880,8 @@ def _build_schema(spec: Spec) -> Schema:
             resolved_fn_src = (
                 f"def {resolved_fn_name}(\n"
                 f"    canonical_id: str,\n"
-                f"    as_of: Optional[int] = None,\n"
-                f") -> Optional[{ctype_name}]:\n"
+                f"    as_of: int | None = None,\n"
+                f") -> {ctype_name} | None:\n"
                 f"    with _db.connect() as conn:\n"
                 f"        record = _resolve_mod.resolve_entity(\n"
                 f"            conn, cls={oc_key},\n"
@@ -901,8 +897,8 @@ def _build_schema(spec: Spec) -> Schema:
             agg_fn_name = f"resolve_{cls_lower}_aggregate"
             agg_fn_src = (
                 f"def {agg_fn_name}(\n"
-                f"    where: Optional[{wtype_name}] = _UNSET,\n"
-                f"    as_of: Optional[int] = None,\n"
+                f"    where: {wtype_name} | None = _UNSET,\n"
+                f"    as_of: int | None = None,\n"
                 f") -> {agg_rtype_name}:\n"
                 f"    pred_sql, pred_params = _build_pred({oc_key}, where)\n"
                 f"    with _db.connect() as conn:\n"

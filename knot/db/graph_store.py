@@ -139,7 +139,7 @@ def insert_rows(
 
     count = 0
     with conn.transaction():
-        for row, canonical_id in zip(rows, canonical_ids):
+        for row, canonical_id in zip(rows, canonical_ids, strict=False):
             values: list[Any] = [
                 source.name,
                 canonical_id,

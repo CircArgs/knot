@@ -36,8 +36,6 @@ import psycopg
 from pydantic import BaseModel
 
 from knot.spec.canonical import compute_content_hash
-
-logger = logging.getLogger(__name__)
 from knot.spec.metaschema import (
     BoolExpr,
     Compare,
@@ -70,6 +68,9 @@ from knot.spec.metaschema import (
     UniqueKey,
     Within,
 )
+
+logger = logging.getLogger(__name__)
+
 
 # ---------------------------------------------------------------------------
 # Errors

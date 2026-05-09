@@ -92,7 +92,7 @@ def _validate_property_value(slot: Slot, value: Any) -> Any:
         return one_field.model_validate({slot.name: value}).model_dump()[slot.name]
     except ValidationError as exc:
         errors = [{**e, "loc": ("body", "value", *e["loc"])} for e in exc.errors()]
-        raise HTTPException(422, detail=errors)
+        raise HTTPException(422, detail=errors) from exc
 
 
 # ─── Endpoint ───────────────────────────────────────────────────────────────
@@ -247,7 +247,7 @@ def submit_correction(
                     exclude_none=True
                 )
             except Exception as exc:
-                raise HTTPException(422, detail=str(exc))
+                raise HTTPException(422, detail=str(exc)) from exc
             spec_revision = spec_store.get_published_revision(conn)
             correction_id = graph_corrections.apply_add(
                 conn,
