@@ -21,19 +21,20 @@ from knot.spec.compile.postgres.migration import (
     diff_specs,
     is_destructive,
 )
+from knot.db._naming import schema
 from knot.db.spec_store import (
-    PublishGateError,
     create_draft,
     publish_draft,
     update_draft,
 )
-from knot.db._naming import schema
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition, ResolutionPolicy
+from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from knot.spec.errors import PublishGateError
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _str_type() -> TypeDefinition:
     return TypeDefinition(name="string", base="str")
@@ -60,34 +61,40 @@ def _minimal_spec(*extra_classes: OntologyClass) -> Spec:
 
 
 async def _table_exists(conn, table_name: str) -> bool:
-    row = await (await conn.execute(
-        "SELECT 1 FROM information_schema.tables "
-        "WHERE table_schema = %s AND table_name = %s",
-        (schema(), table_name),
-    )).fetchone()
+    row = await (
+        await conn.execute(
+            "SELECT 1 FROM information_schema.tables WHERE table_schema = %s AND table_name = %s",
+            (schema(), table_name),
+        )
+    ).fetchone()
     return row is not None
 
 
 async def _column_exists(conn, table_name: str, column_name: str) -> bool:
-    row = await (await conn.execute(
-        "SELECT 1 FROM information_schema.columns "
-        "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
-        (schema(), table_name, column_name),
-    )).fetchone()
+    row = await (
+        await conn.execute(
+            "SELECT 1 FROM information_schema.columns "
+            "WHERE table_schema = %s AND table_name = %s AND column_name = %s",
+            (schema(), table_name, column_name),
+        )
+    ).fetchone()
     return row is not None
 
 
 async def _index_exists(conn, index_name: str) -> bool:
-    row = await (await conn.execute(
-        "SELECT 1 FROM pg_indexes WHERE indexname = %s",
-        (index_name,),
-    )).fetchone()
+    row = await (
+        await conn.execute(
+            "SELECT 1 FROM pg_indexes WHERE indexname = %s",
+            (index_name,),
+        )
+    ).fetchone()
     return row is not None
 
 
 # ---------------------------------------------------------------------------
 # Fixture
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 async def clean_db(pg_conn):
@@ -106,6 +113,7 @@ async def clean_db(pg_conn):
 # ---------------------------------------------------------------------------
 # 1. diff_specs — change-event generation
 # ---------------------------------------------------------------------------
+
 
 def test_diff_from_none_produces_add_class_for_each_concrete_class():
     st = _str_type()
@@ -167,8 +175,16 @@ def test_diff_change_slot_type_detected():
     year_int = Slot(name="year", range=int_t)
     prev_movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
     cand_movie = OntologyClass(name="Movie", slots=[id_slot, year_int])
-    prev = Spec(id="t", version="1.0.0", types=[str_t], slots=[id_slot, year_str], classes=[prev_movie])
-    cand = Spec(id="t", version="1.0.0", types=[str_t, int_t], slots=[id_slot, year_int], classes=[cand_movie])
+    prev = Spec(
+        id="t", version="1.0.0", types=[str_t], slots=[id_slot, year_str], classes=[prev_movie]
+    )
+    cand = Spec(
+        id="t",
+        version="1.0.0",
+        types=[str_t, int_t],
+        slots=[id_slot, year_int],
+        classes=[cand_movie],
+    )
     changes = diff_specs(prev, cand)
     type_changes = [c for c in changes if isinstance(c, ChangeSlotType)]
     assert any(c.slot.name == "year" for c in type_changes)
@@ -177,6 +193,7 @@ def test_diff_change_slot_type_detected():
 # ---------------------------------------------------------------------------
 # 2. is_destructive classification
 # ---------------------------------------------------------------------------
+
 
 def test_add_class_is_not_destructive():
     st = _str_type()
@@ -206,12 +223,15 @@ def test_change_slot_type_is_destructive():
     int_t = _int_type()
     cls = OntologyClass(name="Movie", slots=[])
     slot = Slot(name="year", range=int_t)
-    assert is_destructive(ChangeSlotType(cls=cls, slot=slot, prev_pg_type="TEXT", new_pg_type="BIGINT"))
+    assert is_destructive(
+        ChangeSlotType(cls=cls, slot=slot, prev_pg_type="TEXT", new_pg_type="BIGINT")
+    )
 
 
 # ---------------------------------------------------------------------------
 # 3. apply_changes — DDL idempotency + table/index creation
 # ---------------------------------------------------------------------------
+
 
 async def test_apply_changes_creates_source_table(clean_db):
     spec = _minimal_spec()
@@ -261,14 +281,16 @@ async def test_apply_changes_add_slot_creates_column(clean_db):
 # 4. Publish pipeline: destructive gating via spec_store
 # ---------------------------------------------------------------------------
 
+
 async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     st = _str_type()
     id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
     title = Slot(name="title", range=st)
     movie = OntologyClass(name="Movie", slots=[id_slot, title])
     src = Source(name="s", entity_class=movie, identifier_slot=id_slot)
-    spec_v1 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot, title],
-                   classes=[movie], sources=[src])
+    spec_v1 = Spec(
+        id="t", version="1.0.0", types=[st], slots=[id_slot, title], classes=[movie], sources=[src]
+    )
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, spec_v1)
@@ -279,8 +301,9 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     id_slot2 = Slot(name="imdb_id", range=st, identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot2])
     src_v2 = Source(name="s", entity_class=movie_v2, identifier_slot=id_slot2)
-    spec_v2 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot2],
-                   classes=[movie_v2], sources=[src_v2])
+    spec_v2 = Spec(
+        id="t", version="1.0.0", types=[st], slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
+    )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
     with pytest.raises(PublishGateError, match="destructive"):
@@ -293,8 +316,9 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     title = Slot(name="title", range=st)
     movie = OntologyClass(name="Movie", slots=[id_slot, title])
     src = Source(name="s", entity_class=movie, identifier_slot=id_slot)
-    spec_v1 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot, title],
-                   classes=[movie], sources=[src])
+    spec_v1 = Spec(
+        id="t", version="1.0.0", types=[st], slots=[id_slot, title], classes=[movie], sources=[src]
+    )
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, spec_v1)
@@ -303,8 +327,9 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     id_slot2 = Slot(name="imdb_id", range=st, identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot2])
     src_v2 = Source(name="s", entity_class=movie_v2, identifier_slot=id_slot2)
-    spec_v2 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot2],
-                   classes=[movie_v2], sources=[src_v2])
+    spec_v2 = Spec(
+        id="t", version="1.0.0", types=[st], slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
+    )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
     await publish_draft(clean_db, rev2, allow_destructive=True)  # must not raise

@@ -25,7 +25,6 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import (
-    PublishGateError,
     create_draft,
     publish_draft,
     update_draft,
@@ -38,12 +37,14 @@ from knot.spec import (
     Spec,
     TypeDefinition,
 )
+from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import DiscriminatedRef, IdentifierPattern
 
 
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
+
 
 def _string_type() -> TypeDefinition:
     return TypeDefinition(name="string", base="str")
@@ -100,6 +101,7 @@ def _build_identifier_spec() -> tuple[Spec, OntologyClass, OntologyClass]:
 # Fixture: published polymorphic spec
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def poly_db(pg_conn):
     """Reset, publish Movie + Identifier spec. Yields (conn, movie, identifier, rev)."""
@@ -115,12 +117,11 @@ async def poly_db(pg_conn):
 # 1. Table is created for the polymorphic class
 # ---------------------------------------------------------------------------
 
+
 async def test_polymorphic_class_table_created(poly_db):
     conn, movie, identifier, rev = poly_db
     # If the table exists, we can query it without error.
-    cur = await conn.execute(
-        "SELECT count(*) FROM knot_data.identifier"
-    )
+    cur = await conn.execute("SELECT count(*) FROM knot_data.identifier")
     row = await cur.fetchone()
     assert row[0] == 0  # empty, but table exists
 
@@ -128,6 +129,7 @@ async def test_polymorphic_class_table_created(poly_db):
 # ---------------------------------------------------------------------------
 # 2. Source on a non-polymorphic class publishes fine
 # ---------------------------------------------------------------------------
+
 
 async def test_source_on_normal_class_publishes(pg_conn):
     """A Source targeting a normal (non-polymorphic) class goes through the gate."""
@@ -154,6 +156,7 @@ async def test_source_on_normal_class_publishes(pg_conn):
 # ---------------------------------------------------------------------------
 # 3. Source targeting a polymorphic class is rejected at publish gate
 # ---------------------------------------------------------------------------
+
 
 async def test_source_on_polymorphic_class_rejected(pg_conn):
     """Publish gate rejects a Source whose entity_class has identifier_pattern."""
@@ -192,6 +195,7 @@ async def test_source_on_polymorphic_class_rejected(pg_conn):
 # ---------------------------------------------------------------------------
 # 4. Add rows via apply_add; retrieve via GraphQL byDiscriminator
 # ---------------------------------------------------------------------------
+
 
 async def test_add_identifier_rows_and_query_by_discriminator(poly_db):
     """Add an Identifier row and find it via identifierByDiscriminator."""
@@ -243,6 +247,7 @@ async def test_add_identifier_rows_and_query_by_discriminator(poly_db):
 # 5. byDiscriminator with unknown key returns null
 # ---------------------------------------------------------------------------
 
+
 async def test_by_discriminator_unknown_returns_null(poly_db):
     conn, movie, identifier, rev = poly_db
 
@@ -268,6 +273,7 @@ async def test_by_discriminator_unknown_returns_null(poly_db):
 # ---------------------------------------------------------------------------
 # 6. Schema field presence: polymorphic vs non-polymorphic
 # ---------------------------------------------------------------------------
+
 
 async def test_schema_fields_polymorphic_vs_normal(poly_db):
     """Polymorphic class has byDiscriminator, NOT byCanonicalId or Resolved.
@@ -308,6 +314,7 @@ async def test_schema_fields_polymorphic_vs_normal(poly_db):
 # ---------------------------------------------------------------------------
 # 7. DiscriminatedRef with missing target_class → PublishGateError
 # ---------------------------------------------------------------------------
+
 
 async def test_discriminated_ref_missing_target_class_rejected(pg_conn):
     """DiscriminatedRef.target_class must be on spec.classes."""
@@ -353,6 +360,7 @@ async def test_discriminated_ref_missing_target_class_rejected(pg_conn):
 # 8. Regression: spec without IdentifierPattern works as before
 # ---------------------------------------------------------------------------
 
+
 async def test_regression_no_identifier_pattern(pg_conn):
     """A plain spec with no polymorphic classes publishes and queries normally."""
     await _reset(pg_conn)
@@ -380,7 +388,10 @@ async def test_regression_no_identifier_pattern(pg_conn):
         source=src,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}]]
+        canonical_ids=[
+            str(r["imdb_id"])
+            for r in [{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}]
+        ],
     )
 
     rows = await graph_store.query_rows(

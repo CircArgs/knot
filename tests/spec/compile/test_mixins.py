@@ -21,7 +21,6 @@ from knot import db
 from knot.db import spec_store
 from knot.spec.compile.postgres import migration
 from knot.db.spec_store import (
-    PublishGateError,
     create_draft,
     publish_draft,
     update_draft,
@@ -34,11 +33,13 @@ from knot.spec import (
     Spec,
     TypeDefinition,
 )
+from knot.spec.errors import PublishGateError
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _string_type() -> TypeDefinition:
     return TypeDefinition(name="string", base="str")
@@ -95,6 +96,7 @@ def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]
 # 1. Mixin slot materializes as a column on the class's own table
 # ---------------------------------------------------------------------------
 
+
 async def test_mixin_slot_becomes_column(pg_conn):
     await _reset(pg_conn)
     spec, movie, _ = _build_timestamped_movie_spec()
@@ -119,6 +121,7 @@ async def test_mixin_slot_becomes_column(pg_conn):
 # 2. Mixin slot is queryable via GraphQL
 # ---------------------------------------------------------------------------
 
+
 async def test_mixin_slot_is_queryable_via_graphql(pg_conn):
     await _reset(pg_conn)
     spec, movie, _ = _build_timestamped_movie_spec()
@@ -130,8 +133,11 @@ async def test_mixin_slot_is_queryable_via_graphql(pg_conn):
         pg_conn,
         cls=movie,
         new_canonical_id="tt0111161",
-        values={"imdb_id": "tt0111161", "title": "Shawshank",
-                "created_at": "2026-01-01T00:00:00+00:00"},
+        values={
+            "imdb_id": "tt0111161",
+            "title": "Shawshank",
+            "created_at": "2026-01-01T00:00:00+00:00",
+        },
         spec_revision=rev,
     )
 
@@ -152,6 +158,7 @@ async def test_mixin_slot_is_queryable_via_graphql(pg_conn):
 # ---------------------------------------------------------------------------
 # 3. Transitive mixins (Mixin includes Mixin)
 # ---------------------------------------------------------------------------
+
 
 async def test_transitive_mixin_chain(pg_conn):
     await _reset(pg_conn)
@@ -199,6 +206,7 @@ async def test_transitive_mixin_chain(pg_conn):
 # 4. Own slot shadows mixin slot of same name
 # ---------------------------------------------------------------------------
 
+
 async def test_own_slot_shadows_mixin_slot(pg_conn):
     await _reset(pg_conn)
     st, dt = _string_type(), _ts_type()
@@ -244,6 +252,7 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
 # 5. Slot name collision across mixins → PublishGateError
 # ---------------------------------------------------------------------------
 
+
 async def test_mixin_slot_collision_rejected(pg_conn):
     await _reset(pg_conn)
     st = _string_type()
@@ -277,6 +286,7 @@ async def test_mixin_slot_collision_rejected(pg_conn):
 # 6. Cyclic mixin chain → PublishGateError
 # ---------------------------------------------------------------------------
 
+
 async def test_mixin_cycle_rejected(pg_conn):
     await _reset(pg_conn)
     st = _string_type()
@@ -307,6 +317,7 @@ async def test_mixin_cycle_rejected(pg_conn):
 # ---------------------------------------------------------------------------
 # 7. Adding a mixin shows up in the diff as AddSlot
 # ---------------------------------------------------------------------------
+
 
 def test_add_mixin_emits_addslot_diff():
     st, dt = _string_type(), _ts_type()
@@ -355,6 +366,7 @@ def test_add_mixin_emits_addslot_diff():
 # 8. Removing a mixin shows up in the diff as DropSlot
 # ---------------------------------------------------------------------------
 
+
 def test_remove_mixin_emits_dropslot_diff():
     st, dt = _string_type(), _ts_type()
 
@@ -402,6 +414,7 @@ def test_remove_mixin_emits_dropslot_diff():
 # 9. Mixin slot is read/written via apply_add
 # ---------------------------------------------------------------------------
 
+
 async def test_mixin_slot_round_trip_via_apply_add(pg_conn):
     await _reset(pg_conn)
     spec, movie, _ = _build_timestamped_movie_spec()
@@ -422,8 +435,7 @@ async def test_mixin_slot_round_trip_via_apply_add(pg_conn):
         spec_revision=rev,
     )
     cur = await pg_conn.execute(
-        "SELECT created_at, updated_at FROM knot_data.movie "
-        "WHERE imdb_id = %s",
+        "SELECT created_at, updated_at FROM knot_data.movie WHERE imdb_id = %s",
         ("tt0068646",),
     )
     row = await cur.fetchone()

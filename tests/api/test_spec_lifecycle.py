@@ -12,9 +12,6 @@ import psycopg
 
 from knot import db
 from knot.db.spec_store import (
-    DraftAlreadyPublishedError,
-    DraftNotFoundError,
-    PublishGateError,
     create_draft,
     discard_draft,
     get_published,
@@ -27,11 +24,17 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec.errors import (
+    DraftAlreadyPublishedError,
+    DraftNotFoundError,
+    PublishGateError,
+)
 
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal valid spec factory
 # ---------------------------------------------------------------------------
+
 
 def _string_type() -> TypeDefinition:
     return TypeDefinition(name="string", base="str")
@@ -57,6 +60,7 @@ def _minimal_spec(name: str = "test") -> Spec:
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 async def clean_spec(pg_conn):
     """Truncate spec-related state and drop all knot_data tables."""
@@ -75,6 +79,7 @@ async def clean_spec(pg_conn):
 # ---------------------------------------------------------------------------
 # 1. Basic draft create → update → publish flow
 # ---------------------------------------------------------------------------
+
 
 async def test_create_draft_returns_revision_number(clean_spec):
     rev = await create_draft(clean_spec)
@@ -116,6 +121,7 @@ async def test_published_spec_not_in_draft_list(clean_spec):
 # 2. Draft from specific parent_revision
 # ---------------------------------------------------------------------------
 
+
 async def test_draft_from_parent_revision(clean_spec):
     rev1 = await create_draft(clean_spec)
     await update_draft(clean_spec, rev1, _minimal_spec("v1"))
@@ -134,6 +140,7 @@ async def test_draft_from_parent_revision(clean_spec):
 # ---------------------------------------------------------------------------
 # 3. Discard draft
 # ---------------------------------------------------------------------------
+
 
 async def test_discard_draft_removes_it(clean_spec):
     rev = await create_draft(clean_spec)
@@ -161,6 +168,7 @@ async def test_update_published_draft_raises(clean_spec):
 # ---------------------------------------------------------------------------
 # 4. Publish gate — dangling refs rejected
 # ---------------------------------------------------------------------------
+
 
 async def test_publish_gate_rejects_dangling_slot_range(clean_spec):
     """A slot whose range OntologyClass is not on spec.classes fails gate."""
@@ -210,6 +218,7 @@ async def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
 # 5. Partial unique index: at-most-one published row
 # ---------------------------------------------------------------------------
 
+
 async def test_only_one_published_revision_at_a_time(clean_spec):
     # Publish rev1, then publish rev2 — rev1 must be demoted
     rev1 = await create_draft(clean_spec)
@@ -223,15 +232,18 @@ async def test_only_one_published_revision_at_a_time(clean_spec):
     assert await get_published_revision(clean_spec) == rev2
 
     # Directly check no two rows have published=TRUE
-    count = (await (await clean_spec.execute(
-        "SELECT count(*) FROM spec_revisions WHERE published = TRUE"
-    )).fetchone())[0]
+    count = (
+        await (
+            await clean_spec.execute("SELECT count(*) FROM spec_revisions WHERE published = TRUE")
+        ).fetchone()
+    )[0]
     assert count == 1
 
 
 # ---------------------------------------------------------------------------
 # 6. Missing revision raises DraftNotFoundError
 # ---------------------------------------------------------------------------
+
 
 async def test_get_revision_raises_for_unknown(clean_spec):
     with pytest.raises(DraftNotFoundError):
@@ -242,9 +254,11 @@ async def test_get_revision_raises_for_unknown(clean_spec):
 # 7. Spec name pattern — validated by metaschema Pydantic model
 # ---------------------------------------------------------------------------
 
+
 def test_entity_name_pattern_rejects_bad_names():
     """OntologyClass/Slot names must match ^[A-Za-z_][A-Za-z0-9_]{0,62}$."""
     from pydantic import ValidationError
+
     for bad in ("bad name", "1bad", "foo;DROP TABLE", "", " leading"):
         with pytest.raises(ValidationError):
             OntologyClass(name=bad, slots=[])
@@ -260,6 +274,7 @@ def test_entity_name_pattern_allows_good_names():
 # 8. Case-twin collision detection
 # ---------------------------------------------------------------------------
 
+
 def test_case_twin_classes_can_be_constructed():
     """The metaschema doesn't prevent case-twins; publish gate relies on
     DDL (lowercasing to the same table name) being caught at migration time.
@@ -273,6 +288,7 @@ def test_case_twin_classes_can_be_constructed():
 # ---------------------------------------------------------------------------
 # 9. Destructive change: publish refuses without allow_destructive
 # ---------------------------------------------------------------------------
+
 
 async def test_publish_refuses_destructive_without_flag(clean_spec):
     """Dropping a class between revisions is destructive — gate must block."""

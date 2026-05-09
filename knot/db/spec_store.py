@@ -36,6 +36,11 @@ import psycopg
 from pydantic import BaseModel
 
 from knot.spec.canonical import compute_content_hash
+from knot.spec.errors import (
+    DraftAlreadyPublishedError,
+    DraftNotFoundError,
+    PublishGateError,
+)
 from knot.spec.metaschema import (
     BoolExpr,
     Compare,
@@ -70,23 +75,6 @@ from knot.spec.metaschema import (
 )
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Errors
-# ---------------------------------------------------------------------------
-
-
-class PublishGateError(Exception):
-    """Raised when the publish gate rejects a candidate spec."""
-
-
-class DraftNotFoundError(Exception):
-    """Raised when a draft revision number doesn't exist."""
-
-
-class DraftAlreadyPublishedError(Exception):
-    """Raised when attempting to mutate a revision that's already published."""
 
 
 # ---------------------------------------------------------------------------

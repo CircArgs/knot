@@ -45,6 +45,7 @@ from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -64,6 +65,7 @@ from knot.spec.compile.postgres import migration
 # ---------------------------------------------------------------------------
 # Spec builders
 # ---------------------------------------------------------------------------
+
 
 def _build_person_credit_director_spec() -> tuple[
     Spec, OntologyClass, OntologyClass, OntologyClass, Source, Source
@@ -168,6 +170,7 @@ def _build_person_credit_director_spec() -> tuple[
 # Fixtures
 # ---------------------------------------------------------------------------
 
+
 @pytest_asyncio.fixture
 async def dc_db(pg_conn):
     """Publish the Person/Credit/Director spec. Yields (conn, spec, ..., rev)."""
@@ -214,11 +217,11 @@ def _post(client, query: str, variables: dict | None = None) -> dict:
 # 1. Director view exists in postgres
 # ---------------------------------------------------------------------------
 
+
 async def test_director_view_exists(dc_db):
     conn, *_ = dc_db
     cur = await conn.execute(
-        "SELECT viewname FROM pg_views "
-        "WHERE schemaname = 'knot_data' AND viewname = 'director'"
+        "SELECT viewname FROM pg_views WHERE schemaname = 'knot_data' AND viewname = 'director'"
     )
     row = await cur.fetchone()
     assert row is not None, "knot_data.director VIEW was not created"
@@ -228,12 +231,12 @@ async def test_director_view_exists(dc_db):
 # 2. Person table is a table, not a view
 # ---------------------------------------------------------------------------
 
+
 async def test_person_is_table_not_view(dc_db):
     conn, *_ = dc_db
     # Should be in pg_tables (concrete class)
     cur = await conn.execute(
-        "SELECT tablename FROM pg_tables "
-        "WHERE schemaname = 'knot_data' AND tablename = 'person'"
+        "SELECT tablename FROM pg_tables WHERE schemaname = 'knot_data' AND tablename = 'person'"
     )
     row = await cur.fetchone()
     assert row is not None, "knot_data.person TABLE was not created"
@@ -243,31 +246,48 @@ async def test_person_is_table_not_view(dc_db):
 # 3. directorPage returns only director persons
 # ---------------------------------------------------------------------------
 
+
 async def test_director_page_returns_only_directors(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
     # Insert persons
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-        {"person_id": "p3", "name": "Carol"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-        {"person_id": "p3", "name": "Carol"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+            {"person_id": "p3", "name": "Carol"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+                {"person_id": "p3", "name": "Carol"},
+            ]
+        ],
+    )
     # Insert credits: Alice is director, Bob is actor, Carol is director
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-        {"credit_id": "c3", "person": "p3", "role": "director"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-        {"credit_id": "c3", "person": "p3", "role": "director"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+            {"credit_id": "c2", "person": "p2", "role": "actor"},
+            {"credit_id": "c3", "person": "p3", "role": "director"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+                {"credit_id": "c2", "person": "p2", "role": "actor"},
+                {"credit_id": "c3", "person": "p3", "role": "director"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, "{ director { personId } directorCount }")
     assert "errors" not in result, result.get("errors")
@@ -281,23 +301,40 @@ async def test_director_page_returns_only_directors(dc_db, dc_client):
 # 4. personPage returns all persons
 # ---------------------------------------------------------------------------
 
+
 async def test_person_page_returns_all_persons(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, "{ person { personId } personCount }")
     assert len(result["data"]["person"]) == 2
@@ -308,25 +345,42 @@ async def test_person_page_returns_all_persons(dc_db, dc_client):
 # 5. directorByCanonicalId for a director
 # ---------------------------------------------------------------------------
 
+
 async def test_director_by_canonical_id_found(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+            {"credit_id": "c2", "person": "p2", "role": "actor"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+                {"credit_id": "c2", "person": "p2", "role": "actor"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p1") { personId name } }')
     assert "errors" not in result, result.get("errors")
@@ -340,25 +394,42 @@ async def test_director_by_canonical_id_found(dc_db, dc_client):
 # 6. directorByCanonicalId for non-director returns null
 # ---------------------------------------------------------------------------
 
+
 async def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+            {"credit_id": "c2", "person": "p2", "role": "actor"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+                {"credit_id": "c2", "person": "p2", "role": "actor"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, '{ directorByCanonicalId(canonicalId: "p2") { personId } }')
     assert "errors" not in result, result.get("errors")
@@ -369,33 +440,58 @@ async def test_director_by_canonical_id_non_director_is_null(dc_db, dc_client):
 # 7. Changing credit role updates the director view (recomputed at query time)
 # ---------------------------------------------------------------------------
 
+
 async def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+            ]
+        ],
+    )
     # Initially Alice is a director
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, "{ directorCount }")
     assert result["data"]["directorCount"] == 1
 
     # Re-ingest with role changed to actor
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "actor"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "actor"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "actor"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "actor"},
+            ]
+        ],
+    )
 
     # View recomputes at query time — Alice is no longer a director
     result = _post(dc_client, "{ directorCount }")
@@ -405,6 +501,7 @@ async def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
 # ---------------------------------------------------------------------------
 # 8. ReverseRelation compile correctness (unit)
 # ---------------------------------------------------------------------------
+
 
 def test_reverse_relation_compiles():
     string_t = TypeDefinition(name="string", base="str")
@@ -431,6 +528,7 @@ def test_reverse_relation_compiles():
 # ---------------------------------------------------------------------------
 # 9. AddDefinedClass emits CREATE OR REPLACE VIEW
 # ---------------------------------------------------------------------------
+
 
 async def test_add_defined_class_ddl(pg_conn):
     """AddDefinedClass.emit_ddl calls CREATE OR REPLACE VIEW."""
@@ -465,8 +563,7 @@ async def test_add_defined_class_ddl(pg_conn):
 
     # Verify VIEW exists
     cur = await pg_conn.execute(
-        "SELECT viewname FROM pg_views "
-        "WHERE schemaname = 'knot_data' AND viewname = 'director'"
+        "SELECT viewname FROM pg_views WHERE schemaname = 'knot_data' AND viewname = 'director'"
     )
     row = await cur.fetchone()
     assert row is not None, "Director VIEW was not created"
@@ -475,6 +572,7 @@ async def test_add_defined_class_ddl(pg_conn):
 # ---------------------------------------------------------------------------
 # 10. DropDefinedClass emits DROP VIEW
 # ---------------------------------------------------------------------------
+
 
 async def test_drop_defined_class_ddl(pg_conn):
     await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
@@ -487,8 +585,7 @@ async def test_drop_defined_class_ddl(pg_conn):
     await migration.emit_ddl(migration.DropDefinedClass(class_name="testview"), pg_conn)
 
     cur = await pg_conn.execute(
-        "SELECT viewname FROM pg_views "
-        "WHERE schemaname = 'knot_data' AND viewname = 'testview'"
+        "SELECT viewname FROM pg_views WHERE schemaname = 'knot_data' AND viewname = 'testview'"
     )
     row = await cur.fetchone()
     assert row is None, "testview VIEW was not dropped"
@@ -497,6 +594,7 @@ async def test_drop_defined_class_ddl(pg_conn):
 # ---------------------------------------------------------------------------
 # 11. Publish gate rejects defined class with broken predicate
 # ---------------------------------------------------------------------------
+
 
 async def test_publish_gate_rejects_broken_definition(pg_conn):
     await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
@@ -509,6 +607,7 @@ async def test_publish_gate_rejects_broken_definition(pg_conn):
 
     # Use a RecursiveTraversal as the definition — compile raises NotImplementedError
     from knot.spec.metaschema import RecursiveTraversal, RelationRef, SlotPath as SP
+
     is_a_slot = Slot(name="is_a", range=person)
     start = RelationRef(from_class=person, slot=is_a_slot)
     bad_definition = RecursiveTraversal(start=start, step=SP(from_class=person, slots=[is_a_slot]))
@@ -524,13 +623,14 @@ async def test_publish_gate_rejects_broken_definition(pg_conn):
         sources=[],
     )
 
-    with pytest.raises(spec_store.PublishGateError, match="definition failed to compile"):
+    with pytest.raises(PublishGateError, match="definition failed to compile"):
         await spec_store.publish_gate(spec)
 
 
 # ---------------------------------------------------------------------------
 # 12. Publish gate rejects defined class with no is_a
 # ---------------------------------------------------------------------------
+
 
 async def test_publish_gate_rejects_defined_class_without_is_a(pg_conn):
     string_t = TypeDefinition(name="string", base="str")
@@ -552,13 +652,14 @@ async def test_publish_gate_rejects_defined_class_without_is_a(pg_conn):
         sources=[],
     )
 
-    with pytest.raises(spec_store.PublishGateError, match="must have is_a"):
+    with pytest.raises(PublishGateError, match="must have is_a"):
         await spec_store.publish_gate(spec)
 
 
 # ---------------------------------------------------------------------------
 # 13. Concrete→defined transition is destructive (diff_specs)
 # ---------------------------------------------------------------------------
+
 
 def test_concrete_to_defined_transition_is_destructive():
     string_t = TypeDefinition(name="string", base="str")
@@ -568,8 +669,12 @@ def test_concrete_to_defined_transition_is_destructive():
     # prev: Director is concrete
     director_prev = OntologyClass(name="Director", is_a=person, slots=[])
     prev_spec = Spec(
-        id="t", version="1", types=[string_t], slots=[person_id],
-        classes=[person, director_prev], sources=[],
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_prev],
+        sources=[],
     )
 
     # cand: Director is defined
@@ -577,22 +682,29 @@ def test_concrete_to_defined_transition_is_destructive():
     definition = Compare(op=CompareOp.IS_NOT_NULL, left=role_path)
     director_cand = OntologyClass(name="Director", is_a=person, slots=[], definition=definition)
     cand_spec = Spec(
-        id="t", version="1", types=[string_t], slots=[person_id],
-        classes=[person, director_cand], sources=[],
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_cand],
+        sources=[],
     )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
     destructive = [c for c in changes if migration.is_destructive(c)]
-    assert any(isinstance(c, migration.DropClass) for c in changes), \
+    assert any(isinstance(c, migration.DropClass) for c in changes), (
         f"Expected DropClass in {changes}"
-    assert any(isinstance(c, migration.AddDefinedClass) for c in changes), \
+    )
+    assert any(isinstance(c, migration.AddDefinedClass) for c in changes), (
         f"Expected AddDefinedClass in {changes}"
+    )
     assert destructive, "Concrete→defined should be destructive"
 
 
 # ---------------------------------------------------------------------------
 # 14. Defined→concrete transition is destructive (diff_specs)
 # ---------------------------------------------------------------------------
+
 
 def test_defined_to_concrete_transition_is_destructive():
     string_t = TypeDefinition(name="string", base="str")
@@ -604,29 +716,40 @@ def test_defined_to_concrete_transition_is_destructive():
     definition = Compare(op=CompareOp.IS_NOT_NULL, left=role_path)
     director_prev = OntologyClass(name="Director", is_a=person, slots=[], definition=definition)
     prev_spec = Spec(
-        id="t", version="1", types=[string_t], slots=[person_id],
-        classes=[person, director_prev], sources=[],
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_prev],
+        sources=[],
     )
 
     # cand: Director becomes concrete
     director_cand = OntologyClass(name="Director", is_a=person, slots=[])
     cand_spec = Spec(
-        id="t", version="1", types=[string_t], slots=[person_id],
-        classes=[person, director_cand], sources=[],
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_cand],
+        sources=[],
     )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
     destructive = [c for c in changes if migration.is_destructive(c)]
-    assert any(isinstance(c, migration.DropDefinedClass) for c in changes), \
+    assert any(isinstance(c, migration.DropDefinedClass) for c in changes), (
         f"Expected DropDefinedClass in {changes}"
-    assert any(isinstance(c, migration.AddClass) for c in changes), \
+    )
+    assert any(isinstance(c, migration.AddClass) for c in changes), (
         f"Expected AddClass in {changes}"
+    )
     assert destructive, "Defined→concrete should be destructive"
 
 
 # ---------------------------------------------------------------------------
 # 15. Defined class with changed definition re-emits CREATE OR REPLACE VIEW
 # ---------------------------------------------------------------------------
+
 
 def test_defined_class_redefinition_reemits_view():
     string_t = TypeDefinition(name="string", base="str")
@@ -640,41 +763,73 @@ def test_defined_class_redefinition_reemits_view():
     director_prev = OntologyClass(name="Director", is_a=person, slots=[], definition=def1)
     director_cand = OntologyClass(name="Director", is_a=person, slots=[], definition=def2)
 
-    prev_spec = Spec(id="t", version="1", types=[string_t], slots=[person_id],
-                     classes=[person, director_prev], sources=[])
-    cand_spec = Spec(id="t", version="1", types=[string_t], slots=[person_id],
-                     classes=[person, director_cand], sources=[])
+    prev_spec = Spec(
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_prev],
+        sources=[],
+    )
+    cand_spec = Spec(
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_cand],
+        sources=[],
+    )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
-    assert any(isinstance(c, migration.AddDefinedClass) for c in changes), \
+    assert any(isinstance(c, migration.AddDefinedClass) for c in changes), (
         f"Expected AddDefinedClass (re-create view) in {changes}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # 16. directorResolved returns record for a director
 # ---------------------------------------------------------------------------
 
+
 async def test_director_resolved_found(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+            {"credit_id": "c2", "person": "p2", "role": "actor"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+                {"credit_id": "c2", "person": "p2", "role": "actor"},
+            ]
+        ],
+    )
 
-    result = _post(dc_client, '{ directorResolved(canonicalId: "p1") { personId name canonicalId } }')
+    result = _post(
+        dc_client, '{ directorResolved(canonicalId: "p1") { personId name canonicalId } }'
+    )
     assert "errors" not in result, result.get("errors")
     row = result["data"]["directorResolved"]
     assert row is not None
@@ -686,25 +841,42 @@ async def test_director_resolved_found(dc_db, dc_client):
 # 17. directorResolved for non-director returns null
 # ---------------------------------------------------------------------------
 
+
 async def test_director_resolved_non_director_is_null(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+            {"credit_id": "c2", "person": "p2", "role": "actor"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+                {"credit_id": "c2", "person": "p2", "role": "actor"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, '{ directorResolved(canonicalId: "p2") { personId } }')
     assert "errors" not in result, result.get("errors")
@@ -715,29 +887,46 @@ async def test_director_resolved_non_director_is_null(dc_db, dc_client):
 # 18. directorPage with where filter (by name)
 # ---------------------------------------------------------------------------
 
+
 async def test_director_page_with_name_filter(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-        {"person_id": "p3", "name": "Carol"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-        {"person_id": "p3", "name": "Carol"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-        {"credit_id": "c3", "person": "p3", "role": "director"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-        {"credit_id": "c2", "person": "p2", "role": "actor"},
-        {"credit_id": "c3", "person": "p3", "role": "director"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+            {"person_id": "p3", "name": "Carol"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+                {"person_id": "p3", "name": "Carol"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+            {"credit_id": "c2", "person": "p2", "role": "actor"},
+            {"credit_id": "c3", "person": "p3", "role": "director"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+                {"credit_id": "c2", "person": "p2", "role": "actor"},
+                {"credit_id": "c3", "person": "p3", "role": "director"},
+            ]
+        ],
+    )
 
     # Filter directors by name = 'Alice'
     result = _post(
@@ -756,6 +945,7 @@ async def test_director_page_with_name_filter(dc_db, dc_client):
 # 19. Both person and director appear in schema
 # ---------------------------------------------------------------------------
 
+
 def test_both_classes_in_schema(dc_db, dc_client):
     # __typename returns Query; introspect that both fields exist
     result = _post(dc_client, "{ __typename }")
@@ -770,6 +960,7 @@ def test_both_classes_in_schema(dc_db, dc_client):
 # ---------------------------------------------------------------------------
 # 20. Multi-slot SlotPath compiles through FK chain (unit)
 # ---------------------------------------------------------------------------
+
 
 def test_multi_slot_path_compile():
     string_t = TypeDefinition(name="string", base="str")
@@ -800,6 +991,7 @@ def test_multi_slot_path_compile():
 # 21. ReverseRelation inside RelationAll compiles
 # ---------------------------------------------------------------------------
 
+
 def test_reverse_relation_in_relation_all_compiles():
     string_t = TypeDefinition(name="string", base="str")
     person_id = Slot(name="person_id", range=string_t)
@@ -826,6 +1018,7 @@ def test_reverse_relation_in_relation_all_compiles():
 # 22. ReverseRelation directly (not in RelationAll/Any) raises CompilerError
 # ---------------------------------------------------------------------------
 
+
 def test_reverse_relation_direct_raises_compiler_error():
     string_t = TypeDefinition(name="string", base="str")
     person_id = Slot(name="person_id", range=string_t)
@@ -846,6 +1039,7 @@ def test_reverse_relation_direct_raises_compiler_error():
 # 23. diff_specs: new defined class → AddDefinedClass, not AddClass
 # ---------------------------------------------------------------------------
 
+
 def test_diff_specs_new_defined_class():
     string_t = TypeDefinition(name="string", base="str")
     person_id = Slot(name="person_id", range=string_t)
@@ -855,15 +1049,24 @@ def test_diff_specs_new_defined_class():
     definition = Compare(op=CompareOp.IS_NOT_NULL, left=role_path)
     director = OntologyClass(name="Director", is_a=person, slots=[], definition=definition)
 
-    prev_spec = Spec(id="t", version="1", types=[string_t], slots=[person_id],
-                     classes=[person], sources=[])
-    cand_spec = Spec(id="t", version="1", types=[string_t], slots=[person_id],
-                     classes=[person, director], sources=[])
+    prev_spec = Spec(
+        id="t", version="1", types=[string_t], slots=[person_id], classes=[person], sources=[]
+    )
+    cand_spec = Spec(
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director],
+        sources=[],
+    )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
     # Should produce AddDefinedClass, NOT AddClass for director
     add_defined = [c for c in changes if isinstance(c, migration.AddDefinedClass)]
-    add_class = [c for c in changes if isinstance(c, migration.AddClass) and c.cls.name == "Director"]
+    add_class = [
+        c for c in changes if isinstance(c, migration.AddClass) and c.cls.name == "Director"
+    ]
     assert add_defined, f"Expected AddDefinedClass; got {changes}"
     assert not add_class, f"Should NOT produce AddClass for defined class; got {changes}"
 
@@ -871,6 +1074,7 @@ def test_diff_specs_new_defined_class():
 # ---------------------------------------------------------------------------
 # 24. diff_specs: both defined → AddDefinedClass (re-emit view)
 # ---------------------------------------------------------------------------
+
 
 def test_diff_specs_both_defined_re_emits_view():
     string_t = TypeDefinition(name="string", base="str")
@@ -884,39 +1088,69 @@ def test_diff_specs_both_defined_re_emits_view():
     director_prev = OntologyClass(name="Director", is_a=person, slots=[], definition=def1)
     director_cand = OntologyClass(name="Director", is_a=person, slots=[], definition=def2)
 
-    prev_spec = Spec(id="t", version="1", types=[string_t], slots=[person_id],
-                     classes=[person, director_prev], sources=[])
-    cand_spec = Spec(id="t", version="1", types=[string_t], slots=[person_id],
-                     classes=[person, director_cand], sources=[])
+    prev_spec = Spec(
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_prev],
+        sources=[],
+    )
+    cand_spec = Spec(
+        id="t",
+        version="1",
+        types=[string_t],
+        slots=[person_id],
+        classes=[person, director_cand],
+        sources=[],
+    )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
-    assert any(isinstance(c, migration.AddDefinedClass) for c in changes), \
+    assert any(isinstance(c, migration.AddDefinedClass) for c in changes), (
         f"Expected AddDefinedClass in {changes}"
+    )
 
 
 # ---------------------------------------------------------------------------
 # 25. Person count unchanged after Director view created
 # ---------------------------------------------------------------------------
 
+
 async def test_person_count_unchanged_after_director_view(dc_db, dc_client):
     conn, spec, person, credit, director, person_src, credit_src, rev = dc_db
 
-    await graph_store.insert_rows(conn, source=person_src, spec_revision=rev, rows=[
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-        {"person_id": "p3", "name": "Carol"},
-    ],
-    canonical_ids=[str(r["person_id"]) for r in [
-        {"person_id": "p1", "name": "Alice"},
-        {"person_id": "p2", "name": "Bob"},
-        {"person_id": "p3", "name": "Carol"},
-    ]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev, rows=[
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-    ],
-    canonical_ids=[str(r["credit_id"]) for r in [
-        {"credit_id": "c1", "person": "p1", "role": "director"},
-    ]])
+    await graph_store.insert_rows(
+        conn,
+        source=person_src,
+        spec_revision=rev,
+        rows=[
+            {"person_id": "p1", "name": "Alice"},
+            {"person_id": "p2", "name": "Bob"},
+            {"person_id": "p3", "name": "Carol"},
+        ],
+        canonical_ids=[
+            str(r["person_id"])
+            for r in [
+                {"person_id": "p1", "name": "Alice"},
+                {"person_id": "p2", "name": "Bob"},
+                {"person_id": "p3", "name": "Carol"},
+            ]
+        ],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "c1", "person": "p1", "role": "director"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "c1", "person": "p1", "role": "director"},
+            ]
+        ],
+    )
 
     result = _post(dc_client, "{ personCount }")
     assert result["data"]["personCount"] == 3

@@ -16,11 +16,11 @@ import psycopg
 
 from knot import db
 from knot.db.spec_store import (
-    PublishGateError,
     create_draft,
     publish_draft,
     update_draft,
 )
+from knot.spec.errors import PublishGateError
 from knot.spec.compile.postgres import (
     CompileContext,
     CompilerError,
@@ -115,6 +115,7 @@ def test_literal_emits_placeholder_and_pushes_param():
     result = compile_predicate(node, ctx)
 
     from psycopg import sql
+
     assert isinstance(result, sql.Composable)
     assert ctx.params == [42]
 
@@ -516,18 +517,22 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
 
     # Ingest one valid and one violating row directly via the store.
     from knot.db.graph_store import insert_rows
+
     await insert_rows(
         conn,
         source=src,
         spec_revision=rev,
         rows=[
-            {"imdb_id": "tt0000001", "year": 1972},   # valid
-            {"imdb_id": "tt0000002", "year": 1800},   # violates year >= 1888
+            {"imdb_id": "tt0000001", "year": 1972},  # valid
+            {"imdb_id": "tt0000002", "year": 1800},  # violates year >= 1888
         ],
-        canonical_ids=[str(r["imdb_id"]) for r in [
-            {"imdb_id": "tt0000001", "year": 1972},   # valid
-            {"imdb_id": "tt0000002", "year": 1800},   # violates year >= 1888
-        ]]
+        canonical_ids=[
+            str(r["imdb_id"])
+            for r in [
+                {"imdb_id": "tt0000001", "year": 1972},  # valid
+                {"imdb_id": "tt0000002", "year": 1800},  # violates year >= 1888
+            ]
+        ],
     )
 
     # Compile the constraint and execute it.
@@ -580,12 +585,13 @@ async def test_compile_constraint_no_violations(clean_db):
     await publish_draft(conn, rev)
 
     from knot.db.graph_store import insert_rows
+
     await insert_rows(
         conn,
         source=src,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "year": 2000}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 2000}]]
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 2000}]],
     )
 
     stmt, params = compile_constraint(constraint, movie)
@@ -627,12 +633,15 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
 
     # Ingest a row that will violate the upcoming constraint.
     from knot.db.graph_store import insert_rows
+
     await insert_rows(
         conn,
         source=src,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "year": 1800}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]]  # violates >= 1888
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]
+        ],  # violates >= 1888
     )
 
     # v2: add ERROR constraint that the ingested row violates.
@@ -692,12 +701,15 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     await publish_draft(conn, rev1)
 
     from knot.db.graph_store import insert_rows
+
     await insert_rows(
         conn,
         source=src,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "year": 1800}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]]  # would violate >= 1888
+        canonical_ids=[
+            str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]
+        ],  # would violate >= 1888
     )
 
     body = Compare(
@@ -732,6 +744,7 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
 # Slot.reference traversal — DirectRef and DiscriminatedRef with static target
 # ---------------------------------------------------------------------------
 
+
 def test_relation_any_with_direct_ref_target_class():
     """A slot with range=string + reference=DirectRef(target_class=Movie)
     is traversable: _target_class falls through to slot.reference.target_class."""
@@ -754,7 +767,7 @@ def test_relation_any_with_direct_ref_target_class():
 
     assert "EXISTS" in rendered
     # JOIN should hit Movie's bindings, not Review's.
-    assert "knot_data.\"movie_bindings\"" in rendered or '"knot_data"."movie_bindings"' in rendered
+    assert 'knot_data."movie_bindings"' in rendered or '"knot_data"."movie_bindings"' in rendered
 
 
 def test_relation_any_with_discriminated_ref_target_class():
@@ -784,7 +797,7 @@ def test_relation_any_with_discriminated_ref_target_class():
     rendered = compile_predicate(node, ctx).as_string(None)
 
     assert "EXISTS" in rendered
-    assert "knot_data.\"movie_bindings\"" in rendered or '"knot_data"."movie_bindings"' in rendered
+    assert 'knot_data."movie_bindings"' in rendered or '"knot_data"."movie_bindings"' in rendered
 
 
 def test_relation_any_discriminated_ref_without_target_raises():

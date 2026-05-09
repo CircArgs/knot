@@ -21,14 +21,12 @@ from typing import Any
 import psycopg
 
 from knot.db import spec_store
-from knot.db.spec_store import (
+from knot.spec import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
-    PublishGateError,
-)
-from knot.spec import (
     OntologyClass,
     PermissibleValue,
+    PublishGateError,
     ResolutionPolicy,
     Slot,
     Source,
@@ -40,7 +38,8 @@ from knot.spec.expressions import ExprJson, ExprTranslationError, translate_expr
 from knot.spec.metaschema import Constraint, Severity
 
 __all__ = (
-    # Re-exports of db-side errors so callers don't import from db directly.
+    # Re-exports of spec-layer errors so callers in the api layer can import
+    # from a single place alongside the orchestration helpers.
     "DraftAlreadyPublishedError",
     "DraftNotFoundError",
     "PublishGateError",

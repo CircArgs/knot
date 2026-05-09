@@ -16,12 +16,11 @@ from knot import db
 from knot.config.config import get_dsn
 from knot.db import spec_store
 from knot.db.spec_store import (
-    DraftAlreadyPublishedError,
-    DraftNotFoundError,
     create_draft,
     edit_draft,
 )
 from knot.spec import Spec, TypeDefinition
+from knot.spec.errors import DraftAlreadyPublishedError, DraftNotFoundError
 
 
 def _empty_spec() -> Spec:
@@ -46,6 +45,7 @@ async def _reset(conn):
 # ---------------------------------------------------------------------------
 # 1. Lost-update race is prevented
 # ---------------------------------------------------------------------------
+
 
 async def test_concurrent_edit_draft_serializes(pg_conn):
     """Two coroutines mutating the same draft in parallel: both writes survive.
@@ -90,6 +90,7 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
 # 2. Exception inside the with-block aborts the writeback
 # ---------------------------------------------------------------------------
 
+
 async def test_edit_draft_rolls_back_on_exception(pg_conn):
     """An exception inside the with-block leaves the draft unchanged."""
     await _reset(pg_conn)
@@ -116,6 +117,7 @@ async def test_edit_draft_rolls_back_on_exception(pg_conn):
 # 3. edit_draft on an unknown revision
 # ---------------------------------------------------------------------------
 
+
 async def test_edit_draft_not_found(pg_conn):
     await _reset(pg_conn)
     with pytest.raises(DraftNotFoundError):
@@ -126,6 +128,7 @@ async def test_edit_draft_not_found(pg_conn):
 # ---------------------------------------------------------------------------
 # 4. edit_draft on an already-published revision
 # ---------------------------------------------------------------------------
+
 
 async def test_edit_draft_rejects_published(pg_conn):
     """Once a revision is published, edit_draft refuses to mutate it."""
