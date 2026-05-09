@@ -1,7 +1,10 @@
-"""Single source of truth for the knot package version.
+"""Build-time version source for the knot package.
 
-Imported as ``knot.__version__`` (re-exported by ``knot/__init__.py``).
-Keep in sync with ``pyproject.toml``'s ``[project] version``.
+`pyproject.toml` reads ``__version__`` from this file via
+``[tool.hatch.version]``. CI overwrites it before each build.
+
+Runtime ``knot.__version__`` is read from installed package metadata
+via ``importlib.metadata`` — see ``knot/__init__.py``.
 """
 
 __version__ = "0.0.0"

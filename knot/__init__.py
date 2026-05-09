@@ -1,5 +1,7 @@
 """knot — reflective ontology compiler."""
 
-from knot.__version__ import __version__
+from importlib.metadata import version
+
+__version__ = version("knot")
 
 __all__ = ["__version__"]
