@@ -39,7 +39,7 @@ from psycopg import sql
 
 from knot import db
 from knot.db import graph_store, spec_store
-from knot.db._naming import is_stored
+from knot.spec import is_stored
 from knot.spec.compile.postgres._queries import (
     derived_column_exprs as _derived_column_exprs,
     select_with_derivations as _select_with_derivations,
@@ -89,20 +89,21 @@ from knot.spec.metaschema import (
 #   Credit: credit_id (identifier), movie (FK→Movie canonical_id), role, person_name
 # ---------------------------------------------------------------------------
 
+
 def _build_full_spec() -> tuple[
     Spec,
-    OntologyClass,   # Movie
-    OntologyClass,   # Credit
-    OntologyClass,   # Person
-    Slot,            # imdb_id
-    Slot,            # directors (derived)
-    Slot,            # credit_count (derived)
-    Slot,            # credit_id
-    Slot,            # credit_movie (FK)
-    Slot,            # credit_role
-    Slot,            # credit_person_name
-    Source,          # movie_src
-    Source,          # credit_src
+    OntologyClass,  # Movie
+    OntologyClass,  # Credit
+    OntologyClass,  # Person
+    Slot,  # imdb_id
+    Slot,  # directors (derived)
+    Slot,  # credit_count (derived)
+    Slot,  # credit_id
+    Slot,  # credit_movie (FK)
+    Slot,  # credit_role
+    Slot,  # credit_person_name
+    Source,  # movie_src
+    Source,  # credit_src
 ]:
     str_t = TypeDefinition(name="string", base="str")
     int_t = TypeDefinition(name="integer", base="int")
@@ -142,7 +143,9 @@ def _build_full_spec() -> tuple[
         relation=filtered_rev,
         project=SlotPath(from_class=credit_cls, slots=[credit_person_name]),
     )
-    directors_slot = Slot(name="directors", range=str_t, multivalued=True, derivation=directors_derivation)
+    directors_slot = Slot(
+        name="directors", range=str_t, multivalued=True, derivation=directors_derivation
+    )
 
     # credit_count = count(*) of all Credits for this Movie
     credit_count_derivation = RelationCount(
@@ -162,24 +165,41 @@ def _build_full_spec() -> tuple[
         version="1.0.0",
         types=[str_t, int_t],
         slots=[
-            person_id, person_name_slot,
-            imdb_id, title, directors_slot, credit_count_slot,
-            credit_id, credit_movie, credit_role, credit_person_name,
+            person_id,
+            person_name_slot,
+            imdb_id,
+            title,
+            directors_slot,
+            credit_count_slot,
+            credit_id,
+            credit_movie,
+            credit_role,
+            credit_person_name,
         ],
         classes=[person_cls, movie_cls, credit_cls],
         sources=[movie_src, credit_src],
     )
     return (
-        spec, movie_cls, credit_cls, person_cls,
-        imdb_id, directors_slot, credit_count_slot,
-        credit_id, credit_movie, credit_role, credit_person_name,
-        movie_src, credit_src,
+        spec,
+        movie_cls,
+        credit_cls,
+        person_cls,
+        imdb_id,
+        directors_slot,
+        credit_count_slot,
+        credit_id,
+        credit_movie,
+        credit_role,
+        credit_person_name,
+        movie_src,
+        credit_src,
     )
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest_asyncio.fixture
 async def clean_db(pg_conn):
@@ -199,10 +219,19 @@ async def full_spec_db(clean_db):
     """Publish the Movie+Credit spec and return (conn, spec, rev, entities...)."""
     conn = clean_db
     (
-        spec, movie_cls, credit_cls, person_cls,
-        imdb_id, directors_slot, credit_count_slot,
-        credit_id, credit_movie, credit_role, credit_person_name,
-        movie_src, credit_src,
+        spec,
+        movie_cls,
+        credit_cls,
+        person_cls,
+        imdb_id,
+        directors_slot,
+        credit_count_slot,
+        credit_id,
+        credit_movie,
+        credit_role,
+        credit_person_name,
+        movie_src,
+        credit_src,
     ) = _build_full_spec()
     rev = await create_draft(conn)
     await update_draft(conn, rev, spec)
@@ -210,29 +239,54 @@ async def full_spec_db(clean_db):
 
     # Ingest movies
     await graph_store.insert_rows(
-        conn, source=movie_src, spec_revision=rev,
+        conn,
+        source=movie_src,
+        spec_revision=rev,
         rows=[
             {"imdb_id": "tt0000001", "title": "Film A"},
             {"imdb_id": "tt0000002", "title": "Film B"},
         ],
-        canonical_ids=[str(r["imdb_id"]) for r in [
-            {"imdb_id": "tt0000001", "title": "Film A"},
-            {"imdb_id": "tt0000002", "title": "Film B"},
-        ]]
+        canonical_ids=[
+            str(r["imdb_id"])
+            for r in [
+                {"imdb_id": "tt0000001", "title": "Film A"},
+                {"imdb_id": "tt0000002", "title": "Film B"},
+            ]
+        ],
     )
     # Ingest credits: Film A has two directors; Film B has none
     await graph_store.insert_rows(
-        conn, source=credit_src, spec_revision=rev,
+        conn,
+        source=credit_src,
+        spec_revision=rev,
         rows=[
             {"credit_id": "c001", "movie": "tt0000001", "role": "director", "person_name": "Alice"},
             {"credit_id": "c002", "movie": "tt0000001", "role": "director", "person_name": "Bob"},
-            {"credit_id": "c003", "movie": "tt0000001", "role": "actor",    "person_name": "Carol"},
+            {"credit_id": "c003", "movie": "tt0000001", "role": "actor", "person_name": "Carol"},
         ],
-        canonical_ids=[str(r["credit_id"]) for r in [
-            {"credit_id": "c001", "movie": "tt0000001", "role": "director", "person_name": "Alice"},
-            {"credit_id": "c002", "movie": "tt0000001", "role": "director", "person_name": "Bob"},
-            {"credit_id": "c003", "movie": "tt0000001", "role": "actor",    "person_name": "Carol"},
-        ]]
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {
+                    "credit_id": "c001",
+                    "movie": "tt0000001",
+                    "role": "director",
+                    "person_name": "Alice",
+                },
+                {
+                    "credit_id": "c002",
+                    "movie": "tt0000001",
+                    "role": "director",
+                    "person_name": "Bob",
+                },
+                {
+                    "credit_id": "c003",
+                    "movie": "tt0000001",
+                    "role": "actor",
+                    "person_name": "Carol",
+                },
+            ]
+        ],
     )
     return conn, spec, rev, movie_cls, credit_cls, movie_src, credit_src
 
@@ -241,6 +295,7 @@ async def full_spec_db(clean_db):
 def gql_client_full(full_spec_db):
     from knot.api.main import app
     from fastapi.testclient import TestClient
+
     os.environ["KNOT_AUTH_DEV_MODE"] = "1"
     try:
         yield TestClient(app, raise_server_exceptions=True)
@@ -257,6 +312,7 @@ def _post(client, query: str, variables: dict | None = None) -> dict:
 # ---------------------------------------------------------------------------
 # Unit tests (no DB)
 # ---------------------------------------------------------------------------
+
 
 def _make_ctx(cls: OntologyClass) -> CompileContext:
     return CompileContext(primary_class=cls, alias="s")
@@ -367,12 +423,15 @@ def test_relation_count_distinct_emits_distinct():
 
 
 # 6. RelationAggregate MIN/MAX/SUM/AVG
-@pytest.mark.parametrize("func,expected_sql", [
-    (AggFunc.MIN, "min"),
-    (AggFunc.MAX, "max"),
-    (AggFunc.SUM, "sum"),
-    (AggFunc.AVG, "avg"),
-])
+@pytest.mark.parametrize(
+    "func,expected_sql",
+    [
+        (AggFunc.MIN, "min"),
+        (AggFunc.MAX, "max"),
+        (AggFunc.SUM, "sum"),
+        (AggFunc.AVG, "avg"),
+    ],
+)
 def test_relation_aggregate_standard_funcs(func, expected_sql):
     int_t = TypeDefinition(name="integer", base="int")
     movie_cls = OntologyClass(name="Movie", slots=[])
@@ -475,6 +534,7 @@ def test_derived_column_exprs_empty_for_stored_only_class():
 # 12. _select_with_derivations equals _select_with_binding when no derivations
 def test_select_with_derivations_no_derived_slots_same_as_binding():
     from knot.db.graph_store import _select_with_binding
+
     str_t = TypeDefinition(name="string", base="str")
     slot = Slot(name="title", range=str_t)
     cls = OntologyClass(name="Movie", slots=[slot])
@@ -488,11 +548,10 @@ def test_select_with_derivations_no_derived_slots_same_as_binding():
 # Integration tests (live DB)
 # ---------------------------------------------------------------------------
 
+
 # 13. Derived slot is_stored returns False
 def test_derived_slot_is_not_stored():
-    (
-        spec, movie_cls, *_
-    ) = _build_full_spec()
+    (spec, movie_cls, *_) = _build_full_spec()
     directors_slot = next(s for s in movie_cls.slots if s.name == "directors")
     assert not is_stored(directors_slot)
     imdb_id_slot = next(s for s in movie_cls.slots if s.name == "imdb_id")
@@ -516,7 +575,9 @@ def test_graphql_derived_directors_in_rows(gql_client_full):
 
     # Film B has no credits → directors should be null or empty array
     directors_b = film_b.get("directors")
-    assert directors_b is None or directors_b == [], f"Film B should have no directors, got: {directors_b}"
+    assert directors_b is None or directors_b == [], (
+        f"Film B should have no directors, got: {directors_b}"
+    )
 
 
 # 15. credit_count derived slot returns correct integer
@@ -565,7 +626,8 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     credit_src_v1 = Source(name="credits", entity_class=credit_v1, identifier_slot=cid_v1)
 
     spec_v1 = Spec(
-        id="test", version="1.0.0",
+        id="test",
+        version="1.0.0",
         types=[str_t],
         slots=[imdb_id_v1, title_v1, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
@@ -575,9 +637,13 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     await update_draft(conn, rev1, spec_v1)
     await publish_draft(conn, rev1)
 
-    await graph_store.insert_rows(conn, source=movie_src_v1, spec_revision=rev1,
-                            rows=[{"imdb_id": "tt0000001", "title": "Film A"}],
-                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Film A"}]])
+    await graph_store.insert_rows(
+        conn,
+        source=movie_src_v1,
+        spec_revision=rev1,
+        rows=[{"imdb_id": "tt0000001", "title": "Film A"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Film A"}]],
+    )
 
     # v2: same Movie + Credit objects, Movie gains a derived slot (no new column).
     # Re-use the SAME movie_v1 object so cmovie_v1.range still resolves correctly.
@@ -592,7 +658,8 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     credit_src_v2 = Source(name="credits", entity_class=credit_v1, identifier_slot=cid_v1)
 
     spec_v2 = Spec(
-        id="test", version="1.0.0",
+        id="test",
+        version="1.0.0",
         types=[str_t],
         slots=[imdb_id_v1, title_v1, count_slot, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
@@ -631,7 +698,8 @@ async def test_integration_relation_aggregate_collect(clean_db):
     credit_src = Source(name="credits", entity_class=credit_cls, identifier_slot=cid)
 
     spec = Spec(
-        id="agg_test", version="1.0.0",
+        id="agg_test",
+        version="1.0.0",
         types=[str_t],
         slots=[imdb_id, title, roles_slot, cid, cmovie, crole],
         classes=[movie_cls, credit_cls],
@@ -641,22 +709,35 @@ async def test_integration_relation_aggregate_collect(clean_db):
     await update_draft(conn, rev, spec)
     await publish_draft(conn, rev)
 
-    await graph_store.insert_rows(conn, source=movie_src, spec_revision=rev,
-                            rows=[{"imdb_id": "m1", "title": "Test Film"}],
-                            canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "m1", "title": "Test Film"}]])
-    await graph_store.insert_rows(conn, source=credit_src, spec_revision=rev,
-                            rows=[
-                                {"credit_id": "x1", "movie": "m1", "role": "director"},
-                                {"credit_id": "x2", "movie": "m1", "role": "actor"},
-                            ],
-                            canonical_ids=[str(r["credit_id"]) for r in [
-                                {"credit_id": "x1", "movie": "m1", "role": "director"},
-                                {"credit_id": "x2", "movie": "m1", "role": "actor"},
-                            ]])
+    await graph_store.insert_rows(
+        conn,
+        source=movie_src,
+        spec_revision=rev,
+        rows=[{"imdb_id": "m1", "title": "Test Film"}],
+        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "m1", "title": "Test Film"}]],
+    )
+    await graph_store.insert_rows(
+        conn,
+        source=credit_src,
+        spec_revision=rev,
+        rows=[
+            {"credit_id": "x1", "movie": "m1", "role": "director"},
+            {"credit_id": "x2", "movie": "m1", "role": "actor"},
+        ],
+        canonical_ids=[
+            str(r["credit_id"])
+            for r in [
+                {"credit_id": "x1", "movie": "m1", "role": "director"},
+                {"credit_id": "x2", "movie": "m1", "role": "actor"},
+            ]
+        ],
+    )
 
     rows = await graph_store.query_rows(
-        conn, cls=movie_cls,
-        predicate_sql=None, predicate_params=[],
+        conn,
+        cls=movie_cls,
+        predicate_sql=None,
+        predicate_params=[],
     )
     assert len(rows) == 1
     roles = rows[0].get("roles")
@@ -670,8 +751,10 @@ async def test_integration_filtered_relation_derivation(full_spec_db):
     conn, spec, rev, movie_cls, credit_cls, movie_src, credit_src = full_spec_db
 
     rows = await graph_store.query_rows(
-        conn, cls=movie_cls,
-        predicate_sql=None, predicate_params=[],
+        conn,
+        cls=movie_cls,
+        predicate_sql=None,
+        predicate_params=[],
     )
     film_a = next(r for r in rows if r["imdb_id"] == "tt0000001")
     directors = film_a.get("directors")
@@ -690,8 +773,8 @@ def test_derived_slot_present_in_where_input():
     (spec, movie_cls, *_) = _build_full_spec()
     where_type = _make_class_where_type(movie_cls)
     # directors is derived → must appear in WhereInput (filters via subquery)
-    assert hasattr(where_type, "directors"), \
+    assert hasattr(where_type, "directors"), (
         "Derived slot 'directors' must be in WhereInput (subquery filter)"
+    )
     # imdb_id is stored → must also appear
-    assert hasattr(where_type, "imdb_id"), \
-        "Stored slot 'imdb_id' must be in WhereInput"
+    assert hasattr(where_type, "imdb_id"), "Stored slot 'imdb_id' must be in WhereInput"

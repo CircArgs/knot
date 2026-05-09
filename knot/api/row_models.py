@@ -88,7 +88,7 @@ def build_row_model(source: Source) -> type[BaseModel]:
     Uses ``effective_slots`` so mixin-contributed slots are accepted
     (they live on the class's own table per the storage contract).
     """
-    from knot.db._naming import effective_slots
+    from knot.spec import effective_slots
 
     cls = source.entity_class
     fields: dict[str, Any] = {}
@@ -112,7 +112,7 @@ def build_row_model_for_class(cls: OntologyClass) -> type[BaseModel]:
 
     Uses ``effective_slots`` so mixin-contributed slots are accepted (they
     live on the class's own table per the storage contract)."""
-    from knot.db._naming import effective_slots
+    from knot.spec import effective_slots
 
     fields: dict[str, Any] = {}
     for slot in effective_slots(cls):

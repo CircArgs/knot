@@ -18,14 +18,10 @@ from knot.db._naming import (
     bindings_table_id as _bindings_id,
 )
 from knot.db._naming import (
-    effective_slots as _effective_slots,
-)
-from knot.db._naming import (
-    is_stored as _is_stored,
-)
-from knot.db._naming import (
     table_id as _table_id,
 )
+from knot.spec import effective_slots as _effective_slots
+from knot.spec import is_stored as _is_stored
 from knot.spec.metaschema import OntologyClass
 
 

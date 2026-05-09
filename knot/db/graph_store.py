@@ -37,15 +37,13 @@ from knot.db._naming import (
     bindings_table_id as _bindings_id,
 )
 from knot.db._naming import (
-    stored_slot_names as _stored_slot_names,
-)
-from knot.db._naming import (
     table_id as _table_id,
 )
 from knot.db._naming import (
     user_corrections_source,
 )
 from knot.spec import OntologyClass, Source
+from knot.spec import stored_slot_names as _stored_slot_names
 from knot.spec.compile.postgres._queries import (
     select_with_binding as _select_with_binding,
 )
@@ -698,9 +696,7 @@ async def insert_synthetic_row(
     knot_row_id = (
         await (
             await conn.execute(
-                sql.SQL(
-                    "INSERT INTO {table} ({cols}) VALUES ({ph}) RETURNING _knot_row_id"
-                ).format(
+                sql.SQL("INSERT INTO {table} ({cols}) VALUES ({ph}) RETURNING _knot_row_id").format(
                     table=_table_id(cls),
                     cols=cols_sql,
                     ph=placeholders,

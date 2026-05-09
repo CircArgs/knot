@@ -6,6 +6,7 @@ and the canonical-form hasher (``canonical``) live here. Expression-tree
 """
 
 from knot.spec.canonical import canonical_dump, compute_content_hash
+from knot.spec.effective_slots import effective_slots, is_stored, stored_slot_names
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -74,4 +75,8 @@ __all__ = [
     # canonical
     "compute_content_hash",
     "canonical_dump",
+    # effective-slot helpers
+    "effective_slots",
+    "is_stored",
+    "stored_slot_names",
 ]
