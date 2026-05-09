@@ -19,7 +19,7 @@ from pydantic import BaseModel
 
 from knot import db
 from knot.api.auth.security import require_user
-from knot.db import dq, spec_store
+from knot.graph import dq as graph_dq
 
 router = APIRouter(prefix="/dq", tags=["dq"])
 
@@ -55,7 +55,7 @@ async def list_observations(
 ) -> list[dict[str, Any]]:
     """Time-series of DQ observations (newest first), with optional filters."""
     async with db.connect() as conn:
-        return await dq.query_observations(
+        return await graph_dq.list_observations(
             conn,
             source=source,
             class_name=class_name,
@@ -74,7 +74,7 @@ async def summary(
 ) -> list[dict[str, Any]]:
     """Roll-up per (source, class, slot) over the time window."""
     async with db.connect() as conn:
-        return await dq.summarize(conn, since=since, until=until)
+        return await graph_dq.summarize(conn, since=since, until=until)
 
 
 @router.post(
@@ -92,14 +92,10 @@ async def scan(
 ) -> ScanResponse:
     """Snapshot per-(source, class, slot) stats from the current data plane."""
     async with db.connect() as conn:
-        spec = await spec_store.get_published(conn)
-        if spec is None:
-            raise HTTPException(409, "No spec is published yet.")
-        revision = await spec_store.get_published_revision(conn)
-        inserted = await dq.full_scan(
-            conn,
-            spec,
-            source_filter=source,
-            class_filter=class_name,
-        )
-    return ScanResponse(observations_inserted=inserted, spec_revision=revision or 0)
+        try:
+            inserted, revision = await graph_dq.scan(
+                conn, source_filter=source, class_filter=class_name
+            )
+        except graph_dq.NoSpecPublishedError as exc:
+            raise HTTPException(409, str(exc)) from exc
+    return ScanResponse(observations_inserted=inserted, spec_revision=revision)
