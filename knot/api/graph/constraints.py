@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends
 from knot import db
 from knot.api.auth.security import require_user
 from knot.api.graph._common import StrictBase, published_or_409
+from knot.graph import constraints as graph_constraints
 
 router = APIRouter()
 
@@ -35,32 +36,19 @@ async def check_constraints() -> ConstraintCheckResponse:
     uniform violation shape: (rule_id, class_name, slot_name, offending_pk,
     detail). An empty ``violations`` list means all constraints pass.
     """
-    from knot.spec.compile.postgres import compile_constraint
-
-    violations: list[ViolationRow] = []
-
     async with db.connect() as conn:
         spec = await published_or_409(conn)
-        classes_by_name = {c.name: c for c in spec.classes}
+        violations = await graph_constraints.check_all_constraints(conn, spec)
 
-        for constraint in spec.constraints:
-            cls = classes_by_name.get(constraint.primary.name)
-            if cls is None or cls.abstract:
-                continue
-            stmt, params = compile_constraint(constraint, cls)
-            try:
-                rows = await (await conn.execute(stmt, params)).fetchall()
-            except Exception:
-                continue
-            for row in rows:
-                violations.append(
-                    ViolationRow(
-                        rule_id=row[0],
-                        class_name=row[1],
-                        slot_name=row[2],
-                        offending_pk=str(row[3]),
-                        detail=row[4] or "",
-                    )
-                )
-
-    return ConstraintCheckResponse(violations=violations)
+    return ConstraintCheckResponse(
+        violations=[
+            ViolationRow(
+                rule_id=v.rule_id,
+                class_name=v.class_name,
+                slot_name=v.slot_name,
+                offending_pk=v.offending_pk,
+                detail=v.detail,
+            )
+            for v in violations
+        ]
+    )
