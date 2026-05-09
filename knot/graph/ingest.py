@@ -128,10 +128,31 @@ async def ingest_rows(
                 )
                 violations: list[dict[str, Any]] = []
                 for constraint in relevant:
-                    stmt, params = compile_constraint(constraint, cls)
+                    try:
+                        stmt, params = compile_constraint(constraint, cls)
+                    except Exception as exc:
+                        violations.append(
+                            {
+                                "rule_id": constraint.name,
+                                "class_name": constraint.primary.name,
+                                "slot_name": None,
+                                "offending_pk": "*",
+                                "detail": f"compile failure: {exc}",
+                            }
+                        )
+                        continue
                     try:
                         result_rows = await (await conn.execute(stmt, params)).fetchall()
-                    except Exception:
+                    except Exception as exc:
+                        violations.append(
+                            {
+                                "rule_id": constraint.name,
+                                "class_name": constraint.primary.name,
+                                "slot_name": None,
+                                "offending_pk": "*",
+                                "detail": f"execute failure: {exc}",
+                            }
+                        )
                         continue
                     for row in result_rows:
                         violations.append(

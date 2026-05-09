@@ -32,8 +32,10 @@ async def check_all_constraints(conn: psycopg.AsyncConnection, spec: Spec) -> li
     """Compile every concrete-class constraint, execute, collect violations.
 
     Skips abstract classes (no rows stored). Compile- or execute-time
-    failures on a single constraint are swallowed (continue) so a broken
-    rule doesn't block the rest — same behaviour as before.
+    failures on a single constraint surface as a synthetic violation row
+    (``offending_pk='*'``, ``detail='compile failure: ...'`` /
+    ``'execute failure: ...'``) so operators can see the broken rule rather
+    than silently getting zero violations.
     """
     from knot.spec.compile.postgres import compile_constraint
 
@@ -44,10 +46,31 @@ async def check_all_constraints(conn: psycopg.AsyncConnection, spec: Spec) -> li
         cls = classes_by_name.get(constraint.primary.name)
         if cls is None or cls.abstract:
             continue
-        stmt, params = compile_constraint(constraint, cls)
+        try:
+            stmt, params = compile_constraint(constraint, cls)
+        except Exception as exc:
+            violations.append(
+                ViolationRow(
+                    rule_id=constraint.name,
+                    class_name=constraint.primary.name,
+                    slot_name=None,
+                    offending_pk="*",
+                    detail=f"compile failure: {exc}",
+                )
+            )
+            continue
         try:
             rows = await (await conn.execute(stmt, params)).fetchall()
-        except Exception:
+        except Exception as exc:
+            violations.append(
+                ViolationRow(
+                    rule_id=constraint.name,
+                    class_name=constraint.primary.name,
+                    slot_name=None,
+                    offending_pk="*",
+                    detail=f"execute failure: {exc}",
+                )
+            )
             continue
         for row in rows:
             violations.append(
