@@ -6,10 +6,13 @@ or in normal autocommit mode otherwise.
 
 Contract:
   - Pydantic row validation against the source's class shape.
-  - Canonical-id resolution dispatched as ``IngestResolveCanonical``.
+  - ``RowsIngesting`` dispatched (handlers may mutate rows + populate
+    ``canonical_ids``; default ER fills it from the identifier slot).
   - INSERTs via ``graph_store.insert_rows``.
   - Optional ERROR-severity constraint check post-INSERT inside a
     transaction (any violation rolls back the batch).
+  - ``RowsIngested`` dispatched after the INSERT, inside the same txn
+    when one is active so side-effect handlers roll back consistently.
   - DQ incremental observation written on success.
 
 Routes catch typed exceptions and translate to HTTP. No ``HTTPException``,
@@ -25,8 +28,8 @@ from pydantic import ValidationError
 
 from knot.api.row_models import build_row_model
 from knot.db import dq, graph_store
-from knot.extensions import dispatch
-from knot.extensions.events import IngestResolveCanonical
+from knot.extensions import RequestContext, Session, dispatch
+from knot.extensions.events import RowsIngested, RowsIngesting
 from knot.spec import Source, Spec
 
 
@@ -78,7 +81,7 @@ async def ingest_rows(
     from knot.spec.metaschema import Severity
 
     RowModel = build_row_model(source)
-    validated: list[dict[str, Any]] = []
+    typed_rows: list[Any] = []
     errors: list[dict[str, Any]] = []
     for i, row in enumerate(rows):
         try:
@@ -87,16 +90,25 @@ async def ingest_rows(
             for err in exc.errors():
                 errors.append({**err, "loc": ("body", "rows", i, *err["loc"])})
             continue
-        validated.append(m.model_dump(exclude_none=False))
+        typed_rows.append(m)
 
     if errors:
         raise IngestValidationError(errors)
 
     cls = source.entity_class
-    ev = IngestResolveCanonical(cls=cls, source=source, incoming=validated)
-    await dispatch.dispatch(ev)
+    ctx = RequestContext(
+        db=Session(conn),
+        spec_revision=spec_revision,
+        request_id=batch_id,
+    )
+
+    ev = RowsIngesting(source=source, rows=typed_rows)
+    await dispatch.dispatch(ev, ctx)
     if ev.canonical_ids is None:
         raise RuntimeError("No handler set canonical_ids — default ER extension not registered")
+
+    wire_rows = [r.model_dump(exclude_none=False) for r in ev.rows]
+    canonical_ids = ev.canonical_ids
 
     if validate_constraints:
         relevant = [
@@ -111,8 +123,8 @@ async def ingest_rows(
                     conn,
                     source=source,
                     spec_revision=spec_revision,
-                    rows=validated,
-                    canonical_ids=ev.canonical_ids,
+                    rows=wire_rows,
+                    canonical_ids=canonical_ids,
                 )
                 violations: list[dict[str, Any]] = []
                 for constraint in relevant:
@@ -133,12 +145,21 @@ async def ingest_rows(
                         )
                 if violations:
                     raise _ConstraintViolationSentinel(violations)
+                await dispatch.dispatch(
+                    RowsIngested(
+                        source=source,
+                        rows=ev.rows,
+                        inserted_count=count,
+                        canonical_ids=canonical_ids,
+                    ),
+                    ctx,
+                )
                 await dq.record_incremental(
                     conn,
                     source_name=source.name,
                     cls=cls,
                     batch_id=batch_id,
-                    rows=validated,
+                    rows=wire_rows,
                 )
         except _ConstraintViolationSentinel as exc:
             raise ConstraintViolations(exc.violations) from exc
@@ -147,15 +168,24 @@ async def ingest_rows(
             conn,
             source=source,
             spec_revision=spec_revision,
-            rows=validated,
-            canonical_ids=ev.canonical_ids,
+            rows=wire_rows,
+            canonical_ids=canonical_ids,
+        )
+        await dispatch.dispatch(
+            RowsIngested(
+                source=source,
+                rows=ev.rows,
+                inserted_count=count,
+                canonical_ids=canonical_ids,
+            ),
+            ctx,
         )
         await dq.record_incremental(
             conn,
             source_name=source.name,
             cls=cls,
             batch_id=batch_id,
-            rows=validated,
+            rows=wire_rows,
         )
 
     return count

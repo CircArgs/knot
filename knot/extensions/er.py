@@ -1,38 +1,43 @@
-"""Entity resolution extension — default and per-class resolver registry.
+"""Default ER extension — fills RowsIngesting.canonical_ids.
 
-Default resolver: identifier-slot passthrough.
-Override per class: @er.register("Movie") def my_resolver(ev): ...
+Default: identifier-slot passthrough.
+Custom per source: ``@er.register("imdb_movies")``
+    ``def my_resolver(rows, source) -> list[str]: ...``
 """
 
 from __future__ import annotations
 
 from collections.abc import Callable
 
-from knot.extensions import dispatch
-from knot.extensions.events import IngestResolveCanonical
+from pydantic import BaseModel
 
-# Internal sub-dispatch keyed by OntologyClass.name.
-_RESOLVERS: dict[str, Callable[[IngestResolveCanonical], list[str]]] = {}
+from knot.extensions import RequestContext, dispatch
+from knot.extensions.events import RowsIngesting
+from knot.spec import Source
+
+_RESOLVERS: dict[str, Callable[[list[BaseModel], Source], list[str]]] = {}
 
 
-def register(class_name: str) -> Callable:
-    """Decorator: register a class-specific ER resolver."""
+def register(source_name: str) -> Callable:
+    """Decorator — register a resolver for one Source by name."""
 
-    def deco(fn: Callable) -> Callable:
-        if class_name in _RESOLVERS:
-            raise ValueError(f"Resolver already registered for {class_name!r}")
-        _RESOLVERS[class_name] = fn
+    def deco(fn):
+        if source_name in _RESOLVERS:
+            raise ValueError(f"Resolver already registered for source {source_name!r}")
+        _RESOLVERS[source_name] = fn
         return fn
 
     return deco
 
 
-def _default(ev: IngestResolveCanonical) -> list[str]:
-    id_name = ev.source.identifier_slot.name
-    return [str(r[id_name]) for r in ev.incoming]
+def _default(rows: list[BaseModel], source: Source) -> list[str]:
+    name = source.identifier_slot.name
+    return [str(getattr(r, name)) for r in rows]
 
 
-@dispatch.on(IngestResolveCanonical, priority=50)
-def _resolve(ev: IngestResolveCanonical) -> None:
-    handler = _RESOLVERS.get(ev.cls.name, _default)
-    ev.canonical_ids = handler(ev)
+@dispatch.on(RowsIngesting, priority=50)
+async def _resolve(ev: RowsIngesting, ctx: RequestContext) -> None:
+    if ev.canonical_ids is not None:
+        return  # another handler already set it; respect that
+    resolver = _RESOLVERS.get(ev.source.name, _default)
+    ev.canonical_ids = resolver(ev.rows, ev.source)
