@@ -11,7 +11,6 @@ import pytest
 
 from knot import db
 from knot.db import graph_store, trust_config, trust_posteriors
-from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA, Posterior
 from knot.graph.resolve import (
     _argmax_trust,
@@ -28,6 +27,7 @@ from knot.spec import (
     Spec,
     TypeDefinition,
 )
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -78,9 +78,7 @@ async def resolve_db(pg_conn):
         classes=[movie],
         sources=[src_a, src_b],
     )
-    rev = await create_draft(pg_conn)
-    await update_draft(pg_conn, rev, spec)
-    await publish_draft(pg_conn, rev)
+    rev = await publish_spec(pg_conn, spec)
     yield pg_conn, movie, src_a, src_b, rev
 
 

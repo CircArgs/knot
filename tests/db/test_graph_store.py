@@ -14,8 +14,8 @@ import pytest
 
 from knot import db
 from knot.db import graph_store
-from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -63,9 +63,7 @@ async def graph_db(pg_conn):
     await db.apply_schema()
 
     spec, movie, src, _ = _build_spec()
-    rev = await create_draft(pg_conn)
-    await update_draft(pg_conn, rev, spec)
-    await publish_draft(pg_conn, rev)
+    rev = await publish_spec(pg_conn, spec)
 
     yield pg_conn, movie, src, rev
 

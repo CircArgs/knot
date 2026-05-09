@@ -21,10 +21,10 @@ from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.api.row_models import build_row_model
 from knot.db import graph_store
-from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.extensions import RequestContext, Session, _Dispatcher
 from knot.extensions.events import RowsIngested, RowsIngesting
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -253,9 +253,7 @@ async def ingest_db(pg_conn):
     await db.apply_schema()
 
     spec, movie, src = _build_movie_spec()
-    rev = await create_draft(pg_conn)
-    await update_draft(pg_conn, rev, spec)
-    await publish_draft(pg_conn, rev)
+    rev = await publish_spec(pg_conn, spec)
 
     yield pg_conn, movie, src, rev
 

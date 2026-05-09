@@ -42,7 +42,7 @@ import pytest_asyncio
 
 from knot import db
 from knot.db import graph_store, spec_store
-from knot.db.spec_store import create_draft, publish_draft, update_draft
+from tests._helpers import publish_spec
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 from knot.spec.compile.postgres import CompileContext, compile_predicate, migration
 from knot.spec.errors import PublishGateError
@@ -179,9 +179,7 @@ async def dc_db(pg_conn):
     await db.apply_schema()
 
     spec, person, credit, director, person_src, credit_src = _build_person_credit_director_spec()
-    rev = await create_draft(pg_conn)
-    await update_draft(pg_conn, rev, spec)
-    await publish_draft(pg_conn, rev)
+    rev = await publish_spec(pg_conn, spec)
 
     yield pg_conn, spec, person, credit, director, person_src, credit_src, rev
 

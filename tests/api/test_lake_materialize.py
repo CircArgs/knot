@@ -21,12 +21,8 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
-from knot.db.spec_store import (
-    create_draft,
-    publish_draft,
-    update_draft,
-)
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 
 
 def _dev_principal() -> Principal:
@@ -89,9 +85,7 @@ def client():
 
 @pytest_asyncio.fixture
 async def published(clean):
-    rev = await create_draft(clean)
-    await update_draft(clean, rev, _spec_with_concrete_and_abstract())
-    await publish_draft(clean, rev)
+    rev = await publish_spec(clean, _spec_with_concrete_and_abstract())
     yield clean, rev
 
 

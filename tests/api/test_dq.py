@@ -22,13 +22,9 @@ from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
 from knot.db import dq
 from knot.spec.compile.postgres._naming import user_corrections_source
-from knot.db.spec_store import (
-    create_draft,
-    publish_draft,
-    update_draft,
-)
 from knot.graph.corrections import apply_add, apply_property_correction
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 
 
 def _dev_principal() -> Principal:
@@ -80,9 +76,7 @@ def client():
 @pytest.fixture
 async def published(clean):
     spec, movie, src = _spec()
-    rev = await create_draft(clean)
-    await update_draft(clean, rev, spec)
-    await publish_draft(clean, rev)
+    rev = await publish_spec(clean, spec)
     yield clean, movie, src, rev
 
 

@@ -17,7 +17,6 @@ import pytest
 from knot import db
 from knot.db import corrections as db_corrections
 from knot.db import graph_store
-from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.graph.corrections import (
     apply_add,
     apply_reject_contribution,
@@ -25,6 +24,7 @@ from knot.graph.corrections import (
     apply_tombstone,
 )
 from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Shared fixture
@@ -59,9 +59,7 @@ async def ct_db(pg_conn):
         classes=[movie],
         sources=[src_a, src_b],
     )
-    rev = await create_draft(pg_conn)
-    await update_draft(pg_conn, rev, spec)
-    await publish_draft(pg_conn, rev)
+    rev = await publish_spec(pg_conn, spec)
 
     # Two distinct canonical ids; both sources contribute to "tt_main".
     await graph_store.insert_rows(

@@ -11,10 +11,10 @@ import pytest
 from knot import db
 from knot.db import corrections as db_corrections
 from knot.db import graph_store, trust_posteriors
-from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
 from knot.graph.corrections import _values_match, apply_merge, apply_property_correction
 from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -48,9 +48,7 @@ async def corrections_db(pg_conn):
         classes=[movie],
         sources=[src_a, src_b],
     )
-    rev = await create_draft(pg_conn)
-    await update_draft(pg_conn, rev, spec)
-    await publish_draft(pg_conn, rev)
+    rev = await publish_spec(pg_conn, spec)
 
     # Insert rows from two sources for canonical_id "tt_canonical"
     await graph_store.insert_rows(

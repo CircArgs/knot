@@ -19,8 +19,8 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.db import graph_store
-from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from tests._helpers import publish_spec
 from knot.spec.metaschema import (
     Compare,
     CompareOp,
@@ -112,13 +112,6 @@ def client_no_exc():
         app.dependency_overrides.pop(require_user, None)
 
 
-async def _publish_spec(conn, spec: Spec) -> int:
-    rev = await create_draft(conn)
-    await update_draft(conn, rev, spec)
-    await publish_draft(conn, rev)
-    return rev
-
-
 # ---------------------------------------------------------------------------
 # 1. Happy path: rows pass all constraints → ingest succeeds
 # ---------------------------------------------------------------------------
@@ -131,7 +124,7 @@ async def test_valid_rows_with_flag_succeed(clean_db, client):
     # Add constraint: year >= 1888
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -161,7 +154,7 @@ async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, clie
     spec, movie, src = _build_spec_with_constraints([])
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -193,7 +186,7 @@ async def test_warning_constraint_does_not_block_ingest(clean_db, client):
     spec, movie, src = _build_spec_with_constraints([])
     warn_c = _year_gte_constraint(movie, 1888, name="year_warning", severity=Severity.WARNING)
     spec.constraints.append(warn_c)
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -222,7 +215,7 @@ async def test_violation_without_flag_does_not_block(clean_db, client):
     spec, movie, src = _build_spec_with_constraints([])
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb",  # no ?validate_constraints
@@ -258,7 +251,7 @@ async def test_multiple_constraints_one_violated_reports_violation(clean_db, cli
     c2 = Constraint(name="year_max", primary=movie, body=body2, severity=Severity.ERROR)
 
     spec.constraints.extend([c1, c2])
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -287,7 +280,7 @@ async def test_multiple_constraints_all_pass(clean_db, client):
     body2 = Compare(op=CompareOp.LTE, left=path, right=Literal_(value=9999))
     c2 = Constraint(name="year_max", primary=movie, body=body2, severity=Severity.ERROR)
     spec.constraints.extend([c1, c2])
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -308,7 +301,7 @@ async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
     spec, movie, src = _build_spec_with_constraints([])
     c = _year_gte_constraint(movie, 1888)
     spec.constraints.append(c)
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     resp = client_no_exc.post(
         "/graph/ingest/imdb?validate_constraints=true",
@@ -371,9 +364,7 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
         sources=[src, psrc],
         constraints=[person_constraint],
     )
-    rev = await create_draft(conn)
-    await update_draft(conn, rev, spec)
-    await publish_draft(conn, rev)
+    rev = await publish_spec(conn, spec)
 
     # Ingesting to Movie source — Person constraint must not interfere.
     resp = client.post(
@@ -399,7 +390,7 @@ async def test_compile_failure_surfaces_as_synthetic_violation(
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     spec.constraints.append(_year_gte_constraint(movie, 1888, name="year_min"))
-    await _publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     # Monkeypatch the compiler the ingest path calls, so any constraint
     # compile blows up. The built-in check is expected to catch and
