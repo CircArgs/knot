@@ -105,68 +105,131 @@ def _(mo):
     Two classes (`Movie`, `Person`), three sources (`imdb`, `tmdb`, `wiki`).
     `Movie.directed_by` is a class-range slot pointing at a `Person`
     canonical_id — that's the cross-class edge the data graph will draw.
+
+    Each entity is a separate POST so a UI can build the spec
+    incrementally. Below we declare the spec we want as one structured
+    Python dict, then submit it phase by phase and show the resulting
+    POST ledger — so the eye can flip between "this is the spec" and
+    "this is each call we made to build it."
     """)
     return
 
 
 @app.cell
-def _(post, reset):
-    reset()
+def _(mo):
+    import json as _json
 
-    # — Draft —
+    SPEC = {
+        "types": [
+            {"name": "string",  "base": "str"},
+            {"name": "integer", "base": "int"},
+        ],
+        "slots_phase_1": [
+            # property + identifier slots — only reference types
+            {"name": "imdb_id",   "range_kind": "type", "range_name": "string",
+             "identifier": True, "required": True},
+            {"name": "person_id", "range_kind": "type", "range_name": "string",
+             "identifier": True, "required": True},
+            {"name": "title",     "range_kind": "type", "range_name": "string",
+             "required": True},
+            {"name": "year",      "range_kind": "type", "range_name": "integer",
+             "resolution_policy": "posterior_mean"},
+            {"name": "name",      "range_kind": "type", "range_name": "string",
+             "required": True},
+        ],
+        "classes_phase_1": [
+            {"name": "Person", "slot_names": ["person_id", "name"]},
+        ],
+        "slots_phase_2": [
+            # cross-class slot — needs Person to exist before its range can resolve
+            {"name": "directed_by", "range_kind": "class", "range_name": "Person"},
+        ],
+        "classes_phase_2": [
+            {"name": "Movie",
+             "slot_names": ["imdb_id", "title", "year", "directed_by"]},
+        ],
+        "sources": [
+            {"name": "imdb", "entity_class_name": "Movie",
+             "identifier_slot_name": "imdb_id"},
+            {"name": "tmdb", "entity_class_name": "Movie",
+             "identifier_slot_name": "imdb_id"},
+            {"name": "wiki", "entity_class_name": "Person",
+             "identifier_slot_name": "person_id"},
+        ],
+    }
+
+    mo.ui.code_editor(
+        value=_json.dumps(SPEC, indent=2),
+        language="json",
+        disabled=True,
+    )
+    return (SPEC,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    Each entry above is one POST. Watch the order: types first (no
+    dependencies), then slots that reference types, then classes that
+    group those slots, then a cross-class slot that references the
+    `Person` class we just created, then `Movie` that uses it, then
+    sources. The table below shows each call, in order — one row per
+    entry in the spec.
+    """)
+    return
+
+
+@app.cell
+def _(SPEC, mo, post, reset):
+    reset()
     draft_id = post("/spec/drafts", {"label": "demo"})["revision"]
 
-    # — Types —
-    post(f"/spec/drafts/{draft_id}/types", {"name": "string", "base": "str"})
-    post(f"/spec/drafts/{draft_id}/types", {"name": "integer", "base": "int"})
+    # phase_key → endpoint segment. Phases collapse into endpoint groups,
+    # but stay separate keys to preserve cross-reference dependency order.
+    _ENDPOINT_FOR_PHASE = {
+        "types":           "types",
+        "slots_phase_1":   "slots",
+        "classes_phase_1": "classes",
+        "slots_phase_2":   "slots",
+        "classes_phase_2": "classes",
+        "sources":         "sources",
+    }
 
-    # — Slots: identifiers + properties + cross-class FK —
-    post(f"/spec/drafts/{draft_id}/slots", {
-        "name": "imdb_id", "range_kind": "type", "range_name": "string",
-        "identifier": True, "required": True,
-    })
-    post(f"/spec/drafts/{draft_id}/slots", {
-        "name": "person_id", "range_kind": "type", "range_name": "string",
-        "identifier": True, "required": True,
-    })
-    post(f"/spec/drafts/{draft_id}/slots", {
-        "name": "title", "range_kind": "type", "range_name": "string",
-        "required": True,
-    })
-    post(f"/spec/drafts/{draft_id}/slots", {
-        "name": "year", "range_kind": "type", "range_name": "integer",
-        "resolution_policy": "posterior_mean",
-    })
-    post(f"/spec/drafts/{draft_id}/slots", {
-        "name": "name", "range_kind": "type", "range_name": "string",
-        "required": True,
-    })
-    # — Classes —
-    # Person before Movie so directed_by's range resolves.
-    post(f"/spec/drafts/{draft_id}/classes", {
-        "name": "Person", "slot_names": ["person_id", "name"],
-    })
-    post(f"/spec/drafts/{draft_id}/slots", {
-        "name": "directed_by", "range_kind": "class", "range_name": "Person",
-    })
-    post(f"/spec/drafts/{draft_id}/classes", {
-        "name": "Movie",
-        "slot_names": ["imdb_id", "title", "year", "directed_by"],
-    })
-
-    # — Sources —
-    for _src in ("imdb", "tmdb"):
-        post(f"/spec/drafts/{draft_id}/sources", {
-            "name": _src, "entity_class_name": "Movie",
-            "identifier_slot_name": "imdb_id",
-        })
-    post(f"/spec/drafts/{draft_id}/sources", {
-        "name": "wiki", "entity_class_name": "Person",
-        "identifier_slot_name": "person_id",
-    })
+    _ledger: list[dict[str, str]] = []
+    for _phase, _endpoint in _ENDPOINT_FOR_PHASE.items():
+        for _body in SPEC[_phase]:
+            _path = f"/spec/drafts/{draft_id}/{_endpoint}"
+            try:
+                post(_path, _body)
+                _status = "200 OK"
+            except Exception as _exc:
+                _status = f"FAILED: {_exc}"
+            _ledger.append({
+                "phase": _phase,
+                "endpoint": _path,
+                "name": _body.get("name", "—"),
+                "status": _status,
+            })
 
     publish_resp = post(f"/spec/drafts/{draft_id}/publish")
-    publish_resp
+    _ledger.append({
+        "phase": "publish",
+        "endpoint": f"/spec/drafts/{draft_id}/publish",
+        "name": "—",
+        "status": f"revision {publish_resp['revision']}",
+    })
+
+    mo.ui.table(_ledger)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    Six phases, one POST per entity, all under one transaction at
+    publish time. The data graph cell below queries the resulting
+    published spec via the new `/spec/graphql` endpoint.
+    """)
     return
 
 
