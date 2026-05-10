@@ -49,6 +49,7 @@ __all__ = (
     "ExprTranslationError",
     "InvalidRangeKindError",
     "InvalidIdentifierSlotError",
+    "ReferencedEntityError",
     "RollbackToCurrentError",
     # Reads
     "get_published",
@@ -67,6 +68,11 @@ __all__ = (
     "update_class",
     "add_source",
     "add_constraint",
+    "remove_type",
+    "remove_slot",
+    "remove_class",
+    "remove_source",
+    "remove_constraint",
     # Publish / rollback
     "publish_draft",
     "rollback",
@@ -102,6 +108,24 @@ class InvalidIdentifierSlotError(Exception):
     """Raised when a Source's identifier_slot isn't on the entity_class."""
 
 
+class ReferencedEntityError(Exception):
+    """Raised when a draft entity can't be removed because others reference it."""
+
+    def __init__(
+        self,
+        entity_kind: str,
+        name: str,
+        references: list[tuple[str, str]],
+    ) -> None:
+        self.entity_kind = entity_kind
+        self.name = name
+        self.references = references
+        ref_summary = ", ".join(f"{k}={n}" for k, n in references[:5])
+        super().__init__(
+            f"Cannot remove {entity_kind} {name!r} — referenced by: {ref_summary}"
+        )
+
+
 class RollbackToCurrentError(Exception):
     """Raised when attempting to roll back to the currently-published revision."""
 
@@ -128,6 +152,20 @@ def _find_type(spec: Spec, name: str) -> TypeDefinition:
         if t.name == name:
             return t
     raise EntityNotOnDraftError("TypeDefinition", name)
+
+
+def _find_source(spec: Spec, name: str) -> Source:
+    for s in spec.sources:
+        if s.name == name:
+            return s
+    raise EntityNotOnDraftError("Source", name)
+
+
+def _find_constraint(spec: Spec, name: str) -> Constraint:
+    for c in spec.constraints:
+        if c.name == name:
+            return c
+    raise EntityNotOnDraftError("Constraint", name)
 
 
 # ─── Reads ──────────────────────────────────────────────────────────────────
@@ -434,6 +472,119 @@ async def add_constraint(
                 message=message,
             )
         )
+    return spec
+
+
+# ─── Removals ───────────────────────────────────────────────────────────────
+
+
+async def remove_type(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    name: str,
+) -> Spec:
+    """Remove a TypeDefinition by name.
+
+    Raises ``ReferencedEntityError`` if any slot's range is this type.
+    """
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        target = _find_type(spec, name)
+        refs: list[tuple[str, str]] = [
+            ("slot", s.name)
+            for s in spec.slots
+            if isinstance(s.range, TypeDefinition) and s.range is target
+        ]
+        if refs:
+            raise ReferencedEntityError("type", name, refs)
+        spec.types = [t for t in spec.types if t is not target]
+    return spec
+
+
+async def remove_slot(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    name: str,
+) -> Spec:
+    """Remove a Slot by name.
+
+    Raises ``ReferencedEntityError`` if any class lists this slot, or any
+    source uses it as ``identifier_slot``.
+    """
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        target = _find_slot(spec, name)
+        refs: list[tuple[str, str]] = []
+        for c in spec.classes:
+            if any(s is target for s in c.slots):
+                refs.append(("class", c.name))
+        for src in spec.sources:
+            if src.identifier_slot is target:
+                refs.append(("source", src.name))
+        if refs:
+            raise ReferencedEntityError("slot", name, refs)
+        spec.slots = [s for s in spec.slots if s is not target]
+    return spec
+
+
+async def remove_class(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    name: str,
+) -> Spec:
+    """Remove an OntologyClass by name.
+
+    Raises ``ReferencedEntityError`` if any slot's range is this class, any
+    other class names it via ``is_a`` or ``mixins``, any source's
+    ``entity_class`` is this class, or any constraint's ``primary`` is this
+    class.
+    """
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        target = _find_class(spec, name)
+        refs: list[tuple[str, str]] = []
+        for s in spec.slots:
+            if isinstance(s.range, OntologyClass) and s.range is target:
+                refs.append(("slot", s.name))
+        for c in spec.classes:
+            if c is target:
+                continue
+            if c.is_a is target:
+                refs.append(("class.is_a", c.name))
+            if any(m is target for m in c.mixins):
+                refs.append(("class.mixin", c.name))
+        for src in spec.sources:
+            if src.entity_class is target:
+                refs.append(("source", src.name))
+        for con in spec.constraints:
+            if con.primary is target:
+                refs.append(("constraint", con.name))
+        if refs:
+            raise ReferencedEntityError("class", name, refs)
+        spec.classes = [c for c in spec.classes if c is not target]
+    return spec
+
+
+async def remove_source(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    name: str,
+) -> Spec:
+    """Remove a Source by name. Sources can't be referenced by other entities,
+    so no inbound-reference check is needed."""
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        target = _find_source(spec, name)
+        spec.sources = [s for s in spec.sources if s is not target]
+    return spec
+
+
+async def remove_constraint(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    name: str,
+) -> Spec:
+    """Remove a Constraint by name. Constraints can't be referenced by other
+    entities, so no inbound-reference check is needed."""
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        target = _find_constraint(spec, name)
+        spec.constraints = [c for c in spec.constraints if c is not target]
     return spec
 
 

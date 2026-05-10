@@ -261,6 +261,10 @@ def _map_already_published(exc: graph_spec.DraftAlreadyPublishedError) -> HTTPEx
     return HTTPException(409, str(exc))
 
 
+def _map_referenced(exc: graph_spec.ReferencedEntityError) -> HTTPException:
+    return HTTPException(409, str(exc))
+
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -580,6 +584,95 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ExprTranslationError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+# ─── Draft removals ─────────────────────────────────────────────────────────
+
+
+@router.delete(
+    "/drafts/{draft_id}/types/{name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def remove_type(draft_id: int, name: str) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.remove_type(conn, draft_id, name)
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.ReferencedEntityError as exc:
+            raise _map_referenced(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.delete(
+    "/drafts/{draft_id}/slots/{name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def remove_slot(draft_id: int, name: str) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.remove_slot(conn, draft_id, name)
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.ReferencedEntityError as exc:
+            raise _map_referenced(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.delete(
+    "/drafts/{draft_id}/classes/{name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def remove_class(draft_id: int, name: str) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.remove_class(conn, draft_id, name)
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.ReferencedEntityError as exc:
+            raise _map_referenced(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.delete(
+    "/drafts/{draft_id}/sources/{name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def remove_source(draft_id: int, name: str) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.remove_source(conn, draft_id, name)
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.delete(
+    "/drafts/{draft_id}/constraints/{name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def remove_constraint(draft_id: int, name: str) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.remove_constraint(conn, draft_id, name)
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
