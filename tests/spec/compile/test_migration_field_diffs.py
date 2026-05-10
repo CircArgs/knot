@@ -245,7 +245,12 @@ def test_diff_change_slot_multivalued_emits_record():
 
 
 def test_change_slot_multivalued_is_destructive():
-    rec = ChangeSlotMultivalued(slot_name="id", old_value=False, new_value=True)
+    st = TypeDefinition(name="string", base="str")
+    id_slot = Slot(name="id", range=st, identifier=True)
+    cls = OntologyClass(name="Movie", slots=[id_slot])
+    rec = ChangeSlotMultivalued(
+        cls=cls, slot=id_slot, slot_name="id", old_value=False, new_value=True
+    )
     assert is_destructive(rec)
 
 
@@ -354,7 +359,8 @@ def test_diff_change_class_abstract_emits_record():
 
 
 def test_change_class_abstract_is_destructive():
-    rec = ChangeClassAbstract(class_name="Movie", old_value=False, new_value=True)
+    cls = OntologyClass(name="Movie", slots=[])
+    rec = ChangeClassAbstract(cls=cls, class_name="Movie", old_value=False, new_value=True)
     assert is_destructive(rec)
 
 
@@ -379,7 +385,8 @@ def test_diff_change_class_is_a_emits_record():
 
 
 def test_change_class_is_a_is_destructive():
-    rec = ChangeClassIsA(class_name="Child", old_parent="A", new_parent="B")
+    cls = OntologyClass(name="Child", slots=[])
+    rec = ChangeClassIsA(cls=cls, class_name="Child", old_parent="A", new_parent="B")
     assert is_destructive(rec)
 
 
@@ -439,7 +446,9 @@ def test_diff_change_class_definition_body_change_emits_record():
 
 
 def test_change_class_definition_is_not_destructive():
+    cls = OntologyClass(name="Director", slots=[])
     rec = ChangeClassDefinition(
+        cls=cls,
         class_name="Director",
         had_definition_before=True,
         has_definition_now=True,
@@ -562,7 +571,8 @@ def test_diff_change_source_identifier_slot_emits_record():
 
 
 def test_change_source_identifier_slot_is_destructive():
-    rec = ChangeSourceIdentifierSlot(source_name="imdb", old_slot="id_a", new_slot="id_b")
+    cls = OntologyClass(name="Movie", slots=[])
+    rec = ChangeSourceIdentifierSlot(cls=cls, source_name="imdb", old_slot="id_a", new_slot="id_b")
     assert is_destructive(rec)
 
 

@@ -80,6 +80,7 @@ from psycopg import sql
 from knot.spec import OntologyClass, Slot, Spec
 from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
+from knot.spec.compile.postgres._dispatch import CompilerError
 from knot.spec.compile.postgres._types import slot_pg_type as _slot_pg_type
 
 from ._naming import (
@@ -301,8 +302,11 @@ class ChangeSlotMaximum(Change):
 
 @dataclass
 class ChangeSlotMultivalued(Change):
-    """Bucket A — column shape T vs T[] is a destructive ALTER."""
+    """Bucket A — column shape T vs T[] is a destructive ALTER. Carries
+    ``cls`` and ``slot`` so the emitter can run the right ALTER TABLE."""
 
+    cls: OntologyClass
+    slot: Slot
     slot_name: str
     old_value: bool
     new_value: bool
@@ -352,8 +356,13 @@ class ChangeSlotDerivation(Change):
 
 @dataclass
 class ChangeClassAbstract(Change):
-    """Bucket A — flipping abstract toggles whether the class has a table."""
+    """Bucket A — flipping abstract toggles whether the class has a table.
 
+    ``cls`` is the candidate-side class object so the emitter can rebuild
+    the source table when going abstract → concrete (it needs slots, not
+    just the name)."""
+
+    cls: OntologyClass
     class_name: str
     old_value: bool
     new_value: bool
@@ -373,8 +382,12 @@ class ChangeClassIsA(Change):
     The destructive transitions (concrete↔defined, parent gone from spec
     entirely) are handled by the ``Add/DropDefinedClass`` /
     ``Add/DropClass`` records the diff emits alongside this one. So the
-    record itself is not destructive."""
+    record itself is not destructive.
 
+    ``cls`` is the candidate-side class object so the emitter can dispatch
+    on its definition status (concrete vs defined)."""
+
+    cls: OntologyClass
     class_name: str
     old_parent: str | None
     new_parent: str | None
@@ -404,8 +417,12 @@ class ChangeClassDefinition(Change):
     So this record only fires when both prev and cand are defined classes
     and the body changed.
 
-    Body is opaque (ExprNode by object id); we surface only booleans."""
+    Body is opaque (ExprNode by object id); we surface only booleans.
 
+    ``cls`` is the candidate-side class object so the emitter can re-emit
+    the VIEW with the new compiled body."""
+
+    cls: OntologyClass
     class_name: str
     had_definition_before: bool
     has_definition_now: bool
@@ -440,8 +457,12 @@ class ChangeSourceEntityClass(Change):
 
 @dataclass
 class ChangeSourceIdentifierSlot(Change):
-    """Bucket A — rows are now keyed by a different slot."""
+    """Bucket A — rows are now keyed by a different slot.
 
+    ``cls`` is the source's entity class on the candidate side; the
+    emitter rekeys ``_source_row_id`` against this table."""
+
+    cls: OntologyClass
     source_name: str
     old_slot: str
     new_slot: str
@@ -528,8 +549,11 @@ def _diff_types(prev: Spec | None, candidate: Spec) -> list[Change]:
     return changes
 
 
-def _diff_slot_fields(prev_slot: Slot, cand_slot: Slot) -> list[Change]:
-    """Compare every CANONICAL field on two same-named slots."""
+def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> list[Change]:
+    """Compare every CANONICAL field on two same-named slots in the context
+    of ``cls`` — the candidate class that hosts both slots in its
+    ``effective_slots``. ``cls`` is threaded through so emitters that need a
+    table reference (``ChangeSlotMultivalued``) can resolve it."""
     out: list[Change] = []
     name = cand_slot.name
 
@@ -568,6 +592,8 @@ def _diff_slot_fields(prev_slot: Slot, cand_slot: Slot) -> list[Change]:
     if prev_slot.multivalued != cand_slot.multivalued:
         out.append(
             ChangeSlotMultivalued(
+                cls=cls,
+                slot=cand_slot,
                 slot_name=name,
                 old_value=prev_slot.multivalued,
                 new_value=cand_slot.multivalued,
@@ -634,6 +660,7 @@ def _diff_sources(prev: Spec | None, candidate: Spec) -> list[Change]:
         if ps.identifier_slot.name != cs.identifier_slot.name:
             changes.append(
                 ChangeSourceIdentifierSlot(
+                    cls=cs.entity_class,
                     source_name=name,
                     old_slot=ps.identifier_slot.name,
                     new_slot=cs.identifier_slot.name,
@@ -714,6 +741,7 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
         if prev_cls.abstract != cand_cls.abstract:
             changes.append(
                 ChangeClassAbstract(
+                    cls=cand_cls,
                     class_name=name,
                     old_value=prev_cls.abstract,
                     new_value=cand_cls.abstract,
@@ -725,6 +753,7 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
         if prev_parent != cand_parent:
             changes.append(
                 ChangeClassIsA(
+                    cls=cand_cls,
                     class_name=name,
                     old_parent=prev_parent,
                     new_parent=cand_parent,
@@ -769,6 +798,7 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
             if prev_cls.definition is not cand_cls.definition:
                 changes.append(
                     ChangeClassDefinition(
+                        cls=cand_cls,
                         class_name=name,
                         had_definition_before=True,
                         has_definition_now=True,
@@ -795,7 +825,16 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
             ps, cs = prev_stored[s_name], cand_stored[s_name]
             prev_t = _slot_pg_type(ps)
             new_t = _slot_pg_type(cs)
-            if prev_t != new_t:
+            # When the type difference is *only* the [] suffix, the
+            # ChangeSlotMultivalued record (emitted in _diff_slot_fields)
+            # owns the ALTER — its emitter knows the right USING clause for
+            # T → T[] (ARRAY[col]) and refuses T[] → T. Skip the redundant
+            # ChangeSlotType to avoid two ALTERs racing on the same column
+            # with different USING clauses.
+            multivalued_only = ps.multivalued != cs.multivalued and prev_t.removesuffix(
+                "[]"
+            ) == new_t.removesuffix("[]")
+            if prev_t != new_t and not multivalued_only:
                 changes.append(
                     ChangeSlotType(cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t)
                 )
@@ -809,7 +848,7 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
         # changed without storage shifting.
         for s_name in cand_all.keys() & prev_all.keys():
             ps, cs = prev_all[s_name], cand_all[s_name]
-            changes.extend(_diff_slot_fields(ps, cs))
+            changes.extend(_diff_slot_fields(cand_cls, ps, cs))
 
     changes.extend(_diff_sources(prev, candidate))
     changes.extend(_diff_constraints(prev, candidate))
@@ -927,7 +966,12 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         await conn.execute(stmt)
 
     elif isinstance(change, ChangeSlotType):
-        stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype}").format(
+        # USING <col>::<newtype> handles cast-compatible base changes
+        # (e.g. TEXT→BIGINT for digit-only strings). If the cast fails on
+        # a row, postgres raises and the whole migration aborts (atomic).
+        stmt = sql.SQL(
+            "ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype} USING {col}::{pgtype}"
+        ).format(
             table=_table_id(change.cls),
             col=sql.Identifier(change.slot.name),
             pgtype=sql.SQL(change.new_pg_type),
@@ -937,20 +981,120 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
     elif isinstance(change, ChangeSlotRequired):
         return  # API-enforced; no DDL
 
+    elif isinstance(change, ChangeSlotMultivalued):
+        # Bidirectional column-shape rewrite.
+        #   False → True : promote scalar T to T[] via ARRAY[col]::T[].
+        #   True  → False: refused — there's no general-safe way to
+        #                  project an array back to a scalar; users who
+        #                  want this must run a custom data migration.
+        if change.old_value is True and change.new_value is False:
+            raise CompilerError(
+                "ChangeSlotMultivalued from multivalued=True to False is lossy — "
+                "use a custom SQL migration instead"
+            )
+        # The new pg type is T[] (because cand_slot.multivalued is True now);
+        # the element type is the unaffixed pgtype of the cand slot. We pull
+        # both off the slot reference the diff records on the change.
+        new_pgtype = _slot_pg_type(change.slot)
+        elem_pgtype = new_pgtype.removesuffix("[]")
+        stmt = sql.SQL(
+            "ALTER TABLE {table} ALTER COLUMN {col} TYPE {arrtype} USING ARRAY[{col}]::{arrtype}"
+        ).format(
+            table=_table_id(change.cls),
+            col=sql.Identifier(change.slot.name),
+            arrtype=sql.SQL(f"{elem_pgtype}[]"),
+        )
+        await conn.execute(stmt)
+
+    elif isinstance(change, ChangeClassAbstract):
+        # abstract toggles whether the class has a table.
+        #   True → False : create the source + bindings tables (mirror AddClass).
+        #   False → True : drop the source + bindings tables, IF EMPTY. Refuse
+        #                  on rows present.
+        cls = change.cls
+        if change.old_value is True and change.new_value is False:
+            await conn.execute(_create_source_table_sql(cls))
+            await conn.execute(_bindings_create_sql(cls))
+            await conn.execute(_bindings_index_sql(cls))
+            await conn.execute(_bindings_unique_current_sql(cls))
+            return
+        # concrete → abstract. Refuse if non-empty.
+        cls_lower = change.class_name.lower()
+        existed = await (
+            await conn.execute(
+                sql.SQL("SELECT EXISTS(SELECT 1 FROM {t})").format(
+                    t=sql.Identifier(schema(), cls_lower),
+                )
+            )
+        ).fetchone()
+        if existed and existed[0]:
+            raise CompilerError(
+                f"ChangeClassAbstract on non-empty class {change.class_name!r}: data "
+                "must be removed before flipping abstract=True (use a custom SQL "
+                "migration)."
+            )
+        await conn.execute(
+            sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
+                t=sql.Identifier(schema(), f"{cls_lower}_bindings"),
+            )
+        )
+        await conn.execute(
+            sql.SQL("DROP TABLE IF EXISTS {t} CASCADE").format(
+                t=sql.Identifier(schema(), cls_lower),
+            )
+        )
+
+    elif isinstance(change, ChangeClassDefinition):
+        # Defined-class body change. CREATE OR REPLACE VIEW with the new body
+        # (idempotent — no data lost). Delegate to AddDefinedClass.
+        await emit_ddl(AddDefinedClass(cls=change.cls), conn)
+
+    elif isinstance(change, ChangeClassIsA):
+        # Concrete classes: is_a is structural-only at the DDL layer (own
+        # table, own slots; effective_slots doesn't walk is_a). No-op.
+        # Defined classes: re-emit the VIEW with the new parent as FROM.
+        if _is_defined(change.cls):
+            await emit_ddl(AddDefinedClass(cls=change.cls), conn)
+        # else: no-op for concrete
+
+    elif isinstance(change, ChangeSourceEntityClass):
+        raise CompilerError(
+            "ChangeSourceEntityClass requires manual data migration — "
+            "drop and re-add the source instead"
+        )
+
+    elif isinstance(change, ChangeSourceIdentifierSlot):
+        # Rekey existing rows: _source_row_id ← <new_slot>::TEXT. Postgres
+        # surfaces NOT-NULL violations and PK collisions naturally if the new
+        # slot has NULLs or duplicates per source.
+        stmt = sql.SQL("UPDATE {table} SET _source_row_id = {col}::TEXT WHERE _source = %s").format(
+            table=_table_id(change.cls),
+            col=sql.Identifier(change.new_slot),
+        )
+        await conn.execute(stmt, (change.source_name,))
+
     # Spec-only / runtime-behavior changes — no DDL. These records exist for
     # auditability and to drive the destructive gate / constraint revalidation
     # at publish time.
+    #
+    # ChangeTypeBase: the per-slot ChangeSlotType records emitted alongside it
+    #   already cover the column-type ALTERs for every using slot; the type
+    #   record is gate + audit only (no-op DDL when no slots reference it).
+    # ChangeSlotIdentifier: the storage PK is (_source, _source_row_id); the
+    #   identifier flag is advisory and emits no DDL.
+    # ChangeClassMixins: the slot-level Add/DropSlot records do the work.
     elif isinstance(
         change,
         (
             ChangeTypePattern,
+            ChangeTypeBase,
             ChangeSlotPattern,
             ChangeSlotPermissibleValues,
             ChangeSlotMinimum,
             ChangeSlotMaximum,
+            ChangeSlotIdentifier,
             ChangeSlotResolutionPolicy,
             ChangeSlotDerivation,
-            ChangeClassDefinition,
             AddSource,
             DropSource,
             AddConstraint,
@@ -962,28 +1106,6 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         ),
     ):
         return
-
-    # Bucket-A changes whose DDL emitters aren't wired yet. They MUST gate at
-    # the publish layer (``allow_destructive=true``) but the actual table-
-    # rewrite DDL is follow-up work; surface a clear NotImplementedError if
-    # someone tries to apply them.
-    elif isinstance(
-        change,
-        (
-            ChangeTypeBase,
-            ChangeSlotMultivalued,
-            ChangeSlotIdentifier,
-            ChangeClassAbstract,
-            ChangeClassIsA,
-            ChangeSourceEntityClass,
-            ChangeSourceIdentifierSlot,
-        ),
-    ):
-        raise NotImplementedError(
-            f"DDL emitter for {type(change).__name__} is not implemented yet; "
-            "this change is gated as destructive at publish but the table-rewrite "
-            "path is follow-up work."
-        )
 
     else:
         raise TypeError(f"No DDL emitter registered for {type(change).__name__}")
