@@ -258,6 +258,10 @@ def _map_invalid(exc: Exception) -> HTTPException:
     return HTTPException(400, str(exc))
 
 
+def _map_already_published(exc: graph_spec.DraftAlreadyPublishedError) -> HTTPException:
+    return HTTPException(409, str(exc))
+
+
 # ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
@@ -421,6 +425,8 @@ async def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationRespons
             )
         except graph_spec.CollisionError as exc:
             raise _map_collision(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
 
 
@@ -457,6 +463,8 @@ async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
             raise _map_invalid(exc) from exc
         except graph_spec.ExprTranslationError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
 
 
@@ -485,6 +493,8 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ExprTranslationError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
 
 
@@ -508,6 +518,8 @@ async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationR
             )
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
 
 
@@ -533,6 +545,8 @@ async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.InvalidIdentifierSlotError as exc:
             raise _map_invalid(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
 
 
@@ -559,6 +573,8 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ExprTranslationError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
 
 

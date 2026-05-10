@@ -141,15 +141,7 @@ def _(post, reset):
         "name": "name", "range_kind": "type", "range_name": "string",
         "required": True,
     })
-    # Class-range slot is what generates cross-class edges in the data graph.
-    # Person must exist before we add a class with `directed_by` in its slot
-    # list, but the slot itself can be defined now (it just won't have a
-    # range until Person is created — knot resolves at slot-add time).
-    return (draft_id,)
-
-
-@app.cell
-def _(draft_id, post):
+    # — Classes —
     # Person before Movie so directed_by's range resolves.
     post(f"/spec/drafts/{draft_id}/classes", {
         "name": "Person", "slot_names": ["person_id", "name"],
