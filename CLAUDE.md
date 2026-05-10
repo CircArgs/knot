@@ -34,7 +34,9 @@ knot/                 # Python package
   extensions/         # Master dispatcher + builtin ER extension
   graph/              # Cross-cutting graph helpers (resolve, corrections)
   config/             # Settings (KNOT_ env prefix)
-tests/                # Mirrors knot/ tree
+tests/                # Split into unit/ (pure Python, no I/O) and
+                      # integration/ (real postgres via docker-compose);
+                      # both subdirs mirror the knot/ package layout
 scripts/              # up.sh / down.sh / wait-ready.sh
 docker-compose.yml    # Local postgres for dev + tests
 ```
@@ -55,7 +57,10 @@ docker-compose.yml    # Local postgres for dev + tests
 # Bring up postgres
 ./scripts/up.sh
 
-# Run tests
+# Unit tests — fast, no docker required
+.venv/bin/pytest tests/unit/ -q
+
+# Full suite (requires docker-compose postgres up)
 KNOT_DEV_MODE=1 .venv/bin/pytest tests/ -q
 
 # Lint + format + types
