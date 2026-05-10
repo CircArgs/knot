@@ -20,7 +20,6 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from knot import db
 from knot.api.auth.security import require_user
-from knot.db import spec_store
 from knot.graph import spec as graph_spec
 from knot.spec import (
     OntologyClass,
@@ -267,6 +266,14 @@ def _map_already_published(exc: graph_spec.DraftAlreadyPublishedError) -> HTTPEx
 # ---------------------------------------------------------------------------
 
 router = APIRouter(prefix="/spec", tags=["spec"])
+
+
+# Mount the GraphQL endpoint sibling-module on this router.  Same pattern as
+# ``knot.api.graph`` mounting ``graph/graphql.py`` — the spec metaschema is
+# static, so a side-by-side GraphQL surface composes the same way.
+from knot.api import spec_graphql as _spec_graphql_mod  # noqa: E402
+
+router.include_router(_spec_graphql_mod.router)
 
 
 # ─── Published reads ────────────────────────────────────────────────────────
