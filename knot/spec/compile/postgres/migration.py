@@ -964,15 +964,44 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 # ─── Destructive-change classification ──────────────────────────────────────
 
 # Changes that destroy or rewrite stored data without a backfill path.
-# DropSlot loses a column's data; DropClass loses an entire table;
-# ChangeSlotType issues a raw ALTER COLUMN TYPE and may reject existing
-# data. The publish gate refuses these unless allow_destructive is
-# explicitly set.
+# The publish gate refuses these unless allow_destructive is explicitly
+# set. Three families:
+#
+#   - **Drops**: removing a class, slot, defined class, or source forfeits
+#     the rows / column / view that hold the data.
+#   - **Storage-shape rewrites**: ChangeSlotType (column type), Change-
+#     SlotMultivalued (T → T[] or back), ChangeSlotIdentifier (PK / source
+#     keying), ChangeClassAbstract (table appears/disappears),
+#     ChangeClassIsA / ChangeClassMixins (effective slot set + parent
+#     table rewires), ChangeTypeBase (every using slot's column type
+#     changes). Source rekey is a logical destructive too — rows now
+#     belong to a different class or are keyed by a different slot.
+#
+# Bucket B (data-revalidation: ChangeSlotPattern, ChangeSlotPermissible-
+# Values, min/max, ChangeTypePattern, ChangeConstraintBody) is NOT
+# enumerated here. The publish gate already runs every NEW or CHANGED
+# constraint over current data; tightenings on those fields surface as
+# violations through that pass. Adding a separate revalidation set would
+# duplicate the constraint gate's work.
 _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
+    # original drops + type rewrite
     DropClass,
     DropSlot,
     ChangeSlotType,
     DropDefinedClass,
+    # type-level rewrites
+    ChangeTypeBase,
+    # slot-level shape rewrites
+    ChangeSlotMultivalued,
+    ChangeSlotIdentifier,
+    # class-level shape rewrites
+    ChangeClassAbstract,
+    ChangeClassIsA,
+    ChangeClassMixins,
+    # source rekey / drop
+    DropSource,
+    ChangeSourceEntityClass,
+    ChangeSourceIdentifierSlot,
 )
 
 
