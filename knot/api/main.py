@@ -3,7 +3,9 @@
 Startup sequence (via lifespan):
   1. configure_logging()  — sets up structured JSON/text logging.
   2. db.apply_schema()    — idempotent DDL; safe to run every boot.
-  3. bootstrap_admin_from_env() — seeds admin user if none exist.
+  3. bootstrap_base_spec() — publishes the standard-primitives base spec
+     if no published revision exists yet (idempotent).
+  4. bootstrap_admin_from_env() — seeds admin user if none exist.
 
 Environment variables
 ---------------------
@@ -41,6 +43,7 @@ from knot.api import spec as spec_router_mod
 from knot.api.auth import auth as auth_router_mod
 from knot.api.auth.security import bootstrap_admin_from_env
 from knot.api.middleware import RequestIDMiddleware
+from knot.graph import spec as graph_spec
 from knot.logging_config import configure_logging
 
 logger = logging.getLogger(__name__)
@@ -52,6 +55,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging()
     logger.info("knot starting up", extra={"version": _VERSION})
     await db.apply_schema()
+    async with db.connect() as _conn:
+        await graph_spec.bootstrap_base_spec(_conn)
     await bootstrap_admin_from_env()
     logger.info("knot ready")
     yield

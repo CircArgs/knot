@@ -57,6 +57,7 @@ __all__ = (
     "list_drafts",
     "get_draft",
     # Draft lifecycle
+    "bootstrap_base_spec",
     "create_draft",
     "discard_draft",
     # Mutations
@@ -169,9 +170,48 @@ async def create_draft(
     parent_revision: int | None,
     label: str | None,
 ) -> int:
-    """Create a draft. Raises ``DraftNotFoundError`` if parent_revision is set
-    but missing."""
+    """Create a draft.
+
+    ``parent_revision=None`` (the default) branches from the latest published
+    revision — so authors get the standard primitives (and any prior published
+    content) via lineage. Pass an explicit revision number to branch from a
+    specific historical revision. If nothing has been published yet (this
+    shouldn't happen post-bootstrap, but defend against it), the draft starts
+    empty.
+
+    Raises ``DraftNotFoundError`` if ``parent_revision`` is given but missing.
+    """
+    if parent_revision is None:
+        parent_revision = await spec_store.get_published_revision(conn)
     return await spec_store.create_draft(conn, parent_revision=parent_revision, label=label)
+
+
+async def bootstrap_base_spec(conn: psycopg.AsyncConnection) -> None:
+    """Publish the standard-primitives base spec if no published revision exists.
+
+    Idempotent: if anything is already published, this is a no-op. The base
+    spec carries the six standard primitives (string/integer/float/boolean/
+    datetime/date); new drafts branch from it by default so authors don't
+    have to register them per-spec.
+    """
+    existing = await spec_store.get_published_revision(conn)
+    if existing is not None:
+        return
+    from knot.spec.metaschema import Spec
+    from knot.spec.primitives import STANDARD_PRIMITIVES
+
+    base_spec = Spec(
+        id="knot.base",
+        version="1.0.0",
+        types=list(STANDARD_PRIMITIVES),
+        slots=[],
+        classes=[],
+        sources=[],
+        constraints=[],
+    )
+    draft_id = await spec_store.create_draft(conn, parent_revision=None, label="knot.base")
+    await spec_store.update_draft(conn, draft_id, base_spec)
+    await spec_store.publish_draft(conn, draft_id, allow_destructive=False)
 
 
 async def discard_draft(conn: psycopg.AsyncConnection, draft_id: int) -> None:
