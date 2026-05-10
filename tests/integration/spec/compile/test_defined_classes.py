@@ -493,34 +493,11 @@ async def test_director_view_recomputes_on_credit_update(dc_db, dc_client):
 
 
 # ---------------------------------------------------------------------------
-# 8. ReverseRelation compile correctness (unit)
-# ---------------------------------------------------------------------------
-
-
-def test_reverse_relation_compiles():
-    string_t = TypeDefinition(name="string", base="str")
-    person_id = Slot(name="person_id", range=string_t)
-    person = OntologyClass(name="Person", slots=[person_id])
-
-    credit_id = Slot(name="credit_id", range=string_t)
-    person_fk = Slot(name="person", range=person)
-    role = Slot(name="role", range=string_t)
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
-
-    rev = ReverseRelation(target_class=credit, fk_slot=person_fk)
-    node = RelationAny(relation=rev)
-
-    ctx = CompileContext(primary_class=person, alias="s")
-    result = compile_predicate(node, ctx)
-    sql_str = result.as_string(None)
-
-    assert "EXISTS" in sql_str
-    assert "credit" in sql_str.lower()
-    assert "person" in sql_str.lower()
-
-
-# ---------------------------------------------------------------------------
-# 9. AddDefinedClass emits CREATE OR REPLACE VIEW
+# 8. AddDefinedClass emits CREATE OR REPLACE VIEW
+#
+# Pure-Python compile + diff tests (ReverseRelation compile,
+# concrete↔defined transitions, multi-slot SlotPath, diff_specs) live in
+# tests/unit/spec/compile/test_defined_classes_diff.py.
 # ---------------------------------------------------------------------------
 
 

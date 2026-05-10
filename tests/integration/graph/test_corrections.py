@@ -12,7 +12,7 @@ from knot import db
 from knot.db import corrections as db_corrections
 from knot.db import graph_store, trust_posteriors
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
-from knot.graph.corrections import _values_match, apply_merge, apply_property_correction
+from knot.graph.corrections import apply_merge, apply_property_correction
 from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
 from tests._helpers import publish_spec
 
@@ -162,32 +162,7 @@ async def test_correction_disagreement_increments_beta(corrections_db):
 
 
 # ---------------------------------------------------------------------------
-# 3. Multivalued equality is order-insensitive
-# ---------------------------------------------------------------------------
-
-
-def test_values_match_multivalued_order_insensitive():
-    assert _values_match(["a", "b", "c"], ["c", "a", "b"])
-
-
-def test_values_match_multivalued_unequal_sets():
-    assert not _values_match(["a", "b"], ["a", "c"])
-
-
-def test_values_match_scalar_equal():
-    assert _values_match("hello", "hello")
-
-
-def test_values_match_scalar_unequal():
-    assert not _values_match("hello", "world")
-
-
-def test_values_match_none_not_equal_to_value():
-    assert not _values_match(None, "something")
-
-
-# ---------------------------------------------------------------------------
-# 4. apply_merge: bindings reassigned + lineage event written
+# 3. apply_merge: bindings reassigned + lineage event written
 # ---------------------------------------------------------------------------
 
 

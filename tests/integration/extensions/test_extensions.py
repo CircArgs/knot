@@ -217,27 +217,7 @@ async def test_er_source_specific_resolver_runs_when_registered(pg_conn):
 
 
 # ---------------------------------------------------------------------------
-# 6. ER register raises on duplicate registration
-# ---------------------------------------------------------------------------
-
-
-def test_er_register_duplicate_raises():
-    from knot.extensions import er as er_module
-
-    name = "_dup_test_source"
-    er_module._RESOLVERS[name] = lambda rows, source: []
-    try:
-        with pytest.raises(ValueError, match="already registered"):
-
-            @er_module.register(name)
-            def _fn(rows, source):
-                return []
-    finally:
-        del er_module._RESOLVERS[name]
-
-
-# ---------------------------------------------------------------------------
-# 7. End-to-end via ingest route: built-in identifier-slot fallback
+# 6. End-to-end via ingest route: built-in identifier-slot fallback
 # ---------------------------------------------------------------------------
 
 
