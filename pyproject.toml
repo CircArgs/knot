@@ -37,6 +37,10 @@ dev = [
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "unit: pure unit test (no I/O, no postgres)",
+    "integration: integration test (requires docker-compose postgres)",
+]
 
 [tool.ruff]
 target-version = "py311"

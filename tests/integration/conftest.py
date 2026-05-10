@@ -40,3 +40,10 @@ async def pg_conn(postgres_dsn):
     conn = await psycopg.AsyncConnection.connect(postgres_dsn, autocommit=True)
     yield conn
     await conn.close()
+
+
+def pytest_collection_modifyitems(config, items):
+    """Auto-mark every test under tests/integration/ as 'integration'."""
+    for item in items:
+        if "tests/integration/" in str(item.fspath):
+            item.add_marker(pytest.mark.integration)
