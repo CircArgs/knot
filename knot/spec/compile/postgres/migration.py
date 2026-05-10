@@ -759,15 +759,21 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
             continue
 
         # Both concrete — diff slots.
-        prev_slots = _stored_slots_by_name(prev_cls)
-        cand_slots = _stored_slots_by_name(cand_cls)
+        # ``stored_slots`` drives AddSlot / DropSlot / ChangeSlotType (the
+        # DDL-relevant subset). ``all_slots`` (incl. derived) drives the
+        # per-field diff so a derivation-body or runtime-policy edit on a
+        # derived slot still produces a Change record.
+        prev_stored = _stored_slots_by_name(prev_cls)
+        cand_stored = _stored_slots_by_name(cand_cls)
+        prev_all = {s.name: s for s in _effective_slots(prev_cls)}
+        cand_all = {s.name: s for s in _effective_slots(cand_cls)}
 
-        for s_name in cand_slots.keys() - prev_slots.keys():
-            changes.append(AddSlot(cls=cand_cls, slot=cand_slots[s_name]))
-        for s_name in prev_slots.keys() - cand_slots.keys():
+        for s_name in cand_stored.keys() - prev_stored.keys():
+            changes.append(AddSlot(cls=cand_cls, slot=cand_stored[s_name]))
+        for s_name in prev_stored.keys() - cand_stored.keys():
             changes.append(DropSlot(cls=cand_cls, slot_name=s_name))
-        for s_name in cand_slots.keys() & prev_slots.keys():
-            ps, cs = prev_slots[s_name], cand_slots[s_name]
+        for s_name in cand_stored.keys() & prev_stored.keys():
+            ps, cs = prev_stored[s_name], cand_stored[s_name]
             prev_t = _slot_pg_type(ps)
             new_t = _slot_pg_type(cs)
             if prev_t != new_t:
@@ -778,6 +784,12 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
                 changes.append(
                     ChangeSlotRequired(cls=cand_cls, slot_name=s_name, new_required=cs.required)
                 )
+
+        # Per-field diff over the *full* effective-slot intersection — covers
+        # derived slots whose pattern / resolution_policy / derivation body
+        # changed without storage shifting.
+        for s_name in cand_all.keys() & prev_all.keys():
+            ps, cs = prev_all[s_name], cand_all[s_name]
             changes.extend(_diff_slot_fields(ps, cs))
 
     changes.extend(_diff_sources(prev, candidate))
