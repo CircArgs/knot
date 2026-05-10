@@ -94,7 +94,7 @@ def _():
             ):
                 _conn.execute(text(_stmt))
 
-    return get, json, post, reset
+    return control_db, get, json, post, reset
 
 
 @app.cell(hide_code=True)
@@ -378,6 +378,243 @@ def _(json, mo, spec_edges: list, spec_nodes: list):
     </script>
     """
     mo.iframe(_spec_html, height="640px")
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md("""
+    ## Step 2.5 — Tables generated from this spec
+
+    Publishing the spec triggered DDL emission. Every concrete class became
+    two tables in `knot_data`: a source-row table (one row per source
+    contribution) and a bindings table (SCD2 — tracks which canonical_id
+    each row currently belongs to). Cross-class slots whose range is
+    another class show up as plain text columns whose value is the
+    referenced canonical_id.
+
+    Click any table for its column list.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(control_db, get, json, mo):
+    from sqlalchemy import text as _text
+
+    # Pull tables + columns from postgres directly.
+    with control_db.begin() as _conn:
+        _tables = _conn.execute(_text("""
+            SELECT table_name, table_type
+            FROM information_schema.tables
+            WHERE table_schema = 'knot_data'
+            ORDER BY table_name
+        """)).all()
+        _cols = _conn.execute(_text("""
+            SELECT table_name, column_name, data_type, is_nullable
+            FROM information_schema.columns
+            WHERE table_schema = 'knot_data'
+            ORDER BY table_name, ordinal_position
+        """)).all()
+
+    _columns_by_table: dict = {}
+    for _row in _cols:
+        _columns_by_table.setdefault(_row[0], []).append({
+            "name": _row[1],
+            "type": _row[2],
+            "nullable": _row[3] == "YES",
+        })
+
+    # Classify nodes by role for color coding.
+    # Source-row tables: per-class data tables (movie, person)
+    # Bindings tables: <class>_bindings
+    # VIEWs (defined classes): table_type = 'VIEW'
+    _schema_nodes: list = []
+    for _table_name, _ttype in _tables:
+        if _ttype == "VIEW":
+            _group = "view"
+        elif _table_name.endswith("_bindings"):
+            _group = "bindings"
+        else:
+            _group = "source_rows"
+        _schema_nodes.append({
+            "id": _table_name,
+            "label": _table_name,
+            "group": _group,
+            "props": {
+                "table_type": _ttype,
+                "columns": _columns_by_table.get(_table_name, []),
+            },
+        })
+
+    # source-row → bindings edges from name pattern.
+    _schema_edges: list = []
+    _table_set = {n["id"] for n in _schema_nodes}
+    for _table_name, _ttype in _tables:
+        if _table_name.endswith("_bindings"):
+            _parent = _table_name[: -len("_bindings")]
+            if _parent in _table_set:
+                _schema_edges.append({
+                    "id": f"scd2:{_parent}->{_table_name}",
+                    "from": _parent,
+                    "to": _table_name,
+                    "label": "SCD2",
+                    "props": {"relationship": "source-row → bindings"},
+                })
+
+    # Cross-class FK edges from the published spec: any slot whose
+    # range is another class becomes a text column on the source-row
+    # table of every class that has the slot.
+    _spec_classes_for_schema = get("/spec/published/classes")
+    _spec_slots_for_schema = get("/spec/published/slots")
+    _slot_index = {s["name"]: s for s in _spec_slots_for_schema}
+    for _cls in _spec_classes_for_schema:
+        _from_table = _cls["name"].lower()
+        if _from_table not in _table_set:
+            continue
+        for _slot_name in _cls["slots"]:
+            _slot = _slot_index.get(_slot_name)
+            if _slot is None or _slot["range_kind"] != "class":
+                continue
+            _to_table = _slot["range_name"].lower()
+            if _to_table not in _table_set:
+                continue
+            _schema_edges.append({
+                "id": f"fk:{_from_table}.{_slot_name}->{_to_table}",
+                "from": _from_table,
+                "to": _to_table,
+                "label": f"FK ({_slot_name})",
+                "props": {
+                    "relationship": "cross-class FK",
+                    "slot": _slot_name,
+                    "column": _slot_name,
+                    "references": f"{_to_table}.canonical_id",
+                },
+            })
+
+    _schema_palette = {
+        "source_rows": ("#4f9eff", "#2563eb"),
+        "bindings":    ("#a78bfa", "#7c3aed"),
+        "view":        ("#fbbf24", "#d97706"),
+    }
+    _schema_groups_js = "{\n" + ",\n".join(
+        f'        {g}: {{ color: {{ background: "{bg}", border: "{br}" }} }}'
+        for g, (bg, br) in _schema_palette.items()
+    ) + "\n      }"
+
+    _schema_html = f"""
+    <link href="https://unpkg.com/vis-network@9.1.6/styles/vis-network.min.css" rel="stylesheet" />
+    <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
+
+    <div style="display: flex; gap: 12px; height: 620px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
+      <div id="schema-graph"
+           style="flex: 2; border: 1px solid #ccc; border-radius: 6px; background: #fafafa;">
+      </div>
+      <div id="schema-props"
+           style="flex: 1; padding: 16px; border: 1px solid #ccc; border-radius: 6px;
+                  background: #fff; overflow: auto; font-size: 13px;">
+        <em style="color: #888;">Click a table or edge to inspect.</em>
+      </div>
+    </div>
+
+    <script>
+    (function() {{
+      const rawNodes = {json.dumps(_schema_nodes)};
+      const rawEdges = {json.dumps(_schema_edges)};
+
+      const visNodes = rawNodes.map(n => ({{
+        id: n.id, label: n.label, group: n.group,
+        title: `${{n.group}}: ${{n.label}}`, _props: n.props,
+      }}));
+      const visEdges = rawEdges.map(e => ({{
+        id: e.id, from: e.from, to: e.to, label: e.label,
+        title: e.label, _props: e.props,
+      }}));
+
+      const nodes = new vis.DataSet(visNodes);
+      const edges = new vis.DataSet(visEdges);
+      const container = document.getElementById('schema-graph');
+      const propsEl = document.getElementById('schema-props');
+
+      const network = new vis.Network(container, {{ nodes, edges }}, {{
+        nodes: {{ shape: 'dot', size: 22, font: {{ size: 14, color: '#222' }}, borderWidth: 2 }},
+        edges: {{
+          arrows: 'to',
+          font: {{ size: 11, align: 'middle', color: '#555', strokeWidth: 0 }},
+          color: {{ color: '#888', highlight: '#ff6b35' }},
+          smooth: {{ type: 'continuous' }},
+        }},
+        groups: {_schema_groups_js},
+        physics: {{
+          stabilization: {{ iterations: 250 }},
+          barnesHut: {{ gravitationalConstant: -10000, springLength: 160 }},
+        }},
+        interaction: {{ hover: true, tooltipDelay: 250, dragNodes: true }},
+      }});
+
+      function renderColumns(cols) {{
+        if (!cols || cols.length === 0) return '<em style="color:#888;">no columns</em>';
+        const header = `
+          <tr style="border-bottom: 1px solid #ddd;">
+            <th style="text-align: left; padding: 4px 12px 4px 0; font-weight: 600; color: #444;">column</th>
+            <th style="text-align: left; padding: 4px 12px 4px 0; font-weight: 600; color: #444;">type</th>
+            <th style="text-align: left; padding: 4px 0; font-weight: 600; color: #444;">null</th>
+          </tr>`;
+        const body = cols.map(c =>
+          `<tr>
+             <td style="padding: 3px 12px 3px 0; font-family: ui-monospace, monospace;">${{c.name}}</td>
+             <td style="padding: 3px 12px 3px 0; font-family: ui-monospace, monospace; color: #555;">${{c.type}}</td>
+             <td style="padding: 3px 0; color: ${{c.nullable ? '#888' : '#444'}};">${{c.nullable ? 'YES' : 'NO'}}</td>
+           </tr>`
+        ).join('');
+        return `<table style="border-collapse: collapse; width: 100%; font-size: 12px;">${{header}}${{body}}</table>`;
+      }}
+
+      function renderTableProps(title, group, propsObj) {{
+        const tag = `<span style="display:inline-block; padding: 2px 8px;
+                      border-radius: 999px; background: #eef; color: #335;
+                      font-size: 11px; margin-left: 8px;">${{group}}</span>`;
+        const ttype = propsObj.table_type || '';
+        const cols = renderColumns(propsObj.columns || []);
+        propsEl.innerHTML = `
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 4px;">${{title}}${{tag}}</div>
+          <div style="font-size: 12px; color: #666; margin-bottom: 12px;
+                      font-family: ui-monospace, monospace;">${{ttype}}</div>
+          ${{cols}}
+        `;
+      }}
+
+      function renderEdgeProps(title, propsObj) {{
+        const rows = Object.entries(propsObj || {{}}).map(([k, v]) =>
+          `<tr><td style="padding: 4px 12px 4px 0; color: #666; vertical-align: top;">${{k}}</td>
+               <td style="padding: 4px 0; font-family: ui-monospace, monospace;">${{
+                 typeof v === 'string' ? v : JSON.stringify(v)
+               }}</td></tr>`
+        ).join('');
+        propsEl.innerHTML = `
+          <div style="font-size: 16px; font-weight: 600; margin-bottom: 12px;">${{title}}</div>
+          <table style="border-collapse: collapse; width: 100%;">${{rows}}</table>
+        `;
+      }}
+
+      network.on('selectNode', params => {{
+        const n = nodes.get(params.nodes[0]);
+        renderTableProps(n.label, n.group, n._props || {{}});
+      }});
+      network.on('selectEdge', params => {{
+        if (params.nodes.length > 0) return;
+        const e = edges.get(params.edges[0]);
+        const fromNode = nodes.get(e.from);
+        const toNode = nodes.get(e.to);
+        renderEdgeProps(`${{fromNode.label}} → ${{e.label}} → ${{toNode.label}}`, e._props);
+      }});
+      network.on('deselectNode', () => {{
+        propsEl.innerHTML = '<em style="color: #888;">Click a table or edge to inspect.</em>';
+      }});
+    }})();
+    </script>
+    """
+    mo.iframe(_schema_html, height="640px")
     return
 
 
