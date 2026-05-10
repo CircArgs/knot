@@ -1,4 +1,4 @@
-"""Per-canonical-field diff tests.
+"""Per-canonical-field diff tests (pure Python).
 
 The bug these guard against: ``diff_specs`` previously emitted Change
 records only for adds, drops, slot type, and slot required. Every other
@@ -6,27 +6,16 @@ canonical field edit silently shifted the spec content hash without
 producing a Change, leaving the destructive gate blind to changes that
 are silently destructive at the data plane.
 
-For each new ``Change`` subtype this file pairs:
-  - a pure ``diff_specs`` test that builds two specs differing only in
-    that field and asserts the expected record is emitted, and
-  - (for bucket-A storage-shape rewrites) a publish-gate test that
-    exercises the full draft → publish flow, expects ``PublishGateError``
-    without ``allow_destructive`` and skips the actual DDL run because
-    the rewrite-DDL emitter is follow-up work.
+These tests build two Specs differing only in one field and assert the
+expected Change record is emitted by ``diff_specs``. No SQL execution —
+``diff_specs`` is a pure transform.
 
-Bucket B / C changes (revalidation-only or runtime-only) get a single
-diff-emission test plus an explicit "is not destructive" assertion.
+Publish-gate tests that drive the full draft → publish flow live in
+``tests/integration/spec/compile/test_migration_field_diffs_publish.py``.
 """
 
 from __future__ import annotations
 
-import pytest
-
-from knot.db.spec_store import (
-    create_draft,
-    publish_draft,
-    update_draft,
-)
 from knot.spec import (
     BoolExpr,
     BoolOpKind,
@@ -71,7 +60,6 @@ from knot.spec.compile.postgres.migration import (
     diff_specs,
     is_destructive,
 )
-from knot.spec.errors import PublishGateError
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -699,107 +687,7 @@ def test_change_constraint_severity_is_not_destructive():
 
 
 # ---------------------------------------------------------------------------
-# 6. Publish-gate integration: bucket-B (pattern) doesn't need allow_destructive
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture
-async def clean_db(pg_conn):
-    """Same setup as test_migration.py — drop knot_data + truncate control tables."""
-    from knot import db
-
-    await pg_conn.execute("DROP SCHEMA IF EXISTS knot_data CASCADE")
-    await pg_conn.execute("TRUNCATE TABLE canonical_id_lineage CASCADE")
-    await pg_conn.execute("TRUNCATE TABLE _user_corrections CASCADE")
-    await pg_conn.execute("TRUNCATE TABLE trust_config CASCADE")
-    await pg_conn.execute("TRUNCATE TABLE trust_posteriors CASCADE")
-    await pg_conn.execute("TRUNCATE TABLE users CASCADE")
-    await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
-    await db.apply_schema()
-    yield pg_conn
-
-
-def _publishable_spec_pair(*, mutator):
-    """Build (v1, v2) where v2 has the field mutation applied."""
-
-    def _build():
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True, required=True)
-        movie = OntologyClass(name="Movie", slots=[id_slot])
-        src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
-        return Spec(
-            id="t",
-            version="1.0.0",
-            types=[st],
-            slots=[id_slot],
-            classes=[movie],
-            sources=[src],
-        )
-
-    v1 = _build()
-    v2 = _build()
-    mutator(v2)
-    return v1, v2
-
-
-async def test_publish_allows_slot_pattern_change_without_destructive_flag(clean_db):
-    """Bucket B — Slot.pattern tightening is NOT in the destructive set; the
-    publish should succeed without ``allow_destructive=true``."""
-
-    def mutate(spec):
-        spec.slots[0].pattern = r"^tt[0-9]+$"
-
-    v1, v2 = _publishable_spec_pair(mutator=mutate)
-
-    rev1 = await create_draft(clean_db)
-    await update_draft(clean_db, rev1, v1)
-    await publish_draft(clean_db, rev1)
-
-    rev2 = await create_draft(clean_db)
-    await update_draft(clean_db, rev2, v2)
-    await publish_draft(clean_db, rev2)  # must not raise
-
-
-# ---------------------------------------------------------------------------
-# 7. Publish-gate integration: bucket-A (Source.identifier_slot) requires flag
-# ---------------------------------------------------------------------------
-
-
-async def test_publish_blocks_source_identifier_slot_change_without_flag(clean_db):
-    """Bucket A — Source.identifier_slot changes how rows are keyed. Publish
-    must reject without ``allow_destructive=true``."""
-
-    def _build(identifier_name):
-        st = TypeDefinition(name="string", base="str")
-        id_a = Slot(name="id_a", range=st, identifier=True, required=True)
-        id_b = Slot(name="id_b", range=st, identifier=True, required=True)
-        movie = OntologyClass(name="Movie", slots=[id_a, id_b])
-        identifier = {"id_a": id_a, "id_b": id_b}[identifier_name]
-        src = Source(name="imdb", entity_class=movie, identifier_slot=identifier)
-        return Spec(
-            id="t",
-            version="1.0.0",
-            types=[st],
-            slots=[id_a, id_b],
-            classes=[movie],
-            sources=[src],
-        )
-
-    v1 = _build("id_a")
-    v2 = _build("id_b")
-
-    rev1 = await create_draft(clean_db)
-    await update_draft(clean_db, rev1, v1)
-    await publish_draft(clean_db, rev1)
-
-    rev2 = await create_draft(clean_db)
-    await update_draft(clean_db, rev2, v2)
-    with pytest.raises(PublishGateError, match="destructive"):
-        await publish_draft(clean_db, rev2)
-
-
-# ---------------------------------------------------------------------------
-# 8. Sanity: BoolExpr usage doesn't disturb the diff
+# 6. Sanity: BoolExpr usage doesn't disturb the diff
 # ---------------------------------------------------------------------------
 
 
