@@ -51,11 +51,19 @@ B. **Data-revalidation.** Constraint tightens; previously-valid rows
    ``ChangeSlotMaximum``, ``ChangeTypePattern``, ``ChangeConstraintBody``
    live in this bucket. They produce no DDL.
 
-C. **Spec-only / runtime-behavior.** No DDL, no revalidation. Just
-   changes runtime behavior. ``ChangeSlotResolutionPolicy``,
-   ``ChangeConstraintSeverity``, ``ChangeSlotDerivation`` (body change),
-   ``ChangeClassDefinition`` (body change for an already-defined class —
-   handled by CREATE OR REPLACE VIEW elsewhere).
+C. **Spec-only / runtime-behavior.** No DDL, or DDL that doesn't lose
+   data. ``ChangeSlotResolutionPolicy``, ``ChangeConstraintSeverity``,
+   ``ChangeSlotDerivation`` (body change), ``ChangeClassDefinition``
+   (body change for an already-defined class — ``CREATE OR REPLACE
+   VIEW`` is idempotent), ``ChangeClassMixins`` (audit-only — the
+   actual column adds/drops ride on ``AddSlot``/``DropSlot`` records),
+   ``ChangeSlotIdentifier`` (the storage PK is ``(_source,
+   _source_row_id)``; the ``identifier`` flag is ER/SCD2 advisory and
+   doesn't drive DDL), ``AddSource`` (new pathway, doesn't lose data).
+   ``ChangeClassIsA`` is here for concrete classes (no DDL — own table,
+   own slots) and for defined-class body changes (``CREATE OR REPLACE
+   VIEW``); the destructive transitions (concrete↔defined) are caught
+   instead by the ``Drop*`` records the diff emits.
 
 RUNTIME fields (``_RUNTIME_FIELDS`` in ``knot.spec.canonical``) are
 excluded from the content hash and therefore never reach this layer.
@@ -302,7 +310,10 @@ class ChangeSlotMultivalued(Change):
 
 @dataclass
 class ChangeSlotIdentifier(Change):
-    """Bucket A — identifier flag affects PK / source-keying semantics."""
+    """Bucket C — the actual PK on ``knot_data.<class>`` is
+    ``(_source, _source_row_id)``, NOT the slot marked ``identifier=True``.
+    The ``identifier`` flag is advisory at the storage layer — it drives ER
+    bindings and SCD2 semantics but emits no DDL. Audit-only record."""
 
     slot_name: str
     old_value: bool
@@ -350,9 +361,19 @@ class ChangeClassAbstract(Change):
 
 @dataclass
 class ChangeClassIsA(Change):
-    """Bucket A — for defined classes the parent is the VIEW source; for
-    concrete subclasses the GraphQL surface treats is_a as inherited
-    structure. Either way storage semantics shift."""
+    """Mostly bucket C.
+
+    For a **concrete** class, ``is_a`` is structural-inheritance metadata
+    consumed by the GraphQL surface; ``effective_slots`` walks ``mixins``
+    but NOT ``is_a``, so the child's table is unaffected — no DDL.
+
+    For a **defined** class with a body change, ``is_a`` drives the
+    VIEW's source class; we re-emit ``CREATE OR REPLACE VIEW``.
+
+    The destructive transitions (concrete↔defined, parent gone from spec
+    entirely) are handled by the ``Add/DropDefinedClass`` /
+    ``Add/DropClass`` records the diff emits alongside this one. So the
+    record itself is not destructive."""
 
     class_name: str
     old_parent: str | None
@@ -361,14 +382,11 @@ class ChangeClassIsA(Change):
 
 @dataclass
 class ChangeClassMixins(Change):
-    """Bucket A — mixin set changes ``effective_slots``. The actual column
+    """Bucket C — mixin set changes ``effective_slots``. The actual column
     add/drop rides on ``AddSlot`` / ``DropSlot`` records emitted alongside
     this; this record carries the mixin-list metadata so the migration
-    log is auditable.
-
-    Marked destructive even though slot-level DDL also fires: dropping a
-    mixin without ``allow_destructive`` should fail loudly, and slot-level
-    drop may be subsumed by ``DropClass`` ordering."""
+    log is auditable but emits no DDL of its own. The slot-level
+    ``DropSlot`` records gate ``allow_destructive`` for a mixin removal."""
 
     class_name: str
     old_mixins: list[str]
@@ -377,13 +395,14 @@ class ChangeClassMixins(Change):
 
 @dataclass
 class ChangeClassDefinition(Change):
-    """Bucket C — defined-class VIEW body change.
+    """Bucket C — defined-class VIEW body change. ``CREATE OR REPLACE
+    VIEW`` is idempotent — no data lost.
 
-    For an already-defined class, a definition body change is a
-    ``CREATE OR REPLACE VIEW`` (no data lost). For a concrete↔defined
-    transition, the diff emits ``DropClass``+``AddDefinedClass`` (or
-    inverse) instead of this record. So this record only fires when both
-    prev and cand are defined classes and the body changed.
+    For an already-defined class, a definition body change re-emits the
+    VIEW body. For a concrete↔defined transition, the diff emits
+    ``DropClass``+``AddDefinedClass`` (or inverse) instead of this record.
+    So this record only fires when both prev and cand are defined classes
+    and the body changed.
 
     Body is opaque (ExprNode by object id); we surface only booleans."""
 
@@ -982,38 +1001,41 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 #   - **Drops**: removing a class, slot, defined class, or source forfeits
 #     the rows / column / view that hold the data.
 #   - **Storage-shape rewrites**: ChangeSlotType (column type), Change-
-#     SlotMultivalued (T → T[] or back), ChangeSlotIdentifier (PK / source
-#     keying), ChangeClassAbstract (table appears/disappears),
-#     ChangeClassIsA / ChangeClassMixins (effective slot set + parent
-#     table rewires), ChangeTypeBase (every using slot's column type
-#     changes). Source rekey is a logical destructive too — rows now
-#     belong to a different class or are keyed by a different slot.
+#     SlotMultivalued (T → T[]; reverse refused), ChangeClassAbstract
+#     (table appears/disappears), ChangeTypeBase (every using slot's
+#     column type changes).
+#   - **Source rekey**: ChangeSourceEntityClass (rows now belong to a
+#     different class — refused, manual migration required) and
+#     ChangeSourceIdentifierSlot (rows are now keyed by a different slot
+#     — UPDATE rekeys ``_source_row_id``).
 #
-# Bucket B (data-revalidation: ChangeSlotPattern, ChangeSlotPermissible-
-# Values, min/max, ChangeTypePattern, ChangeConstraintBody) is NOT
-# enumerated here. The publish gate already runs every NEW or CHANGED
-# constraint over current data; tightenings on those fields surface as
-# violations through that pass. Adding a separate revalidation set would
-# duplicate the constraint gate's work.
+# NOT enumerated here:
+#
+#   - Bucket B (data-revalidation: ChangeSlotPattern, ChangeSlotPermissible-
+#     Values, min/max, ChangeTypePattern, ChangeConstraintBody). The publish
+#     gate already runs every NEW or CHANGED constraint over current data;
+#     tightenings on those fields surface as violations through that pass.
+#   - ChangeClassMixins — slot-level ``DropSlot`` / ``AddSlot`` records do
+#     the destructive gating; this record is audit-only.
+#   - ChangeSlotIdentifier — the storage PK is ``(_source, _source_row_id)``;
+#     the ``identifier`` flag is ER/SCD2 advisory and emits no DDL.
+#   - ChangeClassIsA — concrete-class is_a doesn't drive DDL (own table,
+#     own slots); defined-class is_a body changes are CREATE OR REPLACE
+#     VIEW; concrete↔defined transitions surface as ``Drop*`` / ``Add*``.
+#   - ChangeClassDefinition — defined-class body change is CREATE OR
+#     REPLACE VIEW (idempotent, no data loss).
 _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
-    # original drops + type rewrite
     DropClass,
     DropSlot,
-    ChangeSlotType,
     DropDefinedClass,
-    # type-level rewrites
+    ChangeSlotType,
     ChangeTypeBase,
-    # slot-level shape rewrites
     ChangeSlotMultivalued,
-    ChangeSlotIdentifier,
-    # class-level shape rewrites
     ChangeClassAbstract,
     ChangeClassIsA,
-    ChangeClassMixins,
-    # source rekey / drop
-    DropSource,
     ChangeSourceEntityClass,
     ChangeSourceIdentifierSlot,
+    DropSource,
 )
 
 

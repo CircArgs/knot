@@ -262,9 +262,12 @@ def test_diff_change_slot_identifier_emits_record():
     assert rec.new_value is False
 
 
-def test_change_slot_identifier_is_destructive():
+def test_change_slot_identifier_is_not_destructive():
+    """The storage PK is (_source, _source_row_id), NOT the slot marked
+    identifier=True. The flag is advisory at the storage layer (drives ER /
+    SCD2 bindings) and emits no DDL. Audit-only record."""
     rec = ChangeSlotIdentifier(slot_name="id", old_value=True, new_value=False)
-    assert is_destructive(rec)
+    assert not is_destructive(rec)
 
 
 def test_diff_change_slot_resolution_policy_emits_record():
@@ -400,9 +403,11 @@ def test_diff_change_class_mixins_emits_record():
     assert rec.new_mixins == ["A", "B"]
 
 
-def test_change_class_mixins_is_destructive():
+def test_change_class_mixins_is_not_destructive():
+    """The slot-level AddSlot / DropSlot records emitted alongside this one
+    do the destructive gating; the mixins record is audit-only."""
     rec = ChangeClassMixins(class_name="Child", old_mixins=["A"], new_mixins=["A", "B"])
-    assert is_destructive(rec)
+    assert not is_destructive(rec)
 
 
 def test_diff_change_class_definition_body_change_emits_record():
