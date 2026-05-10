@@ -119,11 +119,11 @@ def _(mo):
 def _(mo):
     import json as _json
 
+    # No `types` block: knot ships the standard primitives (string, integer,
+    # float, boolean, datetime, date) in a base spec, and new drafts branch
+    # from the latest published revision by default — so we inherit them
+    # via lineage rather than re-registering them per spec.
     SPEC = {
-        "types": [
-            {"name": "string",  "base": "str"},
-            {"name": "integer", "base": "int"},
-        ],
         "slots_phase_1": [
             # property + identifier slots — only reference types
             {"name": "imdb_id",   "range_kind": "type", "range_name": "string",
@@ -169,10 +169,11 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    Each entry above is one POST. Watch the order: types first (no
-    dependencies), then slots that reference types, then classes that
-    group those slots, then a cross-class slot that references the
-    `Person` class we just created, then `Movie` that uses it, then
+    Each entry above is one POST. Watch the order: slots first — they
+    reference primitives like `string` and `integer` which knot ships
+    with the base spec, so we don't register them ourselves. Then the
+    `Person` class that groups some of those slots, then a cross-class
+    slot whose range is `Person`, then `Movie` that uses it, then
     sources. The table below shows each call, in order — one row per
     entry in the spec.
     """)
@@ -187,7 +188,6 @@ def _(SPEC, mo, post, reset):
     # phase_key → endpoint segment. Phases collapse into endpoint groups,
     # but stay separate keys to preserve cross-reference dependency order.
     _ENDPOINT_FOR_PHASE = {
-        "types":           "types",
         "slots_phase_1":   "slots",
         "classes_phase_1": "classes",
         "slots_phase_2":   "slots",
@@ -197,7 +197,7 @@ def _(SPEC, mo, post, reset):
 
     _ledger: list[dict[str, str]] = []
     for _phase, _endpoint in _ENDPOINT_FOR_PHASE.items():
-        for _body in SPEC[_phase]:
+        for _body in SPEC.get(_phase, []):
             _path = f"/spec/drafts/{draft_id}/{_endpoint}"
             try:
                 post(_path, _body)
@@ -226,7 +226,7 @@ def _(SPEC, mo, post, reset):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    Six phases, one POST per entity, all under one transaction at
+    Five phases, one POST per entity, all under one transaction at
     publish time. The data graph cell below queries the resulting
     published spec via the new `/spec/graphql` endpoint.
     """)
