@@ -31,24 +31,58 @@ Diffing:
   - ``diff_specs(prev, candidate) → list[Change]`` — typed dataclasses.
   - ``emit_ddl(change, conn)`` — single-dispatch over Change subtypes.
   - ``apply_migration(conn, prev, candidate)`` — runs diff + applies.
+
+Change-type taxonomy
+--------------------
+
+``diff_specs`` emits a typed ``Change`` for every CANONICAL field edit on
+every entity. Three buckets:
+
+A. **DDL-destructive.** Storage shape changes; an ALTER may fail or
+   silently lose data. Listed in ``_DESTRUCTIVE_CHANGE_TYPES`` and
+   gated by ``allow_destructive`` at publish.
+
+B. **Data-revalidation.** Constraint tightens; previously-valid rows
+   may now violate. The publish gate already runs the constraint check
+   over current data on every NEW or CHANGED constraint, so a separate
+   ``requires_data_revalidation`` set is not maintained — the constraint
+   gate is the canonical revalidation pass. ``ChangeSlotPattern``,
+   ``ChangeSlotPermissibleValues``, ``ChangeSlotMinimum``,
+   ``ChangeSlotMaximum``, ``ChangeTypePattern``, ``ChangeConstraintBody``
+   live in this bucket. They produce no DDL.
+
+C. **Spec-only / runtime-behavior.** No DDL, no revalidation. Just
+   changes runtime behavior. ``ChangeSlotResolutionPolicy``,
+   ``ChangeConstraintSeverity``, ``ChangeSlotDerivation`` (body change),
+   ``ChangeClassDefinition`` (body change for an already-defined class —
+   handled by CREATE OR REPLACE VIEW elsewhere).
+
+RUNTIME fields (``_RUNTIME_FIELDS`` in ``knot.spec.canonical``) are
+excluded from the content hash and therefore never reach this layer.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 import psycopg
 from psycopg import sql
 
-from ._naming import (
-    bindings_table_id as _bindings_table_id,
-    schema,
-    table_id as _table_id,
-)
 from knot.spec import OntologyClass, Slot, Spec
 from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._types import slot_pg_type as _slot_pg_type
+
+from ._naming import (
+    bindings_table_id as _bindings_table_id,
+)
+from ._naming import (
+    schema,
+)
+from ._naming import (
+    table_id as _table_id,
+)
 
 
 def _is_defined(cls: OntologyClass) -> bool:
@@ -194,6 +228,245 @@ class ChangeSlotRequired(Change):
     new_required: bool
 
 
+# ─── Type-level changes (TypeDefinition) ────────────────────────────────────
+
+
+@dataclass
+class ChangeTypeBase(Change):
+    """`TypeDefinition.base` changed — every slot using this type sees a column
+    type change. Bucket A (DDL-destructive); the actual ALTER COLUMNs ride on
+    the per-slot ``ChangeSlotType`` records emitted alongside this."""
+
+    type_name: str
+    old_base: str | None
+    new_base: str | None
+
+
+@dataclass
+class ChangeTypePattern(Change):
+    """`TypeDefinition.pattern` changed — existing rows may now violate.
+    Bucket B (revalidation, no DDL)."""
+
+    type_name: str
+    old_pattern: str | None
+    new_pattern: str | None
+
+
+# ─── Slot-level changes (canonical fields) ──────────────────────────────────
+
+
+@dataclass
+class ChangeSlotPattern(Change):
+    """Bucket B — pattern tightening can invalidate existing rows."""
+
+    slot_name: str
+    old_pattern: str | None
+    new_pattern: str | None
+
+
+@dataclass
+class ChangeSlotPermissibleValues(Change):
+    """Bucket B — narrowing the enum can invalidate existing rows; widening is fine."""
+
+    slot_name: str
+    old_values: list[str] | None
+    new_values: list[str] | None
+
+
+@dataclass
+class ChangeSlotMinimum(Change):
+    """Bucket B — tightening minimum_value can invalidate existing rows."""
+
+    slot_name: str
+    old_value: float | None
+    new_value: float | None
+
+
+@dataclass
+class ChangeSlotMaximum(Change):
+    """Bucket B — tightening maximum_value can invalidate existing rows."""
+
+    slot_name: str
+    old_value: float | None
+    new_value: float | None
+
+
+@dataclass
+class ChangeSlotMultivalued(Change):
+    """Bucket A — column shape T vs T[] is a destructive ALTER."""
+
+    slot_name: str
+    old_value: bool
+    new_value: bool
+
+
+@dataclass
+class ChangeSlotIdentifier(Change):
+    """Bucket A — identifier flag affects PK / source-keying semantics."""
+
+    slot_name: str
+    old_value: bool
+    new_value: bool
+
+
+@dataclass
+class ChangeSlotResolutionPolicy(Change):
+    """Bucket C — runtime resolution policy; no DDL, no revalidation."""
+
+    slot_name: str
+    old_value: str
+    new_value: str
+
+
+@dataclass
+class ChangeSlotDerivation(Change):
+    """Derivation body change.
+
+    ``had_derivation_before`` / ``has_derivation_now`` capture transitions
+    between stored and derived (those produce ``AddSlot``/``DropSlot`` via
+    the stored-slot diff); ``derivation_changed`` captures a body-only
+    change between two derivation expressions. The body itself is opaque
+    (an ExprNode by object id), so we surface only the booleans.
+
+    Bucket C — derivation projection runs at query time. No DDL."""
+
+    slot_name: str
+    had_derivation_before: bool
+    has_derivation_now: bool
+    derivation_changed: bool
+
+
+# ─── Class-level changes ────────────────────────────────────────────────────
+
+
+@dataclass
+class ChangeClassAbstract(Change):
+    """Bucket A — flipping abstract toggles whether the class has a table."""
+
+    class_name: str
+    old_value: bool
+    new_value: bool
+
+
+@dataclass
+class ChangeClassIsA(Change):
+    """Bucket A — for defined classes the parent is the VIEW source; for
+    concrete subclasses the GraphQL surface treats is_a as inherited
+    structure. Either way storage semantics shift."""
+
+    class_name: str
+    old_parent: str | None
+    new_parent: str | None
+
+
+@dataclass
+class ChangeClassMixins(Change):
+    """Bucket A — mixin set changes ``effective_slots``. The actual column
+    add/drop rides on ``AddSlot`` / ``DropSlot`` records emitted alongside
+    this; this record carries the mixin-list metadata so the migration
+    log is auditable.
+
+    Marked destructive even though slot-level DDL also fires: dropping a
+    mixin without ``allow_destructive`` should fail loudly, and slot-level
+    drop may be subsumed by ``DropClass`` ordering."""
+
+    class_name: str
+    old_mixins: list[str]
+    new_mixins: list[str]
+
+
+@dataclass
+class ChangeClassDefinition(Change):
+    """Bucket C — defined-class VIEW body change.
+
+    For an already-defined class, a definition body change is a
+    ``CREATE OR REPLACE VIEW`` (no data lost). For a concrete↔defined
+    transition, the diff emits ``DropClass``+``AddDefinedClass`` (or
+    inverse) instead of this record. So this record only fires when both
+    prev and cand are defined classes and the body changed.
+
+    Body is opaque (ExprNode by object id); we surface only booleans."""
+
+    class_name: str
+    had_definition_before: bool
+    has_definition_now: bool
+    definition_changed: bool
+
+
+# ─── Source-level changes ───────────────────────────────────────────────────
+
+
+@dataclass
+class AddSource(Change):
+    source_name: str
+    entity_class: str
+    identifier_slot: str
+
+
+@dataclass
+class DropSource(Change):
+    """Bucket A — rows from this source become orphaned."""
+
+    source_name: str
+
+
+@dataclass
+class ChangeSourceEntityClass(Change):
+    """Bucket A — rows now logically belong to a different table."""
+
+    source_name: str
+    old_class: str
+    new_class: str
+
+
+@dataclass
+class ChangeSourceIdentifierSlot(Change):
+    """Bucket A — rows are now keyed by a different slot."""
+
+    source_name: str
+    old_slot: str
+    new_slot: str
+
+
+# ─── Constraint-level changes ───────────────────────────────────────────────
+
+
+@dataclass
+class AddConstraint(Change):
+    constraint_name: str
+    primary: str
+
+
+@dataclass
+class DropConstraint(Change):
+    constraint_name: str
+
+
+@dataclass
+class ChangeConstraintPrimary(Change):
+    """Bucket B — constraint applies to a different class; revalidate."""
+
+    constraint_name: str
+    old_primary: str
+    new_primary: str
+
+
+@dataclass
+class ChangeConstraintBody(Change):
+    """Bucket B — body changed; the publish-gate constraint pass revalidates."""
+
+    constraint_name: str
+
+
+@dataclass
+class ChangeConstraintSeverity(Change):
+    """Bucket C — severity is purely runtime."""
+
+    constraint_name: str
+    old_severity: str
+    new_severity: str
+
+
 # ─── Diff visitor ───────────────────────────────────────────────────────────
 
 
@@ -203,10 +476,199 @@ def _stored_slots_by_name(cls: OntologyClass) -> dict[str, Slot]:
     return {s.name: s for s in _effective_slots(cls) if _is_stored(s)}
 
 
+def _pv_texts(values: list[Any] | None) -> list[str] | None:
+    if values is None:
+        return None
+    return [getattr(v, "text", str(v)) for v in values]
+
+
+def _enum_value(v: Any) -> str:
+    """Render an enum / StrEnum field as its string value."""
+    return getattr(v, "value", str(v))
+
+
+def _diff_types(prev: Spec | None, candidate: Spec) -> list[Change]:
+    """Per-TypeDefinition field-level diff.
+
+    Type Adds/Drops aren't on the change-event surface — types only matter
+    via the slots that reference them, and slot-side ChangeSlotType already
+    fires when the bound pg type shifts. We do emit per-field records for
+    type edits so the migration log is complete and the destructive gate
+    catches base swaps."""
+    changes: list[Change] = []
+    prev_types = {t.name: t for t in (prev.types if prev else [])}
+    cand_types = {t.name: t for t in candidate.types}
+    for name in cand_types.keys() & prev_types.keys():
+        pt, ct = prev_types[name], cand_types[name]
+        if pt.base != ct.base:
+            changes.append(ChangeTypeBase(type_name=name, old_base=pt.base, new_base=ct.base))
+        if pt.pattern != ct.pattern:
+            changes.append(
+                ChangeTypePattern(type_name=name, old_pattern=pt.pattern, new_pattern=ct.pattern)
+            )
+    return changes
+
+
+def _diff_slot_fields(prev_slot: Slot, cand_slot: Slot) -> list[Change]:
+    """Compare every CANONICAL field on two same-named slots."""
+    out: list[Change] = []
+    name = cand_slot.name
+
+    if prev_slot.pattern != cand_slot.pattern:
+        out.append(
+            ChangeSlotPattern(
+                slot_name=name,
+                old_pattern=prev_slot.pattern,
+                new_pattern=cand_slot.pattern,
+            )
+        )
+
+    prev_pv = _pv_texts(prev_slot.permissible_values)
+    cand_pv = _pv_texts(cand_slot.permissible_values)
+    if prev_pv != cand_pv:
+        out.append(
+            ChangeSlotPermissibleValues(slot_name=name, old_values=prev_pv, new_values=cand_pv)
+        )
+
+    if prev_slot.minimum_value != cand_slot.minimum_value:
+        out.append(
+            ChangeSlotMinimum(
+                slot_name=name,
+                old_value=prev_slot.minimum_value,
+                new_value=cand_slot.minimum_value,
+            )
+        )
+    if prev_slot.maximum_value != cand_slot.maximum_value:
+        out.append(
+            ChangeSlotMaximum(
+                slot_name=name,
+                old_value=prev_slot.maximum_value,
+                new_value=cand_slot.maximum_value,
+            )
+        )
+    if prev_slot.multivalued != cand_slot.multivalued:
+        out.append(
+            ChangeSlotMultivalued(
+                slot_name=name,
+                old_value=prev_slot.multivalued,
+                new_value=cand_slot.multivalued,
+            )
+        )
+    if prev_slot.identifier != cand_slot.identifier:
+        out.append(
+            ChangeSlotIdentifier(
+                slot_name=name,
+                old_value=prev_slot.identifier,
+                new_value=cand_slot.identifier,
+            )
+        )
+    if prev_slot.resolution_policy != cand_slot.resolution_policy:
+        out.append(
+            ChangeSlotResolutionPolicy(
+                slot_name=name,
+                old_value=_enum_value(prev_slot.resolution_policy),
+                new_value=_enum_value(cand_slot.resolution_policy),
+            )
+        )
+    had = prev_slot.derivation is not None
+    has = cand_slot.derivation is not None
+    if had or has:
+        derivation_changed = prev_slot.derivation is not cand_slot.derivation and had and has
+        if had != has or derivation_changed:
+            out.append(
+                ChangeSlotDerivation(
+                    slot_name=name,
+                    had_derivation_before=had,
+                    has_derivation_now=has,
+                    derivation_changed=derivation_changed,
+                )
+            )
+    return out
+
+
+def _diff_sources(prev: Spec | None, candidate: Spec) -> list[Change]:
+    changes: list[Change] = []
+    prev_sources = {s.name: s for s in (prev.sources if prev else [])}
+    cand_sources = {s.name: s for s in candidate.sources}
+
+    for name in cand_sources.keys() - prev_sources.keys():
+        s = cand_sources[name]
+        changes.append(
+            AddSource(
+                source_name=name,
+                entity_class=s.entity_class.name,
+                identifier_slot=s.identifier_slot.name,
+            )
+        )
+    for name in prev_sources.keys() - cand_sources.keys():
+        changes.append(DropSource(source_name=name))
+    for name in cand_sources.keys() & prev_sources.keys():
+        ps, cs = prev_sources[name], cand_sources[name]
+        if ps.entity_class.name != cs.entity_class.name:
+            changes.append(
+                ChangeSourceEntityClass(
+                    source_name=name,
+                    old_class=ps.entity_class.name,
+                    new_class=cs.entity_class.name,
+                )
+            )
+        if ps.identifier_slot.name != cs.identifier_slot.name:
+            changes.append(
+                ChangeSourceIdentifierSlot(
+                    source_name=name,
+                    old_slot=ps.identifier_slot.name,
+                    new_slot=cs.identifier_slot.name,
+                )
+            )
+    return changes
+
+
+def _diff_constraints(prev: Spec | None, candidate: Spec) -> list[Change]:
+    changes: list[Change] = []
+    prev_cons = {c.name: c for c in (prev.constraints if prev else [])}
+    cand_cons = {c.name: c for c in candidate.constraints}
+
+    for name in cand_cons.keys() - prev_cons.keys():
+        c = cand_cons[name]
+        changes.append(AddConstraint(constraint_name=name, primary=c.primary.name))
+    for name in prev_cons.keys() - cand_cons.keys():
+        changes.append(DropConstraint(constraint_name=name))
+    for name in cand_cons.keys() & prev_cons.keys():
+        pc, cc = prev_cons[name], cand_cons[name]
+        if pc.primary.name != cc.primary.name:
+            changes.append(
+                ChangeConstraintPrimary(
+                    constraint_name=name,
+                    old_primary=pc.primary.name,
+                    new_primary=cc.primary.name,
+                )
+            )
+        if pc.body is not cc.body:
+            # Body is an ExprNode — compare by object identity (same caveat
+            # as ChangeSlotDerivation; the publish-time content hash already
+            # detects body changes via JCS bytes). When identity differs we
+            # emit the record so the destructive/revalidation gate sees it.
+            changes.append(ChangeConstraintBody(constraint_name=name))
+        if pc.severity != cc.severity:
+            changes.append(
+                ChangeConstraintSeverity(
+                    constraint_name=name,
+                    old_severity=_enum_value(pc.severity),
+                    new_severity=_enum_value(cc.severity),
+                )
+            )
+    return changes
+
+
 def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
     changes: list[Change] = []
     prev_classes = {c.name: c for c in (prev.classes if prev else [])}
     cand_classes = {c.name: c for c in candidate.classes}
+
+    # Type-level changes go first; they may shadow per-slot ChangeSlotType
+    # at consumption time but emitting both is fine (audit log is verbose,
+    # destructive gate hits on either).
+    changes.extend(_diff_types(prev, candidate))
 
     for name in cand_classes.keys() - prev_classes.keys():
         c = cand_classes[name]
@@ -226,6 +688,41 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
 
     for name in cand_classes.keys() & prev_classes.keys():
         prev_cls, cand_cls = prev_classes[name], cand_classes[name]
+
+        # Class-level field changes (abstract / is_a / mixins) — emitted
+        # regardless of the abstract / defined status switch. ``abstract``
+        # toggling between true/false is itself a category-A change.
+        if prev_cls.abstract != cand_cls.abstract:
+            changes.append(
+                ChangeClassAbstract(
+                    class_name=name,
+                    old_value=prev_cls.abstract,
+                    new_value=cand_cls.abstract,
+                )
+            )
+
+        prev_parent = prev_cls.is_a.name if prev_cls.is_a is not None else None
+        cand_parent = cand_cls.is_a.name if cand_cls.is_a is not None else None
+        if prev_parent != cand_parent:
+            changes.append(
+                ChangeClassIsA(
+                    class_name=name,
+                    old_parent=prev_parent,
+                    new_parent=cand_parent,
+                )
+            )
+
+        prev_mixins = [m.name for m in prev_cls.mixins]
+        cand_mixins = [m.name for m in cand_cls.mixins]
+        if prev_mixins != cand_mixins:
+            changes.append(
+                ChangeClassMixins(
+                    class_name=name,
+                    old_mixins=prev_mixins,
+                    new_mixins=cand_mixins,
+                )
+            )
+
         if cand_cls.abstract or prev_cls.abstract:
             continue
 
@@ -250,6 +747,15 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
             # Both defined: re-create view if definition changed (simplest
             # approach; view DDL is idempotent via CREATE OR REPLACE).
             changes.append(AddDefinedClass(cls=cand_cls))
+            if prev_cls.definition is not cand_cls.definition:
+                changes.append(
+                    ChangeClassDefinition(
+                        class_name=name,
+                        had_definition_before=True,
+                        has_definition_now=True,
+                        definition_changed=True,
+                    )
+                )
             continue
 
         # Both concrete — diff slots.
@@ -272,6 +778,10 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
                 changes.append(
                     ChangeSlotRequired(cls=cand_cls, slot_name=s_name, new_required=cs.required)
                 )
+            changes.extend(_diff_slot_fields(ps, cs))
+
+    changes.extend(_diff_sources(prev, candidate))
+    changes.extend(_diff_constraints(prev, candidate))
     return changes
 
 
@@ -395,6 +905,54 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 
     elif isinstance(change, ChangeSlotRequired):
         return  # API-enforced; no DDL
+
+    # Spec-only / runtime-behavior changes — no DDL. These records exist for
+    # auditability and to drive the destructive gate / constraint revalidation
+    # at publish time.
+    elif isinstance(
+        change,
+        (
+            ChangeTypePattern,
+            ChangeSlotPattern,
+            ChangeSlotPermissibleValues,
+            ChangeSlotMinimum,
+            ChangeSlotMaximum,
+            ChangeSlotResolutionPolicy,
+            ChangeSlotDerivation,
+            ChangeClassDefinition,
+            AddSource,
+            DropSource,
+            AddConstraint,
+            DropConstraint,
+            ChangeConstraintPrimary,
+            ChangeConstraintBody,
+            ChangeConstraintSeverity,
+            ChangeClassMixins,
+        ),
+    ):
+        return
+
+    # Bucket-A changes whose DDL emitters aren't wired yet. They MUST gate at
+    # the publish layer (``allow_destructive=true``) but the actual table-
+    # rewrite DDL is follow-up work; surface a clear NotImplementedError if
+    # someone tries to apply them.
+    elif isinstance(
+        change,
+        (
+            ChangeTypeBase,
+            ChangeSlotMultivalued,
+            ChangeSlotIdentifier,
+            ChangeClassAbstract,
+            ChangeClassIsA,
+            ChangeSourceEntityClass,
+            ChangeSourceIdentifierSlot,
+        ),
+    ):
+        raise NotImplementedError(
+            f"DDL emitter for {type(change).__name__} is not implemented yet; "
+            "this change is gated as destructive at publish but the table-rewrite "
+            "path is follow-up work."
+        )
 
     else:
         raise TypeError(f"No DDL emitter registered for {type(change).__name__}")
