@@ -225,7 +225,7 @@ def _(edges, json, mo, nodes):
     }})();
     </script>
     """
-    mo.Html(html)
+    mo.iframe(html, height="640px")
     return
 
 

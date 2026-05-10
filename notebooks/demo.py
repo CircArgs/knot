@@ -377,7 +377,7 @@ def _(json, mo, spec_edges: list, spec_nodes: list):
     }})();
     </script>
     """
-    mo.Html(_spec_html)
+    mo.iframe(_spec_html, height="640px")
     return
 
 
@@ -609,7 +609,7 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(build_data_graph_html, mo):
-    mo.Html(build_data_graph_html("data-graph-pre"))
+    mo.iframe(build_data_graph_html("data-graph-pre"), height="640px")
     return
 
 
@@ -661,7 +661,7 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(build_data_graph_html, mo):
-    mo.Html(build_data_graph_html("data-graph-post"))
+    mo.iframe(build_data_graph_html("data-graph-post"), height="640px")
     return
 
 
@@ -683,6 +683,16 @@ def _(mo):
     Everything went through `/spec/*` and `/graph/*`. No bypass, no
     side-channel writes.
     """)
+    return
+
+
+@app.cell
+def _():
+    return
+
+
+@app.cell
+def _():
     return
 
 
