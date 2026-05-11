@@ -6,9 +6,16 @@ Endpoint groups under `/spec`:
   - /spec/drafts/*      author the next spec via mutation + publish gate
 
 Drafts are mutable; published revisions are immortal.  Every spec mutation
-must go through a draft per `goals.md` § 5.  The publish gate runs spec-graph
-validation (steps 1+2 of the four-step gate); bindings-side checks (steps 3+4)
+must go through a draft.  The publish gate runs spec-graph validation
+(steps 1+2 of the four-step gate); bindings-side checks (steps 3+4)
 land with the modeling router.
+
+TypeExpression is described in the API via (type_kind, type_name):
+  type_kind = "primitive"           type_name = "string"|"integer"|...
+  type_kind = "class"               type_name = <OntologyClass name>
+  type_kind = "array_of_primitive"  type_name = "string"|"integer"|...
+  type_kind = "array_of_class"      type_name = <OntologyClass name>
+  type_kind = null                  (derived slot — no type)
 """
 
 from __future__ import annotations
@@ -27,11 +34,10 @@ from knot.spec import (
     Slot,
     Source,
     Spec,
-    TypeDefinition,
     spec_to_dict,
 )
 from knot.spec.expressions import ExprJson
-from knot.spec.metaschema import Severity
+from knot.spec.metaschema import Array, ClassRef, Primitive, Severity, SlotConstraints
 
 # ---------------------------------------------------------------------------
 # Request / response shapes
@@ -45,19 +51,12 @@ class _StrictBase(BaseModel):
 # ─── Read summaries ─────────────────────────────────────────────────────────
 
 
-class TypeSummary(_StrictBase):
-    name: str
-    base: str | None
-    pattern: str | None
-
-
 class SlotSummary(_StrictBase):
     name: str
-    range_kind: str | None  # "type" | "class" | None
-    range_name: str | None
+    type_kind: str | None  # "primitive"|"class"|"array_of_primitive"|"array_of_class"|None
+    type_name: str | None  # primitive name or class name
     identifier: bool
     required: bool
-    multivalued: bool
     resolution_policy: str
 
 
@@ -73,6 +72,8 @@ class SourceSummary(_StrictBase):
     name: str
     entity_class: str
     identifier_slot: str
+    trust_score: float
+    slot_priors: dict[str, list[float]]  # slot_name -> [alpha, beta]
     description: str | None
 
 
@@ -90,25 +91,21 @@ class RevisionSummary(_StrictBase):
 _NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]{0,62}$"
 
 
-class TypeDefinitionCreate(_StrictBase):
-    name: str = Field(pattern=_NAME_PATTERN)
-    base: str | None = None
+class SlotConstraintsCreate(_StrictBase):
     pattern: str | None = None
-    description: str | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    permissible_values: list[str] | None = None
 
 
 class SlotCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    range_kind: str | None = None  # "type" | "class" | None
-    range_name: str | None = None
+    type_kind: str | None = None  # "primitive"|"class"|"array_of_primitive"|"array_of_class"|null
+    type_name: str | None = None
     identifier: bool = False
     required: bool = False
-    multivalued: bool = False
     resolution_policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST
-    pattern: str | None = None
-    minimum_value: float | None = None
-    maximum_value: float | None = None
-    permissible_values: list[str] | None = None
+    constraints: SlotConstraintsCreate | None = None
     description: str | None = None
     derivation: ExprJson | None = None
 
@@ -135,7 +132,18 @@ class SourceCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
     entity_class_name: str
     identifier_slot_name: str
+    trust_score: float = 1.0
+    slot_priors: dict[str, list[float]] = Field(default_factory=dict)
     description: str | None = None
+
+
+class TrustScoreUpdate(_StrictBase):
+    trust_score: float
+
+
+class SlotPriorUpdate(_StrictBase):
+    alpha: float
+    beta: float
 
 
 class ConstraintCreate(_StrictBase):
@@ -167,7 +175,7 @@ class MutationResponse(_StrictBase):
 
     draft_revision: int
     content_hash: str
-    spec_summary: dict[str, int]  # {classes: n, slots: n, types: n, sources: n}
+    spec_summary: dict[str, int]  # {classes: n, slots: n, sources: n}
 
 
 class PublishResponse(_StrictBase):
@@ -185,7 +193,6 @@ def _spec_summary(spec: Spec) -> dict[str, int]:
     return {
         "classes": len(spec.classes),
         "slots": len(spec.slots),
-        "types": len(spec.types),
         "sources": len(spec.sources),
         "constraints": len(spec.constraints),
     }
@@ -210,27 +217,35 @@ def _summarize_class(c: OntologyClass) -> ClassSummary:
     )
 
 
+def _type_kind_name(slot: Slot) -> tuple[str | None, str | None]:
+    """Return (type_kind, type_name) for the API summary."""
+    t = slot.type
+    if t is None:
+        return None, None
+    if isinstance(t, Primitive):
+        return "primitive", t.name
+    if isinstance(t, ClassRef):
+        return "class", t.target_class.name
+    if isinstance(t, Array):
+        inner = t.of
+        if isinstance(inner, Primitive):
+            return "array_of_primitive", inner.name
+        if isinstance(inner, ClassRef):
+            return "array_of_class", inner.target_class.name
+    return None, None
+
+
 def _summarize_slot(s: Slot) -> SlotSummary:
-    range_kind: str | None = None
-    range_name: str | None = None
-    if isinstance(s.range, OntologyClass):
-        range_kind, range_name = "class", s.range.name
-    elif isinstance(s.range, TypeDefinition):
-        range_kind, range_name = "type", s.range.name
+    type_kind, type_name = _type_kind_name(s)
     rp = s.resolution_policy
     return SlotSummary(
         name=s.name,
-        range_kind=range_kind,
-        range_name=range_name,
+        type_kind=type_kind,
+        type_name=type_name,
         identifier=s.identifier,
         required=s.required,
-        multivalued=s.multivalued,
         resolution_policy=rp.value if hasattr(rp, "value") else str(rp),
     )
-
-
-def _summarize_type(t: TypeDefinition) -> TypeSummary:
-    return TypeSummary(name=t.name, base=t.base, pattern=t.pattern)
 
 
 def _summarize_source(s: Source) -> SourceSummary:
@@ -238,7 +253,35 @@ def _summarize_source(s: Source) -> SourceSummary:
         name=s.name,
         entity_class=s.entity_class.name,
         identifier_slot=s.identifier_slot.name,
+        trust_score=s.trust_score,
+        slot_priors={k: list(v) for k, v in s.slot_priors.items()},
         description=s.description,
+    )
+
+
+def _parse_slot_priors(raw: dict[str, list[float]]) -> dict[str, tuple[float, float]]:
+    """Convert API list[float] representation to (alpha, beta) tuples."""
+    out: dict[str, tuple[float, float]] = {}
+    for slot_name, ab in raw.items():
+        if len(ab) != 2:
+            raise ValueError(f"slot_prior for {slot_name!r} must be [alpha, beta]; got {ab!r}")
+        out[slot_name] = (ab[0], ab[1])
+    return out
+
+
+def _build_slot_constraints(body: SlotConstraintsCreate | None) -> SlotConstraints | None:
+    if body is None:
+        return None
+    if all(
+        v is None
+        for v in [body.pattern, body.min_value, body.max_value, body.permissible_values]
+    ):
+        return None
+    return SlotConstraints(
+        pattern=body.pattern,
+        min_value=body.min_value,
+        max_value=body.max_value,
+        permissible_values=body.permissible_values,
     )
 
 
@@ -272,9 +315,7 @@ def _map_referenced(exc: graph_spec.ReferencedEntityError) -> HTTPException:
 router = APIRouter(prefix="/spec", tags=["spec"])
 
 
-# Mount the GraphQL endpoint sibling-module on this router.  Same pattern as
-# ``knot.api.graph`` mounting ``graph/graphql.py`` — the spec metaschema is
-# static, so a side-by-side GraphQL surface composes the same way.
+# Mount the GraphQL endpoint sibling-module on this router.
 from knot.api import spec_graphql as _spec_graphql_mod  # noqa: E402
 
 router.include_router(_spec_graphql_mod.router)
@@ -321,15 +362,6 @@ async def list_published_slots() -> list[SlotSummary]:
     if spec is None:
         return []
     return [_summarize_slot(s) for s in spec.slots]
-
-
-@router.get("/published/types", response_model=list[TypeSummary])
-async def list_published_types() -> list[TypeSummary]:
-    async with db.connect() as conn:
-        spec = await graph_spec.get_published(conn)
-    if spec is None:
-        return []
-    return [_summarize_type(t) for t in spec.types]
 
 
 @router.get("/published/sources", response_model=list[SourceSummary])
@@ -419,29 +451,6 @@ async def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 
 
 @router.post(
-    "/drafts/{draft_id}/types",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-)
-async def add_type(draft_id: int, body: TypeDefinitionCreate) -> MutationResponse:
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.add_type(
-                conn,
-                draft_id,
-                name=body.name,
-                base=body.base,
-                pattern=body.pattern,
-                description=body.description,
-            )
-        except graph_spec.CollisionError as exc:
-            raise _map_collision(exc) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
-
-
-@router.post(
     "/drafts/{draft_id}/slots",
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
@@ -453,16 +462,12 @@ async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
                 conn,
                 draft_id,
                 name=body.name,
-                range_kind=body.range_kind,
-                range_name=body.range_name,
+                type_kind=body.type_kind,
+                type_name=body.type_name,
                 identifier=body.identifier,
                 required=body.required,
-                multivalued=body.multivalued,
                 resolution_policy=body.resolution_policy,
-                pattern=body.pattern,
-                minimum_value=body.minimum_value,
-                maximum_value=body.maximum_value,
-                permissible_values=body.permissible_values,
+                constraints=_build_slot_constraints(body.constraints),
                 description=body.description,
                 derivation=body.derivation,
             )
@@ -470,7 +475,7 @@ async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
             raise _map_collision(exc) from exc
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.InvalidRangeKindError as exc:
+        except graph_spec.InvalidTypeExprError as exc:
             raise _map_invalid(exc) from exc
         except graph_spec.ExprTranslationError as exc:
             raise HTTPException(404, str(exc)) from exc
@@ -540,6 +545,10 @@ async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationR
     dependencies=[Depends(require_user)],
 )
 async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
+    try:
+        slot_priors = _parse_slot_priors(body.slot_priors)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     async with db.connect() as conn:
         try:
             spec = await graph_spec.add_source(
@@ -548,6 +557,8 @@ async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
                 name=body.name,
                 entity_class_name=body.entity_class_name,
                 identifier_slot_name=body.identifier_slot_name,
+                trust_score=body.trust_score,
+                slot_priors=slot_priors,
                 description=body.description,
             )
         except graph_spec.CollisionError as exc:
@@ -556,6 +567,66 @@ async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.InvalidIdentifierSlotError as exc:
             raise _map_invalid(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.post(
+    "/drafts/{draft_id}/sources/{source_name}/trust_score",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def update_source_trust_score(
+    draft_id: int, source_name: str, body: TrustScoreUpdate
+) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.update_source_trust_score(
+                conn, draft_id, source_name, trust_score=body.trust_score
+            )
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.post(
+    "/drafts/{draft_id}/sources/{source_name}/slot_priors/{slot_name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def update_source_slot_prior(
+    draft_id: int, source_name: str, slot_name: str, body: SlotPriorUpdate
+) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.update_source_slot_prior(
+                conn, draft_id, source_name, slot_name, alpha=body.alpha, beta=body.beta
+            )
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.delete(
+    "/drafts/{draft_id}/sources/{source_name}/slot_priors/{slot_name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def reset_source_slot_prior(
+    draft_id: int, source_name: str, slot_name: str
+) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.reset_source_slot_prior(
+                conn, draft_id, source_name, slot_name
+            )
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
@@ -590,24 +661,6 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
 
 
 # ─── Draft removals ─────────────────────────────────────────────────────────
-
-
-@router.delete(
-    "/drafts/{draft_id}/types/{name}",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-)
-async def remove_type(draft_id: int, name: str) -> MutationResponse:
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.remove_type(conn, draft_id, name)
-        except graph_spec.EntityNotOnDraftError as exc:
-            raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.ReferencedEntityError as exc:
-            raise _map_referenced(exc) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
 
 
 @router.delete(
@@ -678,6 +731,31 @@ async def remove_constraint(draft_id: int, name: str) -> MutationResponse:
     return _response(draft_id, spec)
 
 
+# ─── Preview ────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/drafts/{draft_id}/preview",
+    response_model=graph_spec.PreviewResult,
+    summary="Preview what publish would do — gates + diff, no DDL emitted",
+)
+async def preview_draft(draft_id: int) -> graph_spec.PreviewResult:
+    """Evaluate all publish gates for a draft without applying any DDL.
+
+    Returns the full diff, bucket classification, and any blockers that
+    would prevent publish right now.  ``publishable=True`` means
+    ``POST /publish`` would succeed (without allow_destructive if
+    ``requires_allow_destructive=False``).
+    """
+    async with db.connect() as conn:
+        try:
+            return await graph_spec.preview_publish(conn, draft_id)
+        except graph_spec.DraftNotFoundError as exc:
+            raise HTTPException(404, f"Draft {draft_id} not found.") from exc
+        except graph_spec.PublishGateError as exc:
+            raise HTTPException(400, f"Draft {draft_id} failed the publish gate: {exc}") from exc
+
+
 # ─── Publish ────────────────────────────────────────────────────────────────
 
 
@@ -692,7 +770,7 @@ async def publish(
         False,
         description=(
             "Required to confirm destructive migrations (DropClass / DropSlot / "
-            "ChangeSlotType). Publish fails with 400 otherwise."
+            "ChangeSlotTypeExpression). Publish fails with 400 otherwise."
         ),
     ),
 ) -> PublishResponse:
@@ -728,13 +806,7 @@ async def rollback(
         ),
     ),
 ) -> PublishResponse:
-    """Promote a prior revision back to published.
-
-    Mechanically identical to publish: the diff (current_published → target)
-    is applied to the data plane, the constraint gate runs against current
-    data, and the published flag flips atomically. Rejects an attempt to
-    rollback to the currently-published revision (no-op).
-    """
+    """Promote a prior revision back to published."""
     async with db.connect() as conn:
         try:
             result = await graph_spec.rollback(

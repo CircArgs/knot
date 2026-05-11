@@ -5,7 +5,7 @@ to handle:
 
   - Published-spec reads + revision history
   - Draft create / discard / list
-  - Draft mutations (add type/slot/class, update class, add source/constraint)
+  - Draft mutations (add slot/class, update class, add source/constraint)
   - Publish + rollback
 
 Validation (collision checks, "is this slot/class on the draft", expression
@@ -16,26 +16,34 @@ and the per-entity summary helpers — those are HTTP-shape concerns.
 
 from __future__ import annotations
 
+import dataclasses
 from typing import Any
 
 import psycopg
+from pydantic import BaseModel
 
 from knot.db import spec_store
 from knot.spec import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
     OntologyClass,
-    PermissibleValue,
     PublishGateError,
     ResolutionPolicy,
     Slot,
     Source,
     Spec,
-    TypeDefinition,
     compute_content_hash,
 )
 from knot.spec.expressions import ExprJson, ExprTranslationError, translate_expr
-from knot.spec.metaschema import Constraint, Severity
+from knot.spec.metaschema import (
+    Array,
+    ClassRef,
+    Constraint,
+    Primitive,
+    Severity,
+    SlotConstraints,
+    TypeExpression,
+)
 
 __all__ = (
     # Re-exports of spec-layer errors so callers in the api layer can import
@@ -47,7 +55,7 @@ __all__ = (
     "CollisionError",
     "EntityNotOnDraftError",
     "ExprTranslationError",
-    "InvalidRangeKindError",
+    "InvalidTypeExprError",
     "InvalidIdentifierSlotError",
     "ReferencedEntityError",
     "RollbackToCurrentError",
@@ -58,24 +66,25 @@ __all__ = (
     "list_drafts",
     "get_draft",
     # Draft lifecycle
-    "bootstrap_base_spec",
     "create_draft",
     "discard_draft",
     # Mutations
-    "add_type",
     "add_slot",
     "add_class",
     "update_class",
     "add_source",
+    "update_source_trust_score",
+    "update_source_slot_prior",
     "add_constraint",
-    "remove_type",
     "remove_slot",
     "remove_class",
     "remove_source",
     "remove_constraint",
-    # Publish / rollback
+    # Publish / rollback / preview
     "publish_draft",
     "rollback",
+    "preview_publish",
+    "PreviewResult",
 )
 
 
@@ -100,8 +109,8 @@ class EntityNotOnDraftError(Exception):
         super().__init__(f"{kind} {name!r} not on this draft")
 
 
-class InvalidRangeKindError(Exception):
-    """Raised when range_kind is invalid or range_name is missing."""
+class InvalidTypeExprError(Exception):
+    """Raised when a type expression descriptor is invalid."""
 
 
 class InvalidIdentifierSlotError(Exception):
@@ -147,13 +156,6 @@ def _find_slot(spec: Spec, name: str) -> Slot:
     raise EntityNotOnDraftError("Slot", name)
 
 
-def _find_type(spec: Spec, name: str) -> TypeDefinition:
-    for t in spec.types:
-        if t.name == name:
-            return t
-    raise EntityNotOnDraftError("TypeDefinition", name)
-
-
 def _find_source(spec: Spec, name: str) -> Source:
     for s in spec.sources:
         if s.name == name:
@@ -166,6 +168,53 @@ def _find_constraint(spec: Spec, name: str) -> Constraint:
         if c.name == name:
             return c
     raise EntityNotOnDraftError("Constraint", name)
+
+
+def _build_type_expr(
+    type_kind: str | None,
+    type_name: str | None,
+    spec: Spec,
+) -> TypeExpression | None:
+    """Build a TypeExpression from the API's (type_kind, type_name) descriptor.
+
+    type_kind values:
+      "primitive"  — type_name must be a STANDARD_PRIMITIVE_NAMES entry
+      "class"      — type_name must be an OntologyClass on the draft
+      "array"      — not a top-level kind; handled via array_of_kind + array_of_name
+      None         — no type (derived slot)
+    """
+    if type_kind is None:
+        return None
+    if type_kind == "primitive":
+        from knot.spec.metaschema import STANDARD_PRIMITIVE_NAMES
+
+        if type_name is None or type_name not in STANDARD_PRIMITIVE_NAMES:
+            raise InvalidTypeExprError(
+                f"type_kind='primitive' requires type_name in {STANDARD_PRIMITIVE_NAMES!r}"
+            )
+        return Primitive(name=type_name)
+    if type_kind == "class":
+        if type_name is None:
+            raise InvalidTypeExprError("type_kind='class' requires type_name")
+        cls = _find_class(spec, type_name)
+        return ClassRef(target_class=cls)
+    if type_kind == "array_of_primitive":
+        from knot.spec.metaschema import STANDARD_PRIMITIVE_NAMES
+
+        if type_name is None or type_name not in STANDARD_PRIMITIVE_NAMES:
+            raise InvalidTypeExprError(
+                f"type_kind='array_of_primitive' requires type_name in {STANDARD_PRIMITIVE_NAMES!r}"
+            )
+        return Array(of=Primitive(name=type_name))
+    if type_kind == "array_of_class":
+        if type_name is None:
+            raise InvalidTypeExprError("type_kind='array_of_class' requires type_name")
+        cls = _find_class(spec, type_name)
+        return Array(of=ClassRef(target_class=cls))
+    raise InvalidTypeExprError(
+        f"type_kind must be 'primitive', 'class', 'array_of_primitive', "
+        f"'array_of_class', or null; got {type_kind!r}"
+    )
 
 
 # ─── Reads ──────────────────────────────────────────────────────────────────
@@ -210,46 +259,15 @@ async def create_draft(
 ) -> int:
     """Create a draft.
 
-    ``parent_revision=None`` (the default) branches from the latest published
-    revision — so authors get the standard primitives (and any prior published
-    content) via lineage. Pass an explicit revision number to branch from a
-    specific historical revision. If nothing has been published yet (this
-    shouldn't happen post-bootstrap, but defend against it), the draft starts
-    empty.
+    ``parent_revision=None`` branches from the latest published revision.
+    Pass an explicit revision number to branch from a specific historical
+    revision. If nothing has been published yet, the draft starts empty.
 
     Raises ``DraftNotFoundError`` if ``parent_revision`` is given but missing.
     """
     if parent_revision is None:
         parent_revision = await spec_store.get_published_revision(conn)
     return await spec_store.create_draft(conn, parent_revision=parent_revision, label=label)
-
-
-async def bootstrap_base_spec(conn: psycopg.AsyncConnection) -> None:
-    """Publish the standard-primitives base spec if no published revision exists.
-
-    Idempotent: if anything is already published, this is a no-op. The base
-    spec carries the six standard primitives (string/integer/float/boolean/
-    datetime/date); new drafts branch from it by default so authors don't
-    have to register them per-spec.
-    """
-    existing = await spec_store.get_published_revision(conn)
-    if existing is not None:
-        return
-    from knot.spec.metaschema import Spec
-    from knot.spec.primitives import STANDARD_PRIMITIVES
-
-    base_spec = Spec(
-        id="knot.base",
-        version="1.0.0",
-        types=list(STANDARD_PRIMITIVES),
-        slots=[],
-        classes=[],
-        sources=[],
-        constraints=[],
-    )
-    draft_id = await spec_store.create_draft(conn, parent_revision=None, label="knot.base")
-    await spec_store.update_draft(conn, draft_id, base_spec)
-    await spec_store.publish_draft(conn, draft_id, allow_destructive=False)
 
 
 async def discard_draft(conn: psycopg.AsyncConnection, draft_id: int) -> None:
@@ -261,39 +279,17 @@ async def discard_draft(conn: psycopg.AsyncConnection, draft_id: int) -> None:
 # ─── Mutations ──────────────────────────────────────────────────────────────
 
 
-async def add_type(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    *,
-    name: str,
-    base: str | None,
-    pattern: str | None,
-    description: str | None,
-) -> Spec:
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        if any(t.name.lower() == name.lower() for t in spec.types):
-            raise CollisionError("TypeDefinition", name)
-        spec.types.append(
-            TypeDefinition(name=name, base=base, pattern=pattern, description=description)
-        )
-    return spec
-
-
 async def add_slot(
     conn: psycopg.AsyncConnection,
     draft_id: int,
     *,
     name: str,
-    range_kind: str | None,
-    range_name: str | None,
+    type_kind: str | None,
+    type_name: str | None,
     identifier: bool,
     required: bool,
-    multivalued: bool,
     resolution_policy: ResolutionPolicy,
-    pattern: str | None,
-    minimum_value: float | None,
-    maximum_value: float | None,
-    permissible_values: list[str] | None,
+    constraints: SlotConstraints | None,
     description: str | None,
     derivation: ExprJson | None,
 ) -> Spec:
@@ -301,23 +297,7 @@ async def add_slot(
         if any(s.name.lower() == name.lower() for s in spec.slots):
             raise CollisionError("Slot", name)
 
-        range_obj: Any | None = None
-        if range_kind == "type":
-            if range_name is None:
-                raise InvalidRangeKindError("range_kind='type' requires range_name")
-            range_obj = _find_type(spec, range_name)
-        elif range_kind == "class":
-            if range_name is None:
-                raise InvalidRangeKindError("range_kind='class' requires range_name")
-            range_obj = _find_class(spec, range_name)
-        elif range_kind is not None:
-            raise InvalidRangeKindError(
-                f"range_kind must be 'type', 'class', or null; got {range_kind!r}"
-            )
-
-        permissible = None
-        if permissible_values is not None:
-            permissible = [PermissibleValue(text=t) for t in permissible_values]
+        type_expr = _build_type_expr(type_kind, type_name, spec)
 
         derivation_obj = None
         if derivation is not None:
@@ -327,15 +307,11 @@ async def add_slot(
         spec.slots.append(
             Slot(
                 name=name,
-                range=range_obj,
+                type=type_expr,
                 identifier=identifier,
                 required=required,
-                multivalued=multivalued,
                 resolution_policy=resolution_policy,
-                pattern=pattern,
-                minimum_value=minimum_value,
-                maximum_value=maximum_value,
-                permissible_values=permissible,
+                constraints=constraints,
                 description=description,
                 derivation=derivation_obj,
             )
@@ -422,7 +398,9 @@ async def add_source(
     name: str,
     entity_class_name: str,
     identifier_slot_name: str,
-    description: str | None,
+    trust_score: float = 1.0,
+    slot_priors: dict[str, tuple[float, float]] | None = None,
+    description: str | None = None,
 ) -> Spec:
     async with spec_store.edit_draft(conn, draft_id) as spec:
         if any(s.name.lower() == name.lower() for s in spec.sources):
@@ -440,9 +418,54 @@ async def add_source(
                 name=name,
                 entity_class=cls,
                 identifier_slot=slot,
+                trust_score=trust_score,
+                slot_priors=slot_priors or {},
                 description=description,
             )
         )
+    return spec
+
+
+async def update_source_trust_score(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    source_name: str,
+    *,
+    trust_score: float,
+) -> Spec:
+    """Update the scalar trust_score for an existing source on the draft."""
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        src = _find_source(spec, source_name)
+        src.trust_score = trust_score
+    return spec
+
+
+async def update_source_slot_prior(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    source_name: str,
+    slot_name: str,
+    *,
+    alpha: float,
+    beta: float,
+) -> Spec:
+    """Set (or replace) the Beta prior for a (source, slot) pair on the draft."""
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        src = _find_source(spec, source_name)
+        src.slot_priors[slot_name] = (alpha, beta)
+    return spec
+
+
+async def reset_source_slot_prior(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    source_name: str,
+    slot_name: str,
+) -> Spec:
+    """Remove the Beta prior for a (source, slot) pair, reverting to Beta(1,1)."""
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        src = _find_source(spec, source_name)
+        src.slot_priors.pop(slot_name, None)
     return spec
 
 
@@ -478,28 +501,6 @@ async def add_constraint(
 # ─── Removals ───────────────────────────────────────────────────────────────
 
 
-async def remove_type(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    name: str,
-) -> Spec:
-    """Remove a TypeDefinition by name.
-
-    Raises ``ReferencedEntityError`` if any slot's range is this type.
-    """
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        target = _find_type(spec, name)
-        refs: list[tuple[str, str]] = [
-            ("slot", s.name)
-            for s in spec.slots
-            if isinstance(s.range, TypeDefinition) and s.range is target
-        ]
-        if refs:
-            raise ReferencedEntityError("type", name, refs)
-        spec.types = [t for t in spec.types if t is not target]
-    return spec
-
-
 async def remove_slot(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -532,16 +533,26 @@ async def remove_class(
 ) -> Spec:
     """Remove an OntologyClass by name.
 
-    Raises ``ReferencedEntityError`` if any slot's range is this class, any
-    other class names it via ``is_a`` or ``mixins``, any source's
-    ``entity_class`` is this class, or any constraint's ``primary`` is this
-    class.
+    Raises ``ReferencedEntityError`` if any slot's type references this class
+    (via ClassRef), any other class names it via ``is_a`` or ``mixins``, any
+    source's ``entity_class`` is this class, or any constraint's ``primary``
+    is this class.
     """
+    from knot.spec.metaschema import Array, ClassRef
+
     async with spec_store.edit_draft(conn, draft_id) as spec:
         target = _find_class(spec, name)
         refs: list[tuple[str, str]] = []
+
+        def _type_refs_class(type_expr: Any, cls: OntologyClass) -> bool:
+            if isinstance(type_expr, ClassRef):
+                return type_expr.target_class is cls
+            if isinstance(type_expr, Array):
+                return _type_refs_class(type_expr.of, cls)
+            return False
+
         for s in spec.slots:
-            if isinstance(s.range, OntologyClass) and s.range is target:
+            if s.type is not None and _type_refs_class(s.type, target):
                 refs.append(("slot", s.name))
         for c in spec.classes:
             if c is target:
@@ -647,3 +658,126 @@ async def rollback(
 def content_hash(spec: Spec) -> str:
     """Convenience re-export for routes that build mutation responses."""
     return compute_content_hash(spec)
+
+
+# ─── Preview ─────────────────────────────────────────────────────────────────
+
+
+class PreviewResult(BaseModel):
+    """What publish would do, without doing it."""
+
+    draft_revision: int
+    changes: list[dict]  # serialized Change records
+    buckets: dict[str, list[str]]  # {"A": [...], "B": [...], "C": [...]}
+    blockers: list[dict]  # what would fail Gate 1, 2, or 3 right now
+    publishable: bool  # True iff blockers is empty
+    requires_allow_destructive: bool  # True if any Bucket A change present
+
+
+async def preview_publish(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+) -> PreviewResult:
+    """Evaluate all publish gates for a draft without emitting DDL.
+
+    Returns a ``PreviewResult`` describing what would happen if
+    ``publish_draft`` were called right now.
+
+    Raises ``DraftNotFoundError`` if the draft doesn't exist.
+    Raises ``PublishGateError`` only if the spec-graph gate (Step 1)
+    fails — structural errors that indicate a malformed spec, not data
+    blockers (those go into the ``blockers`` list instead).
+    """
+    from knot.spec.compile.postgres.migration import (
+        AddClass,
+        AddConstraint,
+        AddDefinedClass,
+        AddSlot,
+        AddSource,
+        Change,
+        ChangeClassAbstract,
+        ChangeClassDefinition,
+        ChangeClassIsA,
+        ChangeClassMixins,
+        ChangeConstraintBody,
+        ChangeConstraintPrimary,
+        ChangeConstraintSeverity,
+        ChangeSlotDerivation,
+        ChangeSlotIdentifier,
+        ChangeSlotMaximum,
+        ChangeSlotMinimum,
+        ChangeSlotPattern,
+        ChangeSlotPermissibleValues,
+        ChangeSlotRequired,
+        ChangeSlotResolutionPolicy,
+        ChangeSlotTypeExpression,
+        ChangeSourceEntityClass,
+        ChangeSourceIdentifierSlot,
+        ChangeSourceSlotPrior,
+        ChangeSourceTrustScore,
+        DropClass,
+        DropConstraint,
+        DropDefinedClass,
+        DropSlot,
+        DropSource,
+        is_destructive,
+    )
+
+    # Bucket classification (independent of is_destructive — Bucket B and C
+    # changes are not in _DESTRUCTIVE_CHANGE_TYPES).
+    _BUCKET_B: tuple[type[Change], ...] = (
+        ChangeSlotPattern,
+        ChangeSlotPermissibleValues,
+        ChangeSlotMinimum,
+        ChangeSlotMaximum,
+        ChangeConstraintBody,
+        ChangeConstraintPrimary,
+    )
+    _BUCKET_A: tuple[type[Change], ...] = (
+        DropClass,
+        DropSlot,
+        DropDefinedClass,
+        ChangeSlotTypeExpression,
+        ChangeClassAbstract,
+        ChangeClassIsA,
+        ChangeSourceEntityClass,
+        ChangeSourceIdentifierSlot,
+        DropSource,
+    )
+
+    async with conn.transaction():
+        report = await spec_store.evaluate_gates(conn, draft_id, run_preflight=True)
+
+    changes = report.changes
+    blockers = report.blockers
+
+    # Serialize changes.
+    serialized_changes: list[dict] = []
+    for c in changes:
+        try:
+            d = dataclasses.asdict(c)
+        except TypeError:
+            d = {}
+        serialized_changes.append({"type": type(c).__name__, **d})
+
+    # Bucket classification.
+    bucket_a: list[str] = []
+    bucket_b: list[str] = []
+    bucket_c: list[str] = []
+    for c in changes:
+        name = type(c).__name__
+        if isinstance(c, _BUCKET_A):
+            bucket_a.append(name)
+        elif isinstance(c, _BUCKET_B):
+            bucket_b.append(name)
+        else:
+            bucket_c.append(name)
+
+    return PreviewResult(
+        draft_revision=draft_id,
+        changes=serialized_changes,
+        buckets={"A": bucket_a, "B": bucket_b, "C": bucket_c},
+        blockers=blockers,
+        publishable=len(blockers) == 0,
+        requires_allow_destructive=report.requires_allow_destructive,
+    )

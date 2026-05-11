@@ -548,6 +548,139 @@ async def run_preflight_checks(
     return blockers
 
 
+class GateReport:
+    """Returned by ``evaluate_gates``.  Contains the diff + all blocker info.
+    No DDL is emitted.
+    """
+
+    def __init__(
+        self,
+        changes: list,
+        blockers: list[dict],
+        requires_allow_destructive: bool,
+        candidate: "Spec",
+        prev: "Spec | None",
+    ) -> None:
+        self.changes = changes
+        self.blockers = blockers
+        self.requires_allow_destructive = requires_allow_destructive
+        self.candidate = candidate
+        self.prev = prev
+
+
+async def evaluate_gates(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    *,
+    run_preflight: bool = True,
+) -> GateReport:
+    """Evaluate all publish gates for a draft without emitting DDL.
+
+    Runs inside the caller's transaction.  Steps:
+      1. Spec-graph gate (publish_gate).
+      2. Destructive-change classification (diff_specs + is_destructive).
+      3. Constraint gate (new/changed constraints vs existing data).
+      4. Pre-flight checks (cast feasibility, identifier-slot integrity).
+
+    Returns a ``GateReport`` with the diff, all blockers (from both the
+    constraint gate and preflight), and whether allow_destructive is needed.
+
+    The ``run_preflight`` flag can be set False for unit tests or contexts
+    where the data plane isn't yet set up.
+    """
+    from knot.spec.compile.postgres import compile_constraint
+    from knot.spec.compile.postgres.migration import (
+        diff_specs,
+        is_destructive,
+    )
+
+    candidate = await get_revision(conn, draft_id)
+    publish_gate(candidate)
+    prev = await get_published(conn)
+
+    changes = diff_specs(prev, candidate)
+    destructive_names = [type(c).__name__ for c in changes if is_destructive(c)]
+    requires_allow_destructive = bool(destructive_names)
+
+    blockers: list[dict] = []
+
+    # Destructive-change blocker (reported but not raised here — callers decide).
+    if requires_allow_destructive:
+        blockers.append(
+            {
+                "kind": "destructive_changes",
+                "changes": sorted(set(destructive_names)),
+            }
+        )
+
+    # Constraint gate.
+    prev_class_names: set[str] = {c.name for c in (prev.classes if prev else [])}
+    prev_constraint_hashes: dict[str, str] = {}
+    if prev:
+        for con in prev.constraints:
+            prev_constraint_hashes[con.name] = compute_content_hash(con)
+
+    defined_class_names: set[str] = {
+        c.name for c in candidate.classes if getattr(c, "definition", None) is not None
+    }
+
+    for con in candidate.constraints:
+        cand_hash = compute_content_hash(con)
+        prev_hash = prev_constraint_hashes.get(con.name)
+        if cand_hash == prev_hash:
+            continue
+        if con.primary.name not in prev_class_names:
+            continue
+        if con.primary.name in defined_class_names:
+            continue
+
+        cls = con.primary
+        stmt, params = compile_constraint(con, cls)
+        try:
+            violations = await (await conn.execute(stmt, params)).fetchall()
+        except Exception as exc:
+            blockers.append(
+                {
+                    "kind": "constraint_sql_error",
+                    "constraint": con.name,
+                    "detail": str(exc),
+                }
+            )
+            continue
+
+        if violations:
+            n = len(violations)
+            if con.severity.value == "error":
+                blockers.append(
+                    {
+                        "kind": "constraint_violation",
+                        "constraint": con.name,
+                        "count": n,
+                        "severity": "error",
+                    }
+                )
+            else:
+                logger.warning(
+                    "Constraint %r has %d violation(s) against existing data "
+                    "(severity=WARNING); publishing anyway.",
+                    con.name,
+                    n,
+                )
+
+    # Pre-flight checks.
+    if run_preflight:
+        preflight_blockers = await run_preflight_checks(conn, changes, prev, candidate)
+        blockers.extend(preflight_blockers)
+
+    return GateReport(
+        changes=changes,
+        blockers=blockers,
+        requires_allow_destructive=requires_allow_destructive,
+        candidate=candidate,
+        prev=prev,
+    )
+
+
 async def publish_draft(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -567,89 +700,30 @@ async def publish_draft(
     index in a transient state, and the data plane and the spec are
     never out of sync.
     """
-    from knot.spec.compile.postgres import compile_constraint
-    from knot.spec.compile.postgres.migration import (
-        apply_changes,
-        diff_specs,
-        is_destructive,
-    )
+    from knot.spec.compile.postgres.migration import apply_changes
 
     async with conn.transaction():
-        candidate = await get_revision(conn, draft_id)
-        publish_gate(candidate)
-        prev = await get_published(conn)
+        report = await evaluate_gates(conn, draft_id, run_preflight=True)
 
-        changes = diff_specs(prev, candidate)
-        destructive = [type(c).__name__ for c in changes if is_destructive(c)]
-        if destructive and not allow_destructive:
+        # Gate 1: destructive changes need explicit opt-in.
+        if report.requires_allow_destructive and not allow_destructive:
+            destructive_names = next(
+                b["changes"] for b in report.blockers if b["kind"] == "destructive_changes"
+            )
             raise PublishGateError(
                 "Publish would apply destructive changes "
-                f"({', '.join(sorted(set(destructive)))}); pass "
+                f"({', '.join(destructive_names)}); pass "
                 "allow_destructive=true to confirm."
             )
 
-        # Step 4: constraint gate — for every constraint that is NEW or CHANGED
-        # in the candidate vs prev, compile + run it against existing data.
-        # ERROR severity with any violations → PublishGateError.
-        # WARNING severity → log and continue.
-        #
-        # Only run against classes that already have tables (i.e., present in
-        # prev).  Constraints on brand-new classes are skipped — no rows exist yet.
-        prev_class_names: set[str] = {c.name for c in (prev.classes if prev else [])}
-        prev_constraint_hashes: dict[str, str] = {}
-        if prev:
-            for con in prev.constraints:
-                prev_constraint_hashes[con.name] = compute_content_hash(con)
-
-        # Index defined classes by name for skip logic below.
-        defined_class_names: set[str] = {
-            c.name for c in candidate.classes if getattr(c, "definition", None) is not None
-        }
-
-        for con in candidate.constraints:
-            cand_hash = compute_content_hash(con)
-            prev_hash = prev_constraint_hashes.get(con.name)
-            if cand_hash == prev_hash:
-                continue  # unchanged — skip
-            if con.primary.name not in prev_class_names:
-                continue  # new class — no rows to check yet
-            if con.primary.name in defined_class_names:
-                continue  # defined classes are views; VIEW handles inclusion
-
-            # Find the primary class on the candidate spec (by identity from
-            # the rehydrated spec; `con.primary` already points to it).
-            cls = con.primary
-            stmt, params = compile_constraint(con, cls)
-            try:
-                violations = await (await conn.execute(stmt, params)).fetchall()
-            except Exception as exc:
-                raise PublishGateError(
-                    f"Constraint {con.name!r} SQL execution failed: {exc}"
-                ) from exc
-
-            if violations:
-                n = len(violations)
-                if con.severity.value == "error":
-                    raise PublishGateError(
-                        f"Constraint {con.name!r} has {n} violation(s) against "
-                        f"existing data (severity=ERROR). Publish rejected."
-                    )
-                else:
-                    logger.warning(
-                        "Constraint %r has %d violation(s) against existing data "
-                        "(severity=WARNING); publishing anyway.",
-                        con.name,
-                        n,
-                    )
-
-        # Pre-flight checks: cast feasibility + identifier slot integrity.
-        # Runs before DDL so bad data is caught before any schema change.
-        preflight_blockers = await run_preflight_checks(conn, changes, prev, candidate)
-        if preflight_blockers:
-            kinds = ", ".join(sorted({b["kind"] for b in preflight_blockers}))
+        # Gates 2 + 3: constraint violations and preflight blockers.
+        # Filter out the destructive_changes meta-blocker (handled above).
+        hard_blockers = [b for b in report.blockers if b["kind"] != "destructive_changes"]
+        if hard_blockers:
+            kinds = ", ".join(sorted({b["kind"] for b in hard_blockers}))
             raise PublishGateError(
-                f"preflight: {len(preflight_blockers)} blocker(s) ({kinds})",
-                details=preflight_blockers,
+                f"preflight: {len(hard_blockers)} blocker(s) ({kinds})",
+                details=hard_blockers,
             )
 
         # Demote → promote in two statements so the partial unique index
@@ -663,7 +737,7 @@ async def publish_draft(
             "UPDATE spec_revisions SET published = TRUE, published_at = %s WHERE revision = %s",
             (_now(), draft_id),
         )
-        await apply_changes(conn, changes)
+        await apply_changes(conn, report.changes)
 
     return draft_id
 
