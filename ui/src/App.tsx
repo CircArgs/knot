@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 
 import Layout from "./components/Layout";
 import Home from "./pages/Home";
+import Query from "./pages/Query";
 import SpecGraph from "./pages/SpecGraph";
 
 export default function App() {
@@ -11,6 +12,7 @@ export default function App() {
         <Route path="/" element={<Home />} />
         <Route path="/spec-graph" element={<SpecGraph />} />
         <Route path="/spec/draft/:draftId" element={<SpecGraph />} />
+        <Route path="/query" element={<Query />} />
       </Routes>
     </Layout>
   );
