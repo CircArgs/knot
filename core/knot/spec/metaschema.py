@@ -5,15 +5,16 @@ Names live only at the persistence boundary.
 
 Build order in this file:
   1. SpecBase + enums
-  2. Leaf entities (TypeDefinition, PermissibleValue)
-  3. Expression tree (Literal_, SlotPath, Compare, BoolExpr,
+  2. TypeExpression hierarchy (Primitive, Array, ClassRef)
+  3. SlotConstraints
+  4. Expression tree (Literal_, SlotPath, Compare, BoolExpr,
      Relation*, ScalarDerivation, FormatDerivation, Within, Between,
      Matches, RecursiveTraversal)
-  4. Slot + SlotOverride (with SDK descriptor methods)
-  5. OntologyClass + UniqueKey + IdentifierPattern + ReferencePattern
-  6. Constraint
-  7. Source + Spec root
-  8. model_rebuild() calls to resolve forward refs
+  5. Slot (with SDK descriptor methods)
+  6. OntologyClass
+  7. Constraint
+  8. Source + Spec root
+  9. model_rebuild() calls to resolve forward refs
 
 The SDK affordance — `Movie.year > 1900`, `Movie.imdb_id.from_source(s).is_not_null()`,
 `Movie.credits.where(...).collect(...)` — is woven into Slot's operator
@@ -24,7 +25,7 @@ the SDK; no two-class generation per `auto-generated-sdk.md` simplification.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Any, ClassVar, Literal
+from typing import Annotated, Any, ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -119,40 +120,79 @@ class GroupByMode(StrEnum):
     SOURCE = "source"
 
 
-class ReferenceKind(StrEnum):
-    """Discriminator for ReferencePattern variants."""
-
-    DIRECT = "direct"
-    DISCRIMINATED = "discriminated"
-
-
 # ---------------------------------------------------------------------------
-# 3. Leaf entities
+# 3. TypeExpression hierarchy
+#
+# Recursive sum type: every slot's `type` field is one of these.
+#   Primitive("string")           — a named scalar type
+#   Array(of=Primitive("string")) — homogeneous array of any TypeExpression
+#   ClassRef(target_class=Movie)  — canonical_id FK to another class
 # ---------------------------------------------------------------------------
 
+STANDARD_PRIMITIVE_NAMES: list[str] = [
+    "string",
+    "integer",
+    "float",
+    "boolean",
+    "datetime",
+    "date",
+]
 
-class TypeDefinition(SpecBase):
-    """A primitive or named type referenced by `Slot.range`."""
 
-    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    base: str | None = None
-    pattern: str | None = None
-    description: str | None = None
+class Primitive(SpecBase):
+    """A scalar primitive type, e.g. Primitive("string")."""
+
+    name: str  # must be one of STANDARD_PRIMITIVE_NAMES
+
+    def __hash__(self) -> int:
+        return hash(self.name)
+
+    def __eq__(self, other: object) -> bool:
+        if isinstance(other, Primitive):
+            return self.name == other.name
+        return NotImplemented
+
+
+class Array(SpecBase):
+    """Homogeneous array of another TypeExpression."""
+
+    # Forward ref resolved at model_rebuild() time
+    of: Annotated[Primitive | Array | ClassRef, Field()]
 
     def __hash__(self) -> int:
         return id(self)
 
 
-class PermissibleValue(SpecBase):
-    """One legal value for an enum-typed slot."""
+class ClassRef(SpecBase):
+    """FK reference to another OntologyClass (stored as canonical_id TEXT)."""
 
-    text: str
-    description: str | None = None
-    meaning: str | None = None
+    target_class: OntologyClass
+
+    def __hash__(self) -> int:
+        return id(self)
+
+
+# TypeExpression — the sum type for all slot types.
+# Defined after the three concrete classes exist so the union is valid at runtime.
+TypeExpression = Primitive | Array | ClassRef
 
 
 # ---------------------------------------------------------------------------
-# 4. Expression tree — the unified expression substrate
+# 4. SlotConstraints — all slot-level constraint data in one place
+# ---------------------------------------------------------------------------
+
+
+class SlotConstraints(SpecBase):
+    """Optional constraints layered on a slot's type."""
+
+    pattern: str | None = None
+    min_value: float | None = None
+    max_value: float | None = None
+    permissible_values: list[str] | None = None
+
+
+# ---------------------------------------------------------------------------
+# 5. Expression tree — the unified expression substrate
 #
 # These nodes appear in:
 #   - Slot.derivation                       (forward + backward chain)
@@ -376,7 +416,7 @@ DerivationExpr = (
 
 
 # ---------------------------------------------------------------------------
-# 5. Slot + SDK affordances
+# 6. Slot + SDK affordances
 #
 # Operator overloads on Slot return expression-tree nodes that bind by
 # slot identity but use a shared sentinel `from_class`.  The class context
@@ -421,17 +461,12 @@ class Slot(SpecBase):
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    range: TypeDefinition | OntologyClass | None = None
+    type: TypeExpression | None = None
     identifier: bool = False
     required: bool = False
-    multivalued: bool = False
     resolution_policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST
-    pattern: str | None = None
-    minimum_value: float | None = None
-    maximum_value: float | None = None
-    permissible_values: list[PermissibleValue] | None = None
+    constraints: SlotConstraints | None = None
     derivation: Any | None = None  # DerivationExpr
-    reference: Any | None = None  # DirectRef | DiscriminatedRef
     description: str | None = None
 
     # ------------------------------------------------------------------
@@ -520,59 +555,6 @@ class Slot(SpecBase):
 DerivedSlot = Slot
 
 
-class SlotOverride(SpecBase):
-    """Per-class refinement of a shared Slot's metadata."""
-
-    slot: Slot
-    required: bool | None = None
-    range: TypeDefinition | OntologyClass | None = None
-    pattern: str | None = None
-    minimum_value: float | None = None
-    maximum_value: float | None = None
-    description: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# 6. Reference patterns & identifier patterns
-# ---------------------------------------------------------------------------
-
-
-class DirectRef(SpecBase):
-    """Plain FK — `target_class` + the slot on this class holding the FK value."""
-
-    ref_kind: ClassVar[ReferenceKind] = ReferenceKind.DIRECT
-    target_class: OntologyClass | None = None
-    fk_slot: Slot
-
-
-class DiscriminatedRef(SpecBase):
-    """Discriminator-style polymorphic ref — `class_slot` names the target class.
-
-    Per `spec-model.md` § "Polymorphic references": consumers of polymorphic
-    classes must declare the specific class connections; knot's static
-    dependency graph is otherwise blind to discriminator targets.
-    """
-
-    ref_kind: ClassVar[ReferenceKind] = ReferenceKind.DISCRIMINATED
-    target_class: OntologyClass | None = None
-    class_slot: Slot
-    key_slot: Slot
-
-
-class IdentifierPattern(SpecBase):
-    """Class-level: declares the polymorphic identifier shape on a reified class."""
-
-    class_slot: Slot
-    key_slot: Slot
-    scope: OntologyClass | None = None
-
-
-class UniqueKey(SpecBase):
-    """Multi-slot uniqueness constraint on an OntologyClass."""
-
-    slots: list[Slot] = Field(default_factory=list)
-
-
 # ---------------------------------------------------------------------------
 # 7. OntologyClass
 # ---------------------------------------------------------------------------
@@ -584,33 +566,14 @@ class OntologyClass(SpecBase):
     `__getattr__` resolves slot names so impl authors write
     `Movie.imdb_id` rather than indexing into a slot list.  Walks the
     is_a chain + mixins to inherit slot visibility.
-
-    Defined classes vs concrete classes
-    ------------------------------------
-    When both ``is_a`` and ``definition`` are set, this is a **defined class**:
-    it is stored as a VIEW over the parent class (``is_a``) filtered by the
-    compiled ``definition`` predicate.  No separate table or bindings table is
-    created; the defined class shares the parent's storage.
-
-    When only ``is_a`` is set (``definition`` is None), the class is a
-    **concrete subclass** with its own table (standard OWL subclass).
-
-    When neither ``is_a`` nor ``definition`` is set, the class is a
-    **top-level concrete class** with its own table.
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     is_a: OntologyClass | None = None
     mixins: list[OntologyClass] = Field(default_factory=list)
     slots: list[Slot] = Field(default_factory=list)
-    slot_overrides: list[SlotOverride] = Field(default_factory=list)
-    unique_keys: list[UniqueKey] = Field(default_factory=list)
     abstract: bool = False
-    identifier_pattern: IdentifierPattern | None = None
     description: str | None = None
-    definition: Any | None = (
-        None  # BoolExpr | RelationAll | RelationAny | Compare | ReverseRelation
-    )
 
     def __getattr__(self, item: str) -> Slot:
         # Pydantic and Python internals probe for sentinel attributes; raise
@@ -654,7 +617,7 @@ class OntologyClass(SpecBase):
 
     def descendants(self, *, max_depth: int | None = None) -> RecursiveTraversal:
         """Walk the is_a chain downward."""
-        is_a_slot = Slot(name="is_a", range=self)
+        is_a_slot = Slot(name="is_a", type=ClassRef(target_class=self))
         start = RelationRef(from_class=self, slot=is_a_slot)
         step = SlotPath(from_class=self, slots=[is_a_slot])
         return RecursiveTraversal(start=start, step=step, max_depth=max_depth)
@@ -699,11 +662,20 @@ class Source(SpecBase):
     declares its name, the OntologyClass it produces facts about, and the
     slot that uniquely identifies a row within this source.  Location /
     schema / mapping are bound impl concerns (out of scope for spec graph).
+
+    ``trust_score`` — initial scalar trust for ARGMAX_TRUST resolution;
+    encodes "imdb > wiki" at spec time.
+
+    ``slot_priors`` — optional per-(source, slot) Beta priors as
+    (alpha, beta) tuples for POSTERIOR_MEAN / LCB resolution.  Absent
+    entries default to Beta(1, 1).
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     entity_class: OntologyClass
     identifier_slot: Slot
+    trust_score: float = 1.0
+    slot_priors: dict[str, tuple[float, float]] = Field(default_factory=dict)
     description: str | None = None
 
     def __hash__(self) -> int:
@@ -722,11 +694,9 @@ class Spec(SpecBase):
     version: str
     classes: list[OntologyClass] = Field(default_factory=list)
     slots: list[Slot] = Field(default_factory=list)
-    types: list[TypeDefinition] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
     prefixes: dict[str, str] = Field(default_factory=dict)
-    default_range: TypeDefinition | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -735,6 +705,10 @@ class Spec(SpecBase):
 
 # Order matters here — model_rebuild walks annotations and needs every
 # referenced symbol to exist by name in the module.
+Primitive.model_rebuild()
+Array.model_rebuild()
+ClassRef.model_rebuild()
+SlotConstraints.model_rebuild()
 SlotPath.model_rebuild()
 Compare.model_rebuild()
 Within.model_rebuild()
@@ -754,11 +728,6 @@ ReverseRelation.model_rebuild()
 ScalarDerivation.model_rebuild()
 FormatDerivation.model_rebuild()
 Slot.model_rebuild()
-SlotOverride.model_rebuild()
-DirectRef.model_rebuild()
-DiscriminatedRef.model_rebuild()
-IdentifierPattern.model_rebuild()
-UniqueKey.model_rebuild()
 OntologyClass.model_rebuild()
 Constraint.model_rebuild()
 Source.model_rebuild()
@@ -774,10 +743,14 @@ __all__ = [
     "BoolOpKind",
     "AggFunc",
     "GroupByMode",
-    "ReferenceKind",
-    # leaf
-    "TypeDefinition",
-    "PermissibleValue",
+    # type expression hierarchy
+    "STANDARD_PRIMITIVE_NAMES",
+    "TypeExpression",
+    "Primitive",
+    "Array",
+    "ClassRef",
+    # slot constraints
+    "SlotConstraints",
     # expression tree
     "Literal_",
     "SlotPath",
@@ -802,13 +775,7 @@ __all__ = [
     # slots + classes
     "Slot",
     "DerivedSlot",
-    "SlotOverride",
     "OntologyClass",
-    # references
-    "DirectRef",
-    "DiscriminatedRef",
-    "IdentifierPattern",
-    "UniqueKey",
     # constraints + sources + root
     "Constraint",
     "Source",

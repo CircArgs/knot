@@ -6,12 +6,12 @@ Distinct from `canonical.py`:
   - `serialization.py` — full-fidelity round-trip used for persistence
                          to `spec_revisions` and rehydration on read.
 
-Cycle handling: named SpecBase nodes (TypeDefinition, Slot, OntologyClass,
-Source, Constraint) are tracked by counter `$uid`; second visit emits
+Cycle handling: named SpecBase nodes (Slot, OntologyClass, Source, Constraint)
+are tracked by counter `$uid`; second visit emits
 `{"$ref": <uid>, "$kind": "..."}` so two entities with the same name
 (e.g. Movie.imdb_id vs Person.imdb_id) round-trip as distinct objects.
 
-Two-pass rehydration: types → slots → classes → sources → constraints,
+Two-pass rehydration: slots → classes → sources → constraints,
 since each layer's cross-refs need the prior layer's entities indexed.
 """
 
@@ -23,18 +23,17 @@ from pydantic import BaseModel
 
 from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import (
+    Array,
     BoolExpr,
+    ClassRef,
     Compare,
     Constraint,
-    DirectRef,
-    DiscriminatedRef,
     FilteredRelation,
     FormatDerivation,
-    IdentifierPattern,
     Literal_,
     Matches,
     OntologyClass,
-    PermissibleValue,
+    Primitive,
     RecursiveTraversal,
     RelationAggregate,
     RelationAll,
@@ -46,19 +45,17 @@ from knot.spec.metaschema import (
     ReverseRelation,
     ScalarDerivation,
     Slot,
-    SlotOverride,
+    SlotConstraints,
     SlotPath,
     Source,
     Spec,
-    TypeDefinition,
-    UniqueKey,
     Within,
 )
 from knot.spec.metaschema import Between as _Between
 
 # ─── Serializer ─────────────────────────────────────────────────────────────
 
-_NAMED_CLASSES = (TypeDefinition, Slot, OntologyClass, Source, Constraint)
+_NAMED_CLASSES = (Slot, OntologyClass, Source, Constraint)
 
 
 def _is_named(obj: Any) -> bool:
@@ -134,15 +131,12 @@ def spec_to_dict(spec: Spec) -> dict[str, Any]:
 
 # Lookup: $kind class name → metaschema class
 _KIND_REGISTRY: dict[str, type] = {
-    "TypeDefinition": TypeDefinition,
-    "PermissibleValue": PermissibleValue,
+    "Primitive": Primitive,
+    "Array": Array,
+    "ClassRef": ClassRef,
+    "SlotConstraints": SlotConstraints,
     "Slot": Slot,
-    "SlotOverride": SlotOverride,
     "OntologyClass": OntologyClass,
-    "DirectRef": DirectRef,
-    "DiscriminatedRef": DiscriminatedRef,
-    "IdentifierPattern": IdentifierPattern,
-    "UniqueKey": UniqueKey,
     "Constraint": Constraint,
     "Source": Source,
     "Spec": Spec,
@@ -181,7 +175,6 @@ class _Index:
 
 
 _PLACEHOLDER_KINDS = {
-    "TypeDefinition": TypeDefinition,
     "Slot": Slot,
     "OntologyClass": OntologyClass,
     "Source": Source,
@@ -208,10 +201,10 @@ def _pass1_build(d: Any, index: _Index) -> None:
     kind = d.get("$kind")
     uid = d.get("$uid")
     name = d.get("name")
-    placeholder_cls = _PLACEHOLDER_KINDS.get(kind)
+    placeholder_cls = _PLACEHOLDER_KINDS.get(kind) if isinstance(kind, str) else None
 
     if (
-        placeholder_cls in (TypeDefinition, Slot, OntologyClass)
+        placeholder_cls in (Slot, OntologyClass)
         and isinstance(uid, int)
         and isinstance(name, str)
         and uid not in index.by_uid
@@ -236,6 +229,8 @@ def _resolve(d: Any, index: _Index) -> Any:
     """
     if isinstance(d, list):
         return [_resolve(item, index) for item in d]
+    if isinstance(d, tuple):
+        return tuple(_resolve(item, index) for item in d)
     if not isinstance(d, dict):
         return d
     if "$ref" in d:
@@ -261,7 +256,7 @@ def _resolve(d: Any, index: _Index) -> Any:
     uid = d.get("$uid")
     if isinstance(uid, int) and uid in index.by_uid:
         existing = index.by_uid[uid]
-        if isinstance(existing, (TypeDefinition, Slot, OntologyClass)):
+        if isinstance(existing, (Slot, OntologyClass)):
             for k, v in kwargs.items():
                 if k != "name":
                     setattr(existing, k, v)
@@ -282,25 +277,21 @@ def spec_from_dict(d: dict[str, Any]) -> Spec:
     index = _Index()
     _pass1_build(d, index)
 
-    # Pass 2: types first (no deps), then slots (range needs types/classes),
-    # then classes (slots field needs slots), then sources (need class+slot),
+    # Pass 2: slots first (type expressions have no deps),
+    # then classes (slots field needs slots),
+    # then sources (need class + slot),
     # then constraints (need class + expression refs into slots/classes).
-    types_resolved = [_resolve(td, index) for td in d.get("types", [])]
     slots_resolved = [_resolve(sd, index) for sd in d.get("slots", [])]
     classes_resolved = [_resolve(cd, index) for cd in d.get("classes", [])]
-    # Sources and constraints construct fresh; their cross-refs to types/
-    # slots/classes resolve through the uid index built above.
     sources_resolved = [_resolve(s, index) for s in d.get("sources", [])]
     constraints_resolved = [_resolve(c, index) for c in d.get("constraints", [])]
 
     return Spec(
         id=d["id"],
         version=d["version"],
-        types=types_resolved,
         slots=slots_resolved,
         classes=classes_resolved,
         sources=sources_resolved,
         constraints=constraints_resolved,
         prefixes=d.get("prefixes", {}),
-        default_range=_resolve(d.get("default_range"), index) if d.get("default_range") else None,
     )

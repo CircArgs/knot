@@ -19,28 +19,26 @@ from __future__ import annotations
 
 from knot.spec import (
     OntologyClass,
+    Primitive,
     Slot,
     Source,
     Spec,
-    TypeDefinition,
     compute_content_hash,
 )
 from knot.spec.canonical import CANONICAL_DUMP_VERSION
 
-PINNED_HASH = "7f3318722fb1bd00fd1e057be13f8a61ed61226382cfc83a1333c9da09d79e36"
+PINNED_HASH = "1602b890f572c06ba80afd884bda05cd444c13c36f1b7655f2b30eb53a4db0b5"
 PINNED_VERSION = 3
 
 
 def _fixture_spec() -> Spec:
-    string_type = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=string_type, identifier=True, required=True)
-    title = Slot(name="title", range=string_type, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
     imdb_movies = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
         id="canonical-fixture",
         version="1.0.0",
-        types=[string_type],
         slots=[imdb_id, title],
         classes=[movie],
         sources=[imdb_movies],

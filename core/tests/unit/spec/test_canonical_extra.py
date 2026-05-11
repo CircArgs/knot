@@ -11,10 +11,10 @@ from __future__ import annotations
 from knot.spec.serialization import spec_from_dict, spec_to_dict
 from knot.spec import (
     OntologyClass,
+    Primitive,
     Slot,
     Source,
     Spec,
-    TypeDefinition,
     compute_content_hash,
 )
 
@@ -26,11 +26,11 @@ from knot.spec import (
 def _build_two_class_spec() -> Spec:
     """Spec with Movie and Person classes sharing the slot name 'imdb_id'
     but as *distinct* Slot objects."""
-    st = TypeDefinition(name="string", base="str")
-    movie_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    person_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st, required=True)
-    name = Slot(name="name", range=st, required=True)
+    string = Primitive(name="string")
+    movie_id = Slot(name="imdb_id", type=string, identifier=True, required=True)
+    person_id = Slot(name="imdb_id", type=string, identifier=True, required=True)
+    title = Slot(name="title", type=string, required=True)
+    name = Slot(name="name", type=string, required=True)
     movie = OntologyClass(name="Movie", slots=[movie_id, title])
     person = OntologyClass(name="Person", slots=[person_id, name])
     movie_src = Source(name="imdb_movies", entity_class=movie, identifier_slot=movie_id)
@@ -38,7 +38,6 @@ def _build_two_class_spec() -> Spec:
     return Spec(
         id="two-class",
         version="1.0.0",
-        types=[st],
         slots=[movie_id, person_id, title, name],
         classes=[movie, person],
         sources=[movie_src, person_src],
@@ -46,15 +45,14 @@ def _build_two_class_spec() -> Spec:
 
 
 def _build_simple_spec() -> Spec:
-    st = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st, required=True)
+    string = Primitive(name="string")
+    imdb_id = Slot(name="imdb_id", type=string, identifier=True, required=True)
+    title = Slot(name="title", type=string, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
         id="simple",
         version="1.0.0",
-        types=[st],
         slots=[imdb_id, title],
         classes=[movie],
         sources=[src],
@@ -129,14 +127,14 @@ def test_round_trip_source_identifier_slot_identity():
     assert movie_src.identifier_slot is imdb_slot
 
 
-def test_round_trip_slot_range_identity():
-    """slot.range must be the same TypeDefinition object as spec.types[n]."""
+def test_round_trip_slot_type_preserved():
+    """After round-trip, slot.type is a Primitive with the correct name."""
     spec = _build_simple_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
-    string_type = recovered.types[0]
     for slot in recovered.slots:
-        if slot.range is not None and isinstance(slot.range, TypeDefinition):
-            assert slot.range is string_type
+        assert slot.type is not None
+        assert isinstance(slot.type, Primitive)
+        assert slot.type.name == "string"
 
 
 # ---------------------------------------------------------------------------
@@ -205,14 +203,13 @@ def test_content_hash_invariant_two_class_spec():
 def test_content_hash_changes_when_spec_changes():
     """Different spec content must produce a different hash."""
     spec_a = _build_simple_spec()
-    st = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    string = Primitive(name="string")
+    imdb_id = Slot(name="imdb_id", type=string, identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec_b = Spec(
         id="different_id",
         version="2.0.0",
-        types=[st],
         slots=[imdb_id],
         classes=[movie],
         sources=[src],

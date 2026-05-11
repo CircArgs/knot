@@ -25,6 +25,8 @@ import jcs
 from pydantic import BaseModel
 from pydantic_core import PydanticUndefined
 
+from knot.spec.metaschema import Primitive
+
 CANONICAL_DUMP_VERSION: int = 3
 
 
@@ -38,9 +40,6 @@ _RUNTIME_FIELDS: frozenset[tuple[str, str]] = frozenset(
         # description is RUNTIME on these display-bearing classes
         ("OntologyClass", "description"),
         ("Slot", "description"),
-        ("SlotOverride", "description"),
-        ("PermissibleValue", "description"),
-        ("TypeDefinition", "description"),
         ("Constraint", "description"),
         ("Source", "description"),
         # Spec envelope authoring metadata
@@ -93,7 +92,13 @@ def _node_name(obj: BaseModel) -> str | None:
 
     Named SpecBase nodes participate in cycle de-dup; unnamed nodes
     (`Compare`, `BoolExpr`, expression-tree nodes) inline every visit.
+
+    `Primitive` is excluded: it is a pure value type (no cycles possible),
+    and different Python objects with the same name should produce identical
+    canonical output regardless of object identity.
     """
+    if isinstance(obj, Primitive):
+        return None
     try:
         v = getattr(obj, "name", None)
         if isinstance(v, str) and v:

@@ -12,20 +12,19 @@ from knot.spec.errors import (
     DraftNotFoundError,
     PublishGateError,
 )
-from knot.spec.serialization import spec_from_dict, spec_to_dict
 from knot.spec.metaschema import (
+    STANDARD_PRIMITIVE_NAMES,
+    Array,
     BoolExpr,
     BoolOpKind,
+    ClassRef,
     Compare,
     CompareOp,
     Constraint,
     DerivedSlot,
-    DirectRef,
-    DiscriminatedRef,
-    IdentifierPattern,
     Literal_,
     OntologyClass,
-    PermissibleValue,
+    Primitive,
     RelationAggregate,
     RelationAll,
     RelationAny,
@@ -36,31 +35,32 @@ from knot.spec.metaschema import (
     ResolutionPolicy,
     Severity,
     Slot,
-    SlotOverride,
+    SlotConstraints,
     SlotPath,
     Source,
     Spec,
     SpecBase,
-    TypeDefinition,
-    UniqueKey,
+    TypeExpression,
 )
+from knot.spec.serialization import spec_from_dict, spec_to_dict
 
 __all__ = [
     # entity types
     "Spec",
     "OntologyClass",
     "Slot",
-    "TypeDefinition",
     "Source",
     "Constraint",
-    "SlotOverride",
-    "PermissibleValue",
     "DerivedSlot",
     "SpecBase",
-    "DirectRef",
-    "DiscriminatedRef",
-    "IdentifierPattern",
-    "UniqueKey",
+    # type expression hierarchy
+    "TypeExpression",
+    "Primitive",
+    "Array",
+    "ClassRef",
+    "STANDARD_PRIMITIVE_NAMES",
+    # slot constraints
+    "SlotConstraints",
     # enums
     "ResolutionPolicy",
     "Severity",

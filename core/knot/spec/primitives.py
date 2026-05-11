@@ -1,22 +1,11 @@
-"""The standard primitive types every knot spec inherits from the base spec.
+"""Standard primitive type names for knot specs.
 
-These six TypeDefinitions are auto-published as the base spec on first
-startup. New drafts branch from the latest published revision by default,
-so authors get the primitives via lineage and don't need to register them.
+Primitives are language-level (Primitive("string") in TypeExpression),
+not spec data. This module exposes the canonical set for validation.
 """
 
 from __future__ import annotations
 
-from knot.spec.metaschema import TypeDefinition
+from knot.spec.metaschema import STANDARD_PRIMITIVE_NAMES
 
-STANDARD_PRIMITIVES: list[TypeDefinition] = [
-    TypeDefinition(name="string",   base="str"),
-    TypeDefinition(name="integer",  base="int"),
-    TypeDefinition(name="float",    base="float"),
-    TypeDefinition(name="boolean",  base="bool"),
-    TypeDefinition(name="datetime", base="datetime"),
-    TypeDefinition(name="date",     base="date"),
-]
-
-
-__all__ = ["STANDARD_PRIMITIVES"]
+__all__ = ["STANDARD_PRIMITIVE_NAMES"]
