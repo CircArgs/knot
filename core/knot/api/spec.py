@@ -159,6 +159,10 @@ class DraftCreate(_StrictBase):
     label: str | None = None
 
 
+class SlotRename(_StrictBase):
+    new_name: str = Field(pattern=_NAME_PATTERN)
+
+
 # ─── Response shapes ────────────────────────────────────────────────────────
 
 
@@ -676,6 +680,31 @@ async def remove_slot(draft_id: int, name: str) -> MutationResponse:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ReferencedEntityError as exc:
             raise _map_referenced(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.post(
+    "/drafts/{draft_id}/slots/{slot_name}/rename",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+    summary="Rename a slot (non-destructive RENAME COLUMN at publish)",
+)
+async def rename_slot(draft_id: int, slot_name: str, body: SlotRename) -> MutationResponse:
+    """Rename a slot on a draft.
+
+    Records a rename hint so that ``publish`` emits ``ALTER TABLE … RENAME COLUMN``
+    instead of the destructive ``DROP + ADD`` pair. The spec is updated in-place
+    on the draft; any class or source that references the old name is updated too.
+    """
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.rename_slot(conn, draft_id, slot_name, body.new_name)
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)

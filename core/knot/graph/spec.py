@@ -80,6 +80,7 @@ __all__ = (
     "remove_class",
     "remove_source",
     "remove_constraint",
+    "rename_slot",
     # Publish / rollback / preview
     "publish_draft",
     "rollback",
@@ -526,6 +527,78 @@ async def remove_slot(
     return spec
 
 
+async def rename_slot(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    old_name: str,
+    new_name: str,
+) -> Spec:
+    """Rename a slot on a draft, recording a rename hint for publish time.
+
+    The slot is renamed in-memory across the full spec (slot list, every
+    class that references it, every source whose identifier_slot is it).
+    A rename hint ``{class_name, old_name, new_name}`` is appended to
+    ``spec_revisions.pending_renames`` for every concrete class that has
+    the slot as a stored column, so ``diff_specs`` at publish time can emit
+    a non-destructive ``RenameSlot`` instead of ``DropSlot + AddSlot``.
+
+    Raises ``CollisionError`` if ``new_name`` already exists on the draft.
+    Raises ``EntityNotOnDraftError`` if ``old_name`` isn't on the draft.
+    Raises ``DraftAlreadyPublishedError`` if the draft is already published.
+    """
+    import json as _json
+
+    from knot.spec import effective_slots as _effective_slots
+    from knot.spec import is_stored as _is_stored
+
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        # Validate
+        if any(s.name.lower() == new_name.lower() for s in spec.slots):
+            raise CollisionError("Slot", new_name)
+        target = _find_slot(spec, old_name)
+
+        # Collect the concrete classes that have this as a stored column —
+        # these are the classes that will get a RenameSlot DDL record.
+        rename_hints: list[dict] = []
+        for cls in spec.classes:
+            if cls.abstract:
+                continue
+            stored_names = {s.name for s in _effective_slots(cls) if _is_stored(s)}
+            if old_name in stored_names:
+                rename_hints.append(
+                    {
+                        "class_name": cls.name,
+                        "old_name": old_name,
+                        "new_name": new_name,
+                    }
+                )
+
+        # Rename the slot in-memory.
+        target.name = new_name
+
+    # Append rename hints to pending_renames OUTSIDE the edit_draft context
+    # (which has already committed the spec update above).
+    if rename_hints:
+        # Read existing hints, append new ones, write back.
+        existing_row = await (
+            await conn.execute(
+                "SELECT pending_renames FROM spec_revisions WHERE revision = %s",
+                (draft_id,),
+            )
+        ).fetchone()
+        existing: list[dict] = []
+        if existing_row and existing_row[0]:
+            raw = existing_row[0]
+            existing = raw if isinstance(raw, list) else _json.loads(raw)
+        merged = existing + rename_hints
+        await conn.execute(
+            "UPDATE spec_revisions SET pending_renames = %s WHERE revision = %s",
+            (_json.dumps(merged), draft_id),
+        )
+
+    return spec
+
+
 async def remove_class(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -720,6 +793,7 @@ async def preview_publish(
         DropDefinedClass,
         DropSlot,
         DropSource,
+        RenameSlot,
         is_destructive,
     )
 

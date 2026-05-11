@@ -37,6 +37,13 @@ CREATE INDEX IF NOT EXISTS spec_revisions_published_at
 CREATE INDEX IF NOT EXISTS spec_revisions_parent
     ON spec_revisions (parent_revision);
 
+-- pending_renames: slot-rename hints accumulated on a draft via the rename
+-- endpoint. Each entry is {class_name, old_name, new_name}. At publish time
+-- these hints are passed to diff_specs so it can emit RenameSlot instead of
+-- DropSlot+AddSlot (which would be destructive). Cleared on publish.
+ALTER TABLE spec_revisions
+    ADD COLUMN IF NOT EXISTS pending_renames JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 -- ──────────────────────────────────────────────────────────────────────────────
 -- trust_config
 -- Per-source trust scores. Runtime-editable, NOT draft → publish; affects

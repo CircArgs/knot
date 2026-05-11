@@ -593,6 +593,38 @@ class GateReport:
         self.prev = prev
 
 
+async def _get_pending_renames(
+    conn: psycopg.AsyncConnection, draft_id: int
+) -> dict[str, dict[str, str]]:
+    """Load pending rename hints for a draft from spec_revisions.pending_renames.
+
+    Returns ``{class_name: {old_slot_name: new_slot_name}}``.
+    Returns an empty dict if the column doesn't exist yet (migration guard).
+    """
+    try:
+        row = await (
+            await conn.execute(
+                "SELECT pending_renames FROM spec_revisions WHERE revision = %s",
+                (draft_id,),
+            )
+        ).fetchone()
+    except Exception:
+        # Column may not exist on older DBs before the migration runs.
+        return {}
+    if not row or not row[0]:
+        return {}
+    raw: list[dict] = row[0] if isinstance(row[0], list) else json.loads(row[0])
+    # Build nested dict: {class_name: {old_name: new_name}}.
+    out: dict[str, dict[str, str]] = {}
+    for entry in raw:
+        cls_name = entry.get("class_name", "")
+        old = entry.get("old_name", "")
+        new = entry.get("new_name", "")
+        if cls_name and old and new:
+            out.setdefault(cls_name, {})[old] = new
+    return out
+
+
 async def evaluate_gates(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -623,7 +655,10 @@ async def evaluate_gates(
     publish_gate(candidate)
     prev = await get_published(conn)
 
-    changes = diff_specs(prev, candidate)
+    # Load rename hints accumulated by the rename-slot API.
+    pending_renames = await _get_pending_renames(conn, draft_id)
+
+    changes = diff_specs(prev, candidate, renames=pending_renames if pending_renames else None)
     destructive_names = [type(c).__name__ for c in changes if is_destructive(c)]
     requires_allow_destructive = bool(destructive_names)
 
@@ -759,7 +794,9 @@ async def publish_draft(
             (draft_id,),
         )
         await conn.execute(
-            "UPDATE spec_revisions SET published = TRUE, published_at = %s WHERE revision = %s",
+            "UPDATE spec_revisions "
+            "SET published = TRUE, published_at = %s, pending_renames = '[]'::jsonb "
+            "WHERE revision = %s",
             (_now(), draft_id),
         )
         await apply_changes(conn, report.changes)

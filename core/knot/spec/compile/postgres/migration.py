@@ -286,6 +286,27 @@ class DropSlot(Change):
 
 
 @dataclass
+class RenameSlot(Change):
+    """Bucket C — rename a stored column without touching data.
+
+    Emits ``ALTER TABLE … RENAME COLUMN old_name TO new_name``.
+    Also renames the required-slot CHECK constraint (if one was emitted)
+    by dropping the old name and re-adding it under the new name — postgres
+    has no RENAME CONSTRAINT, so the workaround is DROP + ADD via DO $$.
+
+    This change is produced by ``diff_specs`` only when the caller passes
+    a ``renames`` hint mapping ``{class_name: {old_slot_name: new_slot_name}}``.
+    Without that hint, a slot name change appears as ``DropSlot + AddSlot``
+    (destructive).
+    """
+
+    cls: OntologyClass
+    slot: Slot          # candidate-side slot object (carries new name + required flag)
+    old_name: str
+    new_name: str
+
+
+@dataclass
 class ChangeSlotTypeExpression(Change):
     """Bucket A — the slot's TypeExpression changed, which means the postgres
     column type changed. Carries prev and new pg types for the ALTER COLUMN."""
@@ -791,7 +812,19 @@ def _diff_constraints(prev: Spec | None, candidate: Spec) -> list[Change]:
     return changes
 
 
-def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
+def diff_specs(
+    prev: Spec | None,
+    candidate: Spec,
+    *,
+    renames: dict[str, dict[str, str]] | None = None,
+) -> list[Change]:
+    """Diff two specs into a list of typed Change records.
+
+    ``renames`` is an optional hint map: ``{class_name: {old_slot_name: new_slot_name}}``.
+    When provided, a slot whose name changed according to the hint emits a
+    ``RenameSlot`` instead of the default ``DropSlot + AddSlot`` pair (which
+    would require ``allow_destructive``).
+    """
     changes: list[Change] = []
     prev_classes = {c.name: c for c in (prev.classes if prev else [])}
     cand_classes = {c.name: c for c in candidate.classes}
@@ -897,9 +930,42 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
         prev_all = {s.name: s for s in _effective_slots(prev_cls)}
         cand_all = {s.name: s for s in _effective_slots(cand_cls)}
 
-        for s_name in cand_stored.keys() - prev_stored.keys():
+        # Build rename-hint lookup for this class: {old_name -> new_name}.
+        # Names that appear in the hint but aren't actually missing from prev
+        # or absent from cand are ignored (stale hint, defensive).
+        class_renames: dict[str, str] = {}  # old_name → new_name
+        if renames:
+            class_renames = renames.get(name, {})
+        # Invert: new_name → old_name (for cand-side lookup).
+        new_to_old: dict[str, str] = {v: k for k, v in class_renames.items()}
+
+        # Slots that are truly added (in cand but not in prev, excluding those
+        # that are the new name of a rename).
+        added_slot_names = cand_stored.keys() - prev_stored.keys()
+        # Slots that are truly dropped (in prev but not in cand, excluding
+        # those that are the old name of a rename).
+        dropped_slot_names = prev_stored.keys() - cand_stored.keys()
+
+        # Emit RenameSlot for confirmed renames, remove them from add/drop sets.
+        emitted_renames: set[str] = set()  # old names consumed by a RenameSlot
+        for new_name_r, old_name_r in new_to_old.items():
+            if old_name_r in dropped_slot_names and new_name_r in added_slot_names:
+                cand_slot = cand_stored[new_name_r]
+                changes.append(
+                    RenameSlot(
+                        cls=cand_cls,
+                        slot=cand_slot,
+                        old_name=old_name_r,
+                        new_name=new_name_r,
+                    )
+                )
+                emitted_renames.add(old_name_r)
+                added_slot_names = added_slot_names - {new_name_r}
+                dropped_slot_names = dropped_slot_names - {old_name_r}
+
+        for s_name in added_slot_names:
             changes.append(AddSlot(cls=cand_cls, slot=cand_stored[s_name]))
-        for s_name in prev_stored.keys() - cand_stored.keys():
+        for s_name in dropped_slot_names:
             changes.append(DropSlot(cls=cand_cls, slot_name=s_name))
         for s_name in cand_stored.keys() & prev_stored.keys():
             ps, cs = prev_stored[s_name], cand_stored[s_name]
@@ -1051,6 +1117,35 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         else:
             # true → false: drop CHECK constraint (no data loss).
             await conn.execute(_required_check_drop_sql(change.cls, change.slot))
+
+    elif isinstance(change, RenameSlot):
+        # Step 1: rename the column.
+        await conn.execute(
+            sql.SQL(
+                "ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}"
+            ).format(
+                table=_table_id(change.cls),
+                old_col=sql.Identifier(change.old_name),
+                new_col=sql.Identifier(change.new_name),
+            )
+        )
+        # Step 2: rename the required-slot CHECK constraint if one exists.
+        # Postgres has no RENAME CONSTRAINT DDL. Drop the old name and
+        # re-add under the new name via the idempotent DO $$ helper.
+        # We create a synthetic "old slot" just to compute the old check name.
+        old_slot_for_name = Slot(name=change.old_name, type=change.slot.type)
+        old_chk = _required_check_name(change.cls, old_slot_for_name)
+        new_chk = _required_check_name(change.cls, change.slot)
+        if old_chk != new_chk and change.slot.required:
+            # Drop old name (may not exist if required was false before rename).
+            await conn.execute(
+                sql.SQL("ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {chk}").format(
+                    tbl=_table_id(change.cls),
+                    chk=sql.Identifier(old_chk),
+                )
+            )
+            # Re-add under new name.
+            await conn.execute(_required_check_sql(change.cls, change.slot))
 
     elif isinstance(change, ChangeClassAbstract):
         # abstract toggles whether the class has a table.
