@@ -1,7 +1,8 @@
 # CLAUDE.md — knot
 
 **knot** is an API-first knowledge-graph + ontology platform. Single team,
-no tenants. Postgres data plane. Python implementation in `knot/`.
+no tenants. Postgres data plane. The repo is a **monorepo of sibling
+services**, each self-contained (code + tests + own pyproject/package.json).
 
 This file is the contract between the codebase and any agent that mutates it.
 Read it before making changes.
@@ -23,33 +24,52 @@ branches. The new docs site is being planned in `.knot-docs-plan.md` and
   no internal queue, no internal scheduler. Bound DI impls do all execution.
 - **Async-first.** psycopg `AsyncConnection`; async FastAPI routes. The
   compile/metaschema layers stay sync (pure transforms over Pydantic types).
+- **Sibling services talk via HTTP only.** `ai/` and `er/` never import
+  `knot/`. They call knot's public API. The framework inside `knot/extensions/`
+  is a thin shim that POSTs to those services when configured.
 
-## Layout
+## Layout (monorepo)
 
 ```
-knot/                 # Python package
-  api/                # FastAPI + Strawberry GraphQL (graph/, auth/, lake, spec, dq)
-  db/                 # SQL execution layer; only this dir touches postgres
-  spec/               # Spec model + compilation (compile/postgres, compile/graphql)
-  extensions/         # Master dispatcher + builtin ER extension
-  graph/              # Cross-cutting graph helpers (resolve, corrections)
-  config/             # Settings (KNOT_ env prefix)
-tests/                # Split into unit/ (pure Python, no I/O) and
-                      # integration/ (real postgres via docker-compose);
-                      # both subdirs mirror the knot/ package layout
-scripts/              # up.sh / down.sh / wait-ready.sh
+core/                 # knot core Python package (importable as "knot")
+  knot/               # the package itself
+    api/              # FastAPI + Strawberry GraphQL (graph/, auth/, ai/, lake, spec, dq)
+    db/               # SQL execution layer; only this dir touches postgres
+    spec/             # Spec model + compilation (compile/postgres, compile/graphql)
+    extensions/       # Master dispatcher; HTTP shims to sibling services
+    graph/            # Orchestration tier; one function per API operation
+    config/           # Settings (KNOT_ env prefix)
+  tests/              # unit/ (pure Python, no I/O) + integration/ (real postgres)
+  pyproject.toml      # knot core deps and config
+ai/                   # AI sibling FastAPI service (knot_ai) on :8001
+  knot_ai/            # NL→GraphQL etc., talks to knot via HTTP only
+  tests/
+  pyproject.toml
+er/                   # ER sibling FastAPI service (knot_er) on :8002
+  knot_er/            # entity resolution strategies; receives RowsIngesting payloads
+  tests/
+  pyproject.toml
+ui/                   # React + Vite + React Flow + Apollo (pnpm)
+  src/
+  package.json
+notebooks/            # marimo demo notebooks
+scripts/              # docker-compose helpers (up.sh, down.sh, wait-ready.sh)
 docker-compose.yml    # Local postgres for dev + tests
 ```
 
 ## Boundary rules
 
-- **Execute SQL → `knot/db/`.** Build SQL from models → `knot/spec/compile/`.
-  No crosstalk between the two for compilation. Metadata reads (e.g., schema
-  name from settings) are tolerable.
-- **Configurable names → `knot/config/`.** No hardcoded schema names, table
-  names, or role names anywhere else.
-- **Spec → DB direction only.** `knot/db/` may import typed metadata from
-  `knot/spec/`. `knot/spec/compile/` must NOT import from `knot/db/`.
+- **Execute SQL → `core/knot/db/`.** Build SQL from models →
+  `core/knot/spec/compile/`. No crosstalk between the two for compilation.
+  Metadata reads (e.g., schema name from settings) are tolerable.
+- **Configurable names → `core/knot/config/`.** No hardcoded schema names,
+  table names, or role names anywhere else.
+- **Spec → DB direction only.** `core/knot/db/` may import typed metadata
+  from `core/knot/spec/`. `core/knot/spec/compile/` must NOT import from
+  `core/knot/db/`.
+- **Siblings never import knot.** `ai/`, `er/`, `ui/` talk via HTTP.
+  `core/knot/extensions/` may register HTTP-delegating shims (e.g., calls
+  the `er/` service on `RowsIngesting` events when `KNOT_ER_URL` is set).
 
 ## Workflow
 
@@ -57,16 +77,24 @@ docker-compose.yml    # Local postgres for dev + tests
 # Bring up postgres
 ./scripts/up.sh
 
+# Install knot core in the root .venv (only needed once / after deps change)
+.venv/bin/pip install -e ./core
+
 # Unit tests — fast, no docker required
-.venv/bin/pytest tests/unit/ -q
+.venv/bin/pytest core/tests/unit/ -q
 
 # Full suite (requires docker-compose postgres up)
-KNOT_DEV_MODE=1 .venv/bin/pytest tests/ -q
+cd core && KNOT_DEV_MODE=1 ../.venv/bin/pytest tests/ -q
 
 # Lint + format + types
-.venv/bin/ruff check knot/ tests/
-.venv/bin/ruff format knot/ tests/
-.venv/bin/mypy knot/
+.venv/bin/ruff check core/knot/ core/tests/
+.venv/bin/ruff format core/knot/ core/tests/
+.venv/bin/mypy core/knot/
+
+# Sibling services (each self-contained)
+cd ai && pip install -e . && uvicorn knot_ai.main:app --port 8001
+cd er && pip install -e . && uvicorn knot_er.main:app --port 8002
+cd ui && pnpm install && pnpm dev   # :5173, proxies to all three
 
 # Tear down
 ./scripts/down.sh
