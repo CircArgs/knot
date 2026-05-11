@@ -19,3 +19,17 @@ __marimo__/
 # OS
 .DS_Store
 Thumbs.db
+
+# UI build/install artifacts
+ui/node_modules/
+ui/dist/
+ui/.vite/
+ui/.turbo/
+
+# Sibling service install artifacts
+ai/.venv/
+ai/dist/
+ai/*.egg-info/
+er/.venv/
+er/dist/
+er/*.egg-info/
