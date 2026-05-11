@@ -12,7 +12,16 @@ from __future__ import annotations
 
 
 class PublishGateError(Exception):
-    """Raised when the publish gate rejects a candidate spec."""
+    """Raised when the publish gate rejects a candidate spec.
+
+    ``details`` carries structured blocker information (list of dicts)
+    for callers that need machine-readable gating results (e.g. the
+    preview endpoint).  Plain string callers can ignore it.
+    """
+
+    def __init__(self, message: str, *, details: list[dict] | None = None) -> None:
+        super().__init__(message)
+        self.details: list[dict] = details or []
 
 
 class DraftNotFoundError(Exception):

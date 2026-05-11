@@ -32,12 +32,12 @@ from knot.spec.errors import (
     PublishGateError,
 )
 from knot.spec.metaschema import (
+    ClassRef,
     Constraint,
     OntologyClass,
     Slot,
     Source,
     Spec,
-    TypeDefinition,
 )
 from knot.spec.serialization import spec_from_dict, spec_to_dict
 
@@ -100,9 +100,9 @@ def publish_gate(candidate: Spec) -> None:
 
     Step 1: Pydantic shape (already enforced by Spec instantiation; re-runs
             model_validate over the canonical dump as a defensive recheck).
-    Step 2: Reference resolution — every Slot range, every Source.entity_class,
-            every Source.identifier_slot, every Constraint.primary, every
-            SlotOverride.slot must point at an entity present on the spec.
+    Step 2: Reference resolution — every Slot ClassRef target, every
+            Source.entity_class, every Source.identifier_slot, every
+            Constraint.primary must point at an entity present on the spec.
 
     Steps 3+4 (DataContext cross-checks + impact preview) are bindings-side
     and land with the modeling router.  This function is the natural place
@@ -111,8 +111,8 @@ def publish_gate(candidate: Spec) -> None:
     # Step 1: shape was enforced at construction (extra='forbid' on every
     # SpecBase subclass; bad fields raise immediately).  Pydantic's
     # model_dump-and-revalidate trick doesn't work on the cyclic spec graph
-    # (slot.range → OntologyClass → slots → Slot → range → ...), so we trust
-    # that the in-memory Pydantic models are well-formed.
+    # (slot.type → ClassRef → OntologyClass → slots → Slot → type → ...),
+    # so we trust that the in-memory Pydantic models are well-formed.
     if not isinstance(candidate, Spec):
         raise PublishGateError(
             f"publish_gate expected a Spec instance, got {type(candidate).__name__}"
@@ -121,28 +121,33 @@ def publish_gate(candidate: Spec) -> None:
     # Step 2: reference resolution.
     classes_by_id = {id(c): c for c in candidate.classes}
     slots_by_id = {id(s): s for s in candidate.slots}
-    types_by_id = {id(t): t for t in candidate.types}
 
     errors: list[str] = []
 
+    def _collect_classrefs(type_expr: Any) -> list[ClassRef]:
+        """Walk a TypeExpression and collect all ClassRef nodes."""
+        from knot.spec.metaschema import Array, Primitive
+
+        if isinstance(type_expr, Primitive):
+            return []
+        if isinstance(type_expr, Array):
+            return _collect_classrefs(type_expr.of)
+        if isinstance(type_expr, ClassRef):
+            return [type_expr]
+        return []
+
     for s in candidate.slots:
-        if s.range is None:
-            # Derived slots with deferred range are valid; structural slots
-            # without range are an error.
+        if s.type is None:
+            # Derived slots with deferred type are valid; structural slots
+            # without type are an error.
             if s.derivation is None:
-                errors.append(f"Slot {s.name!r} has no range and no derivation.")
+                errors.append(f"Slot {s.name!r} has no type and no derivation.")
             continue
-        if isinstance(s.range, OntologyClass):
-            if id(s.range) not in classes_by_id:
+        for ref in _collect_classrefs(s.type):
+            if id(ref.target_class) not in classes_by_id:
                 errors.append(
-                    f"Slot {s.name!r}.range references OntologyClass "
-                    f"{s.range.name!r} not on spec.classes."
-                )
-        elif isinstance(s.range, TypeDefinition):
-            if id(s.range) not in types_by_id:
-                errors.append(
-                    f"Slot {s.name!r}.range references TypeDefinition "
-                    f"{s.range.name!r} not on spec.types."
+                    f"Slot {s.name!r}.type references OntologyClass "
+                    f"{ref.target_class.name!r} not on spec.classes."
                 )
 
     for c in candidate.classes:
@@ -157,14 +162,6 @@ def publish_gate(candidate: Spec) -> None:
             errors.append(
                 f"Source {src.name!r}.entity_class references OntologyClass "
                 f"{src.entity_class.name!r} not on spec.classes."
-            )
-        # Polymorphic classes cannot be pointed at by a Source (commitment 11,
-        # slice restriction (b)). Their rows arrive only via Add corrections.
-        if getattr(src.entity_class, "identifier_pattern", None) is not None:
-            errors.append(
-                f"Source {src.name!r}.entity_class {src.entity_class.name!r} has an "
-                f"identifier_pattern and is polymorphic. Sources cannot target "
-                f"polymorphic classes directly; use Add corrections instead."
             )
         if id(src.identifier_slot) not in slots_by_id:
             errors.append(
@@ -184,19 +181,6 @@ def publish_gate(candidate: Spec) -> None:
                 f"Constraint {con.name!r}.primary references OntologyClass "
                 f"{con.primary.name!r} not on spec.classes."
             )
-
-    # DiscriminatedRef target_class validation: every DiscriminatedRef on any
-    # slot must name a target_class that is present on spec.classes.
-    from knot.spec.metaschema import DiscriminatedRef as _DiscriminatedRef
-
-    for s in candidate.slots:
-        ref = getattr(s, "reference", None)
-        if isinstance(ref, _DiscriminatedRef) and ref.target_class is not None:
-            if id(ref.target_class) not in classes_by_id:
-                errors.append(
-                    f"Slot {s.name!r}.reference.target_class references OntologyClass "
-                    f"{ref.target_class.name!r} not on spec.classes."
-                )
 
     # Mixin validation: every mixin must be on spec.classes; the mixin chain
     # must be acyclic; the effective slot set (own + transitive mixins) must
@@ -220,7 +204,7 @@ def publish_gate(candidate: Spec) -> None:
                 f"between mixins {source_a!r} and {source_b!r}."
             )
 
-    # Defined-class validation.
+    # Defined-class validation (classes with a definition body — VIEW-backed).
     for c in candidate.classes:
         if getattr(c, "definition", None) is None:
             continue
@@ -454,6 +438,116 @@ async def get_published_content_hash(conn: psycopg.AsyncConnection) -> str | Non
     return row[0] if row else None
 
 
+async def run_preflight_checks(
+    conn: psycopg.AsyncConnection,
+    changes: list,
+    prev: "Spec | None",
+    candidate: "Spec",
+) -> list[dict]:
+    """Run pre-flight data checks for the given diff.
+
+    Returns a list of blocker dicts (empty = all clear). Does NOT emit DDL.
+    Runs inside the caller's transaction (uses savepoints for cast probes).
+
+    Checks:
+      - For each ChangeSlotTypeExpression: attempt the cast in a savepoint;
+        capture failure as ``kind="type_cast_failure"``.
+      - For each ChangeSourceIdentifierSlot: verify the new slot has no NULLs
+        and no duplicate values for that source's rows.
+    """
+    from knot.spec.compile.postgres._naming import schema, table_id
+    from knot.spec.compile.postgres.migration import (
+        ChangeSlotTypeExpression,
+        ChangeSourceIdentifierSlot,
+    )
+    from psycopg import sql
+
+    blockers: list[dict] = []
+
+    for change in changes:
+        if isinstance(change, ChangeSlotTypeExpression):
+            # Probe the cast inside a savepoint so a failure rolls back only
+            # the probe, not the enclosing publish transaction.
+            # Use a direct SELECT (not wrapped in count(*)) — postgres optimizes
+            # away the inner cast when wrapped, so we need the raw cast to fire.
+            sp_name = f"preflight_cast_{change.cls.name.lower()}_{change.slot.name}"
+            try:
+                await conn.execute(f"SAVEPOINT {sp_name}")
+                await (
+                    await conn.execute(
+                        sql.SQL(
+                            "SELECT {col}::{newt} FROM {tbl} WHERE {col} IS NOT NULL"
+                        ).format(
+                            col=sql.Identifier(change.slot.name),
+                            newt=sql.SQL(change.new_pg_type),
+                            tbl=sql.Identifier(schema(), change.cls.name.lower()),
+                        )
+                    )
+                ).fetchall()
+                await conn.execute(f"RELEASE SAVEPOINT {sp_name}")
+            except psycopg.Error as exc:
+                await conn.execute(f"ROLLBACK TO SAVEPOINT {sp_name}")
+                await conn.execute(f"RELEASE SAVEPOINT {sp_name}")
+                blockers.append(
+                    {
+                        "kind": "type_cast_failure",
+                        "class": change.cls.name,
+                        "slot": change.slot.name,
+                        "from": change.prev_pg_type,
+                        "to": change.new_pg_type,
+                        "detail": str(exc),
+                    }
+                )
+
+        elif isinstance(change, ChangeSourceIdentifierSlot):
+            tbl = sql.Identifier(schema(), change.cls.name.lower())
+            new_col = sql.Identifier(change.new_slot)
+
+            # NULL check
+            null_row = await (
+                await conn.execute(
+                    sql.SQL(
+                        "SELECT count(*) FROM {tbl} WHERE _source = %s AND {col} IS NULL"
+                    ).format(tbl=tbl, col=new_col),
+                    (change.source_name,),
+                )
+            ).fetchone()
+            null_count = null_row[0] if null_row else 0
+            if null_count > 0:
+                blockers.append(
+                    {
+                        "kind": "identifier_nulls",
+                        "source": change.source_name,
+                        "slot": change.new_slot,
+                        "count": null_count,
+                    }
+                )
+
+            # Duplicate check
+            dup_rows = await (
+                await conn.execute(
+                    sql.SQL(
+                        "SELECT {col}, count(*) FROM {tbl} WHERE _source = %s "
+                        "GROUP BY {col} HAVING count(*) > 1"
+                    ).format(tbl=tbl, col=new_col),
+                    (change.source_name,),
+                )
+            ).fetchall()
+            if dup_rows:
+                blockers.append(
+                    {
+                        "kind": "identifier_duplicates",
+                        "source": change.source_name,
+                        "slot": change.new_slot,
+                        "samples": [
+                            {"value": str(r[0]), "count": r[1]} for r in dup_rows[:5]
+                        ],
+                    }
+                )
+
+    return blockers
+
+
 async def publish_draft(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -463,7 +557,7 @@ async def publish_draft(
     """Run the publish gate; on pass, atomically flip this draft to published
     and bring the data-plane schema in line with the new spec.
 
-    The destructive-change check (DropClass / DropSlot / ChangeSlotType)
+    The destructive-change check (DropClass / DropSlot / ChangeSlotTypeExpression)
     runs against the diff before the flag flip; if any destructive change
     is present and ``allow_destructive`` is False, raises
     ``PublishGateError`` and the draft stays a draft.
@@ -547,6 +641,16 @@ async def publish_draft(
                         con.name,
                         n,
                     )
+
+        # Pre-flight checks: cast feasibility + identifier slot integrity.
+        # Runs before DDL so bad data is caught before any schema change.
+        preflight_blockers = await run_preflight_checks(conn, changes, prev, candidate)
+        if preflight_blockers:
+            kinds = ", ".join(sorted({b["kind"] for b in preflight_blockers}))
+            raise PublishGateError(
+                f"preflight: {len(preflight_blockers)} blocker(s) ({kinds})",
+                details=preflight_blockers,
+            )
 
         # Demote → promote in two statements so the partial unique index
         # `(published) WHERE published = TRUE` doesn't see two TRUE rows
