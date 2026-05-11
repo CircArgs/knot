@@ -455,8 +455,9 @@ async def run_preflight_checks(
       - For each ChangeSourceIdentifierSlot: verify the new slot has no NULLs
         and no duplicate values for that source's rows.
     """
-    from knot.spec.compile.postgres._naming import schema, table_id
+    from knot.spec.compile.postgres._naming import schema, user_corrections_source
     from knot.spec.compile.postgres.migration import (
+        ChangeSlotRequired,
         ChangeSlotTypeExpression,
         ChangeSourceIdentifierSlot,
     )
@@ -542,6 +543,30 @@ async def run_preflight_checks(
                         "samples": [
                             {"value": str(r[0]), "count": r[1]} for r in dup_rows[:5]
                         ],
+                    }
+                )
+
+        elif isinstance(change, ChangeSlotRequired) and change.new_required:
+            # false → true: check for NULLs in real-source rows (user-correction
+            # rows are exempted by the CHECK constraint body, so skip them).
+            tbl = sql.Identifier(schema(), change.cls.name.lower())
+            col = sql.Identifier(change.slot_name)
+            null_row = await (
+                await conn.execute(
+                    sql.SQL(
+                        "SELECT count(*) FROM {tbl} "
+                        "WHERE _source != {uc} AND {col} IS NULL"
+                    ).format(tbl=tbl, col=col, uc=sql.Literal(user_corrections_source())),
+                )
+            ).fetchone()
+            null_count = null_row[0] if null_row else 0
+            if null_count > 0:
+                blockers.append(
+                    {
+                        "kind": "required_violation",
+                        "class": change.cls.name,
+                        "slot": change.slot_name,
+                        "null_count": null_count,
                     }
                 )
 

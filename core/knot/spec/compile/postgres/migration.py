@@ -165,6 +165,63 @@ def _bindings_unique_current_sql(cls: OntologyClass) -> sql.Composable:
     ).format(idx=_bindings_unique_current_id(cls), table=_bindings_table_id(cls))
 
 
+def _required_check_name(cls: OntologyClass, slot: Slot) -> str:
+    """Constraint name for the required-slot CHECK.
+
+    ``<class>_<slot>_required_chk`` — lowercase, safe within postgres's
+    63-byte identifier limit (class names are capped at 62 chars by the API,
+    slot names likewise).
+    """
+    return f"{cls.name.lower()}_{slot.name}_required_chk"
+
+
+def _required_check_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
+    """Idempotent ``ADD CONSTRAINT … CHECK`` for a required slot.
+
+    The user-corrections source is exempted so partial correction rows
+    (which only supply changed fields) can always be written.
+
+    Uses a ``DO $$`` block that skips the ALTER when the constraint already
+    exists — postgres 16 has no ``ADD CONSTRAINT IF NOT EXISTS`` for checks.
+    """
+    from knot.spec.compile.postgres._naming import user_corrections_source
+
+    chk_name = _required_check_name(cls, slot)
+    tbl_schema = schema()
+    tbl_name = cls.name.lower()
+    col_name = slot.name
+    uc_src = user_corrections_source()
+
+    # Build the raw SQL string for the DO block (identifiers already safe:
+    # class + slot names pass the API regex ^[A-Za-z_][A-Za-z0-9_]{0,62}$).
+    do_body = (
+        f"BEGIN "
+        f"  IF NOT EXISTS ("
+        f"    SELECT 1 FROM pg_constraint c "
+        f"    JOIN pg_class r ON r.oid = c.conrelid "
+        f"    JOIN pg_namespace n ON n.oid = r.relnamespace "
+        f"    WHERE c.conname = '{chk_name}' "
+        f"    AND n.nspname = '{tbl_schema}' "
+        f"    AND r.relname = '{tbl_name}'"
+        f"  ) THEN "
+        f"    ALTER TABLE {tbl_schema}.{tbl_name} ADD CONSTRAINT {chk_name} "
+        f"    CHECK (_source = '{uc_src}' OR {col_name} IS NOT NULL); "
+        f"  END IF; "
+        f"END"
+    )
+    return sql.SQL("DO $$ {body} $$").format(body=sql.SQL(do_body))
+
+
+def _required_check_drop_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
+    """``DROP CONSTRAINT IF EXISTS`` for a required-slot CHECK."""
+    return sql.SQL(
+        "ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {chk}"
+    ).format(
+        tbl=_table_id(cls),
+        chk=sql.Identifier(_required_check_name(cls, slot)),
+    )
+
+
 def _create_source_table_sql(cls: OntologyClass) -> sql.Composable:
     user_cols: list[sql.Composable] = []
     for slot in _effective_slots(cls):
@@ -241,10 +298,19 @@ class ChangeSlotTypeExpression(Change):
 
 @dataclass
 class ChangeSlotRequired(Change):
-    """No-op DDL today — slot.required is API-enforced (user-correction
-    rows are partial). Kept on the change-event surface for completeness."""
+    """Bucket B (false→true) / Bucket C (true→false).
+
+    false → true: adds a CHECK constraint exempting ``_user_corrections`` rows.
+      The preflight gate verifies no NULL violations exist before emitting
+      the ALTER TABLE.
+    true → false: drops the CHECK constraint (no data loss).
+
+    The slot object on the candidate side is needed by the emitter for
+    the constraint name and column identifier.
+    """
 
     cls: OntologyClass
+    slot: Slot
     slot_name: str
     new_required: bool
 
@@ -847,7 +913,9 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
                 )
             if ps.required != cs.required:
                 changes.append(
-                    ChangeSlotRequired(cls=cand_cls, slot_name=s_name, new_required=cs.required)
+                    ChangeSlotRequired(
+                        cls=cand_cls, slot=cs, slot_name=s_name, new_required=cs.required
+                    )
                 )
 
         # Per-field diff over the *full* effective-slot intersection — covers
@@ -872,6 +940,10 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         await conn.execute(_bindings_create_sql(change.cls))
         await conn.execute(_bindings_index_sql(change.cls))
         await conn.execute(_bindings_unique_current_sql(change.cls))
+        # Emit CHECK constraints for every required stored slot.
+        for slot in _effective_slots(change.cls):
+            if _is_stored(slot) and slot.required:
+                await conn.execute(_required_check_sql(change.cls, slot))
 
     elif isinstance(change, DropClass):
         cls_lower = change.class_name.lower()
@@ -947,6 +1019,8 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             pgtype=sql.SQL(_slot_pg_type(change.slot)),
         )
         await conn.execute(stmt)
+        if change.slot.required:
+            await conn.execute(_required_check_sql(change.cls, change.slot))
 
     elif isinstance(change, DropSlot):
         stmt = sql.SQL("ALTER TABLE {table} DROP COLUMN {col}").format(
@@ -969,7 +1043,14 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         await conn.execute(stmt)
 
     elif isinstance(change, ChangeSlotRequired):
-        return  # API-enforced; no DDL
+        if change.new_required:
+            # false → true: add CHECK constraint.
+            # The preflight gate already verified no NULLs exist for real
+            # sources, so this ALTER is safe to run.
+            await conn.execute(_required_check_sql(change.cls, change.slot))
+        else:
+            # true → false: drop CHECK constraint (no data loss).
+            await conn.execute(_required_check_drop_sql(change.cls, change.slot))
 
     elif isinstance(change, ChangeClassAbstract):
         # abstract toggles whether the class has a table.
