@@ -17,6 +17,7 @@ import { useNavigate, useParams } from "react-router-dom";
 
 import ClassNode from "../components/nodes/ClassNode";
 import ConstraintNode from "../components/nodes/ConstraintNode";
+import Legend from "../components/Legend";
 import Modal from "../components/Modal";
 import PropertyPanel, {
   resolveSelection,
@@ -515,6 +516,7 @@ export default function SpecGraph() {
             <Background gap={20} />
             <Controls />
           </ReactFlow>
+          <Legend mode={showOntologyDetails ? "details" : "class-card"} />
         </div>
         <PropertyPanel
           selection={selection}
