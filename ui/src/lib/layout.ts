@@ -1,19 +1,21 @@
 import ELK from "elkjs/lib/elk.bundled.js";
 import type { ElkNode } from "elkjs/lib/elk.bundled.js";
-
-import type { SpecEdge, SpecNode } from "./buildGraph";
+import type { Edge, Node } from "@xyflow/react";
 
 const elk = new ELK();
 
 /**
  * Run elkjs layered layout once. Caller stores the result and lets React Flow
  * handle drag/manual positioning thereafter.
+ *
+ * Generic over node data so spec-graph and data-graph can share it; the
+ * algorithm only needs id/width/height/edge-endpoints.
  */
-export async function layoutGraph(
-  nodes: SpecNode[],
-  edges: SpecEdge[],
+export async function layoutGraph<N extends Node>(
+  nodes: N[],
+  edges: Edge[],
   opts: { width?: number; height?: number } = {},
-): Promise<SpecNode[]> {
+): Promise<N[]> {
   if (nodes.length === 0) return nodes;
 
   const nodeWidth = opts.width ?? 220;
