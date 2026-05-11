@@ -5,13 +5,15 @@ Coverage:
   2. Multiple handlers on same event type all run
   3. isinstance matching works for subclasses
   4. No matching handler is a no-op (event unchanged)
-  5. ER source-specific resolver overrides the built-in default
-  6. ER register raises on duplicate registration
-  7. End-to-end via ingest route: built-in identifier-slot fallback sets
-     _canonical_id when no team resolver is registered.
+  5. ER module HTTP-delegates to the er sibling service when
+     KNOT_ER_URL is set (httpx mocked).
+  6. End-to-end via ingest route: built-in identifier-slot fallback sets
+     _canonical_id when no team handler is registered.
 """
 
 from __future__ import annotations
+
+import importlib
 
 import pytest
 import pytest_asyncio
@@ -172,33 +174,66 @@ async def test_dispatcher_no_handler_is_noop(pg_conn):
 
 
 # ---------------------------------------------------------------------------
-# 5. ER source-specific resolver overrides the built-in default
+# 5. ER module HTTP-delegates when KNOT_ER_URL is set
 # ---------------------------------------------------------------------------
 
 
-async def test_er_source_specific_resolver_runs_when_registered(pg_conn):
-    """Registering a resolver for a source name routes to that resolver via
-    the master dispatcher. The ER scaffold's RowsIngesting handler picks
-    it up and sets canonical_ids.
+async def test_er_handler_http_delegates_when_url_set(pg_conn, monkeypatch):
+    """With KNOT_ER_URL set, the ER handler POSTs to the configured URL
+    and uses the returned canonical_ids. httpx is mocked to avoid an
+    actual network call.
     """
-    from knot.extensions import dispatch
+    monkeypatch.setenv("KNOT_ER_URL", "http://er.test")
+
+    # Reload the er module so the @dispatch.on registration fires.
+    from knot.extensions import dispatch as _dispatch
     from knot.extensions import er as er_module
 
-    test_source_name = "_test_source_override"
+    # Snapshot dispatcher state so we can restore it; reload may push a
+    # _delegate entry that survives a subsequent reload-with-env-unset.
+    handlers_before = list(_dispatch._handlers)
+    # Drop any pre-existing _delegate so reload sees a clean namespace.
+    er_module.__dict__.pop("_delegate", None)
+    importlib.reload(er_module)
 
-    assert test_source_name not in er_module._RESOLVERS
+    posted: dict = {}
 
-    @er_module.register(test_source_name)
-    def _custom(rows, source):
-        return [f"custom:{r.id}" for r in rows]
+    class _FakeResponse:
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict:
+            return {"canonical_ids": ["resolved:x1", "resolved:x2"]}
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *a) -> None:
+            return None
+
+        async def post(self, url, json, timeout):  # noqa: ARG002
+            posted["url"] = url
+            posted["json"] = json
+            return _FakeResponse()
+
+    # Patch httpx in the lazily-imported module path. The handler does
+    # `import httpx` at call time, so swap the attribute on the
+    # already-loaded module.
+    import httpx
+
+    monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
 
     try:
         st = TypeDefinition(name="string", base="str")
         id_slot = Slot(name="id", range=st, identifier=True, required=True)
         cls = OntologyClass(name="X", slots=[id_slot])
-        src = Source(name=test_source_name, entity_class=cls, identifier_slot=id_slot)
+        src = Source(name="_http_delegate_test", entity_class=cls, identifier_slot=id_slot)
         spec = Spec(
-            id="custom_resolver_test",
+            id="http_delegate_test",
             version="1.0.0",
             types=[st],
             slots=[id_slot],
@@ -206,14 +241,31 @@ async def test_er_source_specific_resolver_runs_when_registered(pg_conn):
             sources=[src],
         )
         RowModel = build_row_model(src)
-        typed = [RowModel.model_validate({"id": "x1"}), RowModel.model_validate({"id": "x2"})]
+        typed = [
+            RowModel.model_validate({"id": "x1"}),
+            RowModel.model_validate({"id": "x2"}),
+        ]
 
         ev = RowsIngesting(source=src, spec=spec, rows=typed)
-        await dispatch.dispatch(ev, _make_ctx(pg_conn))
+        ctx = _make_ctx(pg_conn)
+        # Drive the freshly-loaded handler directly. The master dispatch
+        # also has it registered (priority 50), but calling the function
+        # avoids cross-test interference with other registered handlers.
+        await er_module._delegate(ev, ctx)
 
-        assert ev.canonical_ids == ["custom:x1", "custom:x2"]
+        assert ev.canonical_ids == ["resolved:x1", "resolved:x2"]
+        assert posted["url"] == "http://er.test/resolve"
+        assert posted["json"]["source"] == "_http_delegate_test"
+        assert posted["json"]["class_name"] == "X"
+        assert posted["json"]["identifier_slot"] == "id"
+        assert posted["json"]["rows"] == [{"id": "x1"}, {"id": "x2"}]
     finally:
-        del er_module._RESOLVERS[test_source_name]
+        monkeypatch.delenv("KNOT_ER_URL", raising=False)
+        er_module.__dict__.pop("_delegate", None)
+        importlib.reload(er_module)
+        # Restore the dispatcher's pre-test handler list so the leaked
+        # _delegate from the reload-with-env-set doesn't fire in later tests.
+        _dispatch._handlers[:] = handlers_before
 
 
 # ---------------------------------------------------------------------------
@@ -250,8 +302,10 @@ def ingest_client():
 
 
 async def test_ingest_route_canonical_id_from_builtin_fallback(ingest_db, ingest_client):
-    """No team resolver registered for 'imdb' → built-in identifier-slot
-    passthrough sets _canonical_id to the imdb_id value."""
+    """No KNOT_ER_URL set, no team handler registered for 'imdb' -> the
+    built-in identifier-slot passthrough sets _canonical_id to the
+    imdb_id value.
+    """
     conn, movie, src, rev = ingest_db
 
     resp = ingest_client.post(
