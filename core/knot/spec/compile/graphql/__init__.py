@@ -53,15 +53,17 @@ from strawberry import Schema
 
 from knot.spec.compile.postgres import CompileContext, compile_predicate, compile_value
 from knot.spec.metaschema import (
+    Array,
+    ClassRef,
     Compare,
     CompareOp,
     Literal_,
     Matches,
     OntologyClass,
+    Primitive,
     Slot,
     SlotPath,
     Spec,
-    TypeDefinition,
 )
 
 logger = logging.getLogger(__name__)
@@ -84,16 +86,13 @@ def get_or_build_schema(spec: Spec, content_hash: str) -> Schema:
 # Slot range → Python type mapping
 # ---------------------------------------------------------------------------
 
-_RANGE_TO_PYTHON: dict[str, type] = {
-    "str": str,
+_PRIMITIVE_TO_PYTHON: dict[str, type] = {
     "string": str,
-    "int": int,
     "integer": int,
     "float": float,
-    "number": float,
-    "bool": bool,
     "boolean": bool,
     "datetime": str,  # ISO-8601 string
+    "date": str,  # ISO-8601 string
 }
 
 
@@ -123,15 +122,27 @@ def _all_slots(oc: OntologyClass) -> list[Slot]:
     return result
 
 
-def _slot_python_type(slot: Slot) -> type:
-    rng = slot.range
-    if rng is None:
-        return str
-    if isinstance(rng, TypeDefinition):
-        base = rng.base or rng.name
-        return _RANGE_TO_PYTHON.get(base, str)
-    # OntologyClass reference → canonical_id is a string FK
+def _type_expr_python(type_expr: Any) -> type:
+    """Map a TypeExpression to a Python type for GraphQL schema generation.
+
+    Returns a parameterised ``list[X]`` for ``Array`` so Strawberry's annotation
+    resolver can extract the element type — bare ``list`` triggers a crash
+    inside Strawberry's create_list (get_args(list) is empty).
+    """
+    if isinstance(type_expr, Primitive):
+        return _PRIMITIVE_TO_PYTHON.get(type_expr.name, str)
+    if isinstance(type_expr, Array):
+        inner = _type_expr_python(type_expr.of)
+        return list[inner]
+    if isinstance(type_expr, ClassRef):
+        return str  # canonical_id FK
     return str
+
+
+def _slot_python_type(slot: Slot) -> type:
+    if slot.type is None:
+        return str
+    return _type_expr_python(slot.type)
 
 
 # ---------------------------------------------------------------------------
@@ -199,9 +210,10 @@ def _make_class_object_type(oc: OntologyClass) -> type:
     ns: dict[str, Any] = {}
 
     for slot in _all_slots(oc):
+        # ``py`` is already the full python type (``list[str]`` for Array,
+        # ``str``/``int``/... for Primitive). No extra wrapping needed.
         py = _slot_python_type(slot)
-        ann = list[py] | None if slot.multivalued else py | None
-        annotations[slot.name] = ann
+        annotations[slot.name] = py | None
         ns[slot.name] = None
 
     if "canonical_id" not in annotations:
@@ -584,7 +596,7 @@ def _merge_contributions(
             merged[k] = v
 
     for slot in _all_slots(oc):
-        if slot.multivalued:
+        if isinstance(slot.type, Array):
             flat: list[Any] = []
             seen_set: set = set()
             for c in contribs:
@@ -629,7 +641,7 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
 
     type_name = f"AggregateResult_{oc.name}"
 
-    _NUMERIC_PG_TYPES = {"BIGINT", "DOUBLE PRECISION"}
+    _NUMERIC_PG_TYPES = {"BIGINT", "INTEGER", "DOUBLE PRECISION"}
 
     agg_fields: list[tuple[str, str, str]] = []
     annotations: dict[str, Any] = {"count": int}
