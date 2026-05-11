@@ -34,15 +34,31 @@ export interface SpecNodeData extends Record<string, unknown> {
 /**
  * Full data needed to paint a class card. Built from the spec once per class
  * so the React Flow node component doesn't need to walk the spec itself.
+ *
+ * In class-card mode the card carries fully-resolved slot/source/constraint
+ * objects so the row+chip UI can render their full detail. In ontology-
+ * details mode slots / sources / constraints live as their own nodes; the
+ * card-on-class still carries their *names* so the class node can show a
+ * compact name list and the user can scan slot membership without tracing
+ * `has` edges.
  */
 export interface ClassCard {
   cls: SpecClass;
-  /** Resolved slot objects in the order they appear in `cls.slotNames`. */
+  /** Resolved slot objects in the order they appear in `cls.slotNames`.
+   *  Empty in details mode — use `compactSlotNames` there. */
   slots: SpecSlot[];
-  /** Sources that reference this class as `entityClassName`. */
+  /** Sources that reference this class as `entityClassName`.
+   *  Empty in details mode — use `compactSourceNames` there. */
   sources: SpecSource[];
-  /** Constraints that reference this class as `primaryClassName`. */
+  /** Constraints that reference this class as `primaryClassName`.
+   *  Empty in details mode — use `compactConstraintNames` there. */
   constraints: SpecConstraint[];
+  /** Slot names referenced by this class. Populated in details mode. */
+  compactSlotNames?: string[];
+  /** Source names referencing this class. Populated in details mode. */
+  compactSourceNames?: string[];
+  /** Constraint names referencing this class. Populated in details mode. */
+  compactConstraintNames?: string[];
 }
 
 export type SpecNode = Node<SpecNodeData>;
@@ -231,12 +247,37 @@ function buildDetailGraph(
       data: { label: s.name, entity: { kind: "slot", value: s } },
     });
   }
+  // Pre-bucket sources + constraints by their owning class so each class
+  // node can show a compact name list of its referencing entities even
+  // though those entities are also standalone nodes in this view.
+  const sourceNamesByClass = new Map<string, string[]>();
+  for (const src of spec.sources) {
+    const bucket = sourceNamesByClass.get(src.entityClassName) ?? [];
+    bucket.push(src.name);
+    sourceNamesByClass.set(src.entityClassName, bucket);
+  }
+  const constraintNamesByClass = new Map<string, string[]>();
+  for (const k of spec.constraints) {
+    const bucket = constraintNamesByClass.get(k.primaryClassName) ?? [];
+    bucket.push(k.name);
+    constraintNamesByClass.set(k.primaryClassName, bucket);
+  }
+
   for (const c of spec.classes) {
+    const card: ClassCard = {
+      cls: c,
+      slots: [],
+      sources: [],
+      constraints: [],
+      compactSlotNames: [...c.slotNames],
+      compactSourceNames: sourceNamesByClass.get(c.name) ?? [],
+      compactConstraintNames: constraintNamesByClass.get(c.name) ?? [],
+    };
     nodes.push({
       id: nodeId("class", c.name),
       type: NODE_TYPE_BY_KIND.class,
       position: { x: 0, y: 0 },
-      data: { label: c.name, entity: { kind: "class", value: c } },
+      data: { label: c.name, entity: { kind: "class", value: c }, card },
     });
   }
   for (const src of spec.sources) {
@@ -268,8 +309,11 @@ function buildDetailGraph(
         source: nodeId("class", c.name),
         target: nodeId("slot", slotName),
         label: "has",
-        style: { stroke: "#94a3b8", strokeWidth: 1 },
-        labelStyle: { fontSize: 10, fill: "#64748b" },
+        // Thin gray arrow — structural but not load-bearing; lets range /
+        // primary / is_a edges remain the visually dominant signal.
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#cbd5e1" },
+        style: { stroke: "#cbd5e1", strokeWidth: 1 },
+        labelStyle: { fontSize: 9, fill: "#94a3b8" },
         labelBgPadding: [2, 2],
         labelBgStyle: { fill: "#ffffff", fillOpacity: 0.85 },
       });

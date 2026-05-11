@@ -29,9 +29,18 @@ export default function ClassNode({
   const slots = card?.slots ?? [];
   const sources = card?.sources ?? [];
   const constraints = card?.constraints ?? [];
+  const compactSlotNames = card?.compactSlotNames;
+  const compactSourceNames = card?.compactSourceNames ?? [];
+  const compactConstraintNames = card?.compactConstraintNames ?? [];
+  // `compactSlotNames` is the marker that this card is for the details
+  // view: full row data isn't carried (slots/sources/constraints are
+  // standalone nodes); render names-as-chips instead.
+  const isCompact = compactSlotNames !== undefined;
 
   const ring = selected ? "ring-2 ring-blue-500" : "";
-  const hasMeta = sources.length > 0 || constraints.length > 0;
+  const hasMeta = isCompact
+    ? compactSourceNames.length > 0 || compactConstraintNames.length > 0
+    : sources.length > 0 || constraints.length > 0;
 
   const onSelect = (data as { onSelect?: SelectFn }).onSelect;
 
@@ -68,8 +77,18 @@ export default function ClassNode({
         </span>
       </div>
 
-      {/* Slot rows */}
-      {slots.length === 0 ? (
+      {/* Slot rows (full) OR compact chip list (details mode) */}
+      {isCompact ? (
+        compactSlotNames.length === 0 ? (
+          <div className="px-3 py-2 italic text-slate-400">no slots</div>
+        ) : (
+          <div className="px-3 py-1.5 flex flex-wrap gap-1">
+            {compactSlotNames.map((n) => (
+              <NameChip key={n} name={n} tone="bg-green-100 text-green-800" />
+            ))}
+          </div>
+        )
+      ) : slots.length === 0 ? (
         <div className="px-3 py-2 italic text-slate-400">no slots</div>
       ) : (
         <div className="py-1">
@@ -84,24 +103,69 @@ export default function ClassNode({
         <>
           <div className="border-t border-slate-200" />
           <div className="px-3 py-1.5 space-y-1">
-            {sources.length > 0 && (
-              <MetaRow label="sources">
-                {sources.map((src) => (
-                  <SourceChip key={src.name} src={src} onSelect={onSelect} />
-                ))}
-              </MetaRow>
-            )}
-            {constraints.length > 0 && (
-              <MetaRow label="constraints">
-                {constraints.map((k) => (
-                  <ConstraintChip key={k.name} k={k} onSelect={onSelect} />
-                ))}
-              </MetaRow>
+            {isCompact ? (
+              <>
+                {compactSourceNames.length > 0 && (
+                  <MetaRow label="sources">
+                    {compactSourceNames.map((n) => (
+                      <NameChip
+                        key={n}
+                        name={n}
+                        tone="bg-purple-100 text-purple-800"
+                      />
+                    ))}
+                  </MetaRow>
+                )}
+                {compactConstraintNames.length > 0 && (
+                  <MetaRow label="constraints">
+                    {compactConstraintNames.map((n) => (
+                      <NameChip
+                        key={n}
+                        name={n}
+                        tone="bg-rose-100 text-rose-800"
+                      />
+                    ))}
+                  </MetaRow>
+                )}
+              </>
+            ) : (
+              <>
+                {sources.length > 0 && (
+                  <MetaRow label="sources">
+                    {sources.map((src) => (
+                      <SourceChip key={src.name} src={src} onSelect={onSelect} />
+                    ))}
+                  </MetaRow>
+                )}
+                {constraints.length > 0 && (
+                  <MetaRow label="constraints">
+                    {constraints.map((k) => (
+                      <ConstraintChip key={k.name} k={k} onSelect={onSelect} />
+                    ))}
+                  </MetaRow>
+                )}
+              </>
             )}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * Static name chip — no click handler. Used for the compact slot/source/
+ * constraint name lists shown on a class card in ontology-details mode,
+ * where the entity itself has a standalone node the user can click.
+ */
+function NameChip({ name, tone }: { name: string; tone: string }) {
+  return (
+    <span
+      className={`text-[10px] font-mono px-1.5 py-px rounded ${tone}`}
+      title={name}
+    >
+      {name}
+    </span>
   );
 }
 

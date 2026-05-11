@@ -135,9 +135,12 @@ export default function SpecGraph() {
       return saved ? { ...n, position: saved } : n;
     });
     // Class cards are wider + taller than the old generic nodes; use bigger
-    // sizing inputs so elk leaves enough room between layers.
+    // sizing inputs so elk leaves enough room between layers. Details mode
+    // gets a moderate bump so the class card (which now carries a compact
+    // slot-name list + source/constraint name lists) doesn't visually
+    // overlap its `has` edges to standalone slot nodes.
     const sizing = showOntologyDetails
-      ? { width: 220, height: 110 }
+      ? { width: 240, height: 160 }
       : { width: 300, height: 220 };
     layoutGraph(preserved, es, sizing).then((laid) => {
       if (cancelled) return;
