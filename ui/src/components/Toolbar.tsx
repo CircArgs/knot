@@ -7,6 +7,8 @@ interface Props {
   draftRevision: number | null;
   onToggleMode: () => void;
   onRefetch: () => void;
+  showOntologyDetails: boolean;
+  onToggleOntologyDetails: () => void;
   includeBuiltins: boolean;
   onToggleBuiltins: () => void;
   onAdd?: (kind: AddKind) => void;
@@ -28,6 +30,8 @@ export default function Toolbar({
   draftRevision,
   onToggleMode,
   onRefetch,
+  showOntologyDetails,
+  onToggleOntologyDetails,
   includeBuiltins,
   onToggleBuiltins,
   onAdd,
@@ -61,11 +65,22 @@ export default function Toolbar({
       <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
         <input
           type="checkbox"
-          checked={includeBuiltins}
-          onChange={onToggleBuiltins}
+          checked={showOntologyDetails}
+          onChange={onToggleOntologyDetails}
         />
-        show built-in primitives
+        show ontology details
       </label>
+
+      {showOntologyDetails && (
+        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={includeBuiltins}
+            onChange={onToggleBuiltins}
+          />
+          include built-in primitives
+        </label>
+      )}
 
       {editing && onAdd && (
         <>
