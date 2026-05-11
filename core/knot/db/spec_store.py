@@ -435,6 +435,30 @@ async def get_published_content_hash(conn: psycopg.AsyncConnection) -> str | Non
     return row[0] if row else None
 
 
+def _summarize_blockers(blockers: list[dict]) -> str:
+    """Build a compact, grep-friendly tag list for a PublishGateError message.
+
+    Each blocker contributes one ``kind:identifier`` token so callers (and
+    ``pytest.raises(match=)``) can pin failures to the offending entity
+    without parsing the structured ``details`` payload.
+    """
+    parts: list[str] = []
+    for b in blockers:
+        kind = b.get("kind", "?")
+        if kind == "constraint_violation" or kind == "constraint_sql_error":
+            tag = str(b.get("constraint") or "?")
+        elif kind == "type_cast_failure":
+            tag = f"{b.get('class', '?')}.{b.get('slot', '?')}"
+        elif kind == "identifier_nulls" or kind == "identifier_duplicates":
+            tag = f"{b.get('source', '?')}.{b.get('slot', '?')}"
+        elif kind == "required_violation":
+            tag = f"{b.get('class', '?')}.{b.get('slot', '?')}"
+        else:
+            tag = kind
+        parts.append(f"{kind}:{tag}")
+    return ", ".join(parts)
+
+
 async def run_preflight_checks(
     conn: psycopg.AsyncConnection,
     changes: list,
@@ -809,9 +833,9 @@ async def publish_draft(
         # Filter out the destructive_changes meta-blocker (handled above).
         hard_blockers = [b for b in report.blockers if b["kind"] != "destructive_changes"]
         if hard_blockers:
-            kinds = ", ".join(sorted({b["kind"] for b in hard_blockers}))
             raise PublishGateError(
-                f"preflight: {len(hard_blockers)} blocker(s) ({kinds})",
+                f"preflight: {len(hard_blockers)} blocker(s) "
+                f"[{_summarize_blockers(hard_blockers)}]",
                 details=hard_blockers,
             )
 
