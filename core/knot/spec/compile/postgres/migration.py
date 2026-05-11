@@ -1099,12 +1099,37 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         # USING <col>::<newtype> handles cast-compatible base changes
         # (e.g. TEXT→INTEGER for digit-only strings). If the cast fails on
         # a row, postgres raises and the whole migration aborts (atomic).
+        # Special-case the scalar↔array transitions:
+        #   - scalar→array: wrap each value in a 1-element array
+        #     (postgres can't cast 'foo'::TEXT[] — needs ARRAY['foo']).
+        #   - array→scalar: refused (multiple values would silently collapse).
+        prev_is_array = change.prev_pg_type.endswith("[]")
+        new_is_array = change.new_pg_type.endswith("[]")
+        if prev_is_array and not new_is_array:
+            raise CompilerError(
+                f"lossy: cannot demote array column "
+                f"{change.cls.name}.{change.slot.name} "
+                f"from {change.prev_pg_type} to {change.new_pg_type} — "
+                "multiple values would be lost. Drop and re-add the slot, or "
+                "introduce a new slot and migrate manually."
+            )
+        col_ident = sql.Identifier(change.slot.name)
+        pgtype_sql = sql.SQL(change.new_pg_type)
+        if not prev_is_array and new_is_array:
+            using = sql.SQL("ARRAY[{col}]::{pgtype}").format(
+                col=col_ident, pgtype=pgtype_sql
+            )
+        else:
+            using = sql.SQL("{col}::{pgtype}").format(
+                col=col_ident, pgtype=pgtype_sql
+            )
         stmt = sql.SQL(
-            "ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype} USING {col}::{pgtype}"
+            "ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype} USING {using}"
         ).format(
             table=_table_id(change.cls),
-            col=sql.Identifier(change.slot.name),
-            pgtype=sql.SQL(change.new_pg_type),
+            col=col_ident,
+            pgtype=pgtype_sql,
+            using=using,
         )
         await conn.execute(stmt)
 

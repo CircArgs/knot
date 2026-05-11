@@ -465,21 +465,52 @@ async def run_preflight_checks(
 
     for change in changes:
         if isinstance(change, ChangeSlotTypeExpression):
+            # Refuse array → scalar at the preflight stage (mirrors the
+            # CompilerError emit_ddl would raise) so the publish gate can
+            # report it as a structured blocker rather than a raw cast error.
+            prev_is_array = change.prev_pg_type.endswith("[]")
+            new_is_array = change.new_pg_type.endswith("[]")
+            if prev_is_array and not new_is_array:
+                blockers.append(
+                    {
+                        "kind": "type_cast_failure",
+                        "class": change.cls.name,
+                        "slot": change.slot.name,
+                        "from": change.prev_pg_type,
+                        "to": change.new_pg_type,
+                        "detail": (
+                            "lossy: array → scalar would silently collapse "
+                            "multiple values"
+                        ),
+                    }
+                )
+                continue
+
             # Probe the cast inside a savepoint so a failure rolls back only
-            # the probe, not the enclosing publish transaction.
-            # Use a direct SELECT (not wrapped in count(*)) — postgres optimizes
-            # away the inner cast when wrapped, so we need the raw cast to fire.
+            # the probe, not the enclosing publish transaction. Use the same
+            # USING expression as emit_ddl so scalar→array preflight matches
+            # what would actually run.
+            col_ident = sql.Identifier(change.slot.name)
+            newt = sql.SQL(change.new_pg_type)
+            if not prev_is_array and new_is_array:
+                cast_expr = sql.SQL("ARRAY[{col}]::{newt}").format(
+                    col=col_ident, newt=newt
+                )
+            else:
+                cast_expr = sql.SQL("{col}::{newt}").format(
+                    col=col_ident, newt=newt
+                )
             sp_name = f"preflight_cast_{change.cls.name.lower()}_{change.slot.name}"
             try:
                 await conn.execute(f"SAVEPOINT {sp_name}")
                 await (
                     await conn.execute(
                         sql.SQL(
-                            "SELECT {col}::{newt} FROM {tbl} WHERE {col} IS NOT NULL"
+                            "SELECT {cast} FROM {tbl} WHERE {col} IS NOT NULL"
                         ).format(
-                            col=sql.Identifier(change.slot.name),
-                            newt=sql.SQL(change.new_pg_type),
+                            cast=cast_expr,
                             tbl=sql.Identifier(schema(), change.cls.name.lower()),
+                            col=col_ident,
                         )
                     )
                 ).fetchall()
