@@ -1,7 +1,6 @@
 """Migration emitter — spec → postgres DDL.
 
-Per-class storage is **two tables**, per the SCD2 binding design
-(``design/staging/er-and-storage.md``):
+Per-class storage is **two tables**, per the SCD2 binding design:
 
   - ``knot_data.<class>``           source rows (immutable per ingest);
                                     columns mirror stored slots; stable
@@ -21,7 +20,7 @@ Mapping (locked):
   - class → table:    lowercase class name (``Movie`` → ``knot_data.movie``)
   - bindings table:   same name + ``_bindings`` suffix
   - system columns:   underscore-prefixed
-  - slot → column:    range-based postgres type (whitelist); multivalued → ``T[]``
+  - slot → column:    TypeExpression-based postgres type (whitelist)
   - derived slots:    skipped (query-time projections)
 
 Identifiers go through ``psycopg.sql.Identifier``. Postgres types come
@@ -48,7 +47,7 @@ B. **Data-revalidation.** Constraint tightens; previously-valid rows
    ``requires_data_revalidation`` set is not maintained — the constraint
    gate is the canonical revalidation pass. ``ChangeSlotPattern``,
    ``ChangeSlotPermissibleValues``, ``ChangeSlotMinimum``,
-   ``ChangeSlotMaximum``, ``ChangeTypePattern``, ``ChangeConstraintBody``
+   ``ChangeSlotMaximum``, ``ChangeConstraintBody``
    live in this bucket. They produce no DDL.
 
 C. **Spec-only / runtime-behavior.** No DDL, or DDL that doesn't lose
@@ -59,11 +58,21 @@ C. **Spec-only / runtime-behavior.** No DDL, or DDL that doesn't lose
    actual column adds/drops ride on ``AddSlot``/``DropSlot`` records),
    ``ChangeSlotIdentifier`` (the storage PK is ``(_source,
    _source_row_id)``; the ``identifier`` flag is ER/SCD2 advisory and
-   doesn't drive DDL), ``AddSource`` (new pathway, doesn't lose data).
+   doesn't drive DDL), ``AddSource`` (new pathway, doesn't lose data),
+   ``ChangeSourceTrustScore`` (runtime trust, no DDL),
+   ``ChangeSourceSlotPrior`` (runtime prior, no DDL).
    ``ChangeClassIsA`` is here for concrete classes (no DDL — own table,
    own slots) and for defined-class body changes (``CREATE OR REPLACE
    VIEW``); the destructive transitions (concrete↔defined) are caught
    instead by the ``Drop*`` records the diff emits.
+
+   **Note on DropSource (Bucket A).** ``DropSource`` is *destructive*:
+   rows in ``knot_data.<class>`` that belonged to the removed source
+   become orphaned — their ``_source`` value references a source that
+   no longer exists in the spec.  No column or table is dropped (hence
+   the no-op DDL), but data integrity is silently compromised.
+   ``DropSource`` therefore lives in ``_DESTRUCTIVE_CHANGE_TYPES`` and
+   requires ``allow_destructive=True`` at publish.  It is NOT Bucket C.
 
 RUNTIME fields (``_RUNTIME_FIELDS`` in ``knot.spec.canonical``) are
 excluded from the content hash and therefore never reach this layer.
@@ -220,7 +229,10 @@ class DropSlot(Change):
 
 
 @dataclass
-class ChangeSlotType(Change):
+class ChangeSlotTypeExpression(Change):
+    """Bucket A — the slot's TypeExpression changed, which means the postgres
+    column type changed. Carries prev and new pg types for the ALTER COLUMN."""
+
     cls: OntologyClass
     slot: Slot
     prev_pg_type: str
@@ -235,30 +247,6 @@ class ChangeSlotRequired(Change):
     cls: OntologyClass
     slot_name: str
     new_required: bool
-
-
-# ─── Type-level changes (TypeDefinition) ────────────────────────────────────
-
-
-@dataclass
-class ChangeTypeBase(Change):
-    """`TypeDefinition.base` changed — every slot using this type sees a column
-    type change. Bucket A (DDL-destructive); the actual ALTER COLUMNs ride on
-    the per-slot ``ChangeSlotType`` records emitted alongside this."""
-
-    type_name: str
-    old_base: str | None
-    new_base: str | None
-
-
-@dataclass
-class ChangeTypePattern(Change):
-    """`TypeDefinition.pattern` changed — existing rows may now violate.
-    Bucket B (revalidation, no DDL)."""
-
-    type_name: str
-    old_pattern: str | None
-    new_pattern: str | None
 
 
 # ─── Slot-level changes (canonical fields) ──────────────────────────────────
@@ -298,18 +286,6 @@ class ChangeSlotMaximum(Change):
     slot_name: str
     old_value: float | None
     new_value: float | None
-
-
-@dataclass
-class ChangeSlotMultivalued(Change):
-    """Bucket A — column shape T vs T[] is a destructive ALTER. Carries
-    ``cls`` and ``slot`` so the emitter can run the right ALTER TABLE."""
-
-    cls: OntologyClass
-    slot: Slot
-    slot_name: str
-    old_value: bool
-    new_value: bool
 
 
 @dataclass
@@ -468,6 +444,27 @@ class ChangeSourceIdentifierSlot(Change):
     new_slot: str
 
 
+@dataclass
+class ChangeSourceTrustScore(Change):
+    """Bucket C — scalar trust score for ARGMAX_TRUST resolution.
+    Runtime config; no DDL."""
+
+    source_name: str
+    old_value: float
+    new_value: float
+
+
+@dataclass
+class ChangeSourceSlotPrior(Change):
+    """Bucket C — per-(source, slot) Beta prior for POSTERIOR_MEAN / LCB.
+    Runtime config; no DDL."""
+
+    source_name: str
+    slot_name: str
+    prev_prior: tuple[float, float] | None
+    new_prior: tuple[float, float] | None
+
+
 # ─── Constraint-level changes ───────────────────────────────────────────────
 
 
@@ -527,78 +524,76 @@ def _enum_value(v: Any) -> str:
     return getattr(v, "value", str(v))
 
 
-def _diff_types(prev: Spec | None, candidate: Spec) -> list[Change]:
-    """Per-TypeDefinition field-level diff.
+def _slot_constraints_pattern(slot: Slot) -> str | None:
+    if slot.constraints is not None:
+        return slot.constraints.pattern
+    return None
 
-    Type Adds/Drops aren't on the change-event surface — types only matter
-    via the slots that reference them, and slot-side ChangeSlotType already
-    fires when the bound pg type shifts. We do emit per-field records for
-    type edits so the migration log is complete and the destructive gate
-    catches base swaps."""
-    changes: list[Change] = []
-    prev_types = {t.name: t for t in (prev.types if prev else [])}
-    cand_types = {t.name: t for t in candidate.types}
-    for name in cand_types.keys() & prev_types.keys():
-        pt, ct = prev_types[name], cand_types[name]
-        if pt.base != ct.base:
-            changes.append(ChangeTypeBase(type_name=name, old_base=pt.base, new_base=ct.base))
-        if pt.pattern != ct.pattern:
-            changes.append(
-                ChangeTypePattern(type_name=name, old_pattern=pt.pattern, new_pattern=ct.pattern)
-            )
-    return changes
+
+def _slot_constraints_min(slot: Slot) -> float | None:
+    if slot.constraints is not None:
+        return slot.constraints.min_value
+    return None
+
+
+def _slot_constraints_max(slot: Slot) -> float | None:
+    if slot.constraints is not None:
+        return slot.constraints.max_value
+    return None
+
+
+def _slot_constraints_pv(slot: Slot) -> list[str] | None:
+    if slot.constraints is not None and slot.constraints.permissible_values is not None:
+        return list(slot.constraints.permissible_values)
+    return None
 
 
 def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> list[Change]:
     """Compare every CANONICAL field on two same-named slots in the context
-    of ``cls`` — the candidate class that hosts both slots in its
-    ``effective_slots``. ``cls`` is threaded through so emitters that need a
-    table reference (``ChangeSlotMultivalued``) can resolve it."""
+    of ``cls``."""
     out: list[Change] = []
     name = cand_slot.name
 
-    if prev_slot.pattern != cand_slot.pattern:
+    prev_pattern = _slot_constraints_pattern(prev_slot)
+    cand_pattern = _slot_constraints_pattern(cand_slot)
+    if prev_pattern != cand_pattern:
         out.append(
             ChangeSlotPattern(
                 slot_name=name,
-                old_pattern=prev_slot.pattern,
-                new_pattern=cand_slot.pattern,
+                old_pattern=prev_pattern,
+                new_pattern=cand_pattern,
             )
         )
 
-    prev_pv = _pv_texts(prev_slot.permissible_values)
-    cand_pv = _pv_texts(cand_slot.permissible_values)
+    prev_pv = _slot_constraints_pv(prev_slot)
+    cand_pv = _slot_constraints_pv(cand_slot)
     if prev_pv != cand_pv:
         out.append(
             ChangeSlotPermissibleValues(slot_name=name, old_values=prev_pv, new_values=cand_pv)
         )
 
-    if prev_slot.minimum_value != cand_slot.minimum_value:
+    prev_min = _slot_constraints_min(prev_slot)
+    cand_min = _slot_constraints_min(cand_slot)
+    if prev_min != cand_min:
         out.append(
             ChangeSlotMinimum(
                 slot_name=name,
-                old_value=prev_slot.minimum_value,
-                new_value=cand_slot.minimum_value,
+                old_value=prev_min,
+                new_value=cand_min,
             )
         )
-    if prev_slot.maximum_value != cand_slot.maximum_value:
+
+    prev_max = _slot_constraints_max(prev_slot)
+    cand_max = _slot_constraints_max(cand_slot)
+    if prev_max != cand_max:
         out.append(
             ChangeSlotMaximum(
                 slot_name=name,
-                old_value=prev_slot.maximum_value,
-                new_value=cand_slot.maximum_value,
+                old_value=prev_max,
+                new_value=cand_max,
             )
         )
-    if prev_slot.multivalued != cand_slot.multivalued:
-        out.append(
-            ChangeSlotMultivalued(
-                cls=cls,
-                slot=cand_slot,
-                slot_name=name,
-                old_value=prev_slot.multivalued,
-                new_value=cand_slot.multivalued,
-            )
-        )
+
     if prev_slot.identifier != cand_slot.identifier:
         out.append(
             ChangeSlotIdentifier(
@@ -666,6 +661,30 @@ def _diff_sources(prev: Spec | None, candidate: Spec) -> list[Change]:
                     new_slot=cs.identifier_slot.name,
                 )
             )
+        if ps.trust_score != cs.trust_score:
+            changes.append(
+                ChangeSourceTrustScore(
+                    source_name=name,
+                    old_value=ps.trust_score,
+                    new_value=cs.trust_score,
+                )
+            )
+        # Per-(source, slot) Beta prior diffs
+        prev_priors = ps.slot_priors
+        cand_priors = cs.slot_priors
+        all_slot_names = set(prev_priors.keys()) | set(cand_priors.keys())
+        for slot_name in all_slot_names:
+            pp = prev_priors.get(slot_name)
+            cp = cand_priors.get(slot_name)
+            if pp != cp:
+                changes.append(
+                    ChangeSourceSlotPrior(
+                        source_name=name,
+                        slot_name=slot_name,
+                        prev_prior=pp,
+                        new_prior=cp,
+                    )
+                )
     return changes
 
 
@@ -710,11 +729,6 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
     changes: list[Change] = []
     prev_classes = {c.name: c for c in (prev.classes if prev else [])}
     cand_classes = {c.name: c for c in candidate.classes}
-
-    # Type-level changes go first; they may shadow per-slot ChangeSlotType
-    # at consumption time but emitting both is fine (audit log is verbose,
-    # destructive gate hits on either).
-    changes.extend(_diff_types(prev, candidate))
 
     for name in cand_classes.keys() - prev_classes.keys():
         c = cand_classes[name]
@@ -808,7 +822,7 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
             continue
 
         # Both concrete — diff slots.
-        # ``stored_slots`` drives AddSlot / DropSlot / ChangeSlotType (the
+        # ``stored_slots`` drives AddSlot / DropSlot / ChangeSlotTypeExpression (the
         # DDL-relevant subset). ``all_slots`` (incl. derived) drives the
         # per-field diff so a derivation-body or runtime-policy edit on a
         # derived slot still produces a Change record.
@@ -825,18 +839,11 @@ def diff_specs(prev: Spec | None, candidate: Spec) -> list[Change]:
             ps, cs = prev_stored[s_name], cand_stored[s_name]
             prev_t = _slot_pg_type(ps)
             new_t = _slot_pg_type(cs)
-            # When the type difference is *only* the [] suffix, the
-            # ChangeSlotMultivalued record (emitted in _diff_slot_fields)
-            # owns the ALTER — its emitter knows the right USING clause for
-            # T → T[] (ARRAY[col]) and refuses T[] → T. Skip the redundant
-            # ChangeSlotType to avoid two ALTERs racing on the same column
-            # with different USING clauses.
-            multivalued_only = ps.multivalued != cs.multivalued and prev_t.removesuffix(
-                "[]"
-            ) == new_t.removesuffix("[]")
-            if prev_t != new_t and not multivalued_only:
+            if prev_t != new_t:
                 changes.append(
-                    ChangeSlotType(cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t)
+                    ChangeSlotTypeExpression(
+                        cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t
+                    )
                 )
             if ps.required != cs.required:
                 changes.append(
@@ -887,20 +894,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         )
 
     elif isinstance(change, AddDefinedClass):
-        """Create (or replace) a VIEW for the defined class.
-
-        The VIEW selects all rows from the parent class (is_a) that satisfy the
-        compiled definition predicate.  It JOINs source × bindings just like
-        concrete-class reads, so resolvers can query it identically.
-
-        Schema:
-            CREATE OR REPLACE VIEW knot_data.<cls> AS
-            SELECT s.*, b.canonical_id AS _canonical_id
-            FROM knot_data.<parent> s
-            JOIN knot_data.<parent>_bindings b
-              ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
-            WHERE (<compiled definition>)
-        """
+        """Create (or replace) a VIEW for the defined class."""
         from knot.spec.compile.postgres import CompileContext, compile_predicate
 
         cls = change.cls
@@ -933,10 +927,6 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             joins=joins_sql,
             where=where_sql,
         )
-        # CREATE VIEW DDL cannot use server-side parameters ($1, $2...) because
-        # PostgreSQL can't infer their types in a view body.  Use an
-        # AsyncClientCursor to mogrify (parameter values inlined as SQL
-        # literals by the psycopg client) and execute the fully-rendered DDL.
         from psycopg import AsyncClientCursor
 
         ccur = AsyncClientCursor(conn)
@@ -965,9 +955,9 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         )
         await conn.execute(stmt)
 
-    elif isinstance(change, ChangeSlotType):
+    elif isinstance(change, ChangeSlotTypeExpression):
         # USING <col>::<newtype> handles cast-compatible base changes
-        # (e.g. TEXT→BIGINT for digit-only strings). If the cast fails on
+        # (e.g. TEXT→INTEGER for digit-only strings). If the cast fails on
         # a row, postgres raises and the whole migration aborts (atomic).
         stmt = sql.SQL(
             "ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype} USING {col}::{pgtype}"
@@ -980,31 +970,6 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 
     elif isinstance(change, ChangeSlotRequired):
         return  # API-enforced; no DDL
-
-    elif isinstance(change, ChangeSlotMultivalued):
-        # Bidirectional column-shape rewrite.
-        #   False → True : promote scalar T to T[] via ARRAY[col]::T[].
-        #   True  → False: refused — there's no general-safe way to
-        #                  project an array back to a scalar; users who
-        #                  want this must run a custom data migration.
-        if change.old_value is True and change.new_value is False:
-            raise CompilerError(
-                "ChangeSlotMultivalued from multivalued=True to False is lossy — "
-                "use a custom SQL migration instead"
-            )
-        # The new pg type is T[] (because cand_slot.multivalued is True now);
-        # the element type is the unaffixed pgtype of the cand slot. We pull
-        # both off the slot reference the diff records on the change.
-        new_pgtype = _slot_pg_type(change.slot)
-        elem_pgtype = new_pgtype.removesuffix("[]")
-        stmt = sql.SQL(
-            "ALTER TABLE {table} ALTER COLUMN {col} TYPE {arrtype} USING ARRAY[{col}]::{arrtype}"
-        ).format(
-            table=_table_id(change.cls),
-            col=sql.Identifier(change.slot.name),
-            arrtype=sql.SQL(f"{elem_pgtype}[]"),
-        )
-        await conn.execute(stmt)
 
     elif isinstance(change, ChangeClassAbstract):
         # abstract toggles whether the class has a table.
@@ -1076,18 +1041,9 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
     # Spec-only / runtime-behavior changes — no DDL. These records exist for
     # auditability and to drive the destructive gate / constraint revalidation
     # at publish time.
-    #
-    # ChangeTypeBase: the per-slot ChangeSlotType records emitted alongside it
-    #   already cover the column-type ALTERs for every using slot; the type
-    #   record is gate + audit only (no-op DDL when no slots reference it).
-    # ChangeSlotIdentifier: the storage PK is (_source, _source_row_id); the
-    #   identifier flag is advisory and emits no DDL.
-    # ChangeClassMixins: the slot-level Add/DropSlot records do the work.
     elif isinstance(
         change,
         (
-            ChangeTypePattern,
-            ChangeTypeBase,
             ChangeSlotPattern,
             ChangeSlotPermissibleValues,
             ChangeSlotMinimum,
@@ -1103,6 +1059,8 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             ChangeConstraintBody,
             ChangeConstraintSeverity,
             ChangeClassMixins,
+            ChangeSourceTrustScore,
+            ChangeSourceSlotPrior,
         ),
     ):
         return
@@ -1122,10 +1080,8 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 #
 #   - **Drops**: removing a class, slot, defined class, or source forfeits
 #     the rows / column / view that hold the data.
-#   - **Storage-shape rewrites**: ChangeSlotType (column type), Change-
-#     SlotMultivalued (T → T[]; reverse refused), ChangeClassAbstract
-#     (table appears/disappears), ChangeTypeBase (every using slot's
-#     column type changes).
+#   - **Storage-shape rewrites**: ChangeSlotTypeExpression (column type),
+#     ChangeClassAbstract (table appears/disappears).
 #   - **Source rekey**: ChangeSourceEntityClass (rows now belong to a
 #     different class — refused, manual migration required) and
 #     ChangeSourceIdentifierSlot (rows are now keyed by a different slot
@@ -1134,9 +1090,9 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 # NOT enumerated here:
 #
 #   - Bucket B (data-revalidation: ChangeSlotPattern, ChangeSlotPermissible-
-#     Values, min/max, ChangeTypePattern, ChangeConstraintBody). The publish
-#     gate already runs every NEW or CHANGED constraint over current data;
-#     tightenings on those fields surface as violations through that pass.
+#     Values, min/max, ChangeConstraintBody). The publish gate already runs
+#     every NEW or CHANGED constraint over current data; tightenings on those
+#     fields surface as violations through that pass.
 #   - ChangeClassMixins — slot-level ``DropSlot`` / ``AddSlot`` records do
 #     the destructive gating; this record is audit-only.
 #   - ChangeSlotIdentifier — the storage PK is ``(_source, _source_row_id)``;
@@ -1146,13 +1102,12 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 #     VIEW; concrete↔defined transitions surface as ``Drop*`` / ``Add*``.
 #   - ChangeClassDefinition — defined-class body change is CREATE OR
 #     REPLACE VIEW (idempotent, no data loss).
+#   - ChangeSourceTrustScore / ChangeSourceSlotPrior — runtime config, no DDL.
 _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
     DropClass,
     DropSlot,
     DropDefinedClass,
-    ChangeSlotType,
-    ChangeTypeBase,
-    ChangeSlotMultivalued,
+    ChangeSlotTypeExpression,
     ChangeClassAbstract,
     ChangeClassIsA,
     ChangeSourceEntityClass,
