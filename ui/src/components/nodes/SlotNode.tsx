@@ -2,6 +2,7 @@ import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 
 import type { SpecNodeData } from "../../lib/buildGraph";
+import KindBadge from "./KindBadge";
 
 export default function SlotNode({ data, selected }: NodeProps & { data: SpecNodeData }) {
   if (data.entity.kind !== "slot") return null;
@@ -16,7 +17,8 @@ export default function SlotNode({ data, selected }: NodeProps & { data: SpecNod
       className={`rounded-lg border border-green-300 bg-green-50 shadow-sm hover:shadow-md transition-shadow w-[220px] ${ring}`}
     >
       <Handle type="target" position={Position.Left} className="!bg-green-500" />
-      <div className="px-3 py-2 border-b border-green-200">
+      <div className="px-3 py-2 border-b border-green-200 flex items-center gap-1.5">
+        <KindBadge kind="slot" />
         <span className="font-medium text-green-900 truncate block" title={s.name}>
           {s.name}
         </span>

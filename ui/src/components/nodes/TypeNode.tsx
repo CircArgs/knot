@@ -3,6 +3,7 @@ import type { NodeProps } from "@xyflow/react";
 
 import type { SpecNodeData } from "../../lib/buildGraph";
 import { BUILTIN_TYPES } from "../../types/spec";
+import KindBadge from "./KindBadge";
 
 export default function TypeNode({ data, selected }: NodeProps & { data: SpecNodeData }) {
   if (data.entity.kind !== "type") return null;
@@ -15,9 +16,12 @@ export default function TypeNode({ data, selected }: NodeProps & { data: SpecNod
     >
       <Handle type="target" position={Position.Left} className="!bg-amber-500" />
       <div className="px-3 py-2 border-b border-amber-200 flex items-center justify-between gap-2">
-        <span className="font-medium text-amber-900 truncate" title={t.name}>
-          {t.name}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <KindBadge kind="type" />
+          <span className="font-medium text-amber-900 truncate" title={t.name}>
+            {t.name}
+          </span>
+        </div>
         {isBuiltin && (
           <span className="text-[10px] bg-amber-200 text-amber-800 px-1.5 py-0.5 rounded font-mono">
             builtin

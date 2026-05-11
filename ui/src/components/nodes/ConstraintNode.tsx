@@ -2,6 +2,7 @@ import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 
 import type { SpecNodeData } from "../../lib/buildGraph";
+import KindBadge from "./KindBadge";
 
 const SEVERITY_TONE: Record<string, string> = {
   error: "bg-red-600 text-white",
@@ -22,9 +23,12 @@ export default function ConstraintNode({
     >
       <Handle type="target" position={Position.Left} className="!bg-rose-500" />
       <div className="px-3 py-2 border-b border-rose-200 flex items-center justify-between gap-2">
-        <span className="font-medium text-rose-900 truncate" title={k.name}>
-          {k.name}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <KindBadge kind="constraint" />
+          <span className="font-medium text-rose-900 truncate" title={k.name}>
+            {k.name}
+          </span>
+        </div>
         <span
           className={`text-[10px] px-1.5 py-0.5 rounded font-mono uppercase ${sevTone}`}
         >

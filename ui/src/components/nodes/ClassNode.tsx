@@ -9,6 +9,7 @@ import type {
   SpecSlot,
   SpecSource,
 } from "../../types/spec";
+import KindBadge from "./KindBadge";
 
 /**
  * Class card — the only node kind in the default class-card-centric view.
@@ -47,12 +48,15 @@ export default function ClassNode({
 
       {/* Header */}
       <div className="px-3 py-1.5 border-b border-slate-200 bg-slate-50 rounded-t-lg flex items-center justify-between gap-2">
-        <span
-          className="font-semibold text-slate-900 truncate"
-          title={cls.name}
-        >
-          {cls.name}
-        </span>
+        <div className="flex items-center gap-1.5 min-w-0">
+          <KindBadge kind="class" />
+          <span
+            className="font-semibold text-slate-900 truncate"
+            title={cls.name}
+          >
+            {cls.name}
+          </span>
+        </div>
         <span
           className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide ${
             cls.abstract
