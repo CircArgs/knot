@@ -10,6 +10,7 @@ export default function App() {
       <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/spec-graph" element={<SpecGraph />} />
+        <Route path="/spec/draft/:draftId" element={<SpecGraph />} />
       </Routes>
     </Layout>
   );
