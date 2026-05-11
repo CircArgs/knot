@@ -16,10 +16,8 @@ from knot.db.spec_store import (
 )
 from knot.graph.spec import preview_publish
 from knot.spec import OntologyClass, Slot, Source, Spec
-from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
-from knot.spec.errors import PublishGateError, DraftNotFoundError
-
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -175,8 +173,8 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
 
 async def test_preview_constraint_violation_shows_blocker(clean_db):
     """A new ERROR-severity constraint that existing data violates surfaces as a blocker."""
-    from knot.spec.metaschema import Severity, Constraint
     from knot.spec.expressions import Compare, CompareOp, Literal_, SlotPath
+    from knot.spec.metaschema import Constraint, Severity
 
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot = Slot(name="year", type=Primitive(name="integer"))

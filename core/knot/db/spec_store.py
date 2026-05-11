@@ -33,10 +33,7 @@ from knot.spec.errors import (
 )
 from knot.spec.metaschema import (
     ClassRef,
-    Constraint,
     OntologyClass,
-    Slot,
-    Source,
     Spec,
 )
 from knot.spec.serialization import spec_from_dict, spec_to_dict
@@ -441,8 +438,8 @@ async def get_published_content_hash(conn: psycopg.AsyncConnection) -> str | Non
 async def run_preflight_checks(
     conn: psycopg.AsyncConnection,
     changes: list,
-    prev: "Spec | None",
-    candidate: "Spec",
+    prev: Spec | None,
+    candidate: Spec,
 ) -> list[dict]:
     """Run pre-flight data checks for the given diff.
 
@@ -455,13 +452,14 @@ async def run_preflight_checks(
       - For each ChangeSourceIdentifierSlot: verify the new slot has no NULLs
         and no duplicate values for that source's rows.
     """
+    from psycopg import sql
+
     from knot.spec.compile.postgres._naming import schema, user_corrections_source
     from knot.spec.compile.postgres.migration import (
         ChangeSlotRequired,
         ChangeSlotTypeExpression,
         ChangeSourceIdentifierSlot,
     )
-    from psycopg import sql
 
     blockers: list[dict] = []
 
@@ -583,8 +581,8 @@ class GateReport:
         changes: list,
         blockers: list[dict],
         requires_allow_destructive: bool,
-        candidate: "Spec",
-        prev: "Spec | None",
+        candidate: Spec,
+        prev: Spec | None,
     ) -> None:
         self.changes = changes
         self.blockers = blockers

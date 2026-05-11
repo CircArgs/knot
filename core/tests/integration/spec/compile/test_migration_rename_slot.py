@@ -19,11 +19,10 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.graph.spec import rename_slot, CollisionError, EntityNotOnDraftError
+from knot.graph.spec import CollisionError, EntityNotOnDraftError, rename_slot
 from knot.spec import OntologyClass, Slot, Source, Spec
-from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
-
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Fixture
