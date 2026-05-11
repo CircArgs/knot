@@ -18,7 +18,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import ClassNode from "../components/nodes/ClassNode";
 import ConstraintNode from "../components/nodes/ConstraintNode";
 import Modal from "../components/Modal";
-import PropertyPanel from "../components/PropertyPanel";
+import PropertyPanel, {
+  resolveSelection,
+  type SpecSelection,
+} from "../components/PropertyPanel";
 import SlotNode from "../components/nodes/SlotNode";
 import SourceNode from "../components/nodes/SourceNode";
 import Toolbar, { type AddKind } from "../components/Toolbar";
@@ -40,6 +43,7 @@ import * as api from "../lib/draftApi";
 import { ApiError, normalizeDraftSpec } from "../lib/draftApi";
 import { autoDetach, editEntityViaDeleteAdd } from "../lib/draftHelpers";
 import { layoutGraph } from "../lib/layout";
+import { useLocalStorage } from "../lib/useLocalStorage";
 import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
 
 const NODE_TYPES = {
@@ -60,8 +64,12 @@ export default function SpecGraph() {
   const draftId = draftIdParam ? Number(draftIdParam) : null;
   const mode: "view" | "edit" = draftId !== null ? "edit" : "view";
 
+  const [showOntologyDetails, setShowOntologyDetails] = useLocalStorage(
+    "knot:show-ontology-details",
+    false,
+  );
   const [includeBuiltins, setIncludeBuiltins] = useState(true);
-  const [selectedEntity, setSelectedEntity] = useState<SpecEntity | null>(null);
+  const [selection, setSelection] = useState<SpecSelection | null>(null);
   const [nodes, setNodes] = useState<SpecNode[]>([]);
   const [edges, setEdges] = useState<SpecEdge[]>([]);
   const [draftSpec, setDraftSpec] = useState<PublishedSpec | null>(null);
@@ -101,7 +109,7 @@ export default function SpecGraph() {
     return publishedQ.data?.publishedSpec ?? null;
   }, [mode, draftSpec, publishedQ.data]);
 
-  // ── Layout: re-run when the spec changes ──────────────────────────────────
+  // ── Layout: re-run when the spec or mode changes ──────────────────────────
   useEffect(() => {
     let cancelled = false;
     if (!spec) {
@@ -111,15 +119,27 @@ export default function SpecGraph() {
     }
     const { nodes: ns, edges: es } = buildGraph(spec, {
       includeBuiltinTypes: includeBuiltins,
+      showOntologyDetails,
     });
+    // Inject onSelect into class-card data so slot rows / chips can dispatch
+    // selection without bubbling through React Flow's node-click handler.
+    const withHandlers = ns.map((n) =>
+      n.data.entity.kind === "class" && !showOntologyDetails
+        ? { ...n, data: { ...n.data, onSelect: setSelection } }
+        : n,
+    );
     // Preserve drag positions across refetches.
-    const preserved = ns.map((n) => {
+    const preserved = withHandlers.map((n) => {
       const saved = positionsRef.current[n.id];
       return saved ? { ...n, position: saved } : n;
     });
-    layoutGraph(preserved, es).then((laid) => {
+    // Class cards are wider + taller than the old generic nodes; use bigger
+    // sizing inputs so elk leaves enough room between layers.
+    const sizing = showOntologyDetails
+      ? { width: 220, height: 110 }
+      : { width: 300, height: 220 };
+    layoutGraph(preserved, es, sizing).then((laid) => {
       if (cancelled) return;
-      // Apply positions; but only for nodes that don't already have a saved position.
       const merged = laid.map((n) => {
         const saved = positionsRef.current[n.id];
         return saved ? { ...n, position: saved } : n;
@@ -131,7 +151,7 @@ export default function SpecGraph() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec, includeBuiltins]);
+  }, [spec, includeBuiltins, showOntologyDetails]);
 
   // ── React Flow change handlers ────────────────────────────────────────────
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -151,9 +171,14 @@ export default function SpecGraph() {
   // ── Selection ─────────────────────────────────────────────────────────────
   const onNodeClick = useCallback((_: unknown, node: Node) => {
     const data = node.data as SpecNodeData;
-    setSelectedEntity(data.entity);
+    setSelection({ kind: data.entity.kind, name: data.entity.value.name });
   }, []);
-  const onPaneClick = useCallback(() => setSelectedEntity(null), []);
+  const onPaneClick = useCallback(() => setSelection(null), []);
+
+  // Resolve the current selection back to a typed entity for handlers that
+  // need to act on it (delete, edit modal).
+  const selectedEntity: SpecEntity | null =
+    selection && spec ? resolveSelection(spec, selection) : null;
 
   // ── Toggle edit mode ──────────────────────────────────────────────────────
   const onToggleMode = useCallback(async () => {
@@ -300,7 +325,7 @@ export default function SpecGraph() {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName?.toLowerCase();
       const inField = tag === "input" || tag === "textarea" || tag === "select";
-      if (e.key === "Escape" && !inField) setSelectedEntity(null);
+      if (e.key === "Escape" && !inField) setSelection(null);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "e" && !inField) {
         e.preventDefault();
         onToggleMode();
@@ -454,6 +479,8 @@ export default function SpecGraph() {
         draftRevision={draftId}
         onToggleMode={onToggleMode}
         onRefetch={() => (mode === "view" ? publishedQ.refetch() : reloadDraft())}
+        showOntologyDetails={showOntologyDetails}
+        onToggleOntologyDetails={() => setShowOntologyDetails((b) => !b)}
         includeBuiltins={includeBuiltins}
         onToggleBuiltins={() => setIncludeBuiltins((b) => !b)}
         onAdd={handleAdd}
@@ -490,8 +517,9 @@ export default function SpecGraph() {
           </ReactFlow>
         </div>
         <PropertyPanel
-          entity={selectedEntity}
-          onClose={() => setSelectedEntity(null)}
+          selection={selection}
+          spec={spec}
+          onClose={() => setSelection(null)}
         />
       </div>
 

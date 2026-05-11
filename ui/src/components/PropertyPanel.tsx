@@ -1,18 +1,43 @@
-import type { SpecEntity } from "../types/spec";
+import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
+
+/**
+ * What the panel can be focused on. In the class-card view, slot rows /
+ * source chips / constraint chips aren't standalone React Flow nodes, so
+ * we carry an entity-kind + name and resolve against the spec.
+ */
+export interface SpecSelection {
+  kind: SpecEntityKind;
+  name: string;
+}
 
 interface Props {
-  entity: SpecEntity | null;
+  selection: SpecSelection | null;
+  spec: PublishedSpec | null;
   onClose?: () => void;
 }
 
-export default function PropertyPanel({ entity, onClose }: Props) {
-  if (!entity) {
+export default function PropertyPanel({ selection, spec, onClose }: Props) {
+  const entity = selection && spec ? resolveSelection(spec, selection) : null;
+
+  if (!selection) {
     return (
       <aside className="w-80 border-l border-slate-200 bg-white p-4 text-sm text-slate-500">
-        <div className="italic">Select a node to inspect its properties.</div>
+        <div className="italic">
+          Select a class, slot, source, or constraint to inspect its properties.
+        </div>
       </aside>
     );
   }
+  if (!entity) {
+    return (
+      <aside className="w-80 border-l border-slate-200 bg-white p-4 text-sm text-slate-500">
+        <div className="italic">
+          {selection.kind} "{selection.name}" not found in spec.
+        </div>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-80 border-l border-slate-200 bg-white overflow-y-auto">
       <header className="p-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
@@ -39,6 +64,34 @@ export default function PropertyPanel({ entity, onClose }: Props) {
       </div>
     </aside>
   );
+}
+
+export function resolveSelection(
+  spec: PublishedSpec,
+  sel: SpecSelection,
+): SpecEntity | null {
+  switch (sel.kind) {
+    case "type": {
+      const v = spec.types.find((t) => t.name === sel.name);
+      return v ? { kind: "type", value: v } : null;
+    }
+    case "slot": {
+      const v = spec.slots.find((s) => s.name === sel.name);
+      return v ? { kind: "slot", value: v } : null;
+    }
+    case "class": {
+      const v = spec.classes.find((c) => c.name === sel.name);
+      return v ? { kind: "class", value: v } : null;
+    }
+    case "source": {
+      const v = spec.sources.find((src) => src.name === sel.name);
+      return v ? { kind: "source", value: v } : null;
+    }
+    case "constraint": {
+      const v = spec.constraints.find((k) => k.name === sel.name);
+      return v ? { kind: "constraint", value: v } : null;
+    }
+  }
 }
 
 function PropertyTable({ entity }: { entity: SpecEntity }) {
