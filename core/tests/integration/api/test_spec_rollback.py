@@ -30,7 +30,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Slot, Source, Spec
-from knot.spec.metaschema import Primitive
+from knot.spec.metaschema import Primitive, SourceBinding
 
 
 def _dev_principal() -> Principal:
@@ -41,13 +41,15 @@ def _spec_v1() -> Spec:
     """Movie with imdb_id only."""
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="rollback_test",
         version="1.0.0",
         slots=[imdb_id],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -56,11 +58,13 @@ def _spec_v2() -> Spec:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
-    src_movie = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src_movie = Source(name="imdb")
+    binding_movie = SourceBinding(source=src_movie, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
 
     nm = Slot(name="nm_id", type=Primitive(name="string"), identifier=True, required=True)
     person = OntologyClass(name="Person", slots=[nm])
-    src_person = Source(name="imdb_people", entity_class=person, identifier_slot=nm)
+    src_person = Source(name="imdb_people")
+    binding_person = SourceBinding(source=src_person, class_=person, identifier_slot=nm)  # type: ignore[call-arg]
 
     return Spec(
         id="rollback_test",
@@ -68,6 +72,7 @@ def _spec_v2() -> Spec:
         slots=[imdb_id, title, nm],
         classes=[movie, person],
         sources=[src_movie, src_person],
+        source_bindings=[binding_movie, binding_person],
     )
 
 

@@ -22,6 +22,7 @@ from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
 
@@ -46,13 +47,15 @@ def _spec_with_concrete_and_abstract() -> Spec:
         slots=[imdb_id, title, year],
         mixins=[auditable],
     )
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="lake_test",
         version="1.0.0",
         slots=[imdb_id, title, year, audited_at],
         classes=[movie, auditable],
         sources=[src],
+        source_bindings=[binding],
     )
 
 

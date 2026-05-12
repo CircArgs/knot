@@ -22,6 +22,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal valid spec factory
@@ -33,13 +34,15 @@ def _make_spec() -> Spec:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year = Slot(name="year", type=Primitive(name="integer"), required=False)
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
-    src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb_movies")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="test",
         version="1.0.0",
         slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 

@@ -26,6 +26,7 @@ from knot.db import graph_store
 from knot.extensions import RequestContext, Session, _Dispatcher
 from knot.extensions.events import RowsIngested, RowsIngesting
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -37,19 +38,21 @@ def _dev_principal() -> Principal:
     return Principal(username="dev:default", is_admin=False)
 
 
-def _build_movie_spec() -> tuple[Spec, OntologyClass, Source]:
+def _build_movie_spec() -> tuple[Spec, OntologyClass, Source, SourceBinding]:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="ext_test",
         version="1.0.0",
         slots=[imdb_id, title],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
-    return spec, movie, src
+    return spec, movie, src, binding
 
 
 def _make_ctx(conn) -> RequestContext:
@@ -57,13 +60,19 @@ def _make_ctx(conn) -> RequestContext:
 
 
 def _make_event(
-    src: Source, rows: list[dict] | None = None, *, spec: Spec | None = None
+    src: Source,
+    rows: list[dict] | None = None,
+    *,
+    spec: Spec | None = None,
+    binding: SourceBinding | None = None,
 ) -> RowsIngesting:
-    RowModel = build_row_model(src)
+    if binding is None:
+        _, _, _, binding = _build_movie_spec()
+    RowModel = build_row_model(binding)
     typed = [RowModel.model_validate(r) for r in (rows or [])]
     if spec is None:
-        spec, _, _ = _build_movie_spec()
-    return RowsIngesting(source=src, spec=spec, rows=typed)
+        spec, _, _, _ = _build_movie_spec()
+    return RowsIngesting(source=src, binding=binding, spec=spec, rows=typed)
 
 
 # ---------------------------------------------------------------------------
@@ -88,8 +97,8 @@ async def test_dispatcher_priority_ordering(pg_conn):
     async def _mid(ev, ctx):
         order.append(100)
 
-    _spec, _movie, src = _build_movie_spec()
-    ev = _make_event(src)
+    _spec, _movie, src, _binding = _build_movie_spec()
+    ev = _make_event(src, binding=_binding)
     await d.dispatch(ev, _make_ctx(pg_conn))
 
     assert order == [10, 100, 200]
@@ -112,8 +121,8 @@ async def test_dispatcher_multiple_handlers_all_run(pg_conn):
     async def _b(ev, ctx):
         calls.append("b")
 
-    _spec, _movie, src = _build_movie_spec()
-    ev = _make_event(src)
+    _spec, _movie, src, _binding = _build_movie_spec()
+    ev = _make_event(src, binding=_binding)
 
     await d.dispatch(ev, _make_ctx(pg_conn))
     assert "a" in calls
@@ -141,11 +150,11 @@ async def test_dispatcher_isinstance_matches_subclass(pg_conn):
     async def _base_handler(ev, ctx):
         fired.append(type(ev))
 
-    spec, _movie, src = _build_movie_spec()
+    spec, _movie, src, binding = _build_movie_spec()
     ctx = _make_ctx(pg_conn)
-    await d.dispatch(_make_event(src, spec=spec), ctx)
+    await d.dispatch(_make_event(src, spec=spec, binding=binding), ctx)
     await d.dispatch(
-        RowsIngested(source=src, spec=spec, rows=[], inserted_count=0, canonical_ids=[]),
+        RowsIngested(source=src, binding=binding, spec=spec, rows=[], inserted_count=0, canonical_ids=[]),
         ctx,
     )
 
@@ -166,8 +175,8 @@ async def test_dispatcher_no_handler_is_noop(pg_conn):
         calls.append("fired")
 
     # Dispatching a RowsIngesting must NOT trigger the RowsIngested handler.
-    _spec, _movie, src = _build_movie_spec()
-    await d.dispatch(_make_event(src), _make_ctx(pg_conn))
+    _spec, _movie, src, _binding = _build_movie_spec()
+    await d.dispatch(_make_event(src, binding=_binding), _make_ctx(pg_conn))
     assert calls == []
 
 
@@ -228,21 +237,23 @@ async def test_er_handler_http_delegates_when_url_set(pg_conn, monkeypatch):
     try:
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
         cls = OntologyClass(name="X", slots=[id_slot])
-        src = Source(name="_http_delegate_test", entity_class=cls, identifier_slot=id_slot)
+        src = Source(name="_http_delegate_test")
+        er_binding = SourceBinding(source=src, class_=cls, identifier_slot=id_slot)  # type: ignore[call-arg]
         spec = Spec(
             id="http_delegate_test",
             version="1.0.0",
             slots=[id_slot],
             classes=[cls],
             sources=[src],
+            source_bindings=[er_binding],
         )
-        RowModel = build_row_model(src)
+        RowModel = build_row_model(er_binding)
         typed = [
             RowModel.model_validate({"id": "x1"}),
             RowModel.model_validate({"id": "x2"}),
         ]
 
-        ev = RowsIngesting(source=src, spec=spec, rows=typed)
+        ev = RowsIngesting(source=src, binding=er_binding, spec=spec, rows=typed)
         ctx = _make_ctx(pg_conn)
         # Drive the freshly-loaded handler directly. The master dispatch
         # also has it registered (priority 50), but calling the function
@@ -280,7 +291,7 @@ async def ingest_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    spec, movie, src = _build_movie_spec()
+    spec, movie, src, _binding = _build_movie_spec()
     rev = await publish_spec(pg_conn, spec)
 
     yield pg_conn, movie, src, rev

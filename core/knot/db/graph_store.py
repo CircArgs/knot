@@ -90,6 +90,7 @@ async def insert_rows(
     conn: psycopg.AsyncConnection,
     *,
     source: Source,
+    cls: OntologyClass,
     spec_revision: int,
     rows: list[dict[str, Any]],
     canonical_ids: list[str],
@@ -100,10 +101,11 @@ async def insert_rows(
          change_type 'ingest') iff no current binding exists for that
          knot_row_id.
 
+    ``cls`` is the OntologyClass being written to (provided explicitly now
+    that Source is a thin identity object without entity_class).
     ``canonical_ids`` must be parallel to ``rows`` (same length, same order).
     Returns the number of source rows written.
     """
-    cls = source.entity_class
     slot_names = _stored_slot_names(cls)
     user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
     cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
@@ -634,7 +636,8 @@ async def update_cross_class_references(
             # Check if this slot references merged_class (ClassRef or Array[ClassRef])
             slot_type = slot.type
             if isinstance(slot_type, Array):
-                if not (isinstance(slot_type.of, ClassRef) and slot_type.of.target_class is merged_class):
+                inner = slot_type.of
+                if not (isinstance(inner, ClassRef) and inner.target_class is merged_class):
                     continue
             elif isinstance(slot_type, ClassRef):
                 if slot_type.target_class is not merged_class:

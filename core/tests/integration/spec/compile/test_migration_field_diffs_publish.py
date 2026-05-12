@@ -22,6 +22,7 @@ from knot.spec import (
     OntologyClass,
     Slot,
     Source,
+    SourceBinding,
     Spec,
 )
 from knot.spec.metaschema import Primitive, SlotConstraints
@@ -47,13 +48,15 @@ async def clean_db(pg_conn):
 def _build_spec() -> Spec:
     id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     return Spec(
         id="t",
         version="1.0.0",
         slots=[id_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -82,13 +85,15 @@ async def test_publish_blocks_source_identifier_slot_change_without_flag(clean_d
         id_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True, required=True)
         movie = OntologyClass(name="Movie", slots=[id_a, id_b])
         identifier = {"id_a": id_a, "id_b": id_b}[identifier_name]
-        src = Source(name="imdb", entity_class=movie, identifier_slot=identifier)
+        src = Source(name="imdb")
+        binding = SourceBinding(source=src, class_=movie, identifier_slot=identifier)  # type: ignore[call-arg]
         return Spec(
             id="t",
             version="1.0.0",
             slots=[id_a, id_b],
             classes=[movie],
             sources=[src],
+            source_bindings=[binding],
         )
 
     v1 = _build_with_identifier("id_a")

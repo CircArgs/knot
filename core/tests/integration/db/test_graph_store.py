@@ -14,7 +14,7 @@ import pytest
 
 from knot import db
 from knot.db import graph_store
-from knot.spec import Array, OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import Array, OntologyClass, Primitive, Slot, Source, SourceBinding, Spec
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -31,13 +31,15 @@ def _build_spec() -> tuple[Spec, OntologyClass, Source, int]:
     year = Slot(name="year", type=Primitive(name="integer"))
     tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year, tags])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="test",
         version="1.0.0",
         slots=[imdb_id, title, year, tags],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     return spec, movie, src, 0
 
@@ -75,6 +77,7 @@ async def test_insert_rows_returns_count(graph_db):
     n = await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "title": "Test Movie"}],
         canonical_ids=[
@@ -89,6 +92,7 @@ async def test_insert_rows_creates_current_binding(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "title": "Test Movie"}],
         canonical_ids=[
@@ -103,6 +107,7 @@ async def test_insert_rows_binding_has_null_valid_to(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000002", "title": "Another"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000002", "title": "Another"}]],
@@ -128,6 +133,7 @@ async def test_repush_same_row_does_not_duplicate_binding(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[row_data],
         canonical_ids=[str(r["imdb_id"]) for r in [row_data]],
@@ -135,6 +141,7 @@ async def test_repush_same_row_does_not_duplicate_binding(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000003", "title": "Updated title"}],
         canonical_ids=[
@@ -158,6 +165,7 @@ async def test_repush_updates_source_row_content(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000004", "title": "Old"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000004", "title": "Old"}]],
@@ -165,6 +173,7 @@ async def test_repush_updates_source_row_content(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000004", "title": "New"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000004", "title": "New"}]],
@@ -191,6 +200,7 @@ async def test_canonical_id_exists_after_insert(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000005"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000005"}]],
@@ -208,6 +218,7 @@ async def test_list_rows_includes_canonical_id(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000006", "title": "Listed"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000006", "title": "Listed"}]],
@@ -223,6 +234,7 @@ async def test_list_rows_excludes_closed_bindings(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000007"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000007"}]],
@@ -246,6 +258,7 @@ async def test_list_rows_as_of_excludes_later_revisions(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_asof"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_asof"}]],
@@ -260,6 +273,7 @@ async def test_list_rows_as_of_includes_current_revision(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_asof2"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_asof2"}]],
@@ -278,6 +292,7 @@ async def test_get_canonical_contributions_returns_one_row_per_source(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000008", "title": "Contrib"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000008", "title": "Contrib"}]],
@@ -307,6 +322,7 @@ async def test_count_rows_reflects_current_bindings(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "cnt1"}, {"imdb_id": "cnt2"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "cnt1"}, {"imdb_id": "cnt2"}]],
@@ -324,6 +340,7 @@ async def test_merge_closes_source_binding_and_opens_new(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_keep"}, {"imdb_id": "tt_merge"}],
         canonical_ids=[
@@ -350,6 +367,7 @@ async def test_merge_preserves_valid_from_lt_valid_to_invariant(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_inv_keep"}, {"imdb_id": "tt_inv_merge"}],
         canonical_ids=[
@@ -381,6 +399,7 @@ async def test_partial_unique_index_holds_after_merge(graph_db):
     await graph_store.insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_u1"}, {"imdb_id": "tt_u2"}],
         canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt_u1"}, {"imdb_id": "tt_u2"}]],

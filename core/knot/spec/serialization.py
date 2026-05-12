@@ -11,8 +11,10 @@ are tracked by counter `$uid`; second visit emits
 `{"$ref": <uid>, "$kind": "..."}` so two entities with the same name
 (e.g. Movie.imdb_id vs Person.imdb_id) round-trip as distinct objects.
 
-Two-pass rehydration: slots → classes → sources → constraints,
+Two-pass rehydration: slots → classes → sources → source_bindings → constraints,
 since each layer's cross-refs need the prior layer's entities indexed.
+SourceBinding is not a "named" entity (no .name field) so it isn't pre-built
+in pass-1; it's constructed fresh in pass-2 like Constraint.
 """
 
 from __future__ import annotations
@@ -46,8 +48,10 @@ from knot.spec.metaschema import (
     ScalarDerivation,
     Slot,
     SlotConstraints,
+    SlotMapping,
     SlotPath,
     Source,
+    SourceBinding,
     Spec,
     Within,
 )
@@ -55,6 +59,9 @@ from knot.spec.metaschema import Between as _Between
 
 # ─── Serializer ─────────────────────────────────────────────────────────────
 
+# Named entities tracked by $uid for cycle-safe serialization.
+# SourceBinding and SlotMapping are NOT named (no .name field) — they
+# serialize fresh each visit like Constraint.
 _NAMED_CLASSES = (Slot, OntologyClass, Source, Constraint)
 
 
@@ -139,6 +146,8 @@ _KIND_REGISTRY: dict[str, type] = {
     "OntologyClass": OntologyClass,
     "Constraint": Constraint,
     "Source": Source,
+    "SlotMapping": SlotMapping,
+    "SourceBinding": SourceBinding,
     "Spec": Spec,
     "Literal_": Literal_,
     "SlotPath": SlotPath,
@@ -279,11 +288,13 @@ def spec_from_dict(d: dict[str, Any]) -> Spec:
 
     # Pass 2: slots first (type expressions have no deps),
     # then classes (slots field needs slots),
-    # then sources (need class + slot),
+    # then sources (thin — no cross-refs needed),
+    # then source_bindings (need source + class + slots),
     # then constraints (need class + expression refs into slots/classes).
     slots_resolved = [_resolve(sd, index) for sd in d.get("slots", [])]
     classes_resolved = [_resolve(cd, index) for cd in d.get("classes", [])]
     sources_resolved = [_resolve(s, index) for s in d.get("sources", [])]
+    source_bindings_resolved = [_resolve(b, index) for b in d.get("source_bindings", [])]
     constraints_resolved = [_resolve(c, index) for c in d.get("constraints", [])]
 
     return Spec(
@@ -292,6 +303,7 @@ def spec_from_dict(d: dict[str, Any]) -> Spec:
         slots=slots_resolved,
         classes=classes_resolved,
         sources=sources_resolved,
+        source_bindings=source_bindings_resolved,
         constraints=constraints_resolved,
         prefixes=d.get("prefixes", {}),
     )

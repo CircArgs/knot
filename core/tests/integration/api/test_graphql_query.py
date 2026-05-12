@@ -34,6 +34,7 @@ from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
 from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 
 # ---------------------------------------------------------------------------
 # Spec + data builders
@@ -45,13 +46,15 @@ def _build_spec() -> tuple[Spec, OntologyClass, Source]:
     title = Slot(name="title", type=Primitive(name="string"))
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="gql_test",
         version="1.0.0",
         slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     return spec, movie, src
 
@@ -89,9 +92,11 @@ async def gql_db(pg_conn):
     await publish_draft(pg_conn, rev)
 
     _rows = _sample_rows()
+    movie = next(c for c in spec.classes if c.name == "Movie")
     await graph_store.insert_rows(
         pg_conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=_rows,
         canonical_ids=[str(r["imdb_id"]) for r in _rows],
@@ -594,8 +599,10 @@ def _build_derived_spec():
     credit_count_slot = Slot(name="credit_count", type=Primitive(name="integer"), derivation=credit_count_deriv)
     movie_cls.slots = [imdb_id, title, year, credit_count_slot]
 
-    movie_src = Source(name="imdb", entity_class=movie_cls, identifier_slot=imdb_id)
-    credit_src = Source(name="credits", entity_class=credit_cls, identifier_slot=credit_id)
+    movie_src = Source(name="imdb")
+    credit_src = Source(name="credits")
+    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_slot=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="derived_gql_test",
@@ -603,6 +610,7 @@ def _build_derived_spec():
         slots=[imdb_id, title, year, credit_count_slot, credit_id, credit_movie, credit_role],
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],
+        source_bindings=[movie_binding, credit_binding],
     )
     return spec, movie_cls, credit_cls, movie_src, credit_src
 
@@ -628,6 +636,7 @@ async def derived_db(pg_conn):
     await graph_store.insert_rows(
         pg_conn,
         source=movie_src,
+        cls=movie_cls,
         spec_revision=rev,
         rows=[
             {"imdb_id": "m1", "title": "Film One", "year": 1990},
@@ -647,6 +656,7 @@ async def derived_db(pg_conn):
     await graph_store.insert_rows(
         pg_conn,
         source=credit_src,
+        cls=credit_cls,
         spec_revision=rev,
         rows=[
             {"credit_id": "c1", "movie": "m1", "role": "director"},

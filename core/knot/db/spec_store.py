@@ -98,7 +98,7 @@ def publish_gate(candidate: Spec) -> None:
     Step 1: Pydantic shape (already enforced by Spec instantiation; re-runs
             model_validate over the canonical dump as a defensive recheck).
     Step 2: Reference resolution — every Slot ClassRef target, every
-            Source.entity_class, every Source.identifier_slot, every
+            SourceBinding.class_, every SourceBinding.identifier_slot, every
             Constraint.primary must point at an entity present on the spec.
 
     Steps 3+4 (DataContext cross-checks + impact preview) are bindings-side
@@ -154,22 +154,23 @@ def publish_gate(candidate: Spec) -> None:
                     f"Class {c.name!r}.slots includes Slot {slot.name!r} not on spec.slots."
                 )
 
-    for src in candidate.sources:
-        if id(src.entity_class) not in classes_by_id:
+    for b in candidate.source_bindings:
+        bid = b.binding_id
+        if id(b.class_) not in classes_by_id:
             errors.append(
-                f"Source {src.name!r}.entity_class references OntologyClass "
-                f"{src.entity_class.name!r} not on spec.classes."
+                f"SourceBinding {bid!r}.class_ references OntologyClass "
+                f"{b.class_.name!r} not on spec.classes."
             )
-        if id(src.identifier_slot) not in slots_by_id:
+        if id(b.identifier_slot) not in slots_by_id:
             errors.append(
-                f"Source {src.name!r}.identifier_slot references Slot "
-                f"{src.identifier_slot.name!r} not on spec.slots."
+                f"SourceBinding {bid!r}.identifier_slot references Slot "
+                f"{b.identifier_slot.name!r} not on spec.slots."
             )
-        # identifier_slot must be one of entity_class.slots
-        if not any(slot is src.identifier_slot for slot in src.entity_class.slots):
+        # identifier_slot must be one of class_.slots
+        if not any(slot is b.identifier_slot for slot in b.class_.slots):
             errors.append(
-                f"Source {src.name!r}.identifier_slot ({src.identifier_slot.name!r}) "
-                f"is not on its entity_class {src.entity_class.name!r}."
+                f"SourceBinding {bid!r}.identifier_slot ({b.identifier_slot.name!r}) "
+                f"is not on its class_ {b.class_.name!r}."
             )
 
     for con in candidate.constraints:
@@ -473,7 +474,7 @@ async def run_preflight_checks(
     Checks:
       - For each ChangeSlotTypeExpression: attempt the cast in a savepoint;
         capture failure as ``kind="type_cast_failure"``.
-      - For each ChangeSourceIdentifierSlot: verify the new slot has no NULLs
+      - For each ChangeSourceBindingIdentifierSlot: verify the new slot has no NULLs
         and no duplicate values for that source's rows.
     """
     from psycopg import sql
@@ -482,7 +483,7 @@ async def run_preflight_checks(
     from knot.spec.compile.postgres.migration import (
         ChangeSlotRequired,
         ChangeSlotTypeExpression,
-        ChangeSourceIdentifierSlot,
+        ChangeSourceBindingIdentifierSlot,
     )
 
     blockers: list[dict] = []
@@ -553,7 +554,7 @@ async def run_preflight_checks(
                     }
                 )
 
-        elif isinstance(change, ChangeSourceIdentifierSlot):
+        elif isinstance(change, ChangeSourceBindingIdentifierSlot):
             tbl = sql.Identifier(schema(), change.cls.name.lower())
             new_col = sql.Identifier(change.new_slot)
 

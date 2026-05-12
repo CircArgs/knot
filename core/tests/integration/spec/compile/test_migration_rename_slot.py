@@ -20,7 +20,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.graph.spec import CollisionError, EntityNotOnDraftError, rename_slot
-from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.metaschema import Primitive
 
@@ -51,13 +51,15 @@ def _make_spec(slot_name: str = "title") -> tuple[Spec, Slot]:
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     col_slot = Slot(name=slot_name, type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, col_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="t",
         version="1.0.0",
         slots=[id_slot, col_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     return spec, col_slot
 
@@ -136,13 +138,15 @@ async def test_rename_required_slot_renames_check_constraint(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     req_slot = Slot(name="title", type=Primitive(name="string"), required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot, req_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
         slots=[id_slot, req_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -182,13 +186,15 @@ async def test_rename_slot_collision(clean_db):
     title_slot = Slot(name="title", type=Primitive(name="string"))
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[id_slot, title_slot, year_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
         slots=[id_slot, title_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)

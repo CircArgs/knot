@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 
 from knot import db
 from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -70,13 +71,10 @@ def _build_spec() -> Spec:
         description="A theatrical motion picture.",
     )
 
-    imdb_src = Source(
-        name="imdb",
-        entity_class=movie,
-        identifier_slot=imdb_id,
-        description="IMDb data feed.",
-    )
-    wiki_src = Source(name="wiki", entity_class=person, identifier_slot=person_id)
+    imdb_src = Source(name="imdb", description="IMDb data feed.")
+    wiki_src = Source(name="wiki")
+    imdb_binding = SourceBinding(source=imdb_src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    wiki_binding = SourceBinding(source=wiki_src, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
 
     # Constraint: year must be > 1900 (toy invariant exercising surface).
     year_path = SlotPath(from_class=movie, slots=[year])
@@ -95,6 +93,7 @@ def _build_spec() -> Spec:
         slots=[imdb_id, title, year, person_id, name, directed_by],
         classes=[person, movie],
         sources=[imdb_src, wiki_src],
+        source_bindings=[imdb_binding, wiki_binding],
         constraints=[year_check],
     )
 
@@ -183,7 +182,8 @@ def test_published_spec_returns_full_shape(published):
         classes {
           name abstract description isAName mixinNames slotNames
         }
-        sources { name entityClassName identifierSlotName description trustScore }
+        sources { name description }
+        sourceBindings { sourceName className identifierSlotName description }
         constraints { name primaryClassName severity message }
       }
     }
@@ -230,14 +230,18 @@ def test_published_spec_returns_full_shape(published):
     assert movie["mixinNames"] == []
     assert movie["abstract"] is False
 
-    # Sources
+    # Sources (slim — just name + description)
     sources_by_name = {s["name"]: s for s in ps["sources"]}
     assert set(sources_by_name) == {"imdb", "wiki"}
-    imdb = sources_by_name["imdb"]
-    assert imdb["entityClassName"] == "Movie"
-    assert imdb["identifierSlotName"] == "imdb_id"
-    assert imdb["description"] == "IMDb data feed."
-    assert imdb["trustScore"] == 1.0
+    assert sources_by_name["imdb"]["description"] == "IMDb data feed."
+
+    # SourceBindings carry class/slot/trust metadata
+    bindings_by_source = {b["sourceName"]: b for b in ps["sourceBindings"]}
+    assert set(bindings_by_source) == {"imdb", "wiki"}
+    imdb_b = bindings_by_source["imdb"]
+    assert imdb_b["className"] == "Movie"
+    assert imdb_b["identifierSlotName"] == "imdb_id"
+    assert imdb_b["description"] is None
 
     # Constraints
     assert len(ps["constraints"]) == 1

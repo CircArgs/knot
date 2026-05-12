@@ -38,7 +38,7 @@ from knot.spec import (
     Source,
     Spec,
 )
-from knot.spec.metaschema import ClassRef, Primitive
+from knot.spec.metaschema import ClassRef, Primitive, SourceBinding
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal spec factories
@@ -57,7 +57,8 @@ def _spec_with_unreferenced_extras() -> Spec:
     year = Slot(name="year", type=Primitive(name="integer"))
     label = Slot(name="label", type=Primitive(name="string"))  # not on any class
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
-    src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb_movies")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     year_check = Constraint(
         name="year_positive",
         primary=movie,
@@ -73,6 +74,7 @@ def _spec_with_unreferenced_extras() -> Spec:
         slots=[imdb_id, year, label],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=[year_check],
     )
 
@@ -86,14 +88,17 @@ def _spec_with_class_ref() -> Spec:
     directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))
     movie = OntologyClass(name="Movie", slots=[imdb_id, directed_by])
 
-    src_movie = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
-    src_person = Source(name="wiki_people", entity_class=person, identifier_slot=person_id)
+    src_movie = Source(name="imdb_movies")
+    src_person = Source(name="wiki_people")
+    binding_movie = SourceBinding(source=src_movie, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding_person = SourceBinding(source=src_person, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
     return Spec(
         id="test",
         version="1.0.0",
         slots=[person_id, imdb_id, directed_by],
         classes=[person, movie],
         sources=[src_movie, src_person],
+        source_bindings=[binding_movie, binding_person],
     )
 
 
@@ -102,13 +107,15 @@ def _spec_with_is_a_chain() -> Spec:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = OntologyClass(name="Title", slots=[imdb_id])
     movie = OntologyClass(name="Movie", slots=[imdb_id], is_a=title)
-    src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb_movies")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="test",
         version="1.0.0",
         slots=[imdb_id],
         classes=[title, movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -118,7 +125,8 @@ def _spec_with_constraint_and_class() -> Spec:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
-    src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb_movies")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     nonneg = Constraint(
         name="year_positive",
         primary=movie,
@@ -139,6 +147,7 @@ def _spec_with_constraint_and_class() -> Spec:
         slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=[nonneg],
     )
 

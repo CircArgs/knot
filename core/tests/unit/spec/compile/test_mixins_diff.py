@@ -9,20 +9,18 @@ queryability, collision / cycle rejection) live in
 
 from __future__ import annotations
 
-from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import OntologyClass, Primitive, Slot, Spec
 from knot.spec.compile.postgres import migration
 
 
 def test_add_mixin_emits_addslot_diff():
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v1 = OntologyClass(name="Movie", slots=[imdb_id])
-    src_v1 = Source(name="imdb", entity_class=movie_v1, identifier_slot=imdb_id)
     spec_v1 = Spec(
         id="add_mixin",
         version="1.0.0",
         slots=[imdb_id],
         classes=[movie_v1],
-        sources=[src_v1],
     )
 
     created_at = Slot(name="created_at", type=Primitive(name="datetime"))
@@ -37,13 +35,11 @@ def test_add_mixin_emits_addslot_diff():
         slots=[imdb_id2],
         mixins=[timestamped],
     )
-    src_v2 = Source(name="imdb", entity_class=movie_v2, identifier_slot=imdb_id2)
     spec_v2 = Spec(
         id="add_mixin",
         version="1.0.0",
         slots=[imdb_id2, created_at],
         classes=[movie_v2, timestamped],
-        sources=[src_v2],
     )
 
     changes = migration.diff_specs(spec_v1, spec_v2)
@@ -65,24 +61,20 @@ def test_remove_mixin_emits_dropslot_diff():
         slots=[imdb_id],
         mixins=[timestamped],
     )
-    src_v1 = Source(name="imdb", entity_class=movie_v1, identifier_slot=imdb_id)
     spec_v1 = Spec(
         id="remove_mixin",
         version="1.0.0",
         slots=[imdb_id, created_at],
         classes=[movie_v1, timestamped],
-        sources=[src_v1],
     )
 
     imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[imdb_id2])
-    src_v2 = Source(name="imdb", entity_class=movie_v2, identifier_slot=imdb_id2)
     spec_v2 = Spec(
         id="remove_mixin",
         version="1.0.0",
         slots=[imdb_id2],
         classes=[movie_v2],
-        sources=[src_v2],
     )
 
     changes = migration.diff_specs(spec_v1, spec_v2)

@@ -15,7 +15,8 @@ from knot.api.row_models import build_row_model
 from knot.db import dq, graph_store
 from knot.extensions import RequestContext, Session, dispatch
 from knot.extensions.events import RowsIngested, RowsIngesting
-from knot.spec import Source, Spec
+from knot.spec import Source, SourceBinding, Spec
+from knot.spec.metaschema import NullSemantics
 
 
 class IngestValidationError(Exception):
@@ -46,6 +47,16 @@ class SourceNotOnSpecError(Exception):
         super().__init__(f"Source {source_name!r} not on the published spec.")
 
 
+class SourceBindingNotFoundError(Exception):
+    """Raised when no SourceBinding matches (source_name, class_name)."""
+
+    def __init__(self, source_name: str, class_name: str | None) -> None:
+        self.source_name = source_name
+        self.class_name = class_name
+        key = f"{source_name}__{class_name}" if class_name else source_name
+        super().__init__(f"No SourceBinding found for {key!r} on the published spec.")
+
+
 def find_source(spec: Spec, source_name: str) -> Source:
     """Look up a Source on a Spec; raise ``SourceNotOnSpecError`` if missing."""
     source = next((s for s in spec.sources if s.name == source_name), None)
@@ -54,10 +65,61 @@ def find_source(spec: Spec, source_name: str) -> Source:
     return source
 
 
+def find_source_binding(
+    spec: Spec, source_name: str, class_name: str | None = None
+) -> SourceBinding:
+    """Look up a SourceBinding by source_name (and optionally class_name).
+
+    When ``class_name`` is None and exactly one binding exists for the source,
+    it is returned. Raises ``SourceBindingNotFoundError`` otherwise.
+    """
+    candidates = [b for b in spec.source_bindings if b.source.name == source_name]
+    if class_name is not None:
+        candidates = [b for b in candidates if b.class_.name == class_name]
+    if len(candidates) == 1:
+        return candidates[0]
+    raise SourceBindingNotFoundError(source_name, class_name)
+
+
+def _apply_mappings(
+    binding: SourceBinding,
+    row: dict[str, Any],
+) -> dict[str, Any]:
+    """Translate a raw source row through the binding's SlotMapping rules.
+
+    For each SlotMapping:
+      - Read ``source_field`` from the raw row (fall back to slot name).
+      - If value is None: apply ``null_semantics`` — NO_CLAIM leaves None;
+        ASSERTED_ABSENT sets to a sentinel that downstream can act on
+        (here we pass None, which is correct for SQL NULL).
+      - Apply ``default`` when value is absent/None and default is set.
+
+    Returns a new dict keyed by slot names (not source field names).
+    """
+    if not binding.mappings:
+        return row
+
+    out: dict[str, Any] = dict(row)
+    for m in binding.mappings:
+        source_field = m.source_field
+        value = row.get(source_field)
+        if value is None:
+            if m.default is not None:
+                value = m.default
+            elif m.null_semantics == NullSemantics.ASSERTED_ABSENT:
+                value = None  # explicit NULL — stays None for SQL storage
+            # NO_CLAIM: leave None as-is
+        slot_name = m.slot.name
+        if source_field != slot_name:
+            out.pop(source_field, None)
+        out[slot_name] = value
+    return out
+
+
 async def ingest_rows(
     conn: psycopg.AsyncConnection,
     *,
-    source: Source,
+    binding: SourceBinding,
     spec: Spec,
     spec_revision: int,
     rows: list[dict[str, Any]],
@@ -65,6 +127,10 @@ async def ingest_rows(
     validate_constraints: bool = False,
 ) -> int:
     """Validate + resolve + INSERT a batch of source rows.
+
+    ``binding`` is the ``SourceBinding`` that describes which source→class
+    mapping to use. Slot mappings, defaults, and null_semantics are applied
+    before Pydantic validation.
 
     Returns the number of rows inserted. Raises ``IngestValidationError``
     on Pydantic failure (no rows inserted) and ``ConstraintViolations``
@@ -74,11 +140,18 @@ async def ingest_rows(
     from knot.spec.compile.postgres import compile_constraint
     from knot.spec.metaschema import Severity
 
+    # Convenience alias: the Source object (used for extension events).
+    source = binding.source
+    cls = binding.class_
+
+    # 0. Apply field mappings (rename source_field → slot_name, apply defaults).
+    mapped_rows = [_apply_mappings(binding, r) for r in rows]
+
     # 1. Pydantic validation
-    RowModel = build_row_model(source)
+    RowModel = build_row_model(binding)
     typed_rows: list[Any] = []
     errors: list[dict[str, Any]] = []
-    for i, row in enumerate(rows):
+    for i, row in enumerate(mapped_rows):
         try:
             typed_rows.append(RowModel.model_validate(row))
         except ValidationError as exc:
@@ -87,7 +160,6 @@ async def ingest_rows(
     if errors:
         raise IngestValidationError(errors)
 
-    cls = source.entity_class
     ctx = RequestContext(
         db=Session(conn),
         spec_revision=spec_revision,
@@ -96,13 +168,12 @@ async def ingest_rows(
 
     # 2. Pre-INSERT extension hook (teams may override canonical_ids,
     #    mutate rows, etc.).
-    pre = RowsIngesting(source=source, spec=spec, rows=typed_rows)
+    pre = RowsIngesting(source=source, binding=binding, spec=spec, rows=typed_rows)
     await dispatch.dispatch(pre, ctx)
 
-    # 3. Built-in default canonical_id: {source_name}:{source_row_id}
-    #    (only if no handler set them).
+    # 3. Built-in default canonical_id: {source_name}:{identifier_slot_value}
     if pre.canonical_ids is None:
-        id_name = source.identifier_slot.name
+        id_name = binding.identifier_slot.name
         pre.canonical_ids = [
             f"{source.name}:{getattr(r, id_name)}" for r in pre.rows
         ]
@@ -114,6 +185,7 @@ async def ingest_rows(
         count = await graph_store.insert_rows(
             conn,
             source=source,
+            cls=cls,
             spec_revision=spec_revision,
             rows=wire_rows,
             canonical_ids=pre.canonical_ids,
@@ -181,6 +253,7 @@ async def ingest_rows(
         await dispatch.dispatch(
             RowsIngested(
                 source=source,
+                binding=binding,
                 spec=spec,
                 rows=pre.rows,
                 inserted_count=count,

@@ -31,12 +31,14 @@ from knot.spec import (
     SlotConstraints,
     SlotPath,
     Source,
+    SourceBinding,
     Spec,
 )
 
 from knot.spec.compile.postgres.migration import (
     AddConstraint,
     AddSource,
+    AddSourceBinding,
     ChangeClassAbstract,
     ChangeClassIsA,
     ChangeClassMixins,
@@ -51,12 +53,11 @@ from knot.spec.compile.postgres.migration import (
     ChangeSlotPermissibleValues,
     ChangeSlotResolutionPolicy,
     ChangeSlotTypeExpression,
-    ChangeSourceEntityClass,
-    ChangeSourceIdentifierSlot,
-    ChangeSourceSlotPrior,
-    ChangeSourceTrustScore,
+    ChangeSourceBindingIdentifierSlot,
+    ChangeSourceBindingTrust,
     DropConstraint,
     DropSource,
+    DropSourceBinding,
     diff_specs,
     is_destructive,
 )
@@ -74,19 +75,26 @@ def _make_spec_pair(*, mutator):
     def _build():
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
         movie = OntologyClass(name="Movie", slots=[id_slot])
-        src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+        src = Source(name="imdb")
+        binding = SourceBinding(
+            source=src,
+            class_=movie,
+            identifier_slot=id_slot,
+        )
         spec = Spec(
             id="t",
             version="1.0.0",
             slots=[id_slot],
             classes=[movie],
             sources=[src],
+            source_bindings=[binding],
         )
         return {
             "spec": spec,
             "id_slot": id_slot,
             "movie": movie,
             "source": src,
+            "binding": binding,
         }
 
     prev = _build()
@@ -355,8 +363,6 @@ def test_change_class_mixins_is_not_destructive():
     assert not is_destructive(rec)
 
 
-
-
 # ---------------------------------------------------------------------------
 # 3. Source field diffs
 # ---------------------------------------------------------------------------
@@ -366,9 +372,7 @@ def test_diff_add_source_emits_record():
     def build(*, with_source):
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[id_slot])
-        sources = (
-            [Source(name="imdb", entity_class=cls, identifier_slot=id_slot)] if with_source else []
-        )
+        sources = [Source(name="imdb")] if with_source else []
         return Spec(
             id="t",
             version="1.0.0",
@@ -381,17 +385,13 @@ def test_diff_add_source_emits_record():
     rec = next((c for c in changes if isinstance(c, AddSource)), None)
     assert rec is not None
     assert rec.source_name == "imdb"
-    assert rec.entity_class == "Movie"
-    assert rec.identifier_slot == "id"
 
 
 def test_diff_drop_source_emits_record():
     def build(*, with_source):
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[id_slot])
-        sources = (
-            [Source(name="imdb", entity_class=cls, identifier_slot=id_slot)] if with_source else []
-        )
+        sources = [Source(name="imdb")] if with_source else []
         return Spec(
             id="t",
             version="1.0.0",
@@ -410,115 +410,143 @@ def test_drop_source_is_destructive():
     assert is_destructive(DropSource(source_name="imdb"))
 
 
-def test_diff_change_source_entity_class_emits_record():
-    def build(*, target_class_name):
-        id_slot_a = Slot(name="id_a", type=Primitive(name="string"), identifier=True)
-        id_slot_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True)
-        movie = OntologyClass(name="Movie", slots=[id_slot_a])
-        series = OntologyClass(name="Series", slots=[id_slot_b])
-        target = {"Movie": (movie, id_slot_a), "Series": (series, id_slot_b)}[target_class_name]
-        src = Source(name="imdb", entity_class=target[0], identifier_slot=target[1])
+# ---------------------------------------------------------------------------
+# 4. SourceBinding field diffs
+# ---------------------------------------------------------------------------
+
+
+def test_diff_add_source_binding_emits_record():
+    def build(*, with_binding):
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
+        src = Source(name="imdb")
+        bindings = (
+            [SourceBinding(source=src, class_=cls, identifier_slot=id_slot)] if with_binding else []
+        )
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot_a, id_slot_b],
-            classes=[movie, series],
+            slots=[id_slot],
+            classes=[cls],
             sources=[src],
+            source_bindings=bindings,
         )
 
-    changes = diff_specs(build(target_class_name="Movie"), build(target_class_name="Series"))
-    rec = next((c for c in changes if isinstance(c, ChangeSourceEntityClass)), None)
+    changes = diff_specs(build(with_binding=False), build(with_binding=True))
+    rec = next((c for c in changes if isinstance(c, AddSourceBinding)), None)
     assert rec is not None
     assert rec.source_name == "imdb"
-    assert rec.old_class == "Movie"
-    assert rec.new_class == "Series"
+    assert rec.class_name == "Movie"
+    assert rec.identifier_slot == "id"
 
 
-def test_change_source_entity_class_is_destructive():
-    rec = ChangeSourceEntityClass(source_name="imdb", old_class="Movie", new_class="Series")
-    assert is_destructive(rec)
+def test_diff_drop_source_binding_emits_record():
+    def build(*, with_binding):
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
+        src = Source(name="imdb")
+        bindings = (
+            [SourceBinding(source=src, class_=cls, identifier_slot=id_slot)] if with_binding else []
+        )
+        return Spec(
+            id="t",
+            version="1.0.0",
+            slots=[id_slot],
+            classes=[cls],
+            sources=[src],
+            source_bindings=bindings,
+        )
+
+    changes = diff_specs(build(with_binding=True), build(with_binding=False))
+    rec = next((c for c in changes if isinstance(c, DropSourceBinding)), None)
+    assert rec is not None
+    assert rec.source_name == "imdb"
+    assert rec.class_name == "Movie"
 
 
-def test_diff_change_source_identifier_slot_emits_record():
+def test_drop_source_binding_is_destructive():
+    assert is_destructive(DropSourceBinding(source_name="imdb", class_name="Movie"))
+
+
+def test_diff_change_source_binding_identifier_slot_emits_record():
     def build(*, identifier_name):
         slot_a = Slot(name="id_a", type=Primitive(name="string"), identifier=True)
         slot_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[slot_a, slot_b])
+        src = Source(name="imdb")
         identifier = {"id_a": slot_a, "id_b": slot_b}[identifier_name]
-        src = Source(name="imdb", entity_class=cls, identifier_slot=identifier)
+        binding = SourceBinding(source=src, class_=cls, identifier_slot=identifier)
         return Spec(
             id="t",
             version="1.0.0",
             slots=[slot_a, slot_b],
             classes=[cls],
             sources=[src],
+            source_bindings=[binding],
         )
 
     changes = diff_specs(build(identifier_name="id_a"), build(identifier_name="id_b"))
-    rec = next((c for c in changes if isinstance(c, ChangeSourceIdentifierSlot)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSourceBindingIdentifierSlot)), None)
     assert rec is not None
     assert rec.source_name == "imdb"
+    assert rec.class_name == "Movie"
     assert rec.old_slot == "id_a"
     assert rec.new_slot == "id_b"
 
 
-def test_change_source_identifier_slot_is_destructive():
+def test_change_source_binding_identifier_slot_is_destructive():
     cls = OntologyClass(name="Movie", slots=[])
-    rec = ChangeSourceIdentifierSlot(cls=cls, source_name="imdb", old_slot="id_a", new_slot="id_b")
+    rec = ChangeSourceBindingIdentifierSlot(
+        cls=cls, source_name="imdb", class_name="Movie", old_slot="id_a", new_slot="id_b"
+    )
     assert is_destructive(rec)
 
 
-def test_diff_change_source_trust_score_emits_record():
-    def build(*, trust_score):
+def test_diff_change_source_binding_trust_emits_record():
+    """diff_specs emits ChangeSourceBindingTrust when trust_prior changes.
+
+    trust_prior is RUNTIME (excluded from the content hash) but diff_specs
+    compares live objects directly and emits a Bucket C audit record.
+    No DDL is emitted; the record is non-destructive.
+    """
+    def build(*, trust_prior):
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[id_slot])
-        src = Source(name="imdb", entity_class=cls, identifier_slot=id_slot, trust_score=trust_score)
-        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[cls], sources=[src])
-
-    changes = diff_specs(build(trust_score=1.0), build(trust_score=0.8))
-    rec = next((c for c in changes if isinstance(c, ChangeSourceTrustScore)), None)
-    assert rec is not None
-    assert rec.source_name == "imdb"
-    assert rec.old_value == 1.0
-    assert rec.new_value == 0.8
-
-
-def test_change_source_trust_score_is_not_destructive():
-    rec = ChangeSourceTrustScore(source_name="imdb", old_value=1.0, new_value=0.8)
-    assert not is_destructive(rec)
-
-
-def test_diff_change_source_slot_prior_emits_record():
-    def build(*, alpha, beta):
-        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", slots=[id_slot])
-        src = Source(
-            name="imdb",
-            entity_class=cls,
-            identifier_slot=id_slot,
-            slot_priors={"id": (alpha, beta)},
+        src = Source(name="imdb")
+        binding = SourceBinding(
+            source=src, class_=cls, identifier_slot=id_slot, trust_prior=trust_prior
         )
-        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[cls], sources=[src])
+        return Spec(
+            id="t",
+            version="1.0.0",
+            slots=[id_slot],
+            classes=[cls],
+            sources=[src],
+            source_bindings=[binding],
+        )
 
-    changes = diff_specs(build(alpha=1.0, beta=1.0), build(alpha=5.0, beta=2.0))
-    rec = next((c for c in changes if isinstance(c, ChangeSourceSlotPrior)), None)
+    changes = diff_specs(build(trust_prior=(1.0, 1.0)), build(trust_prior=(5.0, 2.0)))
+    rec = next((c for c in changes if isinstance(c, ChangeSourceBindingTrust)), None)
     assert rec is not None
     assert rec.source_name == "imdb"
-    assert rec.slot_name == "id"
+    assert rec.class_name == "Movie"
+    assert rec.old_prior == (1.0, 1.0)
+    assert rec.new_prior == (5.0, 2.0)
 
 
-def test_change_source_slot_prior_is_not_destructive():
-    rec = ChangeSourceSlotPrior(
+def test_change_source_binding_trust_is_not_destructive():
+    cls = OntologyClass(name="Movie", slots=[])
+    rec = ChangeSourceBindingTrust(
         source_name="imdb",
-        slot_name="title",
-        prev_prior=(1.0, 1.0),
+        class_name="Movie",
+        old_prior=(1.0, 1.0),
         new_prior=(5.0, 2.0),
     )
     assert not is_destructive(rec)
 
 
 # ---------------------------------------------------------------------------
-# 4. Constraint field diffs
+# 5. Constraint field diffs
 # ---------------------------------------------------------------------------
 
 
@@ -528,7 +556,8 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
     movie = OntologyClass(name="Movie", slots=[id_slot, year])
     series = OntologyClass(name="Series", slots=[id_slot, year])
     primary_cls = {"Movie": movie, "Series": series}[primary_name]
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)
     body = Compare(
         op=CompareOp.GT,
         left=SlotPath(from_class=primary_cls, slots=[year]),
@@ -541,6 +570,7 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
         slots=[id_slot, year],
         classes=[movie, series],
         sources=[src],
+        source_bindings=[binding],
         constraints=[con],
     )
 
@@ -549,13 +579,15 @@ def _build_constraintless_spec():
     id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)
     return Spec(
         id="t",
         version="1.0.0",
         slots=[id_slot, year],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -634,7 +666,7 @@ def test_change_constraint_severity_is_not_destructive():
 
 
 # ---------------------------------------------------------------------------
-# 5. Sanity: BoolExpr usage doesn't disturb the diff
+# 6. Sanity: BoolExpr usage doesn't disturb the diff
 # ---------------------------------------------------------------------------
 
 

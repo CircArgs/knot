@@ -14,6 +14,7 @@ from knot.spec import (
     Primitive,
     Slot,
     Source,
+    SourceBinding,
     Spec,
     compute_content_hash,
 )
@@ -33,14 +34,17 @@ def _build_two_class_spec() -> Spec:
     name = Slot(name="name", type=string, required=True)
     movie = OntologyClass(name="Movie", slots=[movie_id, title])
     person = OntologyClass(name="Person", slots=[person_id, name])
-    movie_src = Source(name="imdb_movies", entity_class=movie, identifier_slot=movie_id)
-    person_src = Source(name="imdb_people", entity_class=person, identifier_slot=person_id)
+    movie_src = Source(name="imdb_movies")
+    person_src = Source(name="imdb_people")
+    movie_binding = SourceBinding(source=movie_src, class_=movie, identifier_slot=movie_id)
+    person_binding = SourceBinding(source=person_src, class_=person, identifier_slot=person_id)
     return Spec(
         id="two-class",
         version="1.0.0",
         slots=[movie_id, person_id, title, name],
         classes=[movie, person],
         sources=[movie_src, person_src],
+        source_bindings=[movie_binding, person_binding],
     )
 
 
@@ -49,13 +53,15 @@ def _build_simple_spec() -> Spec:
     imdb_id = Slot(name="imdb_id", type=string, identifier=True, required=True)
     title = Slot(name="title", type=string, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)
     return Spec(
         id="simple",
         version="1.0.0",
         slots=[imdb_id, title],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -103,28 +109,28 @@ def test_round_trip_preserves_class_names():
 
 
 # ---------------------------------------------------------------------------
-# 2. Object identity: source.entity_class is the same object as classes[n]
+# 2. Object identity: binding.class_ is the same object as classes[n]
 # ---------------------------------------------------------------------------
 
 
-def test_round_trip_source_entity_class_identity():
-    """After round-trip, source.entity_class must be the same Python object
+def test_round_trip_binding_class_identity():
+    """After round-trip, binding.class_ must be the same Python object
     as the corresponding entry in spec.classes (not a copy)."""
     spec = _build_simple_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
     movie_class = recovered.classes[0]
-    movie_src = recovered.sources[0]
-    assert movie_src.entity_class is movie_class
+    movie_binding = recovered.source_bindings[0]
+    assert movie_binding.class_ is movie_class
 
 
-def test_round_trip_source_identifier_slot_identity():
-    """After round-trip, source.identifier_slot must be the same Python object
+def test_round_trip_binding_identifier_slot_identity():
+    """After round-trip, binding.identifier_slot must be the same Python object
     as the corresponding entry in spec.slots."""
     spec = _build_simple_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
     imdb_slot = next(s for s in recovered.slots if s.name == "imdb_id")
-    movie_src = recovered.sources[0]
-    assert movie_src.identifier_slot is imdb_slot
+    movie_binding = recovered.source_bindings[0]
+    assert movie_binding.identifier_slot is imdb_slot
 
 
 def test_round_trip_slot_type_preserved():
@@ -164,18 +170,18 @@ def test_same_name_slots_on_different_classes_preserved_in_spec_slots():
 
 
 def test_source_identifier_slot_identity_two_class_spec():
-    """After round-trip, each source's identifier_slot must be the slot
+    """After round-trip, each binding's identifier_slot must be the slot
     on its own class, not the other class's same-named slot."""
     spec = _build_two_class_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
     movie = next(c for c in recovered.classes if c.name == "Movie")
     person = next(c for c in recovered.classes if c.name == "Person")
-    movie_src = next(s for s in recovered.sources if s.name == "imdb_movies")
-    person_src = next(s for s in recovered.sources if s.name == "imdb_people")
+    movie_binding = next(b for b in recovered.source_bindings if b.source.name == "imdb_movies")
+    person_binding = next(b for b in recovered.source_bindings if b.source.name == "imdb_people")
     movie_imdb = next(s for s in movie.slots if s.name == "imdb_id")
     person_imdb = next(s for s in person.slots if s.name == "imdb_id")
-    assert movie_src.identifier_slot is movie_imdb
-    assert person_src.identifier_slot is person_imdb
+    assert movie_binding.identifier_slot is movie_imdb
+    assert person_binding.identifier_slot is person_imdb
 
 
 # ---------------------------------------------------------------------------
@@ -206,12 +212,14 @@ def test_content_hash_changes_when_spec_changes():
     string = Primitive(name="string")
     imdb_id = Slot(name="imdb_id", type=string, identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)
     spec_b = Spec(
         id="different_id",
         version="2.0.0",
         slots=[imdb_id],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     assert compute_content_hash(spec_a) != compute_content_hash(spec_b)

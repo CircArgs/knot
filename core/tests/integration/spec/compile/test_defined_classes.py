@@ -27,7 +27,7 @@ import pytest_asyncio
 from knot import db
 from knot.db import graph_store, spec_store
 from tests._helpers import publish_spec
-from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
 from knot.spec.metaschema import ClassRef, Primitive
 from knot.spec.compile.postgres import CompileContext, compile_predicate, migration
 from knot.spec.metaschema import (
@@ -60,8 +60,10 @@ def _build_person_credit_spec() -> tuple[
     role = Slot(name="role", type=Primitive(name="string"))
     credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
 
-    person_src = Source(name="person_src", entity_class=person, identifier_slot=person_id)
-    credit_src = Source(name="credit_src", entity_class=credit, identifier_slot=credit_id)
+    person_src = Source(name="person_src")
+    credit_src = Source(name="credit_src")
+    person_binding = SourceBinding(source=person_src, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit, identifier_slot=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="defined_class_test",
@@ -69,6 +71,7 @@ def _build_person_credit_spec() -> tuple[
         slots=[person_id, person_name, credit_id, person_fk, role],
         classes=[person, credit],
         sources=[person_src, credit_src],
+        source_bindings=[person_binding, credit_binding],
     )
     return spec, person, credit, person_src, credit_src
 
@@ -153,6 +156,7 @@ async def test_person_page_returns_inserted_rows(dc_db, dc_client):
     await graph_store.insert_rows(
         conn,
         source=person_src,
+        cls=person,
         spec_revision=rev,
         rows=[
             {"person_id": "p1", "name": "Alice"},
@@ -179,6 +183,7 @@ async def test_person_page_returns_all_persons(dc_db, dc_client):
     await graph_store.insert_rows(
         conn,
         source=person_src,
+        cls=person,
         spec_revision=rev,
         rows=[
             {"person_id": "p1", "name": "Alice"},

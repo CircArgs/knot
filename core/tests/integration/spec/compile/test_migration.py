@@ -18,7 +18,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
 from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.compile.postgres.migration import (
@@ -35,7 +35,8 @@ from knot.spec.errors import PublishGateError
 def _minimal_spec(*extra_classes: OntologyClass) -> Spec:
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
-    src = Source(name="imdb_src", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb_src")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     all_classes = [movie, *extra_classes]
     return Spec(
         id="test",
@@ -43,6 +44,7 @@ def _minimal_spec(*extra_classes: OntologyClass) -> Spec:
         slots=[id_slot],
         classes=all_classes,
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -156,9 +158,11 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, title])
-    src = Source(name="s", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="s")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie], sources=[src]
+        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        sources=[src], source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -166,12 +170,14 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     await publish_draft(clean_db, rev1)
 
     # v2 drops "title" → DropSlot (destructive).
-    # Source must reference the new class object so the publish gate passes ref checks.
+    # SourceBinding must reference the new class object so the publish gate passes ref checks.
     id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot2])
-    src_v2 = Source(name="s", entity_class=movie_v2, identifier_slot=id_slot2)
+    src_v2 = Source(name="s")
+    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
+        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2],
+        sources=[src_v2], source_bindings=[binding_v2],
     )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
@@ -183,9 +189,11 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, title])
-    src = Source(name="s", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="s")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie], sources=[src]
+        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        sources=[src], source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -194,9 +202,11 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
 
     id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot2])
-    src_v2 = Source(name="s", entity_class=movie_v2, identifier_slot=id_slot2)
+    src_v2 = Source(name="s")
+    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
+        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2],
+        sources=[src_v2], source_bindings=[binding_v2],
     )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)

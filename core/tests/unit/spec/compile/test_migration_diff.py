@@ -144,7 +144,7 @@ def test_drop_source_requires_allow_destructive_at_publish():
     movie = OntologyClass(name="Movie", slots=[id_slot])
     from knot.spec import Source
 
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
     prev = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie], sources=[src])
     # candidate has no sources → DropSource
     cand = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie], sources=[])

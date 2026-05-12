@@ -37,6 +37,13 @@ class IngestResponse(StrictBase):
 async def ingest(
     source_name: str,
     body: IngestBatch,
+    class_name: str | None = Query(
+        None,
+        description=(
+            "Target class name. Required when a source has bindings to multiple "
+            "classes; optional when only one binding exists for the source."
+        ),
+    ),
     validate_constraints: bool = Query(
         False,
         description=(
@@ -47,13 +54,13 @@ async def ingest(
         ),
     ),
 ) -> IngestResponse:
-    """Push a batch of rows attributed to a known source.
+    """Push a batch of rows attributed to a known source binding.
 
     Validation:
       - 409 if no spec is published yet.
-      - 404 if ``source_name`` isn't a Source on the published spec.
+      - 404 if no SourceBinding matches (source_name, class_name).
       - 422 with FastAPI-shaped error detail if any row fails Pydantic
-        validation against the source's class slot shape.
+        validation against the binding's class slot shape.
 
     When ``validate_constraints=true``, post-INSERT constraint check runs
     inside a transaction; violations roll back the batch.
@@ -61,15 +68,15 @@ async def ingest(
     async with db.connect() as conn:
         spec = await published_or_409(conn)
         try:
-            source = graph_ingest.find_source(spec, source_name)
-        except graph_ingest.SourceNotOnSpecError as exc:
+            binding = graph_ingest.find_source_binding(spec, source_name, class_name)
+        except graph_ingest.SourceBindingNotFoundError as exc:
             raise HTTPException(404, str(exc)) from exc
 
         revision = await spec_store.get_published_revision(conn)
         try:
             count = await graph_ingest.ingest_rows(
                 conn,
-                source=source,
+                binding=binding,
                 spec=spec,
                 spec_revision=revision,
                 rows=body.rows,
@@ -84,6 +91,6 @@ async def ingest(
     return IngestResponse(
         accepted=count,
         source=source_name,
-        entity_class=source.entity_class.name,
+        entity_class=binding.class_.name,
         spec_revision=revision,
     )

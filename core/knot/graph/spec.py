@@ -26,11 +26,14 @@ from knot.db import spec_store
 from knot.spec import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
+    NullSemantics,
     OntologyClass,
     PublishGateError,
     ResolutionPolicy,
     Slot,
+    SlotMapping,
     Source,
+    SourceBinding,
     Spec,
     compute_content_hash,
 )
@@ -73,12 +76,13 @@ __all__ = (
     "add_class",
     "update_class",
     "add_source",
-    "update_source_trust_score",
-    "update_source_slot_prior",
+    "add_source_binding",
+    "update_source_binding_trust",
     "add_constraint",
     "remove_slot",
     "remove_class",
     "remove_source",
+    "remove_source_binding",
     "remove_constraint",
     "rename_slot",
     # Publish / rollback / preview
@@ -397,76 +401,128 @@ async def add_source(
     draft_id: int,
     *,
     name: str,
-    entity_class_name: str,
-    identifier_slot_name: str,
-    trust_score: float = 1.0,
-    slot_priors: dict[str, tuple[float, float]] | None = None,
     description: str | None = None,
 ) -> Spec:
+    """Add a thin Source (name + description only).
+
+    The per-class relationship metadata lives on ``SourceBinding``.
+    Use ``add_source_binding`` after creating the source.
+    """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         if any(s.name.lower() == name.lower() for s in spec.sources):
             raise CollisionError("Source", name)
+        spec.sources.append(Source(name=name, description=description))
+    return spec
 
-        cls = _find_class(spec, entity_class_name)
-        slot = next((s for s in cls.slots if s.name == identifier_slot_name), None)
-        if slot is None:
+
+def _find_source_binding(spec: Spec, source_name: str, class_name: str) -> SourceBinding:
+    """Look up a SourceBinding by (source_name, class_name).
+
+    Raises ``EntityNotOnDraftError`` if no matching binding is found.
+    """
+    for b in spec.source_bindings:
+        if b.source.name == source_name and b.class_.name == class_name:
+            return b
+    raise EntityNotOnDraftError("SourceBinding", f"{source_name}__{class_name}")
+
+
+async def add_source_binding(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    *,
+    source_name: str,
+    class_name: str,
+    identifier_slot_name: str,
+    mappings: list[dict] | None = None,
+    trust_prior: tuple[float, float] = (1.0, 1.0),
+    required_slot_names: list[str] | None = None,
+    description: str | None = None,
+) -> Spec:
+    """Add a SourceBinding (source, class) to the draft.
+
+    ``mappings`` is a list of dicts with keys:
+      slot_name, source_field, default (optional), null_semantics (optional), prior (optional).
+
+    ``identifier_slot_name`` must be a slot on the class (via effective_slots).
+    """
+    from knot.spec import effective_slots as _effective_slots
+
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        src = _find_source(spec, source_name)
+        cls = _find_class(spec, class_name)
+
+        # Check for duplicate binding
+        if any(b.source.name == source_name and b.class_.name == class_name
+               for b in spec.source_bindings):
+            raise CollisionError("SourceBinding", f"{source_name}__{class_name}")
+
+        # Resolve identifier_slot from effective slots (includes inherited)
+        all_slots = {s.name: s for s in _effective_slots(cls)}
+        id_slot = all_slots.get(identifier_slot_name)
+        if id_slot is None:
             raise InvalidIdentifierSlotError(
                 f"Slot {identifier_slot_name!r} is not on class {cls.name!r}"
             )
 
-        spec.sources.append(
-            Source(
-                name=name,
-                entity_class=cls,
-                identifier_slot=slot,
-                trust_score=trust_score,
-                slot_priors=slot_priors or {},
+        # Build SlotMapping objects
+        slot_mappings: list[SlotMapping] = []
+        for m in (mappings or []):
+            slot = all_slots.get(m["slot_name"])
+            if slot is None:
+                raise InvalidIdentifierSlotError(
+                    f"Slot {m['slot_name']!r} is not on class {cls.name!r}"
+                )
+            null_sem_val = m.get("null_semantics", NullSemantics.NO_CLAIM)
+            if isinstance(null_sem_val, str):
+                null_sem_val = NullSemantics(null_sem_val)
+            prior_raw = m.get("prior")
+            prior: tuple[float, float] | None = None
+            if prior_raw is not None:
+                prior = (float(prior_raw[0]), float(prior_raw[1]))
+            slot_mappings.append(SlotMapping(
+                slot=slot,
+                source_field=m.get("source_field", slot.name),
+                default=m.get("default"),
+                null_semantics=null_sem_val,
+                prior=prior,
+            ))
+
+        # Resolve required slots
+        req_slots: list[Slot] = []
+        for rname in (required_slot_names or []):
+            rslot = all_slots.get(rname)
+            if rslot is None:
+                raise InvalidIdentifierSlotError(
+                    f"required_slot {rname!r} is not on class {cls.name!r}"
+                )
+            req_slots.append(rslot)
+
+        spec.source_bindings.append(
+            SourceBinding(
+                source=src,
+                class_=cls,  # type: ignore[call-arg]  # populate_by_name=True allows class_= at runtime
+                identifier_slot=id_slot,
+                mappings=slot_mappings,
+                trust_prior=trust_prior,
+                required_slots=req_slots,
                 description=description,
             )
         )
     return spec
 
 
-async def update_source_trust_score(
+async def update_source_binding_trust(
     conn: psycopg.AsyncConnection,
     draft_id: int,
     source_name: str,
+    class_name: str,
     *,
-    trust_score: float,
+    trust_prior: tuple[float, float],
 ) -> Spec:
-    """Update the scalar trust_score for an existing source on the draft."""
+    """Update the trust_prior for a SourceBinding (RUNTIME — no content hash change)."""
     async with spec_store.edit_draft(conn, draft_id) as spec:
-        src = _find_source(spec, source_name)
-        src.trust_score = trust_score
-    return spec
-
-
-async def update_source_slot_prior(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    source_name: str,
-    slot_name: str,
-    *,
-    alpha: float,
-    beta: float,
-) -> Spec:
-    """Set (or replace) the Beta prior for a (source, slot) pair on the draft."""
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        src = _find_source(spec, source_name)
-        src.slot_priors[slot_name] = (alpha, beta)
-    return spec
-
-
-async def reset_source_slot_prior(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    source_name: str,
-    slot_name: str,
-) -> Spec:
-    """Remove the Beta prior for a (source, slot) pair, reverting to Beta(1,1)."""
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        src = _find_source(spec, source_name)
-        src.slot_priors.pop(slot_name, None)
+        binding = _find_source_binding(spec, source_name, class_name)
+        binding.trust_prior = trust_prior
     return spec
 
 
@@ -510,7 +566,7 @@ async def remove_slot(
     """Remove a Slot by name.
 
     Raises ``ReferencedEntityError`` if any class lists this slot, or any
-    source uses it as ``identifier_slot``.
+    source binding uses it as ``identifier_slot``.
     """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         target = _find_slot(spec, name)
@@ -518,9 +574,9 @@ async def remove_slot(
         for c in spec.classes:
             if any(s is target for s in c.slots):
                 refs.append(("class", c.name))
-        for src in spec.sources:
-            if src.identifier_slot is target:
-                refs.append(("source", src.name))
+        for b in spec.source_bindings:
+            if b.identifier_slot is target:
+                refs.append(("source_binding", b.binding_id))
         if refs:
             raise ReferencedEntityError("slot", name, refs)
         spec.slots = [s for s in spec.slots if s is not target]
@@ -608,7 +664,7 @@ async def remove_class(
 
     Raises ``ReferencedEntityError`` if any slot's type references this class
     (via ClassRef), any other class names it via ``is_a`` or ``mixins``, any
-    source's ``entity_class`` is this class, or any constraint's ``primary``
+    source binding's ``class_`` is this class, or any constraint's ``primary``
     is this class.
     """
     from knot.spec.metaschema import Array, ClassRef
@@ -634,9 +690,9 @@ async def remove_class(
                 refs.append(("class.is_a", c.name))
             if any(m is target for m in c.mixins):
                 refs.append(("class.mixin", c.name))
-        for src in spec.sources:
-            if src.entity_class is target:
-                refs.append(("source", src.name))
+        for b in spec.source_bindings:
+            if b.class_ is target:
+                refs.append(("source_binding", b.binding_id))
         for con in spec.constraints:
             if con.primary is target:
                 refs.append(("constraint", con.name))
@@ -651,11 +707,33 @@ async def remove_source(
     draft_id: int,
     name: str,
 ) -> Spec:
-    """Remove a Source by name. Sources can't be referenced by other entities,
-    so no inbound-reference check is needed."""
+    """Remove a Source by name, cascade-dropping all its SourceBindings.
+
+    Sources are only referenced by SourceBindings; the bindings are dropped
+    together with the source rather than blocking removal.
+    """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         target = _find_source(spec, name)
+        spec.source_bindings = [
+            b for b in spec.source_bindings if b.source is not target
+        ]
         spec.sources = [s for s in spec.sources if s is not target]
+    return spec
+
+
+async def remove_source_binding(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    source_name: str,
+    class_name: str,
+) -> Spec:
+    """Remove a single SourceBinding by (source_name, class_name).
+
+    Raises ``EntityNotOnDraftError`` if the binding doesn't exist.
+    """
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        target = _find_source_binding(spec, source_name, class_name)
+        spec.source_bindings = [b for b in spec.source_bindings if b is not target]
     return spec
 
 
@@ -772,12 +850,12 @@ async def preview_publish(
         ChangeSlotPattern,
         ChangeSlotPermissibleValues,
         ChangeSlotTypeExpression,
-        ChangeSourceEntityClass,
-        ChangeSourceIdentifierSlot,
+        ChangeSourceBindingIdentifierSlot,
         DropClass,
         DropDefinedClass,
         DropSlot,
         DropSource,
+        DropSourceBinding,
     )
 
     # Bucket classification (independent of is_destructive — Bucket B and C
@@ -797,9 +875,9 @@ async def preview_publish(
         ChangeSlotTypeExpression,
         ChangeClassAbstract,
         ChangeClassIsA,
-        ChangeSourceEntityClass,
-        ChangeSourceIdentifierSlot,
         DropSource,
+        DropSourceBinding,
+        ChangeSourceBindingIdentifierSlot,
     )
 
     async with conn.transaction():

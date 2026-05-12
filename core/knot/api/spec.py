@@ -33,11 +33,19 @@ from knot.spec import (
     ResolutionPolicy,
     Slot,
     Source,
+    SourceBinding,
     Spec,
     spec_to_dict,
 )
 from knot.spec.expressions import ExprJson
-from knot.spec.metaschema import Array, ClassRef, Primitive, Severity, SlotConstraints
+from knot.spec.metaschema import (
+    Array,
+    ClassRef,
+    NullSemantics,
+    Primitive,
+    Severity,
+    SlotConstraints,
+)
 
 # ---------------------------------------------------------------------------
 # Request / response shapes
@@ -70,10 +78,24 @@ class ClassSummary(_StrictBase):
 
 class SourceSummary(_StrictBase):
     name: str
-    entity_class: str
+    description: str | None
+
+
+class SlotMappingSummary(_StrictBase):
+    slot_name: str
+    source_field: str
+    null_semantics: str
+    has_prior: bool
+
+
+class SourceBindingSummary(_StrictBase):
+    binding_id: str
+    source_name: str
+    class_name: str
     identifier_slot: str
-    trust_score: float
-    slot_priors: dict[str, list[float]]  # slot_name -> [alpha, beta]
+    trust_prior: list[float]  # [alpha, beta]
+    required_slots: list[str]
+    mappings: list[SlotMappingSummary]
     description: str | None
 
 
@@ -130,20 +152,29 @@ class ClassUpdate(_StrictBase):
 
 class SourceCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    entity_class_name: str
-    identifier_slot_name: str
-    trust_score: float = 1.0
-    slot_priors: dict[str, list[float]] = Field(default_factory=dict)
     description: str | None = None
 
 
-class TrustScoreUpdate(_StrictBase):
-    trust_score: float
+class SlotMappingCreate(_StrictBase):
+    slot_name: str
+    source_field: str | None = None  # defaults to slot_name
+    default: object | None = None
+    null_semantics: str = NullSemantics.NO_CLAIM.value
+    prior: list[float] | None = None  # [alpha, beta] or None
 
 
-class SlotPriorUpdate(_StrictBase):
-    alpha: float
-    beta: float
+class SourceBindingCreate(_StrictBase):
+    source_name: str
+    class_name: str
+    identifier_slot_name: str
+    mappings: list[SlotMappingCreate] = Field(default_factory=list)
+    trust_prior: list[float] = Field(default_factory=lambda: [1.0, 1.0])  # [alpha, beta]
+    required_slot_names: list[str] = Field(default_factory=list)
+    description: str | None = None
+
+
+class SourceBindingTrustUpdate(_StrictBase):
+    trust_prior: list[float]  # [alpha, beta]
 
 
 class ConstraintCreate(_StrictBase):
@@ -198,6 +229,7 @@ def _spec_summary(spec: Spec) -> dict[str, int]:
         "classes": len(spec.classes),
         "slots": len(spec.slots),
         "sources": len(spec.sources),
+        "source_bindings": len(spec.source_bindings),
         "constraints": len(spec.constraints),
     }
 
@@ -253,24 +285,36 @@ def _summarize_slot(s: Slot) -> SlotSummary:
 
 
 def _summarize_source(s: Source) -> SourceSummary:
-    return SourceSummary(
-        name=s.name,
-        entity_class=s.entity_class.name,
-        identifier_slot=s.identifier_slot.name,
-        trust_score=s.trust_score,
-        slot_priors={k: list(v) for k, v in s.slot_priors.items()},
-        description=s.description,
+    return SourceSummary(name=s.name, description=s.description)
+
+
+def _summarize_source_binding(b: SourceBinding) -> SourceBindingSummary:
+    return SourceBindingSummary(
+        binding_id=b.binding_id,
+        source_name=b.source.name,
+        class_name=b.class_.name,
+        identifier_slot=b.identifier_slot.name,
+        trust_prior=list(b.trust_prior),
+        required_slots=[s.name for s in b.required_slots],
+        mappings=[
+            SlotMappingSummary(
+                slot_name=m.slot.name,
+                source_field=m.source_field,
+                null_semantics=m.null_semantics.value
+                if hasattr(m.null_semantics, "value")
+                else str(m.null_semantics),
+                has_prior=m.prior is not None,
+            )
+            for m in b.mappings
+        ],
+        description=b.description,
     )
 
 
-def _parse_slot_priors(raw: dict[str, list[float]]) -> dict[str, tuple[float, float]]:
-    """Convert API list[float] representation to (alpha, beta) tuples."""
-    out: dict[str, tuple[float, float]] = {}
-    for slot_name, ab in raw.items():
-        if len(ab) != 2:
-            raise ValueError(f"slot_prior for {slot_name!r} must be [alpha, beta]; got {ab!r}")
-        out[slot_name] = (ab[0], ab[1])
-    return out
+def _parse_trust_prior(raw: list[float]) -> tuple[float, float]:
+    if len(raw) != 2:
+        raise ValueError(f"trust_prior must be [alpha, beta]; got {raw!r}")
+    return (raw[0], raw[1])
 
 
 def _build_slot_constraints(body: SlotConstraintsCreate | None) -> SlotConstraints | None:
@@ -375,6 +419,15 @@ async def list_published_sources() -> list[SourceSummary]:
     if spec is None:
         return []
     return [_summarize_source(s) for s in spec.sources]
+
+
+@router.get("/published/source_bindings", response_model=list[SourceBindingSummary])
+async def list_published_source_bindings() -> list[SourceBindingSummary]:
+    async with db.connect() as conn:
+        spec = await graph_spec.get_published(conn)
+    if spec is None:
+        return []
+    return [_summarize_source_binding(b) for b in spec.source_bindings]
 
 
 # ─── Revision history ───────────────────────────────────────────────────────
@@ -549,20 +602,43 @@ async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationR
     dependencies=[Depends(require_user)],
 )
 async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
-    try:
-        slot_priors = _parse_slot_priors(body.slot_priors)
-    except ValueError as exc:
-        raise HTTPException(400, str(exc)) from exc
     async with db.connect() as conn:
         try:
             spec = await graph_spec.add_source(
                 conn,
                 draft_id,
                 name=body.name,
-                entity_class_name=body.entity_class_name,
+                description=body.description,
+            )
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.post(
+    "/drafts/{draft_id}/source_bindings",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def add_source_binding(draft_id: int, body: SourceBindingCreate) -> MutationResponse:
+    try:
+        trust_prior = _parse_trust_prior(body.trust_prior)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
+    mappings_raw = [m.model_dump() for m in body.mappings]
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.add_source_binding(
+                conn,
+                draft_id,
+                source_name=body.source_name,
+                class_name=body.class_name,
                 identifier_slot_name=body.identifier_slot_name,
-                trust_score=body.trust_score,
-                slot_priors=slot_priors,
+                mappings=mappings_raw,
+                trust_prior=trust_prior,
+                required_slot_names=body.required_slot_names,
                 description=body.description,
             )
         except graph_spec.CollisionError as exc:
@@ -576,58 +652,22 @@ async def add_source(draft_id: int, body: SourceCreate) -> MutationResponse:
     return _response(draft_id, spec)
 
 
-@router.post(
-    "/drafts/{draft_id}/sources/{source_name}/trust_score",
+@router.patch(
+    "/drafts/{draft_id}/source_bindings/{source_name}/{class_name}/trust",
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
-async def update_source_trust_score(
-    draft_id: int, source_name: str, body: TrustScoreUpdate
+async def update_source_binding_trust(
+    draft_id: int, source_name: str, class_name: str, body: SourceBindingTrustUpdate
 ) -> MutationResponse:
+    try:
+        trust_prior = _parse_trust_prior(body.trust_prior)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
     async with db.connect() as conn:
         try:
-            spec = await graph_spec.update_source_trust_score(
-                conn, draft_id, source_name, trust_score=body.trust_score
-            )
-        except graph_spec.EntityNotOnDraftError as exc:
-            raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
-
-
-@router.post(
-    "/drafts/{draft_id}/sources/{source_name}/slot_priors/{slot_name}",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-)
-async def update_source_slot_prior(
-    draft_id: int, source_name: str, slot_name: str, body: SlotPriorUpdate
-) -> MutationResponse:
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.update_source_slot_prior(
-                conn, draft_id, source_name, slot_name, alpha=body.alpha, beta=body.beta
-            )
-        except graph_spec.EntityNotOnDraftError as exc:
-            raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
-
-
-@router.delete(
-    "/drafts/{draft_id}/sources/{source_name}/slot_priors/{slot_name}",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-)
-async def reset_source_slot_prior(
-    draft_id: int, source_name: str, slot_name: str
-) -> MutationResponse:
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.reset_source_slot_prior(
-                conn, draft_id, source_name, slot_name
+            spec = await graph_spec.update_source_binding_trust(
+                conn, draft_id, source_name, class_name, trust_prior=trust_prior
             )
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
@@ -737,6 +777,24 @@ async def remove_source(draft_id: int, name: str) -> MutationResponse:
     async with db.connect() as conn:
         try:
             spec = await graph_spec.remove_source(conn, draft_id, name)
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.delete(
+    "/drafts/{draft_id}/source_bindings/{source_name}/{class_name}",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+)
+async def remove_source_binding(
+    draft_id: int, source_name: str, class_name: str
+) -> MutationResponse:
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.remove_source_binding(conn, draft_id, source_name, class_name)
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:

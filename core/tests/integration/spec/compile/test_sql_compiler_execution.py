@@ -33,6 +33,7 @@ from knot.spec.metaschema import (
     Slot,
     SlotPath,
     Source,
+    SourceBinding,
     Spec,
 )
 
@@ -67,7 +68,8 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     body = BoolExpr(
         op=BoolOpKind.AND,
@@ -96,6 +98,7 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=[constraint],
     )
 
@@ -110,6 +113,7 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     await insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[
             {"imdb_id": "tt0000001", "year": 1972},  # valid
@@ -138,7 +142,8 @@ async def test_compile_constraint_no_violations(clean_db):
     imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     body = Compare(
         op=CompareOp.GTE,
@@ -157,6 +162,7 @@ async def test_compile_constraint_no_violations(clean_db):
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=[constraint],
     )
 
@@ -169,6 +175,7 @@ async def test_compile_constraint_no_violations(clean_db):
     await insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "year": 2000}],
         canonical_ids=["tt0000001"],
@@ -194,7 +201,8 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     # v1: no constraints
     spec_v1 = Spec(
@@ -203,6 +211,7 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     rev1 = await create_draft(conn)
     await update_draft(conn, rev1, spec_v1)
@@ -214,6 +223,7 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     await insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "year": 1800}],
         canonical_ids=["tt0000001"],
@@ -237,6 +247,7 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=[constraint],
     )
     rev2 = await create_draft(conn)
@@ -253,7 +264,8 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     spec_v1 = Spec(
         id="test",
@@ -261,6 +273,7 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     rev1 = await create_draft(conn)
     await update_draft(conn, rev1, spec_v1)
@@ -271,6 +284,7 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     await insert_rows(
         conn,
         source=src,
+        cls=movie,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "year": 1800}],
         canonical_ids=["tt0000001"],
@@ -293,6 +307,7 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=[constraint],
     )
     rev2 = await create_draft(conn)

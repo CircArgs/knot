@@ -24,6 +24,7 @@ from knot.spec import (
     Source,
     Spec,
 )
+from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -48,14 +49,17 @@ async def resolve_db(pg_conn):
     lcb_slot = Slot(name="lcb_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.LCB)
     tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[id_slot, title, pm_slot, lcb_slot, tags])
-    src_a = Source(name="source_a", entity_class=movie, identifier_slot=id_slot)
-    src_b = Source(name="source_b", entity_class=movie, identifier_slot=id_slot)
+    src_a = Source(name="source_a")
+    src_b = Source(name="source_b")
+    binding_a = SourceBinding(source=src_a, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding_b = SourceBinding(source=src_b, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="resolve_test",
         version="1.0.0",
         slots=[id_slot, title, pm_slot, lcb_slot, tags],
         classes=[movie],
         sources=[src_a, src_b],
+        source_bindings=[binding_a, binding_b],
     )
     rev = await publish_spec(pg_conn, spec)
     yield pg_conn, movie, src_a, src_b, rev
@@ -104,6 +108,7 @@ async def test_resolve_entity_argmax_trust_picks_highest_trust_source(resolve_db
     await graph_store.insert_rows(
         conn,
         source=src_a,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_res1", "title": "Title from A"}],
         canonical_ids=[
@@ -113,6 +118,7 @@ async def test_resolve_entity_argmax_trust_picks_highest_trust_source(resolve_db
     await graph_store.insert_rows(
         conn,
         source=src_b,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_res1", "title": "Title from B"}],
         canonical_ids=[

@@ -42,6 +42,11 @@ _RUNTIME_FIELDS: frozenset[tuple[str, str]] = frozenset(
         ("Slot", "description"),
         ("Constraint", "description"),
         ("Source", "description"),
+        ("SourceBinding", "description"),
+        # Trust/prior fields are RUNTIME — they can be tuned without republishing
+        # the structural spec. Mirrors the old trust_score / slot_priors treatment.
+        ("SourceBinding", "trust_prior"),
+        ("SlotMapping", "prior"),
         # Spec envelope authoring metadata
         ("Spec", "created_at"),
         ("Spec", "last_modified"),

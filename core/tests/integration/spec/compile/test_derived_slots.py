@@ -66,6 +66,7 @@ from knot.spec.metaschema import (
     Slot,
     SlotPath,
     Source,
+    SourceBinding,
     Spec,
 )
 
@@ -154,8 +155,10 @@ def _build_full_spec() -> tuple[
     movie_cls.slots = [imdb_id, title, directors_slot, credit_count_slot]
 
     # --- Sources ---
-    movie_src = Source(name="imdb", entity_class=movie_cls, identifier_slot=imdb_id)
-    credit_src = Source(name="credits", entity_class=credit_cls, identifier_slot=credit_id)
+    movie_src = Source(name="imdb")
+    credit_src = Source(name="credits")
+    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_slot=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="derived_test",
@@ -174,6 +177,7 @@ def _build_full_spec() -> tuple[
         ],
         classes=[person_cls, movie_cls, credit_cls],
         sources=[movie_src, credit_src],
+        source_bindings=[movie_binding, credit_binding],
     )
     return (
         spec,
@@ -237,6 +241,7 @@ async def full_spec_db(clean_db):
     await graph_store.insert_rows(
         conn,
         source=movie_src,
+        cls=movie_cls,
         spec_revision=rev,
         rows=[
             {"imdb_id": "tt0000001", "title": "Film A"},
@@ -248,6 +253,7 @@ async def full_spec_db(clean_db):
     await graph_store.insert_rows(
         conn,
         source=credit_src,
+        cls=credit_cls,
         spec_revision=rev,
         rows=[
             {"credit_id": "c001", "movie": "tt0000001", "role": "director", "person_name": "Alice"},
@@ -570,8 +576,10 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     cid_v1 = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
     cmovie_v1 = Slot(name="movie", type=ClassRef(target_class=movie_v1))
     credit_v1 = OntologyClass(name="Credit", slots=[cid_v1, cmovie_v1])
-    movie_src_v1 = Source(name="imdb", entity_class=movie_v1, identifier_slot=imdb_id_v1)
-    credit_src_v1 = Source(name="credits", entity_class=credit_v1, identifier_slot=cid_v1)
+    movie_src_v1 = Source(name="imdb")
+    credit_src_v1 = Source(name="credits")
+    movie_binding_v1 = SourceBinding(source=movie_src_v1, class_=movie_v1, identifier_slot=imdb_id_v1)  # type: ignore[call-arg]
+    credit_binding_v1 = SourceBinding(source=credit_src_v1, class_=credit_v1, identifier_slot=cid_v1)  # type: ignore[call-arg]
 
     spec_v1 = Spec(
         id="test",
@@ -579,6 +587,7 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
         slots=[imdb_id_v1, title_v1, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v1, credit_src_v1],
+        source_bindings=[movie_binding_v1, credit_binding_v1],
     )
     rev1 = await create_draft(conn)
     await update_draft(conn, rev1, spec_v1)
@@ -587,6 +596,7 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     await graph_store.insert_rows(
         conn,
         source=movie_src_v1,
+        cls=movie_v1,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "title": "Film A"}],
         canonical_ids=["tt0000001"],
@@ -600,8 +610,10 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
 
     # Patch the same movie object — publish gate validates by identity
     movie_v1.slots = [imdb_id_v1, title_v1, count_slot]
-    movie_src_v2 = Source(name="imdb", entity_class=movie_v1, identifier_slot=imdb_id_v1)
-    credit_src_v2 = Source(name="credits", entity_class=credit_v1, identifier_slot=cid_v1)
+    movie_src_v2 = Source(name="imdb")
+    credit_src_v2 = Source(name="credits")
+    movie_binding_v2 = SourceBinding(source=movie_src_v2, class_=movie_v1, identifier_slot=imdb_id_v1)  # type: ignore[call-arg]
+    credit_binding_v2 = SourceBinding(source=credit_src_v2, class_=credit_v1, identifier_slot=cid_v1)  # type: ignore[call-arg]
 
     spec_v2 = Spec(
         id="test",
@@ -609,6 +621,7 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
         slots=[imdb_id_v1, title_v1, count_slot, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v2, credit_src_v2],
+        source_bindings=[movie_binding_v2, credit_binding_v2],
     )
     rev2 = await create_draft(conn)
     await update_draft(conn, rev2, spec_v2)
@@ -641,8 +654,10 @@ async def test_integration_relation_aggregate_collect(clean_db):
     )
     movie_cls.slots = [imdb_id, title, roles_slot]
 
-    movie_src = Source(name="imdb", entity_class=movie_cls, identifier_slot=imdb_id)
-    credit_src = Source(name="credits", entity_class=credit_cls, identifier_slot=cid)
+    movie_src = Source(name="imdb")
+    credit_src = Source(name="credits")
+    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_slot=cid)  # type: ignore[call-arg]
 
     spec = Spec(
         id="agg_test",
@@ -650,6 +665,7 @@ async def test_integration_relation_aggregate_collect(clean_db):
         slots=[imdb_id, title, roles_slot, cid, cmovie, crole],
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],
+        source_bindings=[movie_binding, credit_binding],
     )
     rev = await create_draft(conn)
     await update_draft(conn, rev, spec)
@@ -658,6 +674,7 @@ async def test_integration_relation_aggregate_collect(clean_db):
     await graph_store.insert_rows(
         conn,
         source=movie_src,
+        cls=movie_cls,
         spec_revision=rev,
         rows=[{"imdb_id": "m1", "title": "Test Film"}],
         canonical_ids=["m1"],
@@ -665,6 +682,7 @@ async def test_integration_relation_aggregate_collect(clean_db):
     await graph_store.insert_rows(
         conn,
         source=credit_src,
+        cls=credit_cls,
         spec_revision=rev,
         rows=[
             {"credit_id": "x1", "movie": "m1", "role": "director"},

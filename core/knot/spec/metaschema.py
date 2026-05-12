@@ -13,8 +13,10 @@ Build order in this file:
   5. Slot (with SDK descriptor methods)
   6. OntologyClass
   7. Constraint
-  8. Source + Spec root
-  9. model_rebuild() calls to resolve forward refs
+  8. Source (thin — name + description only)
+  9. NullSemantics, SlotMapping, SourceBinding (reified (Source, Class) binding)
+ 10. Spec root
+ 11. model_rebuild() calls to resolve forward refs
 
 The SDK affordance — `Movie.year > 1900`, `Movie.imdb_id.from_source(s).is_not_null()`,
 `Movie.credits.where(...).collect(...)` — is woven into Slot's operator
@@ -651,31 +653,20 @@ class Constraint(SpecBase):
 
 
 # ---------------------------------------------------------------------------
-# 9. Source
+# 9. Source (thin — just identity; per-class metadata lives on SourceBinding)
 # ---------------------------------------------------------------------------
 
 
 class Source(SpecBase):
-    """A team-owned lake declaration.
+    """A named external system (imdb, tmdb, wiki).
 
-    Per `source-layer-contract.md`: knot starts at normalize.  The Source
-    declares its name, the OntologyClass it produces facts about, and the
-    slot that uniquely identifies a row within this source.  Location /
-    schema / mapping are bound impl concerns (out of scope for spec graph).
-
-    ``trust_score`` — initial scalar trust for ARGMAX_TRUST resolution;
-    encodes "imdb > wiki" at spec time.
-
-    ``slot_priors`` — optional per-(source, slot) Beta priors as
-    (alpha, beta) tuples for POSTERIOR_MEAN / LCB resolution.  Absent
-    entries default to Beta(1, 1).
+    Thin — just identity.  The per-class relationship metadata (which class
+    it feeds, which slot is the native identifier, trust priors, field
+    mappings) lives on ``SourceBinding``.  One Source can bind to multiple
+    classes.
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
-    entity_class: OntologyClass
-    identifier_slot: Slot
-    trust_score: float = 1.0
-    slot_priors: dict[str, tuple[float, float]] = Field(default_factory=dict)
     description: str | None = None
 
     def __hash__(self) -> int:
@@ -683,7 +674,70 @@ class Source(SpecBase):
 
 
 # ---------------------------------------------------------------------------
-# 10. Spec root
+# 10. NullSemantics, SlotMapping, SourceBinding — reified (Source, Class) binding
+# ---------------------------------------------------------------------------
+
+
+class NullSemantics(StrEnum):
+    """How to interpret a NULL value from a source field."""
+
+    NO_CLAIM = "no_claim"            # NULL means "I don't know" — skip in resolution
+    ASSERTED_ABSENT = "asserted_absent"  # NULL means "I assert this has no value"
+
+
+class SlotMapping(SpecBase):
+    """How one source field projects to one class slot.
+
+    ``slot``          — target Slot on the class.
+    ``source_field``  — field name in the source's row payload (may differ from slot.name).
+    ``default``       — value to use when the source omits the field entirely.
+    ``null_semantics``— how to handle explicit NULL from the source.
+    ``prior``         — optional per-slot Beta(α,β) prior overriding the binding-level prior.
+    """
+
+    slot: Slot
+    source_field: str
+    default: Any | None = None
+    null_semantics: NullSemantics = NullSemantics.NO_CLAIM
+    prior: tuple[float, float] | None = None  # Beta(α,β) — None means use binding-level prior
+
+
+class SourceBinding(SpecBase):
+    """Reified (Source, OntologyClass) binding.
+
+    One per (Source, OntologyClass) pair. Carries everything that the old
+    fat ``Source`` carried beyond its name. A single Source can have multiple
+    bindings (one per class it contributes to).
+
+    ``source``          — the named external system.
+    ``class_``          — the OntologyClass this binding feeds.
+    ``identifier_slot`` — which class slot is the source-native identifier.
+    ``mappings``        — optional per-slot projection rules (source_field → slot).
+                          Slots not covered by any mapping are passed through by name.
+    ``trust_prior``     — Beta(α,β) seed for POSTERIOR_MEAN / LCB.  Beta(1,1) = uniform.
+    ``required_slots``  — slots that must be non-null; batch rejected with 422 on violation.
+    ``description``     — human-readable note on this binding.
+    """
+
+    source: Source
+    class_: OntologyClass = Field(alias="class")
+    identifier_slot: Slot
+    mappings: list[SlotMapping] = Field(default_factory=list)
+    trust_prior: tuple[float, float] = (1.0, 1.0)  # Beta(α,β)
+    required_slots: list[Slot] = Field(default_factory=list)
+    description: str | None = None
+
+    def __hash__(self) -> int:
+        return id(self)
+
+    @property
+    def binding_id(self) -> str:
+        """Deterministic identifier for this binding: ``{source.name}__{class_.name}``."""
+        return f"{self.source.name}__{self.class_.name}"
+
+
+# ---------------------------------------------------------------------------
+# 11. Spec root
 # ---------------------------------------------------------------------------
 
 
@@ -695,12 +749,13 @@ class Spec(SpecBase):
     classes: list[OntologyClass] = Field(default_factory=list)
     slots: list[Slot] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
+    source_bindings: list[SourceBinding] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
     prefixes: dict[str, str] = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
-# 11. Resolve forward refs
+# 12. Resolve forward refs
 # ---------------------------------------------------------------------------
 
 # Order matters here — model_rebuild walks annotations and needs every
@@ -731,6 +786,8 @@ Slot.model_rebuild()
 OntologyClass.model_rebuild()
 Constraint.model_rebuild()
 Source.model_rebuild()
+SlotMapping.model_rebuild()
+SourceBinding.model_rebuild()
 Spec.model_rebuild()
 
 
@@ -743,6 +800,7 @@ __all__ = [
     "BoolOpKind",
     "AggFunc",
     "GroupByMode",
+    "NullSemantics",
     # type expression hierarchy
     "STANDARD_PRIMITIVE_NAMES",
     "TypeExpression",
@@ -776,8 +834,10 @@ __all__ = [
     "Slot",
     "DerivedSlot",
     "OntologyClass",
-    # constraints + sources + root
+    # constraints + sources + bindings + root
     "Constraint",
     "Source",
+    "SlotMapping",
+    "SourceBinding",
     "Spec",
 ]

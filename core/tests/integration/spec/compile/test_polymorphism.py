@@ -28,6 +28,7 @@ from knot.spec import (
     OntologyClass,
     Slot,
     Source,
+    SourceBinding,
     Spec,
 )
 from knot.spec.metaschema import ClassRef, Primitive
@@ -59,8 +60,10 @@ def _build_movie_credit_spec() -> tuple[Spec, OntologyClass, OntologyClass, Sour
     role = Slot(name="role", type=Primitive(name="string"))
     credit = OntologyClass(name="Credit", slots=[credit_id, movie_fk, role])
 
-    movie_src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
-    credit_src = Source(name="credits", entity_class=credit, identifier_slot=credit_id)
+    movie_src = Source(name="imdb")
+    credit_src = Source(name="credits")
+    movie_binding = SourceBinding(source=movie_src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit, identifier_slot=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="fk_test",
@@ -68,6 +71,7 @@ def _build_movie_credit_spec() -> tuple[Spec, OntologyClass, OntologyClass, Sour
         slots=[imdb_id, title, credit_id, movie_fk, role],
         classes=[movie, credit],
         sources=[movie_src, credit_src],
+        source_bindings=[movie_binding, credit_binding],
     )
     return spec, movie, credit, movie_src, credit_src
 
@@ -116,6 +120,7 @@ async def test_fk_column_stores_canonical_id(fk_db):
     await graph_store.insert_rows(
         conn,
         source=movie_src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0111161", "title": "Shawshank"}],
         canonical_ids=["tt0111161"],
@@ -123,6 +128,7 @@ async def test_fk_column_stores_canonical_id(fk_db):
     await graph_store.insert_rows(
         conn,
         source=credit_src,
+        cls=credit,
         spec_revision=rev,
         rows=[{"credit_id": "c1", "movie": "tt0111161", "role": "director"}],
         canonical_ids=["c1"],
@@ -173,13 +179,15 @@ async def test_source_on_normal_class_publishes(pg_conn):
     await _reset(pg_conn)
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="normal_src_test",
         version="1.0.0",
         slots=[id_slot],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     rev = await create_draft(pg_conn)
     await update_draft(pg_conn, rev, spec)
@@ -213,13 +221,15 @@ async def test_regression_no_fk_slots(pg_conn):
     title = Slot(name="title", type=Primitive(name="string"))
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="regression_test",
         version="1.0.0",
         slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
     rev = await create_draft(pg_conn)
     await update_draft(pg_conn, rev, spec)
@@ -228,6 +238,7 @@ async def test_regression_no_fk_slots(pg_conn):
     await graph_store.insert_rows(
         pg_conn,
         source=src,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0111161", "title": "Shawshank", "year": 1994}],
         canonical_ids=["tt0111161"],

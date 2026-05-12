@@ -86,7 +86,7 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
-from knot.spec import OntologyClass, Slot, Spec
+from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
 from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._dispatch import CompilerError
@@ -497,59 +497,85 @@ class ChangeClassDefinition(Change):
 
 @dataclass
 class AddSource(Change):
+    """Bucket C — a new named source (thin). No DDL; no data loss."""
+
     source_name: str
-    entity_class: str
-    identifier_slot: str
 
 
 @dataclass
 class DropSource(Change):
-    """Bucket A — rows from this source become orphaned."""
+    """Bucket A — rows from this source become orphaned when source removed.
+
+    Requires allow_destructive=True at publish.
+    """
 
     source_name: str
 
 
+# ─── SourceBinding-level changes ────────────────────────────────────────────
+
+
 @dataclass
-class ChangeSourceEntityClass(Change):
-    """Bucket A — rows now logically belong to a different table."""
+class AddSourceBinding(Change):
+    """Bucket C — new (source, class) binding. No DDL; no data loss."""
 
     source_name: str
-    old_class: str
-    new_class: str
+    class_name: str
+    identifier_slot: str
 
 
 @dataclass
-class ChangeSourceIdentifierSlot(Change):
-    """Bucket A — rows are now keyed by a different slot.
+class DropSourceBinding(Change):
+    """Bucket A — rows from this source+class combination become orphaned.
 
-    ``cls`` is the source's entity class on the candidate side; the
-    emitter rekeys ``_source_row_id`` against this table."""
+    Requires allow_destructive=True at publish.
+    """
+
+    source_name: str
+    class_name: str
+
+
+@dataclass
+class ChangeSourceBindingIdentifierSlot(Change):
+    """Bucket A — the binding's identifier slot changed.  Rows must be rekeyed
+    (``_source_row_id`` UPDATE). Destructive.
+
+    ``cls`` is the binding's class on the candidate side; the emitter
+    rekeys ``_source_row_id`` against this table."""
 
     cls: OntologyClass
     source_name: str
+    class_name: str
     old_slot: str
     new_slot: str
 
 
 @dataclass
-class ChangeSourceTrustScore(Change):
-    """Bucket C — scalar trust score for ARGMAX_TRUST resolution.
-    Runtime config; no DDL."""
+class ChangeSourceBindingTrust(Change):
+    """Bucket C — trust_prior is RUNTIME; no DDL."""
 
     source_name: str
-    old_value: float
-    new_value: float
+    class_name: str
+    old_prior: tuple[float, float]
+    new_prior: tuple[float, float]
 
 
 @dataclass
-class ChangeSourceSlotPrior(Change):
-    """Bucket C — per-(source, slot) Beta prior for POSTERIOR_MEAN / LCB.
-    Runtime config; no DDL."""
+class ChangeSourceBindingMapping(Change):
+    """Bucket C — mapping shape changed (source_field, default, null_semantics).
+    Runtime / spec-only; no DDL."""
 
     source_name: str
+    class_name: str
     slot_name: str
-    prev_prior: tuple[float, float] | None
-    new_prior: tuple[float, float] | None
+
+
+@dataclass
+class ChangeSourceBindingRequired(Change):
+    """Bucket C — required_slots list changed. No DDL (enforced at ingest time)."""
+
+    source_name: str
+    class_name: str
 
 
 # ─── Constraint-level changes ───────────────────────────────────────────────
@@ -714,64 +740,117 @@ def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> l
 
 
 def _diff_sources(prev: Spec | None, candidate: Spec) -> list[Change]:
+    """Diff thin Source entities (name + description only).
+
+    Source is now just an identity node; binding-level changes live in
+    ``_diff_source_bindings``.  DropSource is Bucket A (rows become orphaned).
+    """
     changes: list[Change] = []
     prev_sources = {s.name: s for s in (prev.sources if prev else [])}
     cand_sources = {s.name: s for s in candidate.sources}
 
     for name in cand_sources.keys() - prev_sources.keys():
-        s = cand_sources[name]
-        changes.append(
-            AddSource(
-                source_name=name,
-                entity_class=s.entity_class.name,
-                identifier_slot=s.identifier_slot.name,
-            )
-        )
+        changes.append(AddSource(source_name=name))
     for name in prev_sources.keys() - cand_sources.keys():
         changes.append(DropSource(source_name=name))
-    for name in cand_sources.keys() & prev_sources.keys():
-        ps, cs = prev_sources[name], cand_sources[name]
-        if ps.entity_class.name != cs.entity_class.name:
+    # description is RUNTIME — not in the canonical hash, no Change needed.
+    return changes
+
+
+def _diff_source_bindings(prev: Spec | None, candidate: Spec) -> list[Change]:
+    """Diff SourceBinding entities keyed by (source.name, class_.name).
+
+    Change taxonomy:
+      - AddSourceBinding       Bucket C — new pathway, no data loss
+      - DropSourceBinding      Bucket A — orphans rows from that (source, class)
+      - ChangeSourceBindingIdentifierSlot  Bucket A — row rekey required
+      - ChangeSourceBindingTrust           Bucket C — RUNTIME
+      - ChangeSourceBindingMapping         Bucket C — RUNTIME
+      - ChangeSourceBindingRequired        Bucket C — enforced at ingest time
+    """
+    changes: list[Change] = []
+
+    def _key(b: SourceBinding) -> tuple[str, str]:
+        return (b.source.name, b.class_.name)
+
+    prev_bindings: dict[tuple[str, str], SourceBinding] = {
+        _key(b): b for b in (prev.source_bindings if prev else [])
+    }
+    cand_bindings: dict[tuple[str, str], SourceBinding] = {
+        _key(b): b for b in candidate.source_bindings
+    }
+
+    for key in cand_bindings.keys() - prev_bindings.keys():
+        b = cand_bindings[key]
+        changes.append(
+            AddSourceBinding(
+                source_name=key[0],
+                class_name=key[1],
+                identifier_slot=b.identifier_slot.name,
+            )
+        )
+
+    for key in prev_bindings.keys() - cand_bindings.keys():
+        changes.append(DropSourceBinding(source_name=key[0], class_name=key[1]))
+
+    for key in cand_bindings.keys() & prev_bindings.keys():
+        pb, cb = prev_bindings[key], cand_bindings[key]
+        source_name, class_name = key
+
+        if pb.identifier_slot.name != cb.identifier_slot.name:
             changes.append(
-                ChangeSourceEntityClass(
-                    source_name=name,
-                    old_class=ps.entity_class.name,
-                    new_class=cs.entity_class.name,
+                ChangeSourceBindingIdentifierSlot(
+                    cls=cb.class_,
+                    source_name=source_name,
+                    class_name=class_name,
+                    old_slot=pb.identifier_slot.name,
+                    new_slot=cb.identifier_slot.name,
                 )
             )
-        if ps.identifier_slot.name != cs.identifier_slot.name:
+
+        # trust_prior is RUNTIME — excluded from canonical hash, but we emit a
+        # Change record for auditability. No DDL.
+        if pb.trust_prior != cb.trust_prior:
             changes.append(
-                ChangeSourceIdentifierSlot(
-                    cls=cs.entity_class,
-                    source_name=name,
-                    old_slot=ps.identifier_slot.name,
-                    new_slot=cs.identifier_slot.name,
+                ChangeSourceBindingTrust(
+                    source_name=source_name,
+                    class_name=class_name,
+                    old_prior=tuple(pb.trust_prior),  # type: ignore[arg-type]
+                    new_prior=tuple(cb.trust_prior),  # type: ignore[arg-type]
                 )
             )
-        if ps.trust_score != cs.trust_score:
-            changes.append(
-                ChangeSourceTrustScore(
-                    source_name=name,
-                    old_value=ps.trust_score,
-                    new_value=cs.trust_score,
+
+        # Mapping diffs — compare by slot name.
+        prev_map = {m.slot.name: m for m in pb.mappings}
+        cand_map = {m.slot.name: m for m in cb.mappings}
+        for slot_name in prev_map.keys() | cand_map.keys():
+            pm = prev_map.get(slot_name)
+            cm = cand_map.get(slot_name)
+            if pm is None or cm is None:
+                changed = True
+            else:
+                changed = (
+                    pm.source_field != cm.source_field
+                    or pm.default != cm.default
+                    or pm.null_semantics != cm.null_semantics
                 )
-            )
-        # Per-(source, slot) Beta prior diffs
-        prev_priors = ps.slot_priors
-        cand_priors = cs.slot_priors
-        all_slot_names = set(prev_priors.keys()) | set(cand_priors.keys())
-        for slot_name in all_slot_names:
-            pp = prev_priors.get(slot_name)
-            cp = cand_priors.get(slot_name)
-            if pp != cp:
+            if changed:
                 changes.append(
-                    ChangeSourceSlotPrior(
-                        source_name=name,
+                    ChangeSourceBindingMapping(
+                        source_name=source_name,
+                        class_name=class_name,
                         slot_name=slot_name,
-                        prev_prior=pp,
-                        new_prior=cp,
                     )
                 )
+
+        # required_slots diff
+        prev_req = {s.name for s in pb.required_slots}
+        cand_req = {s.name for s in cb.required_slots}
+        if prev_req != cand_req:
+            changes.append(
+                ChangeSourceBindingRequired(source_name=source_name, class_name=class_name)
+            )
+
     return changes
 
 
@@ -992,6 +1071,7 @@ def diff_specs(
             changes.extend(_diff_slot_fields(cand_cls, ps, cs))
 
     changes.extend(_diff_sources(prev, candidate))
+    changes.extend(_diff_source_bindings(prev, candidate))
     changes.extend(_diff_constraints(prev, candidate))
     return changes
 
@@ -1223,13 +1303,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             await emit_ddl(AddDefinedClass(cls=change.cls), conn)
         # else: no-op for concrete
 
-    elif isinstance(change, ChangeSourceEntityClass):
-        raise CompilerError(
-            "ChangeSourceEntityClass requires manual data migration — "
-            "drop and re-add the source instead"
-        )
-
-    elif isinstance(change, ChangeSourceIdentifierSlot):
+    elif isinstance(change, ChangeSourceBindingIdentifierSlot):
         # Rekey existing rows: _source_row_id ← <new_slot>::TEXT. Postgres
         # surfaces NOT-NULL violations and PK collisions naturally if the new
         # slot has NULLs or duplicates per source.
@@ -1254,14 +1328,17 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             ChangeSlotDerivation,
             AddSource,
             DropSource,
+            AddSourceBinding,
+            DropSourceBinding,
+            ChangeSourceBindingTrust,
+            ChangeSourceBindingMapping,
+            ChangeSourceBindingRequired,
             AddConstraint,
             DropConstraint,
             ChangeConstraintPrimary,
             ChangeConstraintBody,
             ChangeConstraintSeverity,
             ChangeClassMixins,
-            ChangeSourceTrustScore,
-            ChangeSourceSlotPrior,
         ),
     ):
         return
@@ -1311,9 +1388,9 @@ _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
     ChangeSlotTypeExpression,
     ChangeClassAbstract,
     ChangeClassIsA,
-    ChangeSourceEntityClass,
-    ChangeSourceIdentifierSlot,
     DropSource,
+    DropSourceBinding,
+    ChangeSourceBindingIdentifierSlot,
 )
 
 

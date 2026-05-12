@@ -28,6 +28,7 @@ from knot.spec import (
     OntologyClass,
     Slot,
     Source,
+    SourceBinding,
     Spec,
 )
 from knot.spec.metaschema import Primitive
@@ -67,13 +68,15 @@ def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]
         mixins=[timestamped],
     )
 
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_test",
         version="1.0.0",
         slots=[imdb_id, title, created_at, updated_at],
         classes=[movie, timestamped],
         sources=[src],
+        source_bindings=[binding],
     )
     return spec, movie, timestamped
 
@@ -163,13 +166,15 @@ async def test_transitive_mixin_chain(pg_conn):
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[timestamped])
 
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_chain",
         version="1.0.0",
         slots=[imdb_id, created_at, audited_at],
         classes=[movie, timestamped, audited],
         sources=[src],
+        source_bindings=[binding],
     )
 
     rev = await create_draft(pg_conn)
@@ -206,13 +211,15 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
         slots=[imdb_id, own_name],
         mixins=[bad_mixin],
     )
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="own_shadows_mixin",
         version="1.0.0",
         slots=[imdb_id, own_name, mixin_name],
         classes=[movie, bad_mixin],
         sources=[src],
+        source_bindings=[binding],
     )
 
     rev = await create_draft(pg_conn)
@@ -247,13 +254,15 @@ async def test_mixin_slot_collision_rejected(pg_conn):
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[a, b])
 
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_collision",
         version="1.0.0",
         slots=[imdb_id, a_label, b_label],
         classes=[movie, a, b],
         sources=[src],
+        source_bindings=[binding],
     )
 
     rev = await create_draft(pg_conn)
@@ -277,13 +286,15 @@ async def test_mixin_cycle_rejected(pg_conn):
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[a])
 
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_cycle",
         version="1.0.0",
         slots=[imdb_id],
         classes=[movie, a, b],
         sources=[src],
+        source_bindings=[binding],
     )
 
     rev = await create_draft(pg_conn)

@@ -21,6 +21,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 from knot.spec.errors import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
@@ -36,13 +37,15 @@ def _minimal_spec(name: str = "test") -> Spec:
     """A valid spec with one class, one slot, one source."""
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
-    src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb_movies")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id=name,
         version="1.0.0",
         slots=[imdb_id],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -167,13 +170,15 @@ async def test_publish_gate_rejects_dangling_classref(clean_spec):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     bad_slot = Slot(name="bad", type=ClassRef(target_class=orphan_class))
     movie = OntologyClass(name="Movie", slots=[id_slot, bad_slot])
-    src = Source(name="src", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="src")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="bad",
         version="1.0.0",
         slots=[id_slot, bad_slot],
         classes=[movie],  # Orphan intentionally missing
         sources=[src],
+        source_bindings=[binding],
     )
     rev = await create_draft(clean_spec)
     await update_draft(clean_spec, rev, spec)
@@ -185,13 +190,15 @@ async def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
     ghost = OntologyClass(name="Ghost", slots=[id_slot])
-    src = Source(name="src", entity_class=ghost, identifier_slot=id_slot)
+    src = Source(name="src")
+    binding = SourceBinding(source=src, class_=ghost, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="bad",
         version="1.0.0",
         slots=[id_slot],
         classes=[movie],  # ghost not here
         sources=[src],
+        source_bindings=[binding],
     )
     rev = await create_draft(clean_spec)
     await update_draft(clean_spec, rev, spec)

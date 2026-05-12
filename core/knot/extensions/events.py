@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict
 
-from knot.spec import Source, Spec
+from knot.spec import Source, SourceBinding, Spec
 
 
 class Event(BaseModel):
@@ -19,11 +19,17 @@ class Event(BaseModel):
 
 
 class RowEvent(Event):
-    """A batch of typed rows from one source."""
+    """A batch of typed rows from one source.
+
+    ``source`` is the thin Source identity object.
+    ``binding`` is the (source, class) SourceBinding that was used to ingest
+    the rows — carry class and slot info, mappings, trust_prior, etc.
+    """
 
     source: Source
+    binding: SourceBinding
     spec: Spec
-    rows: list[BaseModel]  # typed via build_row_model(source); mutable for handlers
+    rows: list[BaseModel]  # typed via build_row_model(binding); mutable for handlers
 
 
 class RowsIngesting(RowEvent):

@@ -176,19 +176,23 @@ async def full_scan(
     Returns the count of observations inserted.
     """
     inserted = 0
-    sources = [s for s in spec.sources if source_filter is None or s.name == source_filter]
+    bindings = [
+        b
+        for b in spec.source_bindings
+        if source_filter is None or b.source.name == source_filter
+    ]
     seen_class_source: set[tuple[str, str]] = set()
 
-    for src in sources:
-        cls = src.entity_class
+    for binding in bindings:
+        cls = binding.class_
         if class_filter is not None and cls.name != class_filter:
             continue
         if getattr(cls, "definition", None) is not None:
             continue  # defined-class views — skip
         if cls.abstract:
             continue
-        inserted += await _full_scan_for(conn, source_name=src.name, cls=cls)
-        seen_class_source.add((cls.name, src.name))
+        inserted += await _full_scan_for(conn, source_name=binding.source.name, cls=cls)
+        seen_class_source.add((cls.name, binding.source.name))
 
     # Also scan the synthetic _user_corrections source against any class
     # that has user-correction rows.

@@ -15,7 +15,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import Primitive
@@ -57,6 +57,22 @@ async def _ensure_revision(conn) -> int:
     return row[0]
 
 
+def _make_spec(slots, classes, cls, id_slot, *, extra_slots=None) -> Spec:
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=cls, identifier_slot=id_slot)  # type: ignore[call-arg]
+    all_slots = list(slots)
+    if extra_slots:
+        all_slots.extend(extra_slots)
+    return Spec(
+        id="t",
+        version="1.0.0",
+        slots=all_slots,
+        classes=list(classes),
+        sources=[src],
+        source_bindings=[binding],
+    )
+
+
 # ---------------------------------------------------------------------------
 # 2a. ChangeSlotTypeExpression cast feasibility
 # ---------------------------------------------------------------------------
@@ -69,10 +85,7 @@ async def test_preflight_type_cast_failure_blocks_publish(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_str = Slot(name="year", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
-    spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, year_str], classes=[movie], sources=[src]
-    )
+    spec_v1 = _make_spec([id_slot, year_str], [movie], movie, id_slot)
 
     # Publish v1 first so the table exists with data.
     rev1 = await create_draft(clean_db)
@@ -91,10 +104,7 @@ async def test_preflight_type_cast_failure_blocks_publish(clean_db):
     id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_int = Slot(name="year", type=Primitive(name="integer"))
     movie2 = OntologyClass(name="Movie", slots=[id_slot2, year_int])
-    src2 = Source(name="imdb", entity_class=movie2, identifier_slot=id_slot2)
-    spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, year_int], classes=[movie2], sources=[src2]
-    )
+    spec_v2 = _make_spec([id_slot2, year_int], [movie2], movie2, id_slot2)
 
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
@@ -109,10 +119,7 @@ async def test_preflight_type_cast_succeeds_with_compatible_data(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_str = Slot(name="year", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
-    spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, year_str], classes=[movie], sources=[src]
-    )
+    spec_v1 = _make_spec([id_slot, year_str], [movie], movie, id_slot)
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, spec_v1)
@@ -129,10 +136,7 @@ async def test_preflight_type_cast_succeeds_with_compatible_data(clean_db):
     id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_int = Slot(name="year", type=Primitive(name="integer"))
     movie2 = OntologyClass(name="Movie", slots=[id_slot2, year_int])
-    src2 = Source(name="imdb", entity_class=movie2, identifier_slot=id_slot2)
-    spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, year_int], classes=[movie2], sources=[src2]
-    )
+    spec_v2 = _make_spec([id_slot2, year_int], [movie2], movie2, id_slot2)
 
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
@@ -152,10 +156,7 @@ async def test_preflight_identifier_nulls_blocks_publish(clean_db):
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
-    spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[imdb_id, title], classes=[movie], sources=[src]
-    )
+    spec_v1 = _make_spec([imdb_id, title], [movie], movie, imdb_id)
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, spec_v1)
@@ -173,10 +174,7 @@ async def test_preflight_identifier_nulls_blocks_publish(clean_db):
     imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title2 = Slot(name="title", type=Primitive(name="string"), identifier=True)
     movie2 = OntologyClass(name="Movie", slots=[imdb_id2, title2])
-    src2 = Source(name="imdb", entity_class=movie2, identifier_slot=title2)
-    spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[imdb_id2, title2], classes=[movie2], sources=[src2]
-    )
+    spec_v2 = _make_spec([imdb_id2, title2], [movie2], movie2, title2)
 
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
@@ -197,10 +195,7 @@ async def test_preflight_identifier_duplicates_blocks_publish(clean_db):
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
-    spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[imdb_id, title], classes=[movie], sources=[src]
-    )
+    spec_v1 = _make_spec([imdb_id, title], [movie], movie, imdb_id)
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, spec_v1)
@@ -218,10 +213,7 @@ async def test_preflight_identifier_duplicates_blocks_publish(clean_db):
     imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title2 = Slot(name="title", type=Primitive(name="string"), identifier=True)
     movie2 = OntologyClass(name="Movie", slots=[imdb_id2, title2])
-    src2 = Source(name="imdb", entity_class=movie2, identifier_slot=title2)
-    spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[imdb_id2, title2], classes=[movie2], sources=[src2]
-    )
+    spec_v2 = _make_spec([imdb_id2, title2], [movie2], movie2, title2)
 
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)

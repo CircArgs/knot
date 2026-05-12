@@ -20,6 +20,7 @@ from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.db import graph_store
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 from knot.spec.metaschema import (
     Compare,
@@ -45,13 +46,15 @@ def _build_spec_with_constraints(
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="ingest_constraint_test",
         version="1.0.0",
         slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
+        source_bindings=[binding],
         constraints=constraints,
     )
     return spec, movie, src
@@ -336,7 +339,8 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
+    src = Source(name="imdb")
+    movie_binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
 
     # Second class: Person (no source in this test, just a class with a constraint)
     pid = Slot(name="pid", type=Primitive(name="string"), identifier=True, required=True)
@@ -348,7 +352,8 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     person_constraint = Constraint(
         name="age_non_negative", primary=person, body=body, severity=Severity.ERROR
     )
-    psrc = Source(name="people", entity_class=person, identifier_slot=pid)
+    psrc = Source(name="people")
+    person_binding = SourceBinding(source=psrc, class_=person, identifier_slot=pid)  # type: ignore[call-arg]
 
     spec = Spec(
         id="multi_class_test",
@@ -356,6 +361,7 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
         slots=[imdb_id, year, pid, age],
         classes=[movie, person],
         sources=[src, psrc],
+        source_bindings=[movie_binding, person_binding],
         constraints=[person_constraint],
     )
     rev = await publish_spec(conn, spec)

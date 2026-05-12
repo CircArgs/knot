@@ -18,7 +18,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from knot.spec import OntologyClass, Slot, Source
+from knot.spec import OntologyClass, Slot, SourceBinding
 from knot.spec.metaschema import Array, ClassRef, Primitive
 
 _PY_TYPE_FOR_PRIMITIVE: dict[str, type] = {
@@ -89,8 +89,8 @@ def _field_spec(slot: Slot, *, force_optional: bool = False) -> tuple[Any, Any]:
     return py_type, Field(default, **kwargs)
 
 
-def build_row_model(source: Source) -> type[BaseModel]:
-    """Strict Pydantic model whose fields mirror the source's class slots.
+def build_row_model(binding: SourceBinding) -> type[BaseModel]:
+    """Strict Pydantic model whose fields mirror the binding's class slots.
 
     - Field type comes from ``slot.type`` (TypeExpression).
     - Array slots have list[T] type (encoded in TypeExpression).
@@ -101,10 +101,14 @@ def build_row_model(source: Source) -> type[BaseModel]:
 
     Uses ``effective_slots`` so mixin-contributed slots are accepted
     (they live on the class's own table per the storage contract).
+
+    Slot names are taken from the binding's class (after field-mapping by
+    ``_apply_mappings`` in the ingest layer, so the row dict is already
+    keyed by slot names by the time Pydantic validates it).
     """
     from knot.spec import effective_slots
 
-    cls = source.entity_class
+    cls = binding.class_
     fields: dict[str, Any] = {}
     for slot in effective_slots(cls):
         if not _is_stored(slot):

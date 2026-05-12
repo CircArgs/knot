@@ -22,12 +22,13 @@ from knot.spec import (
     Primitive,
     Slot,
     Source,
+    SourceBinding,
     Spec,
     compute_content_hash,
 )
 from knot.spec.canonical import CANONICAL_DUMP_VERSION
 
-PINNED_HASH = "1602b890f572c06ba80afd884bda05cd444c13c36f1b7655f2b30eb53a4db0b5"
+PINNED_HASH = "ccce4b9b95376e14401b3db0b66500379972e457cd272ae7e324a2cd8a69f1e8"
 PINNED_VERSION = 3
 
 
@@ -35,13 +36,15 @@ def _fixture_spec() -> Spec:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"), required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
-    imdb_movies = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
+    imdb_movies = Source(name="imdb_movies")
+    binding = SourceBinding(source=imdb_movies, class_=movie, identifier_slot=imdb_id)
     return Spec(
         id="canonical-fixture",
         version="1.0.0",
         slots=[imdb_id, title],
         classes=[movie],
         sources=[imdb_movies],
+        source_bindings=[binding],
     )
 
 

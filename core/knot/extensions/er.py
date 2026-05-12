@@ -33,8 +33,8 @@ if _ER_URL:
                 f"{_ER_URL.rstrip('/')}/resolve",
                 json={
                     "source": ev.source.name,
-                    "class_name": ev.source.entity_class.name,
-                    "identifier_slot": ev.source.identifier_slot.name,
+                    "class_name": ev.binding.class_.name,
+                    "identifier_slot": ev.binding.identifier_slot.name,
                     "rows": [row.model_dump(exclude_none=False) for row in ev.rows],
                 },
                 timeout=30.0,

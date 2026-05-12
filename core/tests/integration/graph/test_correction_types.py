@@ -24,6 +24,7 @@ from knot.graph.corrections import (
     apply_tombstone,
 )
 from knot.spec import OntologyClass, Primitive, ResolutionPolicy, Slot, Source, Spec
+from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -47,14 +48,17 @@ async def ct_db(pg_conn):
     title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
-    src_a = Source(name="source_a", entity_class=movie, identifier_slot=imdb_id)
-    src_b = Source(name="source_b", entity_class=movie, identifier_slot=imdb_id)
+    src_a = Source(name="source_a")
+    src_b = Source(name="source_b")
+    binding_a = SourceBinding(source=src_a, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding_b = SourceBinding(source=src_b, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="ct_test",
         version="1.0.0",
         slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src_a, src_b],
+        source_bindings=[binding_a, binding_b],
     )
     rev = await publish_spec(pg_conn, spec)
 
@@ -62,6 +66,7 @@ async def ct_db(pg_conn):
     await graph_store.insert_rows(
         pg_conn,
         source=src_a,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_main", "title": "Main A", "year": 2000}],
         canonical_ids=[
@@ -71,6 +76,7 @@ async def ct_db(pg_conn):
     await graph_store.insert_rows(
         pg_conn,
         source=src_b,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_main", "title": "Main B", "year": 2001}],
         canonical_ids=[
@@ -80,6 +86,7 @@ async def ct_db(pg_conn):
     await graph_store.insert_rows(
         pg_conn,
         source=src_a,
+        cls=movie,
         spec_revision=rev,
         rows=[{"imdb_id": "tt_extra", "title": "Extra", "year": 1999}],
         canonical_ids=[

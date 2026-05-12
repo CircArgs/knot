@@ -27,7 +27,7 @@ from knot import db
 from knot.api.graph._common import StrictBase
 from knot.db import spec_store
 from knot.graph import spec as graph_spec
-from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, SourceBinding, Spec
 from knot.spec.metaschema import Constraint
 
 router = APIRouter()
@@ -87,10 +87,27 @@ class OntologyClassGQL:
 @strawberry.type
 class SourceGQL:
     name: str
-    entity_class_name: str
-    identifier_slot_name: str
     description: str | None
-    trust_score: float
+
+
+@strawberry.type
+class SlotMappingGQL:
+    slot_name: str
+    source_field: str
+    null_semantics: str
+    has_prior: bool
+
+
+@strawberry.type
+class SourceBindingGQL:
+    binding_id: str
+    source_name: str
+    class_name: str
+    identifier_slot_name: str
+    trust_prior: list[float]
+    required_slot_names: list[str]
+    mappings: list[SlotMappingGQL]
+    description: str | None
 
 
 @strawberry.type
@@ -110,6 +127,7 @@ class PublishedSpec:
     slots: list[SlotGQL]
     classes: list[OntologyClassGQL]
     sources: list[SourceGQL]
+    source_bindings: list[SourceBindingGQL]
     constraints: list[ConstraintGQL]
 
 
@@ -167,12 +185,29 @@ def _to_class(c: OntologyClass) -> OntologyClassGQL:
 
 
 def _to_source(s: Source) -> SourceGQL:
-    return SourceGQL(
-        name=s.name,
-        entity_class_name=s.entity_class.name,
-        identifier_slot_name=s.identifier_slot.name,
-        description=s.description,
-        trust_score=s.trust_score,
+    return SourceGQL(name=s.name, description=s.description)
+
+
+def _to_slot_mapping(m: Any) -> SlotMappingGQL:
+    ns = m.null_semantics
+    return SlotMappingGQL(
+        slot_name=m.slot.name,
+        source_field=m.source_field,
+        null_semantics=ns.value if hasattr(ns, "value") else str(ns),
+        has_prior=m.prior is not None,
+    )
+
+
+def _to_source_binding(b: SourceBinding) -> SourceBindingGQL:
+    return SourceBindingGQL(
+        binding_id=b.binding_id,
+        source_name=b.source.name,
+        class_name=b.class_.name,
+        identifier_slot_name=b.identifier_slot.name,
+        trust_prior=list(b.trust_prior),
+        required_slot_names=[s.name for s in b.required_slots],
+        mappings=[_to_slot_mapping(m) for m in b.mappings],
+        description=b.description,
     )
 
 
@@ -195,6 +230,7 @@ def _to_published_spec(spec: Spec, *, revision: int, content_hash: str) -> Publi
         slots=[_to_slot(s) for s in spec.slots],
         classes=[_to_class(c) for c in spec.classes],
         sources=[_to_source(s) for s in spec.sources],
+        source_bindings=[_to_source_binding(b) for b in spec.source_bindings],
         constraints=[_to_constraint(c) for c in spec.constraints],
     )
 

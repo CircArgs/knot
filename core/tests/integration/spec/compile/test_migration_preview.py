@@ -15,7 +15,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.graph.spec import preview_publish
-from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.metaschema import Primitive
 
@@ -45,8 +45,12 @@ async def clean_db(pg_conn):
 def _minimal_spec() -> Spec:
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
-    return Spec(id="t", version="1.0.0", slots=[imdb_id], classes=[movie], sources=[src])
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    return Spec(
+        id="t", version="1.0.0", slots=[imdb_id], classes=[movie],
+        sources=[src], source_bindings=[binding],
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -83,14 +87,17 @@ async def test_preview_drop_class_not_publishable(clean_db):
     extra_id = Slot(name="extra_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
     series = OntologyClass(name="Series", slots=[extra_id])
-    src_m = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
-    src_s = Source(name="wiki", entity_class=series, identifier_slot=extra_id)
+    src_m = Source(name="imdb")
+    src_s = Source(name="wiki")
+    binding_m = SourceBinding(source=src_m, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding_s = SourceBinding(source=src_s, class_=series, identifier_slot=extra_id)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
         slots=[imdb_id, extra_id],
         classes=[movie, series],
         sources=[src_m, src_s],
+        source_bindings=[binding_m, binding_s],
     )
 
     rev1 = await create_draft(clean_db)
@@ -100,9 +107,11 @@ async def test_preview_drop_class_not_publishable(clean_db):
     # v2 drops Series.
     imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie2 = OntologyClass(name="Movie", slots=[imdb_id2])
-    src_m2 = Source(name="imdb", entity_class=movie2, identifier_slot=imdb_id2)
+    src_m2 = Source(name="imdb")
+    binding_m2 = SourceBinding(source=src_m2, class_=movie2, identifier_slot=imdb_id2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[imdb_id2], classes=[movie2], sources=[src_m2]
+        id="t", version="1.0.0", slots=[imdb_id2], classes=[movie2],
+        sources=[src_m2], source_bindings=[binding_m2],
     )
 
     rev2 = await create_draft(clean_db)
@@ -129,9 +138,11 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_str = Slot(name="year", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, year_str], classes=[movie], sources=[src]
+        id="t", version="1.0.0", slots=[id_slot, year_str], classes=[movie],
+        sources=[src], source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -149,9 +160,11 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_int = Slot(name="year", type=Primitive(name="integer"))
     movie2 = OntologyClass(name="Movie", slots=[id_slot2, year_int])
-    src2 = Source(name="imdb", entity_class=movie2, identifier_slot=id_slot2)
+    src2 = Source(name="imdb")
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, year_int], classes=[movie2], sources=[src2]
+        id="t", version="1.0.0", slots=[id_slot2, year_int], classes=[movie2],
+        sources=[src2], source_bindings=[binding2],
     )
 
     rev2 = await create_draft(clean_db)
@@ -179,9 +192,11 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year_slot])
-    src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, year_slot], classes=[movie], sources=[src]
+        id="t", version="1.0.0", slots=[id_slot, year_slot], classes=[movie],
+        sources=[src], source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -212,7 +227,8 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year_slot2 = Slot(name="year", type=Primitive(name="integer"))
     movie2 = OntologyClass(name="Movie", slots=[id_slot2, year_slot2])
-    src2 = Source(name="imdb", entity_class=movie2, identifier_slot=id_slot2)
+    src2 = Source(name="imdb")
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
 
     # Build constraint using expression node objects directly.
     path = SlotPath(from_class=movie2, slots=[year_slot2])
@@ -229,6 +245,7 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
         slots=[id_slot2, year_slot2],
         classes=[movie2],
         sources=[src2],
+        source_bindings=[binding2],
         constraints=[con],
     )
 
