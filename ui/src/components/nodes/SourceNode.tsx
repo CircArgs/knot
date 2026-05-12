@@ -12,8 +12,13 @@ export default function SourceNode({ data, selected }: NodeProps & { data: SpecN
     <div
       className={`rounded-lg border border-purple-300 bg-purple-50 shadow-sm hover:shadow-md transition-shadow w-[200px] ${ring}`}
     >
-      {/* Incoming edges from SourceBinding nodes anchor here. */}
+      {/* Incoming edges (legacy / re-targeting) anchor on the left. */}
       <Handle type="target" position={Position.Left} className="!bg-purple-500" />
+      {/* Outgoing edges to SourceBinding nodes anchor on the right.
+          Under the left-to-right layout (ELK direction=RIGHT), a Source
+          sits in the leftmost layer and emits one edge per binding it
+          participates in. */}
+      <Handle type="source" position={Position.Right} className="!bg-purple-500" />
       <div className="px-3 py-2 flex items-center gap-1.5">
         <KindBadge kind="source" />
         <span className="font-medium text-purple-900 truncate block" title={src.name}>

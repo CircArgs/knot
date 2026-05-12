@@ -160,12 +160,16 @@ export function buildGraph(
       },
     });
 
-    // Edge: SourceBinding → Source
+    // Edge: Source → SourceBinding (reversed from the original sb-src
+    // direction so the layered layout reads as the natural data flow:
+    // Source → Binding → Class → … with mixin / is_a parents trailing
+    // at the right. The edge label still reads "source" — it describes
+    // the binding's source side regardless of arrow direction.
     edges.push({
       id: `edge:sb-src:${binding.sourceName}__${binding.className}`,
-      source: bNodeId,
-      target: nodeId("source", binding.sourceName),
-      label: "source",
+      source: nodeId("source", binding.sourceName),
+      target: bNodeId,
+      label: "feeds",
       markerEnd: { type: MarkerType.ArrowClosed, color: "#7c3aed" },
       style: { stroke: "#7c3aed", strokeWidth: 1.25 },
       labelStyle: { fontSize: 10, fill: "#7c3aed" },
