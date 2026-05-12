@@ -130,8 +130,16 @@ def _(mo):
     table.
 
     **Defined class** (`Director`) — backed by a VIEW, not a table. The definition
-    is a SQL predicate: any Person who has a Credit with `role = 'director'`.
-    Knot compiles it to:
+    is a spec-level SQL predicate: any Person who has a Credit with `role = 'director'`.
+    Authors write:
+
+    ```sql
+    EXISTS (SELECT 1 FROM Credit WHERE Credit.person = self AND Credit.role = 'director')
+    ```
+
+    The compiler resolves `Credit` → schema-qualified table + SCD2 bindings JOIN,
+    `Credit.person`/`Credit.role` → alias-qualified column refs, and `self` → the
+    outer binding's `canonical_id`, emitting the full DDL:
 
     ```sql
     CREATE OR REPLACE VIEW knot_data.director AS
@@ -139,7 +147,7 @@ def _(mo):
       FROM knot_data.person s
       JOIN knot_data.person_bindings b
         ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
-      WHERE (<definition-predicate>)
+      WHERE (<compiled-predicate>)
     ```
 
     ### Why is_a vs mixin?
@@ -280,34 +288,28 @@ def _(mo):
         ],
         # ── Defined classes (compiled to VIEWs, not tables) ───────────────────
         # Director: a Person who has a Credit with role='director'.
-        # The definition is a SQL predicate evaluated in the context of the
-        # parent table alias. The VIEW template is:
-        #   SELECT s.*, b.canonical_id AS _canonical_id
-        #   FROM knot_data.person s
-        #   JOIN knot_data.person_bindings b ON b.knot_row_id = s._knot_row_id
-        #    AND b.valid_to IS NULL
-        #   WHERE (<definition>)
-        # Inside the definition, s.* columns are available as bare column refs
-        # (they are qualified with "s." by compile_to_sql). The bindings alias "b"
-        # is also in scope — b.canonical_id is the resolved canonical_id of the
-        # person row, which is what Credit.person stores.
+        # The definition is written at the spec level — bare class names and
+        # ``self`` are resolved by the compiler:
+        #   - ``Credit`` → knot_data.credit + bindings JOIN (SCD2 currency)
+        #   - ``Credit.person``, ``Credit.role`` → alias-qualified column refs
+        #   - ``self`` → outer bindings alias's canonical_id (the Person row
+        #     being tested by the VIEW's WHERE clause)
+        # The compiler expands this to the full DDL-level EXISTS subquery.
         "defined_classes": [
             {
                 "name": "Director",
                 "is_a_name": "Person",
                 "definition": (
                     "EXISTS ("
-                    "  SELECT 1 FROM knot_data.credit c"
-                    "  JOIN knot_data.credit_bindings cb"
-                    "    ON cb.knot_row_id = c._knot_row_id AND cb.valid_to IS NULL"
-                    "  WHERE c.person = b.canonical_id"
-                    "    AND c.role = 'director'"
+                    "  SELECT 1 FROM Credit"
+                    "  WHERE Credit.person = self"
+                    "    AND Credit.role = 'director'"
                     ")"
                 ),
                 "description": (
                     "Defined class: any Person who has a Credit with role='director'. "
                     "Compiled to a VIEW over knot_data.person filtered by an EXISTS "
-                    "subquery into knot_data.credit."
+                    "subquery into knot_data.credit (spec-level form — no DDL details)."
                 ),
             },
         ],
@@ -747,7 +749,15 @@ def _(mo):
     - `knot_data.<class>_bindings` — SCD2 table tracking which `canonical_id`
       each source row currently maps to
 
-    **Director** is a **defined class** — it compiles to a VIEW, not a table:
+    **Director** is a **defined class** — it compiles to a VIEW, not a table.
+    The spec-level definition body is:
+
+    ```sql
+    EXISTS (SELECT 1 FROM Credit WHERE Credit.person = self AND Credit.role = 'director')
+    ```
+
+    The compiler rewrites bare class names (`Credit` → `knot_data.credit` + SCD2 bindings JOIN)
+    and `self` → outer binding's `canonical_id`, producing:
 
     ```sql
     CREATE OR REPLACE VIEW knot_data.director AS
@@ -757,11 +767,12 @@ def _(mo):
         ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
       WHERE (
         EXISTS (
-          SELECT 1 FROM knot_data.credit c
-          JOIN knot_data.credit_bindings cb
-            ON cb.knot_row_id = c._knot_row_id AND cb.valid_to IS NULL
-          WHERE c.person = b.canonical_id
-            AND c.role = 'director'
+          SELECT 1 FROM knot_data.credit AS credit__c0
+          INNER JOIN knot_data.credit_bindings AS credit__b0
+            ON credit__b0.knot_row_id = credit__c0._knot_row_id
+           AND credit__b0.valid_to IS NULL
+          WHERE credit__c0.person = b.canonical_id
+            AND credit__c0.role = 'director'
         )
       )
     ```
