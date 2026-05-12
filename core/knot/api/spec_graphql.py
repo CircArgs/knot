@@ -84,6 +84,7 @@ class OntologyClassGQL:
     mixin_names: list[str]
     slots: list[SlotGQL]
     effective_slots: list[SlotGQL]
+    definition: str | None  # SQL predicate body when this is a defined class (VIEW)
 
 
 @strawberry.type
@@ -184,6 +185,7 @@ def _to_class(c: OntologyClass) -> OntologyClassGQL:
         mixin_names=[m.name for m in c.mixins],
         slots=[_to_slot(s) for s in c.slots],
         effective_slots=[_to_slot(s) for s in _effective_slots(c)],
+        definition=c.definition,
     )
 
 
