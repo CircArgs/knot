@@ -72,6 +72,8 @@ def compile_order_by(
 def compile_constraint(
     constraint: Constraint,
     cls: OntologyClass,
+    *,
+    classes_by_name: dict[str, Any] | None = None,
 ) -> tuple[sql.Composable, list[Any]]:
     """Emit a SELECT returning offending rows in the uniform violation shape.
 
@@ -90,13 +92,16 @@ def compile_constraint(
     ``constraint.body`` is a SQL predicate string validated + compiled via
     ``knot.spec.sql_validate``.
 
+    Pass ``classes_by_name`` to enable spec-aware class-name and ``self``
+    resolution in the constraint body.
+
     Returns ``(composable, [])`` — params list is always empty; literals are
     folded into the SQL string by sqlglot, so no placeholder substitution is
     needed.
     """
     from knot.spec.sql_validate import compile_constraint_sql
 
-    return compile_constraint_sql(constraint, cls)
+    return compile_constraint_sql(constraint, cls, classes_by_name=classes_by_name)
 
 
 # compile_value is an alias for compile_predicate in value-expression contexts.

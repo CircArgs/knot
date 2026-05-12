@@ -789,7 +789,8 @@ async def evaluate_gates(
             continue
 
         cls = con.primary
-        stmt, params = compile_constraint(con, cls)
+        cand_cls_map = {c.name: c for c in candidate.classes}
+        stmt, params = compile_constraint(con, cls, classes_by_name=cand_cls_map)
         try:
             violations = await (await conn.execute(stmt, params)).fetchall()
         except Exception as exc:

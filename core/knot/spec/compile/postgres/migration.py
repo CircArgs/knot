@@ -258,6 +258,11 @@ class AddDefinedClass(Change):
     """Create a VIEW for a defined class (equivalentClass / OWL DL defined)."""
 
     cls: DefinedClass
+    # Optional map of all class names → class objects in the candidate spec.
+    # When provided, the VIEW body's SQL is compiled with spec-aware rewrites
+    # (bare class names, ``self`` resolution).  Set by diff_specs / callers
+    # that have access to the full spec.
+    classes_by_name: dict[str, Any] | None = None
 
 
 @dataclass
@@ -948,6 +953,9 @@ def diff_specs(
     changes: list[Change] = []
     prev_classes = {c.name: c for c in (prev.classes if prev else [])}
     cand_classes = {c.name: c for c in candidate.classes}
+    # Full class map for the candidate spec — threaded into AddDefinedClass so
+    # the VIEW body's SQL compiler can resolve bare class names spec-awaredly.
+    cand_classes_by_name: dict[str, Any] = cand_classes
 
     # Build class-rename lookup: old_name → new_name and new_name → old_name.
     cls_old_to_new: dict[str, str] = {}
@@ -1028,7 +1036,7 @@ def diff_specs(
     for name in added_class_names:
         c = cand_classes[name]
         if isinstance(c, DefinedClass):
-            changes.append(AddDefinedClass(cls=c))
+            changes.append(AddDefinedClass(cls=c, classes_by_name=cand_classes_by_name))
         elif not c.abstract:
             changes.append(AddClass(cls=c))
 
@@ -1102,7 +1110,7 @@ def diff_specs(
                 # Was concrete, now defined: drop table + add view.
                 changes.append(DropClass(class_name=name))
                 assert isinstance(cand_cls, DefinedClass)
-                changes.append(AddDefinedClass(cls=cand_cls))
+                changes.append(AddDefinedClass(cls=cand_cls, classes_by_name=cand_classes_by_name))
             continue
 
         if cand_defined:
@@ -1110,7 +1118,7 @@ def diff_specs(
             # approach; view DDL is idempotent via CREATE OR REPLACE).
             assert isinstance(cand_cls, DefinedClass)
             assert isinstance(prev_cls, DefinedClass)
-            changes.append(AddDefinedClass(cls=cand_cls))
+            changes.append(AddDefinedClass(cls=cand_cls, classes_by_name=cand_classes_by_name))
             from knot.spec.sql_validate import canonical_hash as _canonical_hash
 
             if _canonical_hash(prev_cls.definition) != _canonical_hash(cand_cls.definition):
@@ -1246,7 +1254,14 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         parent = cls.is_a  # always set — DefinedClass.is_a is required
 
         ctx = CompileContext(primary_class=parent, alias="s")
-        where_sql = compile_to_sql(cls.definition, parent, ctx)
+        # Outer bindings alias is "b" — the alias used in the VIEW's FROM/JOIN.
+        where_sql = compile_to_sql(
+            cls.definition,
+            parent,
+            ctx,
+            classes_by_name=change.classes_by_name,
+            outer_bindings_alias="b",
+        )
 
         view_stmt = sql.SQL(
             "CREATE OR REPLACE VIEW {view} AS "

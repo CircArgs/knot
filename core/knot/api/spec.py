@@ -854,24 +854,46 @@ class ConstraintValidateResponse(_StrictBase):
 @router.post(
     "/drafts/{draft_id}/_validate_constraint",
     response_model=ConstraintValidateResponse,
-    summary="Validate a SQL constraint predicate via sqlglot (no DB required)",
+    summary="Validate a SQL constraint predicate via sqlglot (spec-aware)",
 )
 async def validate_constraint_body(
     draft_id: int, body: ConstraintValidateRequest
 ) -> ConstraintValidateResponse:
-    """Parse the SQL predicate string and return any syntax errors.
+    """Parse the SQL predicate string and return any syntax or spec errors.
+
+    Runs spec-aware validation: bare class names and slot references in the
+    body are resolved against the draft's classes.  Unknown class names or
+    slots are reported as errors.
 
     Returns ``{valid: true, errors: []}`` on success or
-    ``{valid: false, errors: ["..."]}`` on parse failure. Draft ID is
-    accepted in the path for API symmetry but is not required for validation.
+    ``{valid: false, errors: ["..."]}`` on failure.
     """
-    from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+    from knot.spec.compile.postgres._naming import schema
+    from knot.spec.sql_validate import SqlPredicateError, _rewrite_spec_references, parse_predicate
 
     try:
-        parse_predicate(body.body)
-        return ConstraintValidateResponse(valid=True, errors=[])
+        expr = parse_predicate(body.body)
     except SqlPredicateError as exc:
         return ConstraintValidateResponse(valid=False, errors=[str(exc)])
+
+    # Attempt spec-aware validation using the draft's class map.
+    try:
+        async with db.connect() as conn:
+            draft_spec = await graph_spec.get_draft(conn, draft_id)
+        classes_by_name = {c.name: c for c in draft_spec.classes}
+        _rewrite_spec_references(
+            expr,
+            classes_by_name=classes_by_name,
+            outer_bindings_alias="b",
+            schema_name=schema(),
+        )
+    except SqlPredicateError as exc:
+        return ConstraintValidateResponse(valid=False, errors=[str(exc)])
+    except Exception:
+        # Draft not found or other transient error — fall back to syntax-only.
+        pass
+
+    return ConstraintValidateResponse(valid=True, errors=[])
 
 
 # ─── Preview ────────────────────────────────────────────────────────────────
