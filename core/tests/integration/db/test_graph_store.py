@@ -73,7 +73,7 @@ async def graph_db(pg_conn):
 
 async def test_insert_rows_returns_count(graph_db):
     conn, movie, src, rev = graph_db
-    n = await graph_store.insert_rows(
+    row_ids, n = await graph_store.insert_rows(
         conn,
         source=src,
         cls=movie,
@@ -84,6 +84,7 @@ async def test_insert_rows_returns_count(graph_db):
         ],
     )
     assert n == 1
+    assert len(row_ids) == 1
 
 
 async def test_insert_rows_creates_current_binding(graph_db):

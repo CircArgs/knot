@@ -1,13 +1,13 @@
-"""Tests for POST /graph/ingest/{source_name}?validate_constraints=true.
+"""Tests for ERROR-severity constraint enforcement on POST /graph/ingest/{source_name}.
 
 Coverage:
   1. Happy path: rows pass all ERROR constraints → ingest succeeds, rows land.
-  2. Violation path: row fails constraint with flag → 422, no rows land.
-  3. WARNING-severity constraint with flag → does NOT block ingest.
-  4. Without the flag: violations don't block (existing behaviour preserved).
-  5. Multiple constraints, first violated → 422 with that constraint reported.
+  2. Violation path: row fails ERROR constraint → 422, no rows land.
+  3. WARNING-severity constraint violated → does NOT block ingest.
+  4. Pre-existing violating rows in DB do not taint a valid new batch (batch scope).
+  5. Multiple constraints, one violated → 422 with that constraint reported.
   6. Multiple constraints, all pass → ingest succeeds.
-  7. Multiple violations across multiple constraints → all reported.
+  7. Multiple violations in one batch → all reported.
   8. Only constraints whose primary_class matches the source's class are checked.
 """
 
@@ -109,8 +109,8 @@ def client_no_exc():
 # ---------------------------------------------------------------------------
 
 
-async def test_valid_rows_with_flag_succeed(clean_db, client):
-    """Rows that satisfy the constraint land successfully with the flag."""
+async def test_valid_rows_succeed(clean_db, client):
+    """Rows that satisfy the constraint land successfully."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     # Add constraint: year >= 1888
@@ -119,7 +119,7 @@ async def test_valid_rows_with_flag_succeed(clean_db, client):
     await publish_spec(conn, spec)
 
     resp = client.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt0000001", "year": 1994}]},
     )
     assert resp.status_code == 200, resp.text
@@ -140,7 +140,7 @@ async def test_valid_rows_with_flag_succeed(clean_db, client):
 # ---------------------------------------------------------------------------
 
 
-async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, client_no_exc):
+async def test_violating_row_returns_422_and_rolls_back(clean_db, client_no_exc):
     """year=1500 violates year >= 1888 → 422, no row persisted."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
@@ -149,7 +149,7 @@ async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, clie
     await publish_spec(conn, spec)
 
     resp = client_no_exc.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt_bad", "year": 1500}]},
     )
     assert resp.status_code == 422, resp.text
@@ -173,7 +173,7 @@ async def test_violating_row_with_flag_returns_422_and_rolls_back(clean_db, clie
 
 
 async def test_warning_constraint_does_not_block_ingest(clean_db, client):
-    """A WARNING constraint violation with validate_constraints=true still allows ingest."""
+    """A WARNING-severity constraint violation never blocks ingest."""
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
     warn_c = _year_gte_constraint(movie, 1888, name="year_warning", severity=Severity.WARNING)
@@ -181,7 +181,7 @@ async def test_warning_constraint_does_not_block_ingest(clean_db, client):
     await publish_spec(conn, spec)
 
     resp = client.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt_old", "year": 1500}]},
     )
     # WARNING should not block — expect 200.
@@ -197,31 +197,57 @@ async def test_warning_constraint_does_not_block_ingest(clean_db, client):
 
 
 # ---------------------------------------------------------------------------
-# 4. Without the flag: violations do not block (existing behaviour)
+# 4. Batch scope: pre-existing violating rows don't taint a valid new batch
 # ---------------------------------------------------------------------------
 
 
-async def test_violation_without_flag_does_not_block(clean_db, client):
-    """Without validate_constraints=true, a violating row ingests without error."""
-    conn = clean_db
-    spec, movie, src = _build_spec_with_constraints([])
-    c = _year_gte_constraint(movie, 1888)
-    spec.constraints.append(c)
-    await publish_spec(conn, spec)
+async def test_batch_scope_preexisting_violations_dont_block_valid_batch(clean_db, client):
+    """Pre-existing DB row that violates a constraint does not block a clean new batch.
 
+    Uses graph_store.insert_rows directly to plant a violating row without
+    going through the ingest constraint check.  Then ingests a VALID row via
+    the API; the batch check must be scoped to the new batch only, so the
+    pre-existing violator must not cause a 422.
+    """
+    conn = clean_db
+
+    # Build and publish spec WITH the constraint.
+    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    movie_cls = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
+    src_obj = Source(name="imdb")
+    binding_obj = SourceBinding(source=src_obj, class_=movie_cls, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
+    c = Constraint(name="year_gte_1888", primary=movie_cls, body="year >= 1888", severity=Severity.ERROR)
+    spec2 = Spec(
+        id="batch_scope_test",
+        version="1.0.0",
+        classes=[movie_cls],
+        sources=[src_obj],
+        source_bindings=[binding_obj],
+        constraints=[c],
+    )
+    await publish_spec(conn, spec2)
+
+    # Plant a violating row directly via graph_store (bypasses ingest constraints).
+    from knot.db import spec_store as _spec_store
+    async with db.connect() as conn2:
+        revision = await _spec_store.get_published_revision(conn2)
+        await graph_store.insert_rows(
+            conn2,
+            source=src_obj,
+            cls=movie_cls,
+            spec_revision=revision,
+            rows=[{"imdb_id": "tt_preexisting", "year": 1000}],
+            canonical_ids=["imdb:tt_preexisting"],
+        )
+
+    # Now ingest a VALID row via the API — must succeed despite the pre-existing violator.
     resp = client.post(
-        "/graph/ingest/imdb",  # no ?validate_constraints
-        json={"rows": [{"imdb_id": "tt_old", "year": 1500}]},
+        "/graph/ingest/imdb",
+        json={"rows": [{"imdb_id": "tt_good", "year": 2000}]},
     )
     assert resp.status_code == 200, resp.text
     assert resp.json()["accepted"] == 1
-
-    # Row landed despite violating the constraint.
-    async with db.connect() as conn2:
-        rows = await graph_store.query_rows(
-            conn2, cls=movie, predicate_sql=None, predicate_params=[]
-        )
-    assert len(rows) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -243,7 +269,7 @@ async def test_multiple_constraints_one_violated_reports_violation(clean_db, cli
     await publish_spec(conn, spec)
 
     resp = client_no_exc.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt_bad", "year": 1500}]},
     )
     assert resp.status_code == 422, resp.text
@@ -269,7 +295,7 @@ async def test_multiple_constraints_all_pass(clean_db, client):
     await publish_spec(conn, spec)
 
     resp = client.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt_ok", "year": 2000}]},
     )
     assert resp.status_code == 200, resp.text
@@ -290,7 +316,7 @@ async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
     await publish_spec(conn, spec)
 
     resp = client_no_exc.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={
             "rows": [
                 {"imdb_id": "tt_bad1", "year": 1000},
@@ -351,7 +377,7 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
 
     # Ingesting to Movie source — Person constraint must not interfere.
     resp = client.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt0000001", "year": 2000}]},
     )
     assert resp.status_code == 200, resp.text
@@ -366,7 +392,7 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
 async def test_compile_failure_surfaces_as_synthetic_violation(
     clean_db, client_no_exc, monkeypatch
 ):
-    """When compile_constraint raises, the built-in constraint check
+    """When the SQL compiler raises, the built-in constraint check
     reports it as a synthetic violation row (offending_pk='*', detail
     starts 'compile failure: ...') and rolls back the INSERT.
     """
@@ -375,18 +401,16 @@ async def test_compile_failure_surfaces_as_synthetic_violation(
     spec.constraints.append(_year_gte_constraint(movie, 1888, name="year_min"))
     await publish_spec(conn, spec)
 
-    # Monkeypatch the compiler the ingest path calls, so any constraint
-    # compile blows up. The built-in check is expected to catch and
-    # surface it as synthetic.
-    from knot.spec.compile import postgres as postgres_compile
+    # Monkeypatch compile_to_sql in the module that ingest imports it from.
+    import knot.spec.sql_validate as sql_validate_mod
 
-    def _broken(constraint, cls):
+    def _broken(body, cls, ctx):
         raise RuntimeError("synthetic boom")
 
-    monkeypatch.setattr(postgres_compile, "compile_constraint", _broken)
+    monkeypatch.setattr(sql_validate_mod, "compile_to_sql", _broken)
 
     resp = client_no_exc.post(
-        "/graph/ingest/imdb?validate_constraints=true",
+        "/graph/ingest/imdb",
         json={"rows": [{"imdb_id": "tt_ok", "year": 2000}]},
     )
     assert resp.status_code == 422, resp.text

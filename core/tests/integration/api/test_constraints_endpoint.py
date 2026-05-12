@@ -268,20 +268,21 @@ def test_e2e_constraint_violation_reported(draft_with_movie, client):
     )
     assert ingest_resp.status_code == 200
 
-    # Ingest a violating row (year = 1800 < 1888)
+    # Ingest a violating row (year = 1800 < 1888) — ERROR constraints always block at ingest.
     ingest_resp2 = client.post(
         "/graph/ingest/imdb_movies",
         json={"rows": [{"imdb_id": "tt0000002", "year": 1800}]},
     )
-    assert ingest_resp2.status_code == 200
+    assert ingest_resp2.status_code == 422
+    violations_ingest = ingest_resp2.json()["detail"]["violations"]
+    assert len(violations_ingest) >= 1
+    assert violations_ingest[0]["rule_id"] == "year_not_before_cinema"
 
-    # Run constraint check — should report exactly one violation (tt0000002)
+    # The violating row rolled back, so the constraint check endpoint sees no violations.
     check_resp = client.post("/graph/constraints/check")
     assert check_resp.status_code == 200, check_resp.text
     violations = check_resp.json()["violations"]
-    assert len(violations) == 1
-    assert violations[0]["rule_id"] == "year_not_before_cinema"
-    assert violations[0]["class_name"] == "Movie"
+    assert violations == []
 
 
 def test_e2e_no_violations_when_all_rows_valid(draft_with_movie, client):
