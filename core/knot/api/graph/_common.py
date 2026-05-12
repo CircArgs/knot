@@ -6,7 +6,7 @@ from fastapi import HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from knot.db import spec_store
-from knot.spec import OntologyClass, Spec
+from knot.spec import DefinedClass, OntologyClass, Spec
 
 
 class StrictBase(BaseModel):
@@ -15,12 +15,17 @@ class StrictBase(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
-def resolve_class(spec: Spec, class_name: str) -> OntologyClass:
-    """Look up a class on the published spec; 404 if missing, 400 if abstract."""
+def resolve_class(spec: Spec, class_name: str) -> OntologyClass | DefinedClass:
+    """Look up a class on the published spec; 404 if missing, 400 if abstract.
+
+    Defined classes are readable surfaces (backed by a VIEW), so they
+    pass the abstract-gate. Only abstract OntologyClasses (with no
+    stored rows) are rejected.
+    """
     cls = next((c for c in spec.classes if c.name == class_name), None)
     if cls is None:
         raise HTTPException(404, f"Class {class_name!r} not on the published spec.")
-    if cls.abstract:
+    if isinstance(cls, OntologyClass) and cls.abstract:
         raise HTTPException(400, f"Class {class_name!r} is abstract; no rows are stored.")
     return cls
 

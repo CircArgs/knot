@@ -238,8 +238,15 @@ async def list_rows(
 ) -> list[dict[str, Any]]:
     base = _select_with_binding(cls, include_tombstoned=include_tombstoned)
     where = sql.SQL("WHERE s._spec_revision <= %s") if as_of is not None else sql.SQL("")
-    stmt = sql.SQL("{base} {where} ORDER BY b.canonical_id, s._source LIMIT %s OFFSET %s").format(
-        base=base, where=where
+    # Defined classes are backed by a VIEW that exposes _canonical_id directly
+    # (no bindings alias b); ORDER BY s._canonical_id in that case.
+    order = (
+        sql.SQL("ORDER BY s._canonical_id, s._source")
+        if _is_defined_class(cls)
+        else sql.SQL("ORDER BY b.canonical_id, s._source")
+    )
+    stmt = sql.SQL("{base} {where} {order} LIMIT %s OFFSET %s").format(
+        base=base, where=where, order=order
     )
     params: list[Any] = []
     if as_of is not None:
