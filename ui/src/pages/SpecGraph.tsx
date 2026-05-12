@@ -60,6 +60,15 @@ export default function SpecGraph() {
   const mode: "view" | "edit" = draftId !== null ? "edit" : "view";
 
   const [selection, setSelection] = useState<SpecSelection | null>(null);
+  // Focus-dim: click an edge → only its endpoints stay bright; click a node
+  // → highlight nodes/edges within `depth` hops; everything else dims.
+  // Cleared by a pane click.
+  const [focus, setFocus] = useState<
+    | { kind: "node"; id: string; depth: number }
+    | { kind: "edge"; id: string }
+    | null
+  >(null);
+  const [focusDepth, setFocusDepth] = useState(1);
   const [nodes, setNodes] = useState<SpecNode[]>([]);
   const [edges, setEdges] = useState<SpecEdge[]>([]);
   const [draftSpec, setDraftSpec] = useState<PublishedSpec | null>(null);
@@ -159,8 +168,74 @@ export default function SpecGraph() {
         ? `${entity.value.sourceName}__${entity.value.className}`
         : (entity.value as { name: string }).name;
     setSelection({ kind: entity.kind, name });
+    setFocus({ kind: "node", id: node.id, depth: focusDepth });
+  }, [focusDepth]);
+  const onEdgeClick = useCallback((_: unknown, edge: SpecEdge) => {
+    setFocus({ kind: "edge", id: edge.id });
   }, []);
-  const onPaneClick = useCallback(() => setSelection(null), []);
+  const onPaneClick = useCallback(() => {
+    setSelection(null);
+    setFocus(null);
+  }, []);
+
+  // ── Focus-dim computation ─────────────────────────────────────────────────
+  // Build the set of node ids and edge ids that should remain bright.
+  // Returns null when focus is cleared → every node/edge renders full opacity.
+  const focusedSet = useMemo<
+    { nodeIds: Set<string>; edgeIds: Set<string> } | null
+  >(() => {
+    if (!focus) return null;
+    if (focus.kind === "edge") {
+      const edge = edges.find((e) => e.id === focus.id);
+      if (!edge) return null;
+      return {
+        nodeIds: new Set([edge.source, edge.target]),
+        edgeIds: new Set([edge.id]),
+      };
+    }
+    // node focus — BFS outward to `depth` hops via undirected edges
+    const adj: Record<string, { neighbor: string; edgeId: string }[]> = {};
+    for (const e of edges) {
+      (adj[e.source] = adj[e.source] ?? []).push({ neighbor: e.target, edgeId: e.id });
+      (adj[e.target] = adj[e.target] ?? []).push({ neighbor: e.source, edgeId: e.id });
+    }
+    const nodeIds = new Set<string>([focus.id]);
+    const edgeIds = new Set<string>();
+    let frontier = [focus.id];
+    for (let i = 0; i < focus.depth; i++) {
+      const next: string[] = [];
+      for (const nid of frontier) {
+        for (const { neighbor, edgeId } of adj[nid] ?? []) {
+          edgeIds.add(edgeId);
+          if (!nodeIds.has(neighbor)) {
+            nodeIds.add(neighbor);
+            next.push(neighbor);
+          }
+        }
+      }
+      frontier = next;
+      if (frontier.length === 0) break;
+    }
+    return { nodeIds, edgeIds };
+  }, [focus, edges]);
+
+  // Derive what React Flow sees — apply opacity dim when not in focusedSet.
+  const displayedNodes = useMemo<SpecNode[]>(() => {
+    if (!focusedSet) return nodes;
+    return nodes.map((n) =>
+      focusedSet.nodeIds.has(n.id)
+        ? n
+        : { ...n, style: { ...n.style, opacity: 0.2 } },
+    );
+  }, [nodes, focusedSet]);
+  const displayedEdges = useMemo<SpecEdge[]>(() => {
+    if (!focusedSet) return edges;
+    return edges.map((e) =>
+      focusedSet.edgeIds.has(e.id)
+        ? e
+        : { ...e, style: { ...e.style, opacity: 0.15 } },
+    );
+  }, [edges, focusedSet]);
 
   // Resolve the current selection back to a typed entity for handlers that
   // need to act on it (delete, edit modal).
@@ -516,12 +591,13 @@ export default function SpecGraph() {
             </div>
           )}
           <ReactFlow
-            nodes={nodes}
-            edges={edges}
+            nodes={displayedNodes}
+            edges={displayedEdges}
             nodeTypes={NODE_TYPES}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onNodeClick={onNodeClick}
+            onEdgeClick={onEdgeClick}
             onPaneClick={onPaneClick}
             onNodeDoubleClick={onNodeDoubleClick}
             onConnect={onConnect}
@@ -531,6 +607,39 @@ export default function SpecGraph() {
             <Controls />
           </ReactFlow>
           <Legend />
+          {/* Focus-depth stepper: only visible when a node is focused. Clicking
+              a node bf brightens it + neighbours within `focusDepth` hops; user
+              can step the radius up/down. Clicking the canvas clears focus. */}
+          {focus?.kind === "node" && (
+            <div className="absolute bottom-4 left-4 z-10 flex items-center gap-1 bg-white/95 border border-slate-300 rounded-lg shadow-md px-2 py-1 text-xs">
+              <span className="text-slate-500 mr-1">focus depth</span>
+              <button
+                onClick={() => {
+                  const next = Math.max(1, focusDepth - 1);
+                  setFocusDepth(next);
+                  setFocus({ ...focus, depth: next });
+                }}
+                className="w-5 h-5 rounded border border-slate-300 hover:bg-slate-100 leading-none"
+                disabled={focusDepth <= 1}
+                aria-label="decrease focus depth"
+              >
+                −
+              </button>
+              <span className="w-4 text-center font-mono">{focusDepth}</span>
+              <button
+                onClick={() => {
+                  const next = Math.min(6, focusDepth + 1);
+                  setFocusDepth(next);
+                  setFocus({ ...focus, depth: next });
+                }}
+                className="w-5 h-5 rounded border border-slate-300 hover:bg-slate-100 leading-none"
+                disabled={focusDepth >= 6}
+                aria-label="increase focus depth"
+              >
+                +
+              </button>
+            </div>
+          )}
         </div>
         <PropertyPanel
           selection={selection}
