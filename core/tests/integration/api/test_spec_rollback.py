@@ -46,7 +46,6 @@ def _spec_v1() -> Spec:
     return Spec(
         id="rollback_test",
         version="1.0.0",
-        slots=[imdb_id],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -69,7 +68,6 @@ def _spec_v2() -> Spec:
     return Spec(
         id="rollback_test",
         version="2.0.0",
-        slots=[imdb_id, title, nm],
         classes=[movie, person],
         sources=[src_movie, src_person],
         source_bindings=[binding_movie, binding_person],

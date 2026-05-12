@@ -28,6 +28,7 @@ from knot.api.graph._common import StrictBase
 from knot.db import spec_store
 from knot.graph import spec as graph_spec
 from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, SourceBinding, Spec
+from knot.spec.effective_slots import effective_slots as _effective_slots
 from knot.spec.metaschema import Constraint
 
 router = APIRouter()
@@ -81,7 +82,8 @@ class OntologyClassGQL:
     description: str | None
     is_a_name: str | None
     mixin_names: list[str]
-    slot_names: list[str]
+    slots: list[SlotGQL]
+    effective_slots: list[SlotGQL]
 
 
 @strawberry.type
@@ -124,7 +126,6 @@ class PublishedSpec:
     version: str
     revision: int
     content_hash: str
-    slots: list[SlotGQL]
     classes: list[OntologyClassGQL]
     sources: list[SourceGQL]
     source_bindings: list[SourceBindingGQL]
@@ -180,7 +181,8 @@ def _to_class(c: OntologyClass) -> OntologyClassGQL:
         description=c.description,
         is_a_name=c.is_a.name if c.is_a is not None else None,
         mixin_names=[m.name for m in c.mixins],
-        slot_names=[s.name for s in c.slots],
+        slots=[_to_slot(s) for s in c.slots],
+        effective_slots=[_to_slot(s) for s in _effective_slots(c)],
     )
 
 
@@ -227,7 +229,6 @@ def _to_published_spec(spec: Spec, *, revision: int, content_hash: str) -> Publi
         version=spec.version,
         revision=revision,
         content_hash=content_hash,
-        slots=[_to_slot(s) for s in spec.slots],
         classes=[_to_class(c) for c in spec.classes],
         sources=[_to_source(s) for s in spec.sources],
         source_bindings=[_to_source_binding(b) for b in spec.source_bindings],

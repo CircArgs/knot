@@ -25,8 +25,8 @@ from knot.spec import (
     SourceBinding,
     Spec,
 )
-from knot.spec.metaschema import Primitive, SlotConstraints
 from knot.spec.errors import PublishGateError
+from knot.spec.metaschema import Primitive, SlotConstraints
 
 
 @pytest.fixture
@@ -53,7 +53,6 @@ def _build_spec() -> Spec:
     return Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -65,7 +64,7 @@ async def test_publish_allows_slot_pattern_change_without_destructive_flag(clean
     publish should succeed without ``allow_destructive=true``."""
     v1 = _build_spec()
     v2 = _build_spec()
-    v2.slots[0].constraints = SlotConstraints(pattern=r"^tt[0-9]+$")
+    v2.classes[0].slots[0].constraints = SlotConstraints(pattern=r"^tt[0-9]+$")
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, v1)
@@ -90,7 +89,6 @@ async def test_publish_blocks_source_identifier_slot_change_without_flag(clean_d
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_a, id_b],
             classes=[movie],
             sources=[src],
             source_bindings=[binding],

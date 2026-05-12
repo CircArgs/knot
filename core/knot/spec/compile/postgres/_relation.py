@@ -23,7 +23,6 @@ from __future__ import annotations
 
 from psycopg import sql
 
-from ._naming import bindings_table_id, table_id
 from knot.spec.compile.postgres._context import CompileContext
 from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
 from knot.spec.metaschema import (
@@ -43,6 +42,8 @@ from knot.spec.metaschema import (
     ReverseRelation,
     ScalarDerivation,
 )
+
+from ._naming import bindings_table_id, table_id
 
 # ---------------------------------------------------------------------------
 # Internal helpers

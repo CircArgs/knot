@@ -86,7 +86,7 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
-from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
+from knot.spec import OntologyClass, Slot, SourceBinding, Spec
 from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._dispatch import CompilerError

@@ -307,7 +307,6 @@ def test_matches_emits_like():
 
 def test_relation_all_no_body_raises_compiler_error():
     """RelationAll with body=None should raise CompilerError."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     credit_cls = OntologyClass(name="Credit", slots=[])
     fk_slot = Slot(name="credits", type=ClassRef(target_class=credit_cls))
     movie = OntologyClass(name="Movie", slots=[fk_slot])

@@ -47,7 +47,6 @@ def _build_movie_spec() -> tuple[Spec, OntologyClass, Source, SourceBinding]:
     spec = Spec(
         id="ext_test",
         version="1.0.0",
-        slots=[imdb_id, title],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -242,7 +241,6 @@ async def test_er_handler_http_delegates_when_url_set(pg_conn, monkeypatch):
         spec = Spec(
             id="http_delegate_test",
             version="1.0.0",
-            slots=[id_slot],
             classes=[cls],
             sources=[src],
             source_bindings=[er_binding],

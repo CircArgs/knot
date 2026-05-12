@@ -95,7 +95,6 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     spec = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -159,7 +158,6 @@ async def test_compile_constraint_no_violations(clean_db):
     spec = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -208,7 +206,6 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     spec_v1 = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -244,7 +241,6 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     spec_v2 = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -270,7 +266,6 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     spec_v1 = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -304,7 +299,6 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     spec_v2 = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],

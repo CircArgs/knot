@@ -55,7 +55,6 @@ async def ct_db(pg_conn):
     spec = Spec(
         id="ct_test",
         version="1.0.0",
-        slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src_a, src_b],
         source_bindings=[binding_a, binding_b],

@@ -22,13 +22,16 @@ from __future__ import annotations
 
 from psycopg import sql
 
-from ._naming import (
-    bindings_table_id as _bindings_table_id,
-    table_id as _table_id,
-)
 from knot.spec import OntologyClass
 from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
+
+from ._naming import (
+    bindings_table_id as _bindings_table_id,
+)
+from ._naming import (
+    table_id as _table_id,
+)
 
 
 def is_materializable(cls: OntologyClass) -> bool:

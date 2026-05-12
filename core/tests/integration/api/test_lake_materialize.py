@@ -52,7 +52,6 @@ def _spec_with_concrete_and_abstract() -> Spec:
     return Spec(
         id="lake_test",
         version="1.0.0",
-        slots=[imdb_id, title, year, audited_at],
         classes=[movie, auditable],
         sources=[src],
         source_bindings=[binding],

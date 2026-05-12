@@ -48,7 +48,7 @@ def _minimal_spec() -> Spec:
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
-        id="t", version="1.0.0", slots=[imdb_id], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -94,7 +94,6 @@ async def test_preview_drop_class_not_publishable(clean_db):
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        slots=[imdb_id, extra_id],
         classes=[movie, series],
         sources=[src_m, src_s],
         source_bindings=[binding_m, binding_s],
@@ -110,7 +109,7 @@ async def test_preview_drop_class_not_publishable(clean_db):
     src_m2 = Source(name="imdb")
     binding_m2 = SourceBinding(source=src_m2, class_=movie2, identifier_slot=imdb_id2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[imdb_id2], classes=[movie2],
+        id="t", version="1.0.0", classes=[movie2],
         sources=[src_m2], source_bindings=[binding_m2],
     )
 
@@ -141,7 +140,7 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, year_str], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -163,7 +162,7 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     src2 = Source(name="imdb")
     binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, year_int], classes=[movie2],
+        id="t", version="1.0.0", classes=[movie2],
         sources=[src2], source_bindings=[binding2],
     )
 
@@ -195,7 +194,7 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, year_slot], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -242,7 +241,6 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot2, year_slot2],
         classes=[movie2],
         sources=[src2],
         source_bindings=[binding2],

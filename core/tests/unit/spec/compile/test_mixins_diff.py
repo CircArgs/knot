@@ -19,7 +19,6 @@ def test_add_mixin_emits_addslot_diff():
     spec_v1 = Spec(
         id="add_mixin",
         version="1.0.0",
-        slots=[imdb_id],
         classes=[movie_v1],
     )
 
@@ -38,7 +37,6 @@ def test_add_mixin_emits_addslot_diff():
     spec_v2 = Spec(
         id="add_mixin",
         version="1.0.0",
-        slots=[imdb_id2, created_at],
         classes=[movie_v2, timestamped],
     )
 
@@ -64,7 +62,6 @@ def test_remove_mixin_emits_dropslot_diff():
     spec_v1 = Spec(
         id="remove_mixin",
         version="1.0.0",
-        slots=[imdb_id, created_at],
         classes=[movie_v1, timestamped],
     )
 
@@ -73,7 +70,6 @@ def test_remove_mixin_emits_dropslot_diff():
     spec_v2 = Spec(
         id="remove_mixin",
         version="1.0.0",
-        slots=[imdb_id2],
         classes=[movie_v2],
     )
 

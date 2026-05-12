@@ -21,12 +21,12 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
-from knot.spec.metaschema import SourceBinding
 from knot.spec.errors import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
     PublishGateError,
 )
+from knot.spec.metaschema import SourceBinding
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal valid spec factory
@@ -42,7 +42,6 @@ def _minimal_spec(name: str = "test") -> Spec:
     return Spec(
         id=name,
         version="1.0.0",
-        slots=[imdb_id],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -175,7 +174,6 @@ async def test_publish_gate_rejects_dangling_classref(clean_spec):
     spec = Spec(
         id="bad",
         version="1.0.0",
-        slots=[id_slot, bad_slot],
         classes=[movie],  # Orphan intentionally missing
         sources=[src],
         source_bindings=[binding],
@@ -195,7 +193,6 @@ async def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
     spec = Spec(
         id="bad",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie],  # ghost not here
         sources=[src],
         source_bindings=[binding],

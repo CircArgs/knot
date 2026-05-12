@@ -36,7 +36,6 @@ def _build_spec() -> tuple[Spec, OntologyClass, Source, int]:
     spec = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id, title, year, tags],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],

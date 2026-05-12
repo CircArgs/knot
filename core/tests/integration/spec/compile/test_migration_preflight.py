@@ -60,13 +60,9 @@ async def _ensure_revision(conn) -> int:
 def _make_spec(slots, classes, cls, id_slot, *, extra_slots=None) -> Spec:
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=cls, identifier_slot=id_slot)  # type: ignore[call-arg]
-    all_slots = list(slots)
-    if extra_slots:
-        all_slots.extend(extra_slots)
     return Spec(
         id="t",
         version="1.0.0",
-        slots=all_slots,
         classes=list(classes),
         sources=[src],
         source_bindings=[binding],

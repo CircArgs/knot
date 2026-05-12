@@ -163,18 +163,6 @@ def _build_full_spec() -> tuple[
     spec = Spec(
         id="derived_test",
         version="1.0.0",
-        slots=[
-            person_id,
-            person_name_slot,
-            imdb_id,
-            title,
-            directors_slot,
-            credit_count_slot,
-            credit_id,
-            credit_movie,
-            credit_role,
-            credit_person_name,
-        ],
         classes=[person_cls, movie_cls, credit_cls],
         sources=[movie_src, credit_src],
         source_bindings=[movie_binding, credit_binding],
@@ -584,7 +572,6 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     spec_v1 = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_v1, title_v1, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v1, credit_src_v1],
         source_bindings=[movie_binding_v1, credit_binding_v1],
@@ -618,7 +605,6 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     spec_v2 = Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id_v1, title_v1, count_slot, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v2, credit_src_v2],
         source_bindings=[movie_binding_v2, credit_binding_v2],
@@ -662,7 +648,6 @@ async def test_integration_relation_aggregate_collect(clean_db):
     spec = Spec(
         id="agg_test",
         version="1.0.0",
-        slots=[imdb_id, title, roles_slot, cid, cmovie, crole],
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],
         source_bindings=[movie_binding, credit_binding],

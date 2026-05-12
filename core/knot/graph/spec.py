@@ -5,13 +5,17 @@ to handle:
 
   - Published-spec reads + revision history
   - Draft create / discard / list
-  - Draft mutations (add slot/class, update class, add source/constraint)
+  - Draft mutations (add class, update class, add source/constraint)
   - Publish + rollback
 
-Validation (collision checks, "is this slot/class on the draft", expression
+Validation (collision checks, "is this class on the draft", expression
 translation) runs in this layer; the route catches typed exceptions and
 maps to HTTP. The route layer keeps the Pydantic request/response shapes
 and the per-entity summary helpers — those are HTTP-shape concerns.
+
+Slots are now inline on each OntologyClass (by-copy). There is no top-level
+Spec.slots list. add_class accepts inline slot definitions; update_class
+accepts a full slot replacement list.
 """
 
 from __future__ import annotations
@@ -72,19 +76,16 @@ __all__ = (
     "create_draft",
     "discard_draft",
     # Mutations
-    "add_slot",
     "add_class",
     "update_class",
     "add_source",
     "add_source_binding",
     "update_source_binding_trust",
     "add_constraint",
-    "remove_slot",
     "remove_class",
     "remove_source",
     "remove_source_binding",
     "remove_constraint",
-    "rename_slot",
     # Publish / rollback / preview
     "publish_draft",
     "rollback",
@@ -154,13 +155,6 @@ def _find_class(spec: Spec, name: str) -> OntologyClass:
     raise EntityNotOnDraftError("OntologyClass", name)
 
 
-def _find_slot(spec: Spec, name: str) -> Slot:
-    for s in spec.slots:
-        if s.name == name:
-            return s
-    raise EntityNotOnDraftError("Slot", name)
-
-
 def _find_source(spec: Spec, name: str) -> Source:
     for s in spec.sources:
         if s.name == name:
@@ -219,6 +213,38 @@ def _build_type_expr(
     raise InvalidTypeExprError(
         f"type_kind must be 'primitive', 'class', 'array_of_primitive', "
         f"'array_of_class', or null; got {type_kind!r}"
+    )
+
+
+def _build_slot(
+    *,
+    name: str,
+    type_kind: str | None,
+    type_name: str | None,
+    identifier: bool,
+    required: bool,
+    resolution_policy: ResolutionPolicy,
+    constraints: SlotConstraints | None,
+    description: str | None,
+    derivation: ExprJson | None,
+    spec: Spec,
+    primary_class: OntologyClass | None = None,
+) -> Slot:
+    """Build a Slot object from API request fields."""
+    type_expr = _build_type_expr(type_kind, type_name, spec)
+    derivation_obj = None
+    if derivation is not None:
+        ctx_class = primary_class or OntologyClass(name="__derivation_ctx__")
+        derivation_obj = translate_expr(derivation, spec, ctx_class)
+    return Slot(
+        name=name,
+        type=type_expr,
+        identifier=identifier,
+        required=required,
+        resolution_policy=resolution_policy,
+        constraints=constraints,
+        description=description,
+        derivation=derivation_obj,
     )
 
 
@@ -284,87 +310,88 @@ async def discard_draft(conn: psycopg.AsyncConnection, draft_id: int) -> None:
 # ─── Mutations ──────────────────────────────────────────────────────────────
 
 
-async def add_slot(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    *,
-    name: str,
-    type_kind: str | None,
-    type_name: str | None,
-    identifier: bool,
-    required: bool,
-    resolution_policy: ResolutionPolicy,
-    constraints: SlotConstraints | None,
-    description: str | None,
-    derivation: ExprJson | None,
-) -> Spec:
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        if any(s.name.lower() == name.lower() for s in spec.slots):
-            raise CollisionError("Slot", name)
-
-        type_expr = _build_type_expr(type_kind, type_name, spec)
-
-        derivation_obj = None
-        if derivation is not None:
-            placeholder_primary = OntologyClass(name="__derivation_ctx__")
-            derivation_obj = translate_expr(derivation, spec, placeholder_primary)
-
-        spec.slots.append(
-            Slot(
-                name=name,
-                type=type_expr,
-                identifier=identifier,
-                required=required,
-                resolution_policy=resolution_policy,
-                constraints=constraints,
-                description=description,
-                derivation=derivation_obj,
-            )
-        )
-    return spec
-
-
 async def add_class(
     conn: psycopg.AsyncConnection,
     draft_id: int,
     *,
     name: str,
-    slot_names: list[str],
+    slots: list[dict] | None = None,
     is_a_name: str | None,
     mixin_names: list[str],
     abstract: bool,
     description: str | None,
     definition: ExprJson | None,
 ) -> Spec:
+    """Add an OntologyClass with inline slot definitions.
+
+    ``slots`` is a list of slot-creation dicts, each with keys matching
+    the SlotCreate API shape: name, type_kind, type_name, identifier,
+    required, resolution_policy, constraints, description, derivation.
+
+    Raises ``CollisionError`` if the class name or any slot name collides.
+    """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         if any(c.name.lower() == name.lower() for c in spec.classes):
             raise CollisionError("OntologyClass", name)
 
-        slots = [_find_slot(spec, n) for n in slot_names]
         is_a = _find_class(spec, is_a_name) if is_a_name else None
         mixins = [_find_class(spec, n) for n in mixin_names]
 
+        # Build the class first (needed as context for any derivation exprs)
+        new_cls = OntologyClass(
+            name=name,
+            slots=[],
+            is_a=is_a,
+            mixins=mixins,
+            abstract=abstract,
+            description=description,
+        )
+
+        # Build inline slots
+        slot_names_seen: set[str] = set()
+        built_slots: list[Slot] = []
+        for slot_def in (slots or []):
+            sname = slot_def.get("name", "")
+            if sname.lower() in slot_names_seen:
+                raise CollisionError("Slot", sname)
+            slot_names_seen.add(sname.lower())
+            constraints_raw = slot_def.get("constraints")
+            slot_constraints: SlotConstraints | None = None
+            if constraints_raw:
+                slot_constraints = SlotConstraints(
+                    pattern=constraints_raw.get("pattern"),
+                    min_value=constraints_raw.get("min_value"),
+                    max_value=constraints_raw.get("max_value"),
+                    permissible_values=constraints_raw.get("permissible_values"),
+                )
+            rp_raw = slot_def.get("resolution_policy", ResolutionPolicy.ARGMAX_TRUST)
+            rp = rp_raw if isinstance(rp_raw, ResolutionPolicy) else ResolutionPolicy(rp_raw)
+            built_slots.append(
+                _build_slot(
+                    name=sname,
+                    type_kind=slot_def.get("type_kind"),
+                    type_name=slot_def.get("type_name"),
+                    identifier=bool(slot_def.get("identifier", False)),
+                    required=bool(slot_def.get("required", False)),
+                    resolution_policy=rp,
+                    constraints=slot_constraints,
+                    description=slot_def.get("description"),
+                    derivation=slot_def.get("derivation"),
+                    spec=spec,
+                    primary_class=new_cls,
+                )
+            )
+
+        new_cls.slots = built_slots
+
         definition_obj = None
         if definition is not None:
-            primary = (
-                is_a
-                if is_a is not None
-                else _find_class(spec, name)
-                if any(c.name == name for c in spec.classes)
-                else OntologyClass(name=name)
-            )
+            primary = is_a if is_a is not None else new_cls
             definition_obj = translate_expr(definition, spec, primary)
+        if definition_obj is not None:
+            new_cls.definition = definition_obj  # type: ignore[attr-defined]
 
-        spec.classes.append(
-            OntologyClass(
-                name=name,
-                slots=slots,
-                is_a=is_a,
-                mixins=mixins,
-                abstract=abstract,
-                description=description,
-            )
-        )
+        spec.classes.append(new_cls)
     return spec
 
 
@@ -373,17 +400,57 @@ async def update_class(
     draft_id: int,
     name: str,
     *,
-    slot_names: list[str] | None = None,
+    slots: list[dict] | None = None,
     is_a_name: str | None = None,
     mixin_names: list[str] | None = None,
     abstract: bool | None = None,
     description: str | None = None,
 ) -> Spec:
+    """Update an OntologyClass on a draft.
+
+    ``slots`` is a full replacement list of slot-creation dicts. If provided,
+    the class's slots are completely replaced with the new inline definitions.
+    If omitted, the existing slots are unchanged.
+    """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         cls = _find_class(spec, name)
 
-        if slot_names is not None:
-            cls.slots = [_find_slot(spec, n) for n in slot_names]
+        if slots is not None:
+            slot_names_seen: set[str] = set()
+            built_slots: list[Slot] = []
+            for slot_def in slots:
+                sname = slot_def.get("name", "")
+                if sname.lower() in slot_names_seen:
+                    raise CollisionError("Slot", sname)
+                slot_names_seen.add(sname.lower())
+                constraints_raw = slot_def.get("constraints")
+                slot_constraints: SlotConstraints | None = None
+                if constraints_raw:
+                    slot_constraints = SlotConstraints(
+                        pattern=constraints_raw.get("pattern"),
+                        min_value=constraints_raw.get("min_value"),
+                        max_value=constraints_raw.get("max_value"),
+                        permissible_values=constraints_raw.get("permissible_values"),
+                    )
+                rp_raw = slot_def.get("resolution_policy", ResolutionPolicy.ARGMAX_TRUST)
+                rp = rp_raw if isinstance(rp_raw, ResolutionPolicy) else ResolutionPolicy(rp_raw)
+                built_slots.append(
+                    _build_slot(
+                        name=sname,
+                        type_kind=slot_def.get("type_kind"),
+                        type_name=slot_def.get("type_name"),
+                        identifier=bool(slot_def.get("identifier", False)),
+                        required=bool(slot_def.get("required", False)),
+                        resolution_policy=rp,
+                        constraints=slot_constraints,
+                        description=slot_def.get("description"),
+                        derivation=slot_def.get("derivation"),
+                        spec=spec,
+                        primary_class=cls,
+                    )
+                )
+            cls.slots = built_slots
+
         if is_a_name is not None:
             cls.is_a = _find_class(spec, is_a_name) if is_a_name else None
         if mixin_names is not None:
@@ -557,103 +624,6 @@ async def add_constraint(
 # ─── Removals ───────────────────────────────────────────────────────────────
 
 
-async def remove_slot(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    name: str,
-) -> Spec:
-    """Remove a Slot by name.
-
-    Raises ``ReferencedEntityError`` if any class lists this slot, or any
-    source binding uses it as ``identifier_slot``.
-    """
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        target = _find_slot(spec, name)
-        refs: list[tuple[str, str]] = []
-        for c in spec.classes:
-            if any(s is target for s in c.slots):
-                refs.append(("class", c.name))
-        for b in spec.source_bindings:
-            if b.identifier_slot is target:
-                refs.append(("source_binding", b.binding_id))
-        if refs:
-            raise ReferencedEntityError("slot", name, refs)
-        spec.slots = [s for s in spec.slots if s is not target]
-    return spec
-
-
-async def rename_slot(
-    conn: psycopg.AsyncConnection,
-    draft_id: int,
-    old_name: str,
-    new_name: str,
-) -> Spec:
-    """Rename a slot on a draft, recording a rename hint for publish time.
-
-    The slot is renamed in-memory across the full spec (slot list, every
-    class that references it, every source whose identifier_slot is it).
-    A rename hint ``{class_name, old_name, new_name}`` is appended to
-    ``spec_revisions.pending_renames`` for every concrete class that has
-    the slot as a stored column, so ``diff_specs`` at publish time can emit
-    a non-destructive ``RenameSlot`` instead of ``DropSlot + AddSlot``.
-
-    Raises ``CollisionError`` if ``new_name`` already exists on the draft.
-    Raises ``EntityNotOnDraftError`` if ``old_name`` isn't on the draft.
-    Raises ``DraftAlreadyPublishedError`` if the draft is already published.
-    """
-    import json as _json
-
-    from knot.spec import effective_slots as _effective_slots
-    from knot.spec import is_stored as _is_stored
-
-    async with spec_store.edit_draft(conn, draft_id) as spec:
-        # Validate
-        if any(s.name.lower() == new_name.lower() for s in spec.slots):
-            raise CollisionError("Slot", new_name)
-        target = _find_slot(spec, old_name)
-
-        # Collect the concrete classes that have this as a stored column —
-        # these are the classes that will get a RenameSlot DDL record.
-        rename_hints: list[dict] = []
-        for cls in spec.classes:
-            if cls.abstract:
-                continue
-            stored_names = {s.name for s in _effective_slots(cls) if _is_stored(s)}
-            if old_name in stored_names:
-                rename_hints.append(
-                    {
-                        "class_name": cls.name,
-                        "old_name": old_name,
-                        "new_name": new_name,
-                    }
-                )
-
-        # Rename the slot in-memory.
-        target.name = new_name
-
-    # Append rename hints to pending_renames OUTSIDE the edit_draft context
-    # (which has already committed the spec update above).
-    if rename_hints:
-        # Read existing hints, append new ones, write back.
-        existing_row = await (
-            await conn.execute(
-                "SELECT pending_renames FROM spec_revisions WHERE revision = %s",
-                (draft_id,),
-            )
-        ).fetchone()
-        existing: list[dict] = []
-        if existing_row and existing_row[0]:
-            raw = existing_row[0]
-            existing = raw if isinstance(raw, list) else _json.loads(raw)
-        merged = existing + rename_hints
-        await conn.execute(
-            "UPDATE spec_revisions SET pending_renames = %s WHERE revision = %s",
-            (_json.dumps(merged), draft_id),
-        )
-
-    return spec
-
-
 async def remove_class(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -679,9 +649,14 @@ async def remove_class(
                 return _type_refs_class(type_expr.of, cls)
             return False
 
-        for s in spec.slots:
-            if s.type is not None and _type_refs_class(s.type, target):
-                refs.append(("slot", s.name))
+        # Check slots inline on all classes
+        for c in spec.classes:
+            if c is target:
+                continue
+            for s in c.slots:
+                if s.type is not None and _type_refs_class(s.type, target):
+                    refs.append(("slot", f"{c.name}.{s.name}"))
+
         for c in spec.classes:
             if c is target:
                 continue

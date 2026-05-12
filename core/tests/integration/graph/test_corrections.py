@@ -13,7 +13,16 @@ from knot.db import corrections as db_corrections
 from knot.db import graph_store, trust_posteriors
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
 from knot.graph.corrections import apply_merge, apply_property_correction
-from knot.spec import Array, ClassRef, OntologyClass, Primitive, ResolutionPolicy, Slot, Source, Spec
+from knot.spec import (
+    Array,
+    ClassRef,
+    OntologyClass,
+    Primitive,
+    ResolutionPolicy,
+    Slot,
+    Source,
+    Spec,
+)
 from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
@@ -45,7 +54,6 @@ async def corrections_db(pg_conn):
     spec = Spec(
         id="corrections_test",
         version="1.0.0",
-        slots=[id_slot, title, tags],
         classes=[movie],
         sources=[src_a, src_b],
         source_bindings=[binding_a, binding_b],
@@ -279,7 +287,6 @@ async def test_apply_merge_rewrites_cross_class_fk_references(pg_conn):
     spec = Spec(
         id="merge_fk_test",
         version="1.0.0",
-        slots=[person_id, person_name, imdb_id, title, directed_by],
         classes=[person, movie],
         sources=[src_people, src_movies],
         source_bindings=[binding_people, binding_movies],

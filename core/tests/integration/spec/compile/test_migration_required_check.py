@@ -81,7 +81,6 @@ def _simple_spec(id_slot, movie) -> Spec:
     return Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -160,7 +159,7 @@ async def test_add_slot_required_emits_check(clean_db):
     src_v2 = Source(name="imdb")
     binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie_v2],
+        id="t", version="1.0.0", classes=[movie_v2],
         sources=[src_v2], source_bindings=[binding_v2],
     )
     await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
@@ -182,7 +181,7 @@ async def test_change_slot_required_false_to_true_with_nulls_blocked(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -205,7 +204,7 @@ async def test_change_slot_required_false_to_true_with_nulls_blocked(clean_db):
     src2 = Source(name="imdb")
     binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, title2], classes=[movie2],
+        id="t", version="1.0.0", classes=[movie2],
         sources=[src2], source_bindings=[binding2],
     )
 
@@ -230,7 +229,7 @@ async def test_change_slot_required_false_to_true_with_all_rows_ok(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -252,7 +251,7 @@ async def test_change_slot_required_false_to_true_with_all_rows_ok(clean_db):
     src2 = Source(name="imdb")
     binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, title2], classes=[movie2],
+        id="t", version="1.0.0", classes=[movie2],
         sources=[src2], source_bindings=[binding2],
     )
 
@@ -277,7 +276,7 @@ async def test_change_slot_required_true_to_false_drops_check(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -294,7 +293,7 @@ async def test_change_slot_required_true_to_false_drops_check(clean_db):
     src2 = Source(name="imdb")
     binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2, title2], classes=[movie2],
+        id="t", version="1.0.0", classes=[movie2],
         sources=[src2], source_bindings=[binding2],
     )
 

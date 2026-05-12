@@ -31,8 +31,8 @@ from knot.spec import (
     SourceBinding,
     Spec,
 )
-from knot.spec.metaschema import Primitive
 from knot.spec.errors import PublishGateError
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -73,7 +73,6 @@ def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]
     spec = Spec(
         id="mixin_test",
         version="1.0.0",
-        slots=[imdb_id, title, created_at, updated_at],
         classes=[movie, timestamped],
         sources=[src],
         source_bindings=[binding],
@@ -171,7 +170,6 @@ async def test_transitive_mixin_chain(pg_conn):
     spec = Spec(
         id="mixin_chain",
         version="1.0.0",
-        slots=[imdb_id, created_at, audited_at],
         classes=[movie, timestamped, audited],
         sources=[src],
         source_bindings=[binding],
@@ -216,7 +214,6 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
     spec = Spec(
         id="own_shadows_mixin",
         version="1.0.0",
-        slots=[imdb_id, own_name, mixin_name],
         classes=[movie, bad_mixin],
         sources=[src],
         source_bindings=[binding],
@@ -259,7 +256,6 @@ async def test_mixin_slot_collision_rejected(pg_conn):
     spec = Spec(
         id="mixin_collision",
         version="1.0.0",
-        slots=[imdb_id, a_label, b_label],
         classes=[movie, a, b],
         sources=[src],
         source_bindings=[binding],
@@ -291,7 +287,6 @@ async def test_mixin_cycle_rejected(pg_conn):
     spec = Spec(
         id="mixin_cycle",
         version="1.0.0",
-        slots=[imdb_id],
         classes=[movie, a, b],
         sources=[src],
         source_bindings=[binding],

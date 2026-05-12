@@ -25,20 +25,21 @@ import pytest
 import pytest_asyncio
 
 from knot import db
-from knot.db import graph_store, spec_store
-from tests._helpers import publish_spec
+from knot.db import graph_store
 from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
-from knot.spec.metaschema import ClassRef, Primitive
 from knot.spec.compile.postgres import CompileContext, compile_predicate, migration
 from knot.spec.metaschema import (
+    ClassRef,
     Compare,
     CompareOp,
     Literal_,
+    Primitive,
     RelationAll,
     RelationAny,
     ReverseRelation,
     SlotPath,
 )
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Spec builders
@@ -68,7 +69,6 @@ def _build_person_credit_spec() -> tuple[
     spec = Spec(
         id="defined_class_test",
         version="1.0.0",
-        slots=[person_id, person_name, credit_id, person_fk, role],
         classes=[person, credit],
         sources=[person_src, credit_src],
         source_bindings=[person_binding, credit_binding],
@@ -202,13 +202,10 @@ async def test_person_page_returns_all_persons(dc_db, dc_client):
 
 
 def test_reverse_relation_compiles():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person = OntologyClass(name="Person")
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"))
     person_fk = Slot(name="person", type=ClassRef(target_class=person))
-    role = Slot(name="role", type=Primitive(name="string"))
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
+    credit = OntologyClass(name="Credit")
 
     rev = ReverseRelation(target_class=credit, fk_slot=person_fk)
     node = RelationAny(relation=rev)
@@ -281,12 +278,10 @@ def test_reverse_relation_in_relation_all_compiles():
 
 
 def test_reverse_relation_direct_raises():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person = OntologyClass(name="Person")
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"))
     person_fk = Slot(name="person", type=ClassRef(target_class=person))
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk])
+    credit = OntologyClass(name="Credit")
 
     rev = ReverseRelation(target_class=credit, fk_slot=person_fk)
 
@@ -301,15 +296,13 @@ def test_reverse_relation_direct_raises():
 
 
 def test_diff_specs_add_class():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person = OntologyClass(name="Person")
 
-    prev_spec = Spec(id="t", version="1", slots=[person_id], classes=[person], sources=[])
-    director = OntologyClass(name="Director", is_a=person, slots=[])
+    prev_spec = Spec(id="t", version="1", classes=[person], sources=[])
+    director = OntologyClass(name="Director", is_a=person)
     cand_spec = Spec(
         id="t",
         version="1",
-        slots=[person_id],
         classes=[person, director],
         sources=[],
     )
@@ -325,18 +318,16 @@ def test_diff_specs_add_class():
 
 
 def test_diff_specs_drop_class():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
-    director = OntologyClass(name="Director", is_a=person, slots=[])
+    person = OntologyClass(name="Person")
+    director = OntologyClass(name="Director", is_a=person)
 
     prev_spec = Spec(
         id="t",
         version="1",
-        slots=[person_id],
         classes=[person, director],
         sources=[],
     )
-    cand_spec = Spec(id="t", version="1", slots=[person_id], classes=[person], sources=[])
+    cand_spec = Spec(id="t", version="1", classes=[person], sources=[])
 
     changes = migration.diff_specs(prev_spec, cand_spec)
     drop_class = [c for c in changes if isinstance(c, migration.DropClass) and c.class_name == "Director"]

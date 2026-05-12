@@ -39,7 +39,6 @@ def _make_spec() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],

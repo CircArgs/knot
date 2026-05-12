@@ -27,13 +27,13 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
+from knot.spec import OntologyClass, Spec
+from knot.spec import effective_slots as _effective_slots
+from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._naming import (
     schema,
     user_corrections_source,
 )
-from knot.spec import OntologyClass, Spec
-from knot.spec import effective_slots as _effective_slots
-from knot.spec import is_stored as _is_stored
 
 # ---------------------------------------------------------------------------
 # Stats computation — pure functions, no DB access

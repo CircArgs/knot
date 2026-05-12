@@ -4,11 +4,12 @@ Tests cover:
   - spec_to_dict / spec_from_dict round-trip with object identity preserved
   - same-name-Slot collision: Movie.imdb_id vs Person.imdb_id as distinct objects
   - content_hash invariant across round-trip
+
+Slots are now inline on each OntologyClass; there is no top-level spec.slots list.
 """
 
 from __future__ import annotations
 
-from knot.spec.serialization import spec_from_dict, spec_to_dict
 from knot.spec import (
     OntologyClass,
     Primitive,
@@ -18,6 +19,7 @@ from knot.spec import (
     Spec,
     compute_content_hash,
 )
+from knot.spec.serialization import spec_from_dict, spec_to_dict
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,7 +43,6 @@ def _build_two_class_spec() -> Spec:
     return Spec(
         id="two-class",
         version="1.0.0",
-        slots=[movie_id, person_id, title, name],
         classes=[movie, person],
         sources=[movie_src, person_src],
         source_bindings=[movie_binding, person_binding],
@@ -58,7 +59,6 @@ def _build_simple_spec() -> Spec:
     return Spec(
         id="simple",
         version="1.0.0",
-        slots=[imdb_id, title],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -89,9 +89,12 @@ def test_round_trip_preserves_class_count():
 
 
 def test_round_trip_preserves_slot_count():
+    """Slots are inline on each class; total slot count matches sum over all classes."""
     spec = _build_simple_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
-    assert len(recovered.slots) == len(spec.slots)
+    orig_count = sum(len(c.slots) for c in spec.classes)
+    rec_count = sum(len(c.slots) for c in recovered.classes)
+    assert rec_count == orig_count
 
 
 def test_round_trip_preserves_source_count():
@@ -125,10 +128,11 @@ def test_round_trip_binding_class_identity():
 
 def test_round_trip_binding_identifier_slot_identity():
     """After round-trip, binding.identifier_slot must be the same Python object
-    as the corresponding entry in spec.slots."""
+    as the corresponding slot on its class."""
     spec = _build_simple_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
-    imdb_slot = next(s for s in recovered.slots if s.name == "imdb_id")
+    movie_class = recovered.classes[0]
+    imdb_slot = next(s for s in movie_class.slots if s.name == "imdb_id")
     movie_binding = recovered.source_bindings[0]
     assert movie_binding.identifier_slot is imdb_slot
 
@@ -137,10 +141,11 @@ def test_round_trip_slot_type_preserved():
     """After round-trip, slot.type is a Primitive with the correct name."""
     spec = _build_simple_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
-    for slot in recovered.slots:
-        assert slot.type is not None
-        assert isinstance(slot.type, Primitive)
-        assert slot.type.name == "string"
+    for cls in recovered.classes:
+        for slot in cls.slots:
+            assert slot.type is not None
+            assert isinstance(slot.type, Primitive)
+            assert slot.type.name == "string"
 
 
 # ---------------------------------------------------------------------------
@@ -160,13 +165,17 @@ def test_same_name_slots_on_different_classes_are_distinct_objects():
     assert movie_imdb is not person_imdb
 
 
-def test_same_name_slots_on_different_classes_preserved_in_spec_slots():
-    """spec.slots should contain both imdb_id slot objects as separate entries."""
+def test_same_name_slots_on_different_classes_are_separate_across_classes():
+    """Both Movie.imdb_id and Person.imdb_id exist on their respective classes."""
     spec = _build_two_class_spec()
     recovered = spec_from_dict(spec_to_dict(spec))
-    imdb_slots = [s for s in recovered.slots if s.name == "imdb_id"]
-    assert len(imdb_slots) == 2
-    assert imdb_slots[0] is not imdb_slots[1]
+    movie = next(c for c in recovered.classes if c.name == "Movie")
+    person = next(c for c in recovered.classes if c.name == "Person")
+    movie_imdb_slots = [s for s in movie.slots if s.name == "imdb_id"]
+    person_imdb_slots = [s for s in person.slots if s.name == "imdb_id"]
+    assert len(movie_imdb_slots) == 1
+    assert len(person_imdb_slots) == 1
+    assert movie_imdb_slots[0] is not person_imdb_slots[0]
 
 
 def test_source_identifier_slot_identity_two_class_spec():
@@ -217,7 +226,6 @@ def test_content_hash_changes_when_spec_changes():
     spec_b = Spec(
         id="different_id",
         version="2.0.0",
-        slots=[imdb_id],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],

@@ -1,9 +1,8 @@
 """knot demo — Netflix ontology with Source + SourceBinding.
 
 A runnable narrative that drives knot through its `/spec/*` and
-`/graph/*` API. Demonstrates the Phase 2 Source/SourceBinding split:
-Source is a thin label; the per-class metadata (identifier slot, field
-mappings, trust priors) lives on SourceBinding.
+`/graph/*` API. Demonstrates the Phase 3 inline-slot model: slots are
+defined inline on each class (no top-level slot registry).
 
 Bring-up:
     ./scripts/up.sh
@@ -124,6 +123,11 @@ def _(mo):
     > apply to completely different entity types (e.g. a `User`) without any
     > shared structural identity.
 
+    **Slots are inline on each class.** Each class definition carries its own
+    slot list directly — there is no separate slot-registration phase.
+    Mixin classes define their slots inline; concrete classes inherit them
+    via `mixin_names` / `is_a_name`.
+
     **Sources and SourceBindings:**
 
     Three thin `Source` labels (imdb, tmdb, wiki) carry only a name and
@@ -141,72 +145,78 @@ def _(mo):
     import json as _json
 
     SPEC = {
-        # ── Mixin slots ────────────────────────────────────────────────────
-        "mixin_slots": [
-            {"name": "created_at",       "type_kind": "primitive", "type_name": "datetime"},
-            {"name": "updated_at",       "type_kind": "primitive", "type_name": "datetime"},
-            {"name": "default_locale",   "type_kind": "primitive", "type_name": "string"},
-            {"name": "available_locales","type_kind": "array_of_primitive", "type_name": "string"},
-        ],
-        # ── Identifier slots (one per source) ──────────────────────────────
-        "id_slots": [
-            {"name": "imdb_id",   "type_kind": "primitive", "type_name": "string", "identifier": True},
-            {"name": "tmdb_id",   "type_kind": "primitive", "type_name": "string", "identifier": True},
-            {"name": "wiki_slug", "type_kind": "primitive", "type_name": "string", "identifier": True},
-        ],
-        # ── Shared media slots ─────────────────────────────────────────────
-        "media_slots": [
-            {"name": "title",    "type_kind": "primitive", "type_name": "string", "required": True},
-            {"name": "year",     "type_kind": "primitive", "type_name": "integer"},
-            {"name": "synopsis", "type_kind": "primitive", "type_name": "string"},
-        ],
-        # ── Class-specific slots ───────────────────────────────────────────
-        "class_slots": [
-            {"name": "runtime",        "type_kind": "primitive", "type_name": "integer"},
-            {"name": "season_count",   "type_kind": "primitive", "type_name": "integer"},
-            {"name": "episode_number", "type_kind": "primitive", "type_name": "integer"},
-        ],
-        # ── Mixin classes ──────────────────────────────────────────────────
+        # ── Mixin classes (slots inline) ──────────────────────────────────────
         "mixin_classes": [
             {
                 "name": "Auditable",
                 "abstract": True,
-                "slot_names": ["created_at", "updated_at"],
+                "slots": [
+                    {"name": "created_at", "type_kind": "primitive", "type_name": "datetime"},
+                    {"name": "updated_at", "type_kind": "primitive", "type_name": "datetime"},
+                ],
                 "description": "Mixin: stamps any entity with audit timestamps.",
             },
             {
                 "name": "Localizable",
                 "abstract": True,
-                "slot_names": ["default_locale", "available_locales"],
+                "slots": [
+                    {"name": "default_locale",    "type_kind": "primitive",       "type_name": "string"},
+                    {"name": "available_locales", "type_kind": "array_of_primitive", "type_name": "string"},
+                ],
                 "description": "Mixin: marks media artifacts as having localized content.",
             },
         ],
-        # ── Abstract parent ────────────────────────────────────────────────
+        # ── Abstract parent (slots inline) ────────────────────────────────────
         "parent_class": [
             {
                 "name": "MediaItem",
                 "abstract": True,
-                "slot_names": ["title", "year", "synopsis", "imdb_id", "tmdb_id", "wiki_slug"],
                 "mixin_names": ["Auditable", "Localizable"],
+                "slots": [
+                    {"name": "imdb_id",   "type_kind": "primitive", "type_name": "string", "identifier": True},
+                    {"name": "tmdb_id",   "type_kind": "primitive", "type_name": "string", "identifier": True},
+                    {"name": "wiki_slug", "type_kind": "primitive", "type_name": "string", "identifier": True},
+                    {"name": "title",     "type_kind": "primitive", "type_name": "string", "required": True},
+                    {"name": "year",      "type_kind": "primitive", "type_name": "integer"},
+                    {"name": "synopsis",  "type_kind": "primitive", "type_name": "string"},
+                ],
                 "description": "Abstract parent for Movie / TVSeries / Episode.",
             },
         ],
-        # ── Concrete children ──────────────────────────────────────────────
+        # ── Concrete children (own slots inline; shared slots inherited) ───────
         "child_classes": [
-            {"name": "Movie",    "is_a_name": "MediaItem", "slot_names": ["runtime"],
-             "description": "A theatrical or direct-to-streaming film."},
-            {"name": "TVSeries", "is_a_name": "MediaItem", "slot_names": ["season_count"],
-             "description": "A multi-season serialised show."},
-            {"name": "Episode",  "is_a_name": "MediaItem", "slot_names": ["episode_number"],
-             "description": "A single episode of a TVSeries."},
+            {
+                "name": "Movie",
+                "is_a_name": "MediaItem",
+                "slots": [
+                    {"name": "runtime", "type_kind": "primitive", "type_name": "integer"},
+                ],
+                "description": "A theatrical or direct-to-streaming film.",
+            },
+            {
+                "name": "TVSeries",
+                "is_a_name": "MediaItem",
+                "slots": [
+                    {"name": "season_count", "type_kind": "primitive", "type_name": "integer"},
+                ],
+                "description": "A multi-season serialised show.",
+            },
+            {
+                "name": "Episode",
+                "is_a_name": "MediaItem",
+                "slots": [
+                    {"name": "episode_number", "type_kind": "primitive", "type_name": "integer"},
+                ],
+                "description": "A single episode of a TVSeries.",
+            },
         ],
-        # ── Sources (thin labels) ──────────────────────────────────────────
+        # ── Sources (thin labels) ──────────────────────────────────────────────
         "sources": [
             {"name": "imdb", "description": "IMDB ratings & metadata"},
             {"name": "tmdb", "description": "The Movie Database"},
             {"name": "wiki", "description": "Wikipedia"},
         ],
-        # ── SourceBindings — one per (source, class) pair ─────────────────
+        # ── SourceBindings — one per (source, class) pair ─────────────────────
         "source_bindings": [
             {
                 "source_name": "imdb",
@@ -261,10 +271,10 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    Each entry above is one POST. The build order matters: mixin slots
-    before mixin classes (classes reference their slots by name), parent
-    class after its mixin classes, child classes after the parent, sources
-    before source bindings. The table below shows each call in order.
+    Each entry above is one POST. The build order matters: mixin classes
+    before the parent (which applies them via `mixin_names`), parent before
+    children, sources before source bindings. Slots are inline on each
+    class — no separate slot-registration phase.
     """)
     return
 
@@ -276,14 +286,10 @@ def _(SPEC, mo, post, reset):
 
     # Ordered list of (phase_key, endpoint_segment) pairs.
     _PHASES = [
-        ("mixin_slots",   "slots"),
-        ("id_slots",      "slots"),
-        ("media_slots",   "slots"),
-        ("class_slots",   "slots"),
-        ("mixin_classes", "classes"),
-        ("parent_class",  "classes"),
-        ("child_classes", "classes"),
-        ("sources",       "sources"),
+        ("mixin_classes",   "classes"),
+        ("parent_class",    "classes"),
+        ("child_classes",   "classes"),
+        ("sources",         "sources"),
         ("source_bindings", "source_bindings"),
     ]
 
@@ -321,14 +327,13 @@ def _(mo):
     mo.md("""
     ## Step 2 — Spec graph
 
-    Nodes are spec-graph entities (classes, slots, types, sources).
-    Edges encode the structural relationships:
+    Nodes are spec-graph entities (classes, sources, source bindings).
+    Slots live inline on each class node. Edges encode structural relationships:
 
-    - `class --has--> slot`
-    - `slot --range--> type | class`
-    - `source --of--> class`  *(binding target)*
     - `class --is_a--> class`  *(inheritance)*
     - `class --mixin--> class`  *(crosscutting)*
+    - `class --fk--> class`  *(class-ref slot)*
+    - `source_binding --binds--> class`
 
     Click any node to see its full attribute set on the right.
     """)
@@ -338,14 +343,13 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(get):
     spec_classes = get("/spec/published/classes")
-    spec_slots = get("/spec/published/slots")
     spec_sources = get("/spec/published/sources")
     spec_bindings = get("/spec/published/source_bindings")
-    return spec_bindings, spec_classes, spec_slots, spec_sources
+    return spec_bindings, spec_classes, spec_sources
 
 
 @app.cell(hide_code=True)
-def _(spec_bindings, spec_classes, spec_slots, spec_sources):
+def _(spec_bindings, spec_classes, spec_sources):
     # Build vis.js node + edge sets from the published spec read-models.
     spec_nodes: list = []
     spec_edges: list = []
@@ -358,63 +362,25 @@ def _(spec_bindings, spec_classes, spec_slots, spec_sources):
             "props": props,
         })
 
-    # Primitive types referenced by slots (infer from slot data)
-    _seen_types: set = set()
-    for _s in spec_slots:
-        if _s["type_kind"] in ("primitive", "array_of_primitive") and _s["type_name"]:
-            _seen_types.add(_s["type_name"])
-    for _tn in sorted(_seen_types):
-        _add_node("type", _tn, {"name": _tn, "kind": "primitive"})
-
-    for _s in spec_slots:
-        _add_node("slot", _s["name"], _s)
     for _c in spec_classes:
-        _add_node("class", _c["name"], _c)
+        # Summarise inline slots for the property panel.
+        _slot_summary = [s["name"] for s in _c.get("slots", [])]
+        _add_node("class", _c["name"], {**_c, "own_slots": _slot_summary})
     for _src in spec_sources:
         _add_node("source", _src["name"], _src)
-
-    # class --has--> slot
-    for _c in spec_classes:
-        for _slot_name in _c["slots"]:
-            spec_edges.append({
-                "id": f"has:{_c['name']}:{_slot_name}",
-                "from": f"class:{_c['name']}",
-                "to": f"slot:{_slot_name}",
-                "label": "has",
-                "props": {"class": _c["name"], "slot": _slot_name},
-            })
-
-    # slot --range--> type | class
-    for _s in spec_slots:
-        if _s["type_kind"] in ("primitive", "array_of_primitive") and _s["type_name"]:
-            spec_edges.append({
-                "id": f"range:{_s['name']}",
-                "from": f"slot:{_s['name']}",
-                "to": f"type:{_s['type_name']}",
-                "label": "range",
-                "props": {"range_kind": _s["type_kind"]},
-            })
-        elif _s["type_kind"] in ("class", "array_of_class") and _s["type_name"]:
-            spec_edges.append({
-                "id": f"range:{_s['name']}",
-                "from": f"slot:{_s['name']}",
-                "to": f"class:{_s['type_name']}",
-                "label": "range",
-                "props": {"range_kind": _s["type_kind"]},
-            })
 
     # class --is_a--> parent
     _class_names = {_c["name"] for _c in spec_classes}
     for _c in spec_classes:
-        if _c.get("is_a") and _c["is_a"] in _class_names:
+        if _c.get("is_a_name") and _c["is_a_name"] in _class_names:
             spec_edges.append({
                 "id": f"isa:{_c['name']}",
                 "from": f"class:{_c['name']}",
-                "to": f"class:{_c['is_a']}",
+                "to": f"class:{_c['is_a_name']}",
                 "label": "is_a",
                 "props": {"relationship": "inheritance"},
             })
-        for _mx in _c.get("mixins", []):
+        for _mx in _c.get("mixin_names", []):
             if _mx in _class_names:
                 spec_edges.append({
                     "id": f"mixin:{_c['name']}:{_mx}",
@@ -424,17 +390,37 @@ def _(spec_bindings, spec_classes, spec_slots, spec_sources):
                     "props": {"relationship": "mixin"},
                 })
 
-    # source --bound_to--> class (via source_bindings)
+    # class-ref slots: class --fk--> class
+    for _c in spec_classes:
+        for _s in _c.get("slots", []):
+            if _s.get("type_kind") in ("class", "array_of_class") and _s.get("type_name") in _class_names:
+                spec_edges.append({
+                    "id": f"fk:{_c['name']}.{_s['name']}",
+                    "from": f"class:{_c['name']}",
+                    "to": f"class:{_s['type_name']}",
+                    "label": _s["name"],
+                    "props": {"slot": _s["name"], "type_kind": _s["type_kind"]},
+                })
+
+    # source_binding --binds--> class
     for _b in spec_bindings:
+        _add_node("binding", f"{_b['source_name']}/{_b['class_name']}", _b)
         spec_edges.append({
-            "id": f"binding:{_b['source_name']}:{_b['class_name']}",
-            "from": f"source:{_b['source_name']}",
+            "id": f"binding-src:{_b['source_name']}:{_b['class_name']}",
+            "from": f"binding:{_b['source_name']}/{_b['class_name']}",
+            "to": f"source:{_b['source_name']}",
+            "label": "source",
+            "props": {},
+        })
+        spec_edges.append({
+            "id": f"binding-cls:{_b['source_name']}:{_b['class_name']}",
+            "from": f"binding:{_b['source_name']}/{_b['class_name']}",
             "to": f"class:{_b['class_name']}",
-            "label": f"binds ({_b['identifier_slot']})",
+            "label": f"binds ({_b.get('identifier_slot', _b.get('identifier_slot_name', ''))})",
             "props": {
-                "trust_prior": _b["trust_prior"],
-                "required_slots": _b["required_slots"],
-                "mappings": len(_b["mappings"]),
+                "trust_prior": _b.get("trust_prior"),
+                "required_slots": _b.get("required_slots", _b.get("required_slot_names", [])),
+                "mappings": len(_b.get("mappings", [])),
             },
         })
 
@@ -444,10 +430,9 @@ def _(spec_bindings, spec_classes, spec_slots, spec_sources):
 @app.cell(hide_code=True)
 def _(json, mo, spec_edges: list, spec_nodes: list):
     _palette = {
-        "class":  ("#4f9eff", "#2563eb", "#dbeafe", "#1e40af"),
-        "slot":   ("#22c55e", "#15803d", "#dcfce7", "#15803d"),
-        "type":   ("#a78bfa", "#7c3aed", "#ede9fe", "#5b21b6"),
-        "source": ("#f59e0b", "#b45309", "#fef3c7", "#92400e"),
+        "class":   ("#4f9eff", "#2563eb", "#dbeafe", "#1e40af"),
+        "source":  ("#f59e0b", "#b45309", "#fef3c7", "#92400e"),
+        "binding": ("#a78bfa", "#7c3aed", "#ede9fe", "#5b21b6"),
     }
     _groups_js = "{\n" + ",\n".join(
         f'        {g}: {{ color: {{ background: "{bg}", border: "{br}" }} }}'
@@ -580,7 +565,7 @@ def _(mo):
 
 
 @app.cell(hide_code=True)
-def _(control_db, get, json, mo):
+def _(control_db, json, mo):
     from sqlalchemy import text as _text
 
     with control_db.begin() as _conn:
@@ -822,9 +807,6 @@ def _(get, json):
     def build_data_graph_html(div_id):
         """Pull resolved canonical entities and render as a vis.js network."""
         spec_classes_local = get("/spec/published/classes")
-        spec_slots_local = get("/spec/published/slots")
-
-        slot_index = {s["name"]: s for s in spec_slots_local}
 
         # Only concrete classes (non-abstract) have data tables.
         concrete_classes = [c for c in spec_classes_local if not c.get("abstract")]
@@ -971,6 +953,10 @@ def _(mo):
     mo.md("""
     ## What you just saw
 
+    - **Slots are inline on each class.** No separate slot-registration phase —
+      each class definition carries its own slot list directly. Mixin classes
+      define their slots inline; concrete classes inherit them via
+      `mixin_names` / `is_a_name`.
     - **Source** (thin label) carries only a name + description.
       It is NOT the owner of the binding relationship.
     - **SourceBinding** is the reified `(Source, Class)` relationship.

@@ -6,7 +6,7 @@ so the spec GraphQL schema is also static, defined once in
 
   - GET serves Strawberry's bundled GraphiQL HTML.
   - POST with no published spec returns ``{"data": {"publishedSpec": null}}``.
-  - POST returns the full spec shape (slots/classes/sources/constraints).
+  - POST returns the full spec shape (classes with inline slots/sources/constraints).
   - Selective field projection works (only ``classes { name }``).
 """
 
@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 
 from knot import db
 from knot.spec import OntologyClass, Slot, Source, Spec
-from knot.spec.metaschema import SourceBinding
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
@@ -30,6 +29,7 @@ from knot.spec.metaschema import (
     Severity,
     SlotConstraints,
     SlotPath,
+    SourceBinding,
 )
 from tests._helpers import publish_spec
 
@@ -90,7 +90,6 @@ def _build_spec() -> Spec:
     return Spec(
         id="spec_graphql_test",
         version="1.2.3",
-        slots=[imdb_id, title, year, person_id, name, directed_by],
         classes=[person, movie],
         sources=[imdb_src, wiki_src],
         source_bindings=[imdb_binding, wiki_binding],
@@ -174,13 +173,14 @@ def test_published_spec_returns_full_shape(published):
         version
         revision
         contentHash
-        slots {
-          name identifier required resolutionPolicy
-          typeKind typeName minimumValue maximumValue
-          permissibleValues
-        }
         classes {
-          name abstract description isAName mixinNames slotNames
+          name abstract description isAName mixinNames
+          slots {
+            name identifier required resolutionPolicy
+            typeKind typeName minimumValue maximumValue
+            permissibleValues
+          }
+          effectiveSlots { name }
         }
         sources { name description }
         sourceBindings { sourceName className identifierSlotName description }
@@ -199,36 +199,34 @@ def test_published_spec_returns_full_shape(published):
     assert ps["revision"] == rev
     assert ps["contentHash"]  # non-empty
 
-    # Slots
-    slots_by_name = {s["name"]: s for s in ps["slots"]}
-    assert set(slots_by_name) == {
-        "imdb_id",
-        "title",
-        "year",
-        "person_id",
-        "name",
-        "directed_by",
-    }
-    year_slot = slots_by_name["year"]
+    # Classes — slots are inline
+    classes_by_name = {c["name"]: c for c in ps["classes"]}
+    assert set(classes_by_name) == {"Person", "Movie"}
+
+    movie = classes_by_name["Movie"]
+    assert movie["isAName"] is None
+    assert movie["mixinNames"] == []
+    assert movie["abstract"] is False
+    movie_slots_by_name = {s["name"]: s for s in movie["slots"]}
+    assert set(movie_slots_by_name) == {"imdb_id", "title", "year", "directed_by"}
+
+    year_slot = movie_slots_by_name["year"]
     assert year_slot["typeKind"] == "primitive"
     assert year_slot["typeName"] == "integer"
     assert year_slot["minimumValue"] == 1888.0
     assert year_slot["maximumValue"] == 2100.0
-    directed_by = slots_by_name["directed_by"]
+
+    directed_by = movie_slots_by_name["directed_by"]
     assert directed_by["typeKind"] == "class"
     assert directed_by["typeName"] == "Person"
-    imdb_id_slot = slots_by_name["imdb_id"]
+
+    imdb_id_slot = movie_slots_by_name["imdb_id"]
     assert imdb_id_slot["identifier"] is True
     assert imdb_id_slot["required"] is True
 
-    # Classes
-    classes_by_name = {c["name"]: c for c in ps["classes"]}
-    assert set(classes_by_name) == {"Person", "Movie"}
-    movie = classes_by_name["Movie"]
-    assert movie["slotNames"] == ["imdb_id", "title", "year", "directed_by"]
-    assert movie["isAName"] is None
-    assert movie["mixinNames"] == []
-    assert movie["abstract"] is False
+    person = classes_by_name["Person"]
+    person_slots_by_name = {s["name"]: s for s in person["slots"]}
+    assert set(person_slots_by_name) == {"person_id", "name"}
 
     # Sources (slim — just name + description)
     sources_by_name = {s["name"]: s for s in ps["sources"]}

@@ -747,7 +747,6 @@ class Spec(SpecBase):
     id: str
     version: str
     classes: list[OntologyClass] = Field(default_factory=list)
-    slots: list[Slot] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     source_bindings: list[SourceBinding] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)

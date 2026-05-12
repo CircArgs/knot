@@ -20,8 +20,6 @@ from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.db import graph_store
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
-from knot.spec.metaschema import SourceBinding
-from tests._helpers import publish_spec
 from knot.spec.metaschema import (
     Compare,
     CompareOp,
@@ -29,7 +27,9 @@ from knot.spec.metaschema import (
     Literal_,
     Severity,
     SlotPath,
+    SourceBinding,
 )
+from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,7 +51,6 @@ def _build_spec_with_constraints(
     spec = Spec(
         id="ingest_constraint_test",
         version="1.0.0",
-        slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -358,13 +357,12 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     spec = Spec(
         id="multi_class_test",
         version="1.0.0",
-        slots=[imdb_id, year, pid, age],
         classes=[movie, person],
         sources=[src, psrc],
         source_bindings=[movie_binding, person_binding],
         constraints=[person_constraint],
     )
-    rev = await publish_spec(conn, spec)
+    await publish_spec(conn, spec)
 
     # Ingesting to Movie source — Person constraint must not interfere.
     resp = client.post(

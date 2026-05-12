@@ -231,10 +231,20 @@ _RelationAggregateJson.model_rebuild()
 
 
 def _find_slot(spec: Spec, name: str) -> Slot:
-    for s in spec.slots:
-        if s.name == name:
-            return s
-    raise ExprTranslationError(f"Slot {name!r} not on this draft")
+    """Find a Slot by name, searching all class slots (own only, not mixin-walked).
+
+    Slots are now inline on each OntologyClass. We search all classes for a
+    slot with the given name. If multiple classes define a slot with the same
+    name (different objects), we return the first found — the caller is
+    responsible for providing enough context (primary_class) for the expression
+    to be meaningful. In practice, expression bodies always reference slots
+    that belong to the constraint's primary class or a related class.
+    """
+    for c in spec.classes:
+        for s in c.slots:
+            if s.name == name:
+                return s
+    raise ExprTranslationError(f"Slot {name!r} not found on any class in this draft")
 
 
 def _find_class(spec: Spec, name: str) -> OntologyClass:

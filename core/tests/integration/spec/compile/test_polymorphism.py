@@ -14,7 +14,6 @@ Coverage:
 
 from __future__ import annotations
 
-import pytest
 import pytest_asyncio
 
 from knot import db
@@ -68,7 +67,6 @@ def _build_movie_credit_spec() -> tuple[Spec, OntologyClass, OntologyClass, Sour
     spec = Spec(
         id="fk_test",
         version="1.0.0",
-        slots=[imdb_id, title, credit_id, movie_fk, role],
         classes=[movie, credit],
         sources=[movie_src, credit_src],
         source_bindings=[movie_binding, credit_binding],
@@ -184,7 +182,6 @@ async def test_source_on_normal_class_publishes(pg_conn):
     spec = Spec(
         id="normal_src_test",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -226,7 +223,6 @@ async def test_regression_no_fk_slots(pg_conn):
     spec = Spec(
         id="regression_test",
         version="1.0.0",
-        slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],

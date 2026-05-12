@@ -21,7 +21,6 @@ from knot.spec import (
     SourceBinding,
     Spec,
 )
-from knot.spec.metaschema import Array, ClassRef, Primitive
 from knot.spec.compile.postgres._dispatch import CompilerError
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.compile.postgres.migration import (
@@ -30,6 +29,7 @@ from knot.spec.compile.postgres.migration import (
     diff_specs,
     is_destructive,
 )
+from knot.spec.metaschema import Array, Primitive
 
 # ---------------------------------------------------------------------------
 # Fixture (mirrors test_migration.py)
@@ -122,7 +122,6 @@ async def test_change_slot_type_scalar_to_array_promotes_column(clean_db):
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot, tags_v1],
         classes=[movie_v1],
         sources=[src],
         source_bindings=[binding_v1],
@@ -138,14 +137,14 @@ async def test_change_slot_type_scalar_to_array_promotes_column(clean_db):
         (rev,),
     )
 
+    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     tags_v2 = Slot(name="tags", type=Array(of=Primitive(name="string")))
-    movie_v2 = OntologyClass(name="Movie", slots=[id_slot, tags_v2])
+    movie_v2 = OntologyClass(name="Movie", slots=[id_slot2, tags_v2])
     src_v2 = Source(name="imdb")
-    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot, tags_v2],
         classes=[movie_v2],
         sources=[src_v2],
         source_bindings=[binding_v2],
@@ -169,21 +168,20 @@ async def test_change_slot_type_array_to_scalar_refused(clean_db):
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot, tags_v1],
         classes=[movie_v1],
         sources=[src],
         source_bindings=[binding_v1],
     )
     await apply_changes(clean_db, diff_specs(None, spec_v1))
 
+    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     tags_v2 = Slot(name="tags", type=Primitive(name="string"))
-    movie_v2 = OntologyClass(name="Movie", slots=[id_slot, tags_v2])
+    movie_v2 = OntologyClass(name="Movie", slots=[id_slot2, tags_v2])
     src_v2 = Source(name="imdb")
-    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot, tags_v2],
         classes=[movie_v2],
         sources=[src_v2],
         source_bindings=[binding_v2],
@@ -200,18 +198,17 @@ async def test_change_slot_type_array_to_scalar_refused(clean_db):
 async def test_change_class_abstract_true_to_false_creates_table(clean_db):
     """Abstract → concrete: table + bindings are created."""
     id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
-    movie_abs = OntologyClass(name="Movie", slots=[id_slot], abstract=True)
-    spec_v1 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie_abs])
+    movie_abs = OntologyClass(name="Movie", abstract=True)
+    spec_v1 = Spec(id="t", version="1.0.0", classes=[movie_abs])
     await apply_changes(clean_db, diff_specs(None, spec_v1))
     assert not await _table_exists(clean_db, "movie")
 
-    movie_concrete = OntologyClass(name="Movie", slots=[id_slot], abstract=False)
+    movie_concrete = OntologyClass(name="Movie", abstract=False)
     src = Source(name="imdb")
     binding_concrete = SourceBinding(source=src, class_=movie_concrete, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie_concrete],
         sources=[src],
         source_bindings=[binding_concrete],
@@ -224,13 +221,12 @@ async def test_change_class_abstract_true_to_false_creates_table(clean_db):
 async def test_change_class_abstract_false_to_true_drops_empty_table(clean_db):
     """Concrete → abstract: empty table is dropped."""
     id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
-    movie_v1 = OntologyClass(name="Movie", slots=[id_slot])
+    movie_v1 = OntologyClass(name="Movie")
     src = Source(name="imdb")
     binding_v1 = SourceBinding(source=src, class_=movie_v1, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie_v1],
         sources=[src],
         source_bindings=[binding_v1],
@@ -239,8 +235,8 @@ async def test_change_class_abstract_false_to_true_drops_empty_table(clean_db):
     assert await _table_exists(clean_db, "movie")
 
     # Drop the source first (sources can't reference an abstract class).
-    movie_abs = OntologyClass(name="Movie", slots=[id_slot], abstract=True)
-    spec_v2 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie_abs])
+    movie_abs = OntologyClass(name="Movie", abstract=True)
+    spec_v2 = Spec(id="t", version="1.0.0", classes=[movie_abs])
     await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
     assert not await _table_exists(clean_db, "movie")
     assert not await _table_exists(clean_db, "movie_bindings")
@@ -255,7 +251,6 @@ async def test_change_class_abstract_false_to_true_refused_if_rows(clean_db):
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot],
         classes=[movie_v1],
         sources=[src],
         source_bindings=[binding_v1],
@@ -269,8 +264,8 @@ async def test_change_class_abstract_false_to_true_refused_if_rows(clean_db):
         (rev,),
     )
 
-    movie_abs = OntologyClass(name="Movie", slots=[id_slot], abstract=True)
-    spec_v2 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie_abs])
+    movie_abs = OntologyClass(name="Movie", abstract=True)
+    spec_v2 = Spec(id="t", version="1.0.0", classes=[movie_abs])
     with pytest.raises(CompilerError, match="non-empty"):
         await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
 
@@ -282,18 +277,17 @@ async def test_change_class_abstract_false_to_true_refused_if_rows(clean_db):
 
 async def test_change_class_is_a_concrete_is_no_op(clean_db):
     """For concrete classes, is_a doesn't drive DDL — own table, own slots."""
-    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
-    a = OntologyClass(name="A", slots=[id_slot])
-    b = OntologyClass(name="B", slots=[id_slot])
+    a = OntologyClass(name="A")
+    b = OntologyClass(name="B")
 
     def _build(parent_obj):
-        child = OntologyClass(name="Child", slots=[id_slot], is_a=parent_obj)
+        child_id = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+        child = OntologyClass(name="Child", is_a=parent_obj, slots=[child_id])
         src = Source(name="s")
-        binding = SourceBinding(source=src, class_=child, identifier_slot=id_slot)  # type: ignore[call-arg]
+        binding = SourceBinding(source=src, class_=child, identifier_slot=child_id)  # type: ignore[call-arg]
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[a, b, child],
             sources=[src],
             source_bindings=[binding],
@@ -334,8 +328,8 @@ async def test_change_source_entity_class_is_destructive(clean_db):
     rows) must be handled manually outside the automated migration path.
     """
     id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
-    series = OntologyClass(name="Series", slots=[id_slot])
+    movie = OntologyClass(name="Movie")
+    series = OntologyClass(name="Series")
 
     def _build(target_cls):
         src = Source(name="imdb")
@@ -343,7 +337,6 @@ async def test_change_source_entity_class_is_destructive(clean_db):
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[movie, series],
             sources=[src],
             source_bindings=[binding],
@@ -378,15 +371,18 @@ async def test_change_source_identifier_slot_rekeys_rows(clean_db):
     """Rows are rekeyed: ``_source_row_id`` shifts to the new slot's value."""
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = Slot(name="title", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title])
 
     def _build(identifier):
+        imdb_id_ = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+        title_ = Slot(name="title", type=Primitive(name="string"), identifier=True, required=True)
+        movie = OntologyClass(name="Movie", slots=[imdb_id_, title_])
+        # Use the correct slot object from this class for the binding
+        id_slot = imdb_id_ if identifier.name == "imdb_id" else title_
         src = Source(name="imdb")
-        binding = SourceBinding(source=src, class_=movie, identifier_slot=identifier)  # type: ignore[call-arg]
+        binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[imdb_id, title],
             classes=[movie],
             sources=[src],
             source_bindings=[binding],
@@ -419,20 +415,19 @@ async def test_change_source_identifier_slot_rekeys_rows(clean_db):
 async def test_change_class_mixins_no_op_without_slot_changes(clean_db):
     """Adding/removing a mixin with no shared slots is a no-op DDL-wise; the
     audit record alone is harmless."""
-    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     body_v1 = Slot(name="body_v1", type=Primitive(name="string"))
     body_v2 = Slot(name="body_v2", type=Primitive(name="string"))
     mixin_a = OntologyClass(name="MixinA", slots=[body_v1])
     mixin_b = OntologyClass(name="MixinB", slots=[body_v2])
 
     def _build(mixins):
-        cls = OntologyClass(name="Movie", slots=[id_slot], mixins=mixins)
+        cls_id = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+        cls = OntologyClass(name="Movie", mixins=mixins, slots=[cls_id])
         src = Source(name="imdb")
-        binding = SourceBinding(source=src, class_=cls, identifier_slot=id_slot)  # type: ignore[call-arg]
+        binding = SourceBinding(source=src, class_=cls, identifier_slot=cls_id)  # type: ignore[call-arg]
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot, body_v1, body_v2],
             classes=[mixin_a, mixin_b, cls],
             sources=[src],
             source_bindings=[binding],

@@ -1,9 +1,8 @@
 """Tests for DELETE /spec/drafts/{draft_id}/{kind}/{name}.
 
 Coverage:
-  - Happy paths for each entity kind (slot, class, source, constraint).
-  - Reference-protection 409s (cannot remove a slot referenced by a class or
-    used as a source's identifier, a class referenced by a slot's ClassRef /
+  - Happy paths for entity kinds: class, source, constraint.
+  - Reference-protection 409s (a class referenced by a slot's ClassRef /
     another class's is_a / a source / a constraint).
   - DELETE on a published revision is 409.
   - DELETE of an unknown name is 404.
@@ -51,11 +50,9 @@ def _dev_principal() -> Principal:
 
 def _spec_with_unreferenced_extras() -> Spec:
     """Movie with imdb_id + year, plus a Source and Constraint that
-    can be deleted freely. Also has an extra slot 'label' that is only
-    on spec.slots (not on any class), so it can be deleted freely."""
+    can be deleted freely."""
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     year = Slot(name="year", type=Primitive(name="integer"))
-    label = Slot(name="label", type=Primitive(name="string"))  # not on any class
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb_movies")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
@@ -71,7 +68,6 @@ def _spec_with_unreferenced_extras() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id, year, label],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -95,7 +91,6 @@ def _spec_with_class_ref() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        slots=[person_id, imdb_id, directed_by],
         classes=[person, movie],
         sources=[src_movie, src_person],
         source_bindings=[binding_movie, binding_person],
@@ -112,7 +107,6 @@ def _spec_with_is_a_chain() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id],
         classes=[title, movie],
         sources=[src],
         source_bindings=[binding],
@@ -144,7 +138,6 @@ def _spec_with_constraint_and_class() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -180,57 +173,6 @@ def client():
         yield TestClient(app, raise_server_exceptions=True)
     finally:
         app.dependency_overrides.pop(require_user, None)
-
-
-# ---------------------------------------------------------------------------
-# Slot removal — free slot (not on any class)
-# ---------------------------------------------------------------------------
-
-
-async def test_delete_free_slot_succeeds(clean_db, client):
-    """A slot that exists only on spec.slots (not on any class) can be removed."""
-    from knot.db.spec_store import get_revision
-
-    rev = await create_draft(clean_db)
-    await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
-
-    r = client.delete(f"/spec/drafts/{rev}/slots/label")
-    assert r.status_code == 200, r.text
-    summary = r.json()["spec_summary"]
-    # Was 3 slots (imdb_id, year, label); now 2
-    assert summary["slots"] == 2
-
-    spec = await get_revision(clean_db, rev)
-    assert "label" not in {s.name for s in spec.slots}
-
-
-async def test_delete_slot_referenced_by_class_returns_409(clean_db, client):
-    """A slot listed on any class cannot be removed."""
-    rev = await create_draft(clean_db)
-    await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
-
-    r = client.delete(f"/spec/drafts/{rev}/slots/year")
-    assert r.status_code == 409
-    detail = r.json()["detail"]
-    assert "year" in detail
-    assert "Movie" in detail
-
-
-async def test_delete_slot_used_as_identifier_returns_409(clean_db, client):
-    """A slot used as a source's identifier_slot cannot be removed.
-
-    `imdb_id` is on `Movie` AND is the identifier_slot of `imdb_movies`,
-    so the references list should mention both.
-    """
-    rev = await create_draft(clean_db)
-    await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
-
-    r = client.delete(f"/spec/drafts/{rev}/slots/imdb_id")
-    assert r.status_code == 409
-    detail = r.json()["detail"]
-    assert "imdb_id" in detail
-    # Must mention the source, since that's the identifier_slot link.
-    assert "imdb_movies" in detail
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +267,7 @@ async def test_delete_on_published_draft_returns_409(clean_db, client):
     await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
     await publish_draft(clean_db, rev, allow_destructive=False)
 
-    r = client.delete(f"/spec/drafts/{rev}/slots/label")
+    r = client.delete(f"/spec/drafts/{rev}/sources/imdb_movies")
     assert r.status_code == 409
     assert "published" in r.json()["detail"].lower()
 
@@ -335,5 +277,5 @@ async def test_delete_unknown_name_returns_404(clean_db, client):
     rev = await create_draft(clean_db)
     await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
 
-    r = client.delete(f"/spec/drafts/{rev}/slots/nonexistent")
+    r = client.delete(f"/spec/drafts/{rev}/sources/nonexistent")
     assert r.status_code == 404

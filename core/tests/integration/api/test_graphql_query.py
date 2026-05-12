@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import ClassRef, OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.metaschema import SourceBinding
 
 # ---------------------------------------------------------------------------
@@ -51,7 +51,6 @@ def _build_spec() -> tuple[Spec, OntologyClass, Source]:
     spec = Spec(
         id="gql_test",
         version="1.0.0",
-        slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -607,7 +606,6 @@ def _build_derived_spec():
     spec = Spec(
         id="derived_gql_test",
         version="1.0.0",
-        slots=[imdb_id, title, year, credit_count_slot, credit_id, credit_movie, credit_role],
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],
         source_bindings=[movie_binding, credit_binding],

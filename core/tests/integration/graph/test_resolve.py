@@ -56,7 +56,6 @@ async def resolve_db(pg_conn):
     spec = Spec(
         id="resolve_test",
         version="1.0.0",
-        slots=[id_slot, title, pm_slot, lcb_slot, tags],
         classes=[movie],
         sources=[src_a, src_b],
         source_bindings=[binding_a, binding_b],

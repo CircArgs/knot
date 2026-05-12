@@ -24,7 +24,6 @@ from knot.spec.metaschema import (
     SlotPath,
 )
 
-
 # ---------------------------------------------------------------------------
 # ReverseRelation compile correctness
 # ---------------------------------------------------------------------------
@@ -125,12 +124,11 @@ def test_diff_specs_add_class():
     person_id = Slot(name="person_id", type=Primitive(name="string"))
     person = OntologyClass(name="Person", slots=[person_id])
 
-    prev_spec = Spec(id="t", version="1", slots=[person_id], classes=[person], sources=[])
+    prev_spec = Spec(id="t", version="1", classes=[person], sources=[])
     director = OntologyClass(name="Director", is_a=person, slots=[])
     cand_spec = Spec(
         id="t",
         version="1",
-        slots=[person_id],
         classes=[person, director],
         sources=[],
     )
@@ -148,11 +146,10 @@ def test_diff_specs_drop_class():
     prev_spec = Spec(
         id="t",
         version="1",
-        slots=[person_id],
         classes=[person, director],
         sources=[],
     )
-    cand_spec = Spec(id="t", version="1", slots=[person_id], classes=[person], sources=[])
+    cand_spec = Spec(id="t", version="1", classes=[person], sources=[])
 
     changes = migration.diff_specs(prev_spec, cand_spec)
     drop_class = [c for c in changes if isinstance(c, migration.DropClass) and c.class_name == "Director"]

@@ -9,11 +9,12 @@ Per `spec-versioning.md`:
     intermediate so Pydantic minor bumps don't shift bytes
   - sha256 the canonical bytes for `compute_content_hash`
 
-Cycle handling (CANONICAL_DUMP_VERSION = 2): named SpecBase nodes (those
+Cycle handling (CANONICAL_DUMP_VERSION = 4): named SpecBase nodes (those
 with a `name: str` field) are tracked by object id.  First visit emits the
 full canonical form; subsequent visits emit `{"$ref": "<name>"}`.  This
 breaks cycles from cross-class `slot.range` references without losing
-identity.
+identity.  Version 4: Spec.slots removed; slots are now inline on each
+OntologyClass.
 """
 
 from __future__ import annotations
@@ -27,7 +28,7 @@ from pydantic_core import PydanticUndefined
 
 from knot.spec.metaschema import Primitive
 
-CANONICAL_DUMP_VERSION: int = 3
+CANONICAL_DUMP_VERSION: int = 4
 
 
 # ---------------------------------------------------------------------------

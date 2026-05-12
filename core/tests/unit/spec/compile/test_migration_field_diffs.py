@@ -34,7 +34,6 @@ from knot.spec import (
     SourceBinding,
     Spec,
 )
-
 from knot.spec.compile.postgres.migration import (
     AddConstraint,
     AddSource,
@@ -84,7 +83,6 @@ def _make_spec_pair(*, mutator):
         spec = Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[movie],
             sources=[src],
             source_bindings=[binding],
@@ -187,8 +185,8 @@ def test_diff_change_slot_type_expression_emits_record():
     year_int = Slot(name="year", type=Primitive(name="integer"))
     prev_movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
     cand_movie = OntologyClass(name="Movie", slots=[id_slot, year_int])
-    prev = Spec(id="t", version="1.0.0", slots=[id_slot, year_str], classes=[prev_movie])
-    cand = Spec(id="t", version="1.0.0", slots=[id_slot, year_int], classes=[cand_movie])
+    prev = Spec(id="t", version="1.0.0", classes=[prev_movie])
+    cand = Spec(id="t", version="1.0.0", classes=[cand_movie])
     changes = diff_specs(prev, cand)
     rec = next((c for c in changes if isinstance(c, ChangeSlotTypeExpression)), None)
     assert rec is not None
@@ -260,7 +258,6 @@ def test_diff_change_slot_derivation_body_change_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot, title, derived],
             classes=[movie],
         ), derived
 
@@ -296,7 +293,7 @@ def test_diff_change_class_abstract_emits_record():
     def build(*, abstract):
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Title", slots=[id_slot], abstract=abstract)
-        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[cls])
+        return Spec(id="t", version="1.0.0", classes=[cls])
 
     changes = diff_specs(build(abstract=False), build(abstract=True))
     rec = next((c for c in changes if isinstance(c, ChangeClassAbstract)), None)
@@ -321,7 +318,7 @@ def test_diff_change_class_is_a_emits_record():
             name="Child", slots=[id_slot], is_a={"A": a, "B": b, None: None}[parent_name]
         )
         classes = [a, b, child]
-        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=classes)
+        return Spec(id="t", version="1.0.0", classes=classes)
 
     changes = diff_specs(build(parent_name="A"), build(parent_name="B"))
     rec = next((c for c in changes if isinstance(c, ChangeClassIsA)), None)
@@ -346,7 +343,7 @@ def test_diff_change_class_mixins_emits_record():
         cls = OntologyClass(
             name="Child", slots=[id_slot], mixins=[mx_lookup[m] for m in mixin_names]
         )
-        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[a, b, cls])
+        return Spec(id="t", version="1.0.0", classes=[a, b, cls])
 
     changes = diff_specs(build(mixin_names=["A"]), build(mixin_names=["A", "B"]))
     rec = next((c for c in changes if isinstance(c, ChangeClassMixins)), None)
@@ -376,7 +373,6 @@ def test_diff_add_source_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[cls],
             sources=sources,
         )
@@ -395,7 +391,6 @@ def test_diff_drop_source_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[cls],
             sources=sources,
         )
@@ -426,7 +421,6 @@ def test_diff_add_source_binding_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[cls],
             sources=[src],
             source_bindings=bindings,
@@ -451,7 +445,6 @@ def test_diff_drop_source_binding_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[cls],
             sources=[src],
             source_bindings=bindings,
@@ -479,7 +472,6 @@ def test_diff_change_source_binding_identifier_slot_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[slot_a, slot_b],
             classes=[cls],
             sources=[src],
             source_bindings=[binding],
@@ -519,7 +511,6 @@ def test_diff_change_source_binding_trust_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot],
             classes=[cls],
             sources=[src],
             source_bindings=[binding],
@@ -535,7 +526,6 @@ def test_diff_change_source_binding_trust_emits_record():
 
 
 def test_change_source_binding_trust_is_not_destructive():
-    cls = OntologyClass(name="Movie", slots=[])
     rec = ChangeSourceBindingTrust(
         source_name="imdb",
         class_name="Movie",
@@ -567,7 +557,6 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
     return Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot, year],
         classes=[movie, series],
         sources=[src],
         source_bindings=[binding],
@@ -584,7 +573,6 @@ def _build_constraintless_spec():
     return Spec(
         id="t",
         version="1.0.0",
-        slots=[id_slot, year],
         classes=[movie],
         sources=[src],
         source_bindings=[binding],
@@ -688,7 +676,6 @@ def test_diff_bool_expr_constraint_body_emits_change_constraint_body():
         return Spec(
             id="t",
             version="1.0.0",
-            slots=[id_slot, year],
             classes=[movie],
             constraints=[con],
         )

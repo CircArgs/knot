@@ -19,13 +19,15 @@ from knot.db.spec_store import (
     create_draft,
     edit_draft,
 )
-from knot.spec import Spec
-from knot.spec.metaschema import Primitive, Slot
+from knot.spec import OntologyClass, Spec
 from knot.spec.errors import DraftAlreadyPublishedError, DraftNotFoundError
+from knot.spec.metaschema import Primitive, Slot
 
 
 def _empty_spec() -> Spec:
-    return Spec(id="conc", version="1.0.0")
+    # A spec with a single empty class so workers can append slots to it.
+    cls = OntologyClass(name="Conc", slots=[])
+    return Spec(id="conc", version="1.0.0", classes=[cls])
 
 
 async def _new_conn() -> psycopg.AsyncConnection:
@@ -66,7 +68,7 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
             conn = await _new_conn()
             try:
                 async with edit_draft(conn, rev) as spec:
-                    spec.slots.append(Slot(name=slot_name, type=Primitive(name="string")))
+                    spec.classes[0].slots.append(Slot(name=slot_name, type=Primitive(name="string")))
                     # Small yield to allow the other coroutine to attempt the lock.
                     await asyncio.sleep(0.1)
             finally:
@@ -81,7 +83,7 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
     # Both writes must survive — this is the property a non-locking
     # implementation would violate.
     final = await spec_store.get_revision(pg_conn, rev)
-    names = {s.name for s in final.slots}
+    names = {s.name for s in final.classes[0].slots}
     assert names == {"slot_a", "slot_b"}, names
 
 
@@ -97,19 +99,19 @@ async def test_edit_draft_rolls_back_on_exception(pg_conn):
     await spec_store.update_draft(pg_conn, rev, _empty_spec())
 
     pre = await spec_store.get_revision(pg_conn, rev)
-    pre_count = len(pre.slots)
+    pre_count = len(pre.classes[0].slots)
 
     class Boom(Exception):
         pass
 
     with pytest.raises(Boom):
         async with edit_draft(pg_conn, rev) as spec:
-            spec.slots.append(Slot(name="should_not_persist", type=Primitive(name="string")))
+            spec.classes[0].slots.append(Slot(name="should_not_persist", type=Primitive(name="string")))
             raise Boom()
 
     after = await spec_store.get_revision(pg_conn, rev)
-    assert len(after.slots) == pre_count
-    assert all(s.name != "should_not_persist" for s in after.slots)
+    assert len(after.classes[0].slots) == pre_count
+    assert all(s.name != "should_not_persist" for s in after.classes[0].slots)
 
 
 # ---------------------------------------------------------------------------

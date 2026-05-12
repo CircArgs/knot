@@ -16,6 +16,10 @@ TypeExpression is described in the API via (type_kind, type_name):
   type_kind = "array_of_primitive"  type_name = "string"|"integer"|...
   type_kind = "array_of_class"      type_name = <OntologyClass name>
   type_kind = null                  (derived slot — no type)
+
+Slots are now inline on each OntologyClass (by-copy). There is no top-level
+POST /spec/drafts/{id}/slots or DELETE /spec/drafts/{id}/slots/{name}.
+Slots are declared inline when creating or updating a class.
 """
 
 from __future__ import annotations
@@ -44,7 +48,6 @@ from knot.spec.metaschema import (
     NullSemantics,
     Primitive,
     Severity,
-    SlotConstraints,
 )
 
 # ---------------------------------------------------------------------------
@@ -70,7 +73,7 @@ class SlotSummary(_StrictBase):
 
 class ClassSummary(_StrictBase):
     name: str
-    slots: list[str]
+    slots: list[SlotSummary]
     is_a: str | None
     mixins: list[str]
     abstract: bool
@@ -134,7 +137,7 @@ class SlotCreate(_StrictBase):
 
 class ClassCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    slot_names: list[str] = Field(default_factory=list)
+    slots: list[SlotCreate] = Field(default_factory=list)
     is_a_name: str | None = None
     mixin_names: list[str] = Field(default_factory=list)
     abstract: bool = False
@@ -143,7 +146,7 @@ class ClassCreate(_StrictBase):
 
 
 class ClassUpdate(_StrictBase):
-    slot_names: list[str] | None = None
+    slots: list[SlotCreate] | None = None
     is_a_name: str | None = None
     mixin_names: list[str] | None = None
     abstract: bool | None = None
@@ -190,10 +193,6 @@ class DraftCreate(_StrictBase):
     label: str | None = None
 
 
-class SlotRename(_StrictBase):
-    new_name: str = Field(pattern=_NAME_PATTERN)
-
-
 # ─── Response shapes ────────────────────────────────────────────────────────
 
 
@@ -210,7 +209,7 @@ class MutationResponse(_StrictBase):
 
     draft_revision: int
     content_hash: str
-    spec_summary: dict[str, int]  # {classes: n, slots: n, sources: n}
+    spec_summary: dict[str, int]  # {classes: n, sources: n}
 
 
 class PublishResponse(_StrictBase):
@@ -227,7 +226,6 @@ class PublishResponse(_StrictBase):
 def _spec_summary(spec: Spec) -> dict[str, int]:
     return {
         "classes": len(spec.classes),
-        "slots": len(spec.slots),
         "sources": len(spec.sources),
         "source_bindings": len(spec.source_bindings),
         "constraints": len(spec.constraints),
@@ -240,16 +238,6 @@ def _response(draft_id: int, spec: Spec) -> MutationResponse:
         draft_revision=draft_id,
         content_hash=graph_spec.content_hash(spec),
         spec_summary=_spec_summary(spec),
-    )
-
-
-def _summarize_class(c: OntologyClass) -> ClassSummary:
-    return ClassSummary(
-        name=c.name,
-        slots=[s.name for s in c.slots],
-        is_a=c.is_a.name if c.is_a else None,
-        mixins=[m.name for m in c.mixins],
-        abstract=c.abstract,
     )
 
 
@@ -281,6 +269,16 @@ def _summarize_slot(s: Slot) -> SlotSummary:
         identifier=s.identifier,
         required=s.required,
         resolution_policy=rp.value if hasattr(rp, "value") else str(rp),
+    )
+
+
+def _summarize_class(c: OntologyClass) -> ClassSummary:
+    return ClassSummary(
+        name=c.name,
+        slots=[_summarize_slot(s) for s in c.slots],
+        is_a=c.is_a.name if c.is_a else None,
+        mixins=[m.name for m in c.mixins],
+        abstract=c.abstract,
     )
 
 
@@ -317,20 +315,26 @@ def _parse_trust_prior(raw: list[float]) -> tuple[float, float]:
     return (raw[0], raw[1])
 
 
-def _build_slot_constraints(body: SlotConstraintsCreate | None) -> SlotConstraints | None:
-    if body is None:
-        return None
-    if all(
-        v is None
-        for v in [body.pattern, body.min_value, body.max_value, body.permissible_values]
-    ):
-        return None
-    return SlotConstraints(
-        pattern=body.pattern,
-        min_value=body.min_value,
-        max_value=body.max_value,
-        permissible_values=body.permissible_values,
-    )
+def _slot_create_to_dict(s: SlotCreate) -> dict:
+    """Convert a SlotCreate request model to the dict format graph_spec.add_class expects."""
+    result: dict = {
+        "name": s.name,
+        "type_kind": s.type_kind,
+        "type_name": s.type_name,
+        "identifier": s.identifier,
+        "required": s.required,
+        "resolution_policy": s.resolution_policy,
+        "description": s.description,
+        "derivation": s.derivation,
+    }
+    if s.constraints is not None:
+        result["constraints"] = {
+            "pattern": s.constraints.pattern,
+            "min_value": s.constraints.min_value,
+            "max_value": s.constraints.max_value,
+            "permissible_values": s.constraints.permissible_values,
+        }
+    return result
 
 
 # ─── Exception → HTTP mapping helpers ───────────────────────────────────────
@@ -401,15 +405,6 @@ async def get_published_class(name: str) -> ClassSummary:
     except StopIteration as exc:
         raise HTTPException(404, f"OntologyClass {name!r} not on this draft") from exc
     return _summarize_class(cls)
-
-
-@router.get("/published/slots", response_model=list[SlotSummary])
-async def list_published_slots() -> list[SlotSummary]:
-    async with db.connect() as conn:
-        spec = await graph_spec.get_published(conn)
-    if spec is None:
-        return []
-    return [_summarize_slot(s) for s in spec.slots]
 
 
 @router.get("/published/sources", response_model=list[SourceSummary])
@@ -508,52 +503,25 @@ async def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
 
 
 @router.post(
-    "/drafts/{draft_id}/slots",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-)
-async def add_slot(draft_id: int, body: SlotCreate) -> MutationResponse:
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.add_slot(
-                conn,
-                draft_id,
-                name=body.name,
-                type_kind=body.type_kind,
-                type_name=body.type_name,
-                identifier=body.identifier,
-                required=body.required,
-                resolution_policy=body.resolution_policy,
-                constraints=_build_slot_constraints(body.constraints),
-                description=body.description,
-                derivation=body.derivation,
-            )
-        except graph_spec.CollisionError as exc:
-            raise _map_collision(exc) from exc
-        except graph_spec.EntityNotOnDraftError as exc:
-            raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.InvalidTypeExprError as exc:
-            raise _map_invalid(exc) from exc
-        except graph_spec.ExprTranslationError as exc:
-            raise HTTPException(404, str(exc)) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
-
-
-@router.post(
     "/drafts/{draft_id}/classes",
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
 )
 async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
+    slots_dicts = [_slot_create_to_dict(s) for s in body.slots]
+    # Validate no duplicate slot names in the request payload
+    seen: set[str] = set()
+    for s in body.slots:
+        if s.name.lower() in seen:
+            raise HTTPException(400, f"Duplicate slot name {s.name!r} in class definition.")
+        seen.add(s.name.lower())
     async with db.connect() as conn:
         try:
             spec = await graph_spec.add_class(
                 conn,
                 draft_id,
                 name=body.name,
-                slot_names=body.slot_names,
+                slots=slots_dicts,
                 is_a_name=body.is_a_name,
                 mixin_names=body.mixin_names,
                 abstract=body.abstract,
@@ -577,13 +545,22 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
     dependencies=[Depends(require_user)],
 )
 async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
+    slots_dicts: list[dict] | None = None
+    if body.slots is not None:
+        # Validate no duplicate slot names in the request payload
+        seen: set[str] = set()
+        for s in body.slots:
+            if s.name.lower() in seen:
+                raise HTTPException(400, f"Duplicate slot name {s.name!r} in class update.")
+            seen.add(s.name.lower())
+        slots_dicts = [_slot_create_to_dict(s) for s in body.slots]
     async with db.connect() as conn:
         try:
             spec = await graph_spec.update_class(
                 conn,
                 draft_id,
                 name,
-                slot_names=body.slot_names,
+                slots=slots_dicts,
                 is_a_name=body.is_a_name,
                 mixin_names=body.mixin_names,
                 abstract=body.abstract,
@@ -705,49 +682,6 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
 
 
 # ─── Draft removals ─────────────────────────────────────────────────────────
-
-
-@router.delete(
-    "/drafts/{draft_id}/slots/{name}",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-)
-async def remove_slot(draft_id: int, name: str) -> MutationResponse:
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.remove_slot(conn, draft_id, name)
-        except graph_spec.EntityNotOnDraftError as exc:
-            raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.ReferencedEntityError as exc:
-            raise _map_referenced(exc) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
-
-
-@router.post(
-    "/drafts/{draft_id}/slots/{slot_name}/rename",
-    response_model=MutationResponse,
-    dependencies=[Depends(require_user)],
-    summary="Rename a slot (non-destructive RENAME COLUMN at publish)",
-)
-async def rename_slot(draft_id: int, slot_name: str, body: SlotRename) -> MutationResponse:
-    """Rename a slot on a draft.
-
-    Records a rename hint so that ``publish`` emits ``ALTER TABLE … RENAME COLUMN``
-    instead of the destructive ``DROP + ADD`` pair. The spec is updated in-place
-    on the draft; any class or source that references the old name is updated too.
-    """
-    async with db.connect() as conn:
-        try:
-            spec = await graph_spec.rename_slot(conn, draft_id, slot_name, body.new_name)
-        except graph_spec.CollisionError as exc:
-            raise _map_collision(exc) from exc
-        except graph_spec.EntityNotOnDraftError as exc:
-            raise _map_entity_not_on_draft(exc) from exc
-        except graph_spec.DraftAlreadyPublishedError as exc:
-            raise _map_already_published(exc) from exc
-    return _response(draft_id, spec)
 
 
 @router.delete(

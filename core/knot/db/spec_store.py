@@ -100,6 +100,8 @@ def publish_gate(candidate: Spec) -> None:
     Step 2: Reference resolution — every Slot ClassRef target, every
             SourceBinding.class_, every SourceBinding.identifier_slot, every
             Constraint.primary must point at an entity present on the spec.
+            Slots are now inline on each OntologyClass; there is no top-level
+            slots list. identifier_slot must be reachable via effective_slots().
 
     Steps 3+4 (DataContext cross-checks + impact preview) are bindings-side
     and land with the modeling router.  This function is the natural place
@@ -116,8 +118,9 @@ def publish_gate(candidate: Spec) -> None:
         )
 
     # Step 2: reference resolution.
+    from knot.spec.effective_slots import effective_slots as _effective_slots
+
     classes_by_id = {id(c): c for c in candidate.classes}
-    slots_by_id = {id(s): s for s in candidate.slots}
 
     errors: list[str] = []
 
@@ -133,26 +136,23 @@ def publish_gate(candidate: Spec) -> None:
             return [type_expr]
         return []
 
-    for s in candidate.slots:
-        if s.type is None:
-            # Derived slots with deferred type are valid; structural slots
-            # without type are an error.
-            if s.derivation is None:
-                errors.append(f"Slot {s.name!r} has no type and no derivation.")
-            continue
-        for ref in _collect_classrefs(s.type):
-            if id(ref.target_class) not in classes_by_id:
-                errors.append(
-                    f"Slot {s.name!r}.type references OntologyClass "
-                    f"{ref.target_class.name!r} not on spec.classes."
-                )
-
+    # Validate slots inline on each class.
     for c in candidate.classes:
         for slot in c.slots:
-            if id(slot) not in slots_by_id:
-                errors.append(
-                    f"Class {c.name!r}.slots includes Slot {slot.name!r} not on spec.slots."
-                )
+            if slot.type is None:
+                # Derived slots with deferred type are valid; structural slots
+                # without type are an error.
+                if slot.derivation is None:
+                    errors.append(
+                        f"Class {c.name!r} slot {slot.name!r} has no type and no derivation."
+                    )
+                continue
+            for ref in _collect_classrefs(slot.type):
+                if id(ref.target_class) not in classes_by_id:
+                    errors.append(
+                        f"Class {c.name!r} slot {slot.name!r}.type references OntologyClass "
+                        f"{ref.target_class.name!r} not on spec.classes."
+                    )
 
     for b in candidate.source_bindings:
         bid = b.binding_id
@@ -161,16 +161,15 @@ def publish_gate(candidate: Spec) -> None:
                 f"SourceBinding {bid!r}.class_ references OntologyClass "
                 f"{b.class_.name!r} not on spec.classes."
             )
-        if id(b.identifier_slot) not in slots_by_id:
-            errors.append(
-                f"SourceBinding {bid!r}.identifier_slot references Slot "
-                f"{b.identifier_slot.name!r} not on spec.slots."
-            )
-        # identifier_slot must be one of class_.slots
-        if not any(slot is b.identifier_slot for slot in b.class_.slots):
+            continue
+        # identifier_slot must be reachable via effective_slots() (own + mixin).
+        effective = {s.name: s for s in _effective_slots(b.class_)}
+        if b.identifier_slot.name not in effective or (
+            effective[b.identifier_slot.name] is not b.identifier_slot
+        ):
             errors.append(
                 f"SourceBinding {bid!r}.identifier_slot ({b.identifier_slot.name!r}) "
-                f"is not on its class_ {b.class_.name!r}."
+                f"is not reachable via effective_slots() from class {b.class_.name!r}."
             )
 
     for con in candidate.constraints:

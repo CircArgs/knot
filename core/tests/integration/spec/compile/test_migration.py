@@ -19,13 +19,13 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
-from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.compile.postgres.migration import (
     apply_changes,
     diff_specs,
 )
 from knot.spec.errors import PublishGateError
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -34,14 +34,13 @@ from knot.spec.errors import PublishGateError
 
 def _minimal_spec(*extra_classes: OntologyClass) -> Spec:
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
+    movie = OntologyClass(name="Movie")
     src = Source(name="imdb_src")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     all_classes = [movie, *extra_classes]
     return Spec(
         id="test",
         version="1.0.0",
-        slots=[id_slot],
         classes=all_classes,
         sources=[src],
         source_bindings=[binding],
@@ -139,12 +138,13 @@ async def test_apply_changes_is_idempotent(clean_db):
 async def test_apply_changes_add_slot_creates_column(clean_db):
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
-    v1 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie])
+    v1 = Spec(id="t", version="1.0.0", classes=[movie])
     await apply_changes(clean_db, diff_specs(None, v1))
 
+    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     title = Slot(name="title", type=Primitive(name="string"))
-    movie_v2 = OntologyClass(name="Movie", slots=[id_slot, title])
-    v2 = Spec(id="t", version="1.0.0", slots=[id_slot, title], classes=[movie_v2])
+    movie_v2 = OntologyClass(name="Movie", slots=[id_slot2, title])
+    v2 = Spec(id="t", version="1.0.0", classes=[movie_v2])
     await apply_changes(clean_db, diff_specs(v1, v2))
     assert await _column_exists(clean_db, "movie", "title")
 
@@ -161,7 +161,7 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     src = Source(name="s")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -176,7 +176,7 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     src_v2 = Source(name="s")
     binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2],
+        id="t", version="1.0.0", classes=[movie_v2],
         sources=[src_v2], source_bindings=[binding_v2],
     )
     rev2 = await create_draft(clean_db)
@@ -192,7 +192,7 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     src = Source(name="s")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie],
+        id="t", version="1.0.0", classes=[movie],
         sources=[src], source_bindings=[binding],
     )
 
@@ -205,7 +205,7 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     src_v2 = Source(name="s")
     binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2],
+        id="t", version="1.0.0", classes=[movie_v2],
         sources=[src_v2], source_bindings=[binding_v2],
     )
     rev2 = await create_draft(clean_db)

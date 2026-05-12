@@ -28,8 +28,8 @@ from knot.spec import (
 )
 from knot.spec.canonical import CANONICAL_DUMP_VERSION
 
-PINNED_HASH = "ccce4b9b95376e14401b3db0b66500379972e457cd272ae7e324a2cd8a69f1e8"
-PINNED_VERSION = 3
+PINNED_HASH = "358914bdb3f38510e477fd20492c605fd3a5ba5713250155d912a4264ce9fe98"
+PINNED_VERSION = 4
 
 
 def _fixture_spec() -> Spec:
@@ -41,7 +41,6 @@ def _fixture_spec() -> Spec:
     return Spec(
         id="canonical-fixture",
         version="1.0.0",
-        slots=[imdb_id, title],
         classes=[movie],
         sources=[imdb_movies],
         source_bindings=[binding],
