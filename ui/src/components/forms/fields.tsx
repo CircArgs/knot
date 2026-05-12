@@ -54,11 +54,19 @@ export function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="mb-3">{children}</div>;
 }
 
-export function Submit({ children, busy }: { children: React.ReactNode; busy?: boolean }) {
+export function Submit({
+  children,
+  busy,
+  disabled,
+}: {
+  children: React.ReactNode;
+  busy?: boolean;
+  disabled?: boolean;
+}) {
   return (
     <button
       type="submit"
-      disabled={busy}
+      disabled={busy || disabled}
       className="px-4 py-1.5 rounded bg-blue-600 text-white font-medium hover:bg-blue-700 disabled:opacity-50"
     >
       {busy ? "Saving…" : children}

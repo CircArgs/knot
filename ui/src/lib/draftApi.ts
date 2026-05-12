@@ -246,6 +246,7 @@ export function normalizeDraftSpec(
     (k: Record<string, any>): SpecConstraint => ({
       name: k.name,
       primaryClassName: resolveName(k.primary) ?? "",
+      body: k.body ?? "",
       severity: k.severity ?? "ERROR",
       message: k.message ?? null,
     }),

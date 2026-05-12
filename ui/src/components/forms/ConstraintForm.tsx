@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import Editor from "@monaco-editor/react";
 
 import type { PublishedSpec, SpecConstraint } from "../../types/spec";
 import {
@@ -11,7 +12,6 @@ import {
   Submit,
   inputClass,
   selectClass,
-  textareaClass,
 } from "./fields";
 import SearchableSelect from "./SearchableSelect";
 
@@ -21,7 +21,7 @@ const SEVERITIES = ["error", "warning"] as const;
 const Schema = z.object({
   name: z.string().regex(NAME_PATTERN, "must match ^[A-Za-z_][A-Za-z0-9_]{0,62}$"),
   primaryClassName: z.string().min(1, "required"),
-  body: z.string().min(1, "constraint body is required (JSON ExprTree)"),
+  body: z.string().min(1, "SQL predicate is required"),
   severity: z.enum(SEVERITIES),
   message: z.string(),
 });
@@ -33,6 +33,8 @@ interface Props {
   initial?: Partial<SpecConstraint>;
   lockName?: boolean;
   onSubmit: (vals: ConstraintFormValues) => Promise<void>;
+  /** Base URL for the spec API (e.g. "/api" or ""). Used for live SQL validation. */
+  draftId?: number;
 }
 
 function normalizeSev(s: string | undefined): (typeof SEVERITIES)[number] | null {
@@ -43,7 +45,26 @@ function normalizeSev(s: string | undefined): (typeof SEVERITIES)[number] | null
     : null;
 }
 
-export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Props) {
+/** Debounce helper — returns a stable debounced function. */
+function useDebounce<T extends (...args: Parameters<T>) => void>(fn: T, delay: number): T {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  return useCallback(
+    ((...args: Parameters<T>) => {
+      if (timer.current !== null) clearTimeout(timer.current);
+      timer.current = setTimeout(() => fn(...args), delay);
+    }) as T,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fn, delay],
+  );
+}
+
+export default function ConstraintForm({
+  spec,
+  initial,
+  lockName,
+  onSubmit,
+  draftId,
+}: Props) {
   const {
     register,
     handleSubmit,
@@ -55,7 +76,7 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
     defaultValues: {
       name: initial?.name ?? "",
       primaryClassName: initial?.primaryClassName ?? "",
-      body: "",
+      body: initial?.body ?? "",
       severity: normalizeSev(initial?.severity) ?? "error",
       message: initial?.message ?? "",
     },
@@ -63,9 +84,58 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
 
   const primaryClassName = watch("primaryClassName");
   const body = watch("body");
-  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  // Live SQL validation state
+  const [sqlError, setSqlError] = useState<string | null>(null);
+  const [sqlValid, setSqlValid] = useState(false);
+  const [validating, setValidating] = useState(false);
 
   const classOptions = spec.classes.map((c) => ({ value: c.name, label: c.name }));
+
+  /** Validate the SQL body against the server's parse endpoint. */
+  const validateSql = useCallback(
+    async (sql: string, className: string) => {
+      if (!sql.trim() || !draftId) {
+        setSqlError(null);
+        setSqlValid(false);
+        return;
+      }
+      setValidating(true);
+      try {
+        const resp = await fetch(`/spec/drafts/${draftId}/_validate_constraint`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ body: sql, primary_class_name: className || undefined }),
+        });
+        if (resp.ok) {
+          const data = (await resp.json()) as { valid: boolean; errors: string[] };
+          if (data.valid) {
+            setSqlError(null);
+            setSqlValid(true);
+          } else {
+            setSqlError(data.errors[0] ?? "Invalid SQL predicate");
+            setSqlValid(false);
+          }
+        } else {
+          setSqlError(null); // network error — don't block submission
+          setSqlValid(false);
+        }
+      } catch {
+        setSqlError(null);
+        setSqlValid(false);
+      } finally {
+        setValidating(false);
+      }
+    },
+    [draftId],
+  );
+
+  const debouncedValidate = useDebounce(validateSql, 400);
+
+  useEffect(() => {
+    setSqlValid(false);
+    debouncedValidate(body, primaryClassName);
+  }, [body, primaryClassName, debouncedValidate]);
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -75,7 +145,7 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
           {...register("name")}
           disabled={lockName}
           className={inputClass}
-          placeholder="e.g. imdb_id_present"
+          placeholder="e.g. year_not_before_cinema"
         />
         <ErrText error={errors.name} />
       </FieldRow>
@@ -107,40 +177,67 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
         <input {...register("message")} className={inputClass} />
       </FieldRow>
 
-      {/* ── Advanced: body ─────────────────────────────────────────────────── */}
+      {/* ── SQL predicate body ─────────────────────────────────────────────── */}
       <div className="mb-3">
-        <button
-          type="button"
-          onClick={() => setAdvancedOpen((b) => !b)}
-          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+        <div className="flex items-center justify-between mb-1">
+          <Label required>body (SQL predicate)</Label>
+          {validating && (
+            <span className="text-xs text-slate-400 italic">validating…</span>
+          )}
+        </div>
+        <div
+          className={`border rounded overflow-hidden ${
+            (errors.body && !body) || sqlError
+              ? "border-rose-400 ring-1 ring-rose-300"
+              : "border-slate-300"
+          }`}
+          style={{ height: 120 }}
         >
-          <span>{advancedOpen ? "▾" : "▸"}</span>
-          Advanced — body (JSON ExprTree) <span className="text-rose-500 ml-0.5">*</span>
-        </button>
-        {advancedOpen && (
-          <div className="mt-2">
-            <textarea
-              {...register("body")}
-              className={`${textareaClass} ${
-                errors.body && !body ? "border-rose-400 ring-1 ring-rose-300" : ""
-              }`}
-              placeholder='{"$kind": "BoolExpr", "op": "and", "args": [...]}'
-              rows={5}
-            />
-            {errors.body && (
-              <p className="text-xs text-rose-600 mt-1">{errors.body.message}</p>
-            )}
-          </div>
+          <Editor
+            height="120px"
+            defaultLanguage="sql"
+            language="sql"
+            value={body}
+            onChange={(v) => setValue("body", v ?? "", { shouldValidate: true })}
+            options={{
+              minimap: { enabled: false },
+              fontSize: 12,
+              scrollBeyondLastLine: false,
+              automaticLayout: true,
+              lineNumbers: "off",
+              glyphMargin: false,
+              folding: false,
+              lineDecorationsWidth: 4,
+              lineNumbersMinChars: 0,
+              wordWrap: "on",
+              renderLineHighlight: "none",
+              overviewRulerLanes: 0,
+              scrollbar: { vertical: "hidden", horizontal: "auto" },
+            }}
+          />
+        </div>
+        <p className="text-xs text-slate-400 mt-0.5">
+          WHERE-clause fragment, e.g.{" "}
+          <code className="bg-slate-100 px-0.5 rounded">year &gt;= 1888</code> or{" "}
+          <code className="bg-slate-100 px-0.5 rounded">
+            year &gt;= 1888 AND year &lt;= 2100
+          </code>
+        </p>
+        {errors.body && !body && (
+          <p className="text-xs text-rose-600 mt-1">{errors.body.message}</p>
         )}
-        {!advancedOpen && errors.body && (
-          <p className="text-xs text-rose-600 mt-1">
-            constraint requires a body — expand Advanced to fill it in
-          </p>
+        {sqlError && (
+          <p className="text-xs text-rose-600 mt-1">{sqlError}</p>
+        )}
+        {sqlValid && !sqlError && body.trim() && (
+          <p className="text-xs text-emerald-600 mt-1">Valid SQL predicate</p>
         )}
       </div>
 
       <div className="flex justify-end">
-        <Submit busy={isSubmitting}>Save constraint</Submit>
+        <Submit busy={isSubmitting} disabled={!!sqlError || validating}>
+          Save constraint
+        </Submit>
       </div>
     </form>
   );

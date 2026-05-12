@@ -410,7 +410,7 @@ export default function SpecGraph() {
             return api.addConstraint(draftId, {
               name: vals.name,
               primary_class_name: vals.primaryClassName,
-              body: JSON.parse(vals.body),
+              body: vals.body,
               severity: vals.severity,
               message: vals.message || null,
             });
@@ -548,7 +548,7 @@ export default function SpecGraph() {
           title={`Add ${addOpen}`}
           widthClass="w-[560px]"
         >
-          {renderForm(addOpen, spec, null, (vals) => handleFormSubmit(addOpen, vals, null))}
+          {renderForm(addOpen, spec, null, (vals) => handleFormSubmit(addOpen, vals, null), draftId)}
         </Modal>
       )}
 
@@ -562,7 +562,7 @@ export default function SpecGraph() {
         >
           {renderForm(editTarget.kind, spec, editTarget, (vals) =>
             handleFormSubmit(editTarget.kind, vals, editTarget),
-          )}
+          draftId)}
         </Modal>
       )}
     </div>
@@ -576,6 +576,7 @@ function renderForm(
   spec: PublishedSpec,
   editing: SpecEntity | null,
   onSubmit: (vals: any) => Promise<void>,
+  draftId: number | null = null,
 ) {
   switch (kind) {
     case "class": {
@@ -622,6 +623,7 @@ function renderForm(
           initial={editing?.kind === "constraint" ? editing.value : undefined}
           lockName={!!editing}
           onSubmit={onSubmit}
+          draftId={draftId ?? undefined}
         />
       );
   }

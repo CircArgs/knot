@@ -69,6 +69,7 @@ export type Severity = "error" | "warning";
 export interface SpecConstraint {
   name: string;
   primaryClassName: string;
+  body: string;
   severity: Severity | string;
   message: string | null;
 }
