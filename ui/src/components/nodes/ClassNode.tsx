@@ -33,6 +33,14 @@ export default function ClassNode({
   const constraints = card?.constraints ?? [];
   const isJunction = card?.isJunction === true;
 
+  // Inherited slots — anything in effectiveSlots that isn't own. Rendered
+  // in a separate, muted section so the user can see the full effective
+  // contract of the class without confusing inherited slots with owned ones.
+  const ownNames = new Set(slots.map((s) => s.name));
+  const inheritedSlots = (cls.effectiveSlots ?? []).filter(
+    (s) => !ownNames.has(s.name),
+  );
+
   const ring = selected
     ? "ring-2 ring-blue-500"
     : isJunction
@@ -121,15 +129,47 @@ export default function ClassNode({
         </div>
       </div>
 
-      {/* Slot rows */}
-      {slots.length === 0 ? (
+      {/* Slot rows — own slots first */}
+      {slots.length === 0 && inheritedSlots.length === 0 ? (
         <div className="px-3 py-2 italic text-slate-400">no slots</div>
       ) : (
         <div className="py-1">
           {slots.map((s) => (
-            <SlotRow key={s.name} slot={s} className={cls.name} onSelect={onSelect} />
+            <SlotRow
+              key={s.name}
+              slot={s}
+              className={cls.name}
+              onSelect={onSelect}
+            />
           ))}
         </div>
+      )}
+
+      {/* Inherited slots — from mixins or is_a parent. Visually muted so
+          they're distinguishable from owned slots without disappearing. */}
+      {inheritedSlots.length > 0 && (
+        <>
+          <div className="border-t border-slate-200" />
+          <div className="px-3 pt-1.5 pb-0.5 flex items-center gap-1.5">
+            <span className="text-[9px] uppercase tracking-wide text-slate-400">
+              inherited
+            </span>
+            <span className="text-[9px] text-slate-400 italic">
+              from is_a / mixins
+            </span>
+          </div>
+          <div className="py-1 opacity-60">
+            {inheritedSlots.map((s) => (
+              <SlotRow
+                key={s.name}
+                slot={s}
+                className={cls.name}
+                onSelect={onSelect}
+                inherited
+              />
+            ))}
+          </div>
+        </>
       )}
 
       {/* Meta line (sources + constraints) */}
@@ -159,10 +199,12 @@ function SlotRow({
   slot,
   className,
   onSelect,
+  inherited = false,
 }: {
   slot: SpecSlot;
   className: string;
   onSelect?: SelectFn;
+  inherited?: boolean;
 }) {
   const icon = slotIcon(slot);
   const isClassRange = isClassKind(slot.typeKind);
@@ -175,7 +217,10 @@ function SlotRow({
         e.stopPropagation();
         onSelect?.({ kind: "slot", name: slot.name, className });
       }}
-      className="relative px-3 py-1 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
+      className={`relative px-3 py-1 hover:bg-slate-50 cursor-pointer flex items-center gap-2 ${
+        inherited ? "italic" : ""
+      }`}
+      title={inherited ? "inherited from is_a / mixin" : undefined}
     >
       <span className="text-slate-400 w-3 inline-block text-center font-mono">
         {icon}
