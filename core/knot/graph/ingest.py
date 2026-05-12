@@ -6,9 +6,11 @@ extensions seam fires RowsIngesting (pre-INSERT) and RowsIngested
 
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 import psycopg
+from psycopg import sql
 from pydantic import ValidationError
 
 from knot.api.row_models import build_row_model
@@ -16,7 +18,9 @@ from knot.db import dq, graph_store
 from knot.extensions import RequestContext, Session, dispatch
 from knot.extensions.events import RowsIngested, RowsIngesting
 from knot.spec import Source, SourceBinding, Spec
-from knot.spec.metaschema import NullSemantics
+from knot.spec.metaschema import Array, ClassRef, NullSemantics
+
+_logger = logging.getLogger(__name__)
 
 
 class IngestValidationError(Exception):
@@ -63,6 +67,45 @@ def find_source(spec: Spec, source_name: str) -> Source:
     if source is None:
         raise SourceNotOnSpecError(source_name)
     return source
+
+
+def _resolve_classref_values(
+    binding: SourceBinding,
+    row: dict[str, Any],
+    source_name: str,
+) -> dict[str, Any]:
+    """For each ClassRef slot in the binding's class, if the row carries a
+    raw source-native ID (no ':' prefix), expand it to a canonical_id using
+    the same ``{source_name}:{value}`` pattern applied to the row's own
+    identifier slot.
+
+    Array[ClassRef] slots are handled element-wise.  Values that already
+    contain ':' are assumed to be canonical_ids and are passed through
+    unchanged.  None values are skipped.
+
+    Limitation: this assumes the referenced entity comes from the SAME source.
+    Cross-source FK references are not supported here.
+    """
+    from knot.spec.effective_slots import effective_slots
+
+    out = dict(row)
+    for slot in effective_slots(binding.class_):
+        slot_type = slot.type
+        if slot_type is None:
+            continue
+        val = out.get(slot.name)
+        if val is None:
+            continue
+        if isinstance(slot_type, ClassRef):
+            if isinstance(val, str) and ":" not in val:
+                out[slot.name] = f"{source_name}:{val}"
+        elif isinstance(slot_type, Array) and isinstance(slot_type.of, ClassRef):
+            if isinstance(val, list):
+                out[slot.name] = [
+                    f"{source_name}:{v}" if isinstance(v, str) and ":" not in v else v
+                    for v in val
+                ]
+    return out
 
 
 def find_source_binding(
@@ -124,7 +167,6 @@ async def ingest_rows(
     spec_revision: int,
     rows: list[dict[str, Any]],
     batch_id: str,
-    validate_constraints: bool = False,
 ) -> int:
     """Validate + resolve + INSERT a batch of source rows.
 
@@ -133,11 +175,11 @@ async def ingest_rows(
     before Pydantic validation.
 
     Returns the number of rows inserted. Raises ``IngestValidationError``
-    on Pydantic failure (no rows inserted) and ``ConstraintViolations``
-    when ``validate_constraints=True`` and ERROR-severity violations are
-    found (transaction rolled back).
+    on Pydantic failure (no rows inserted). Raises ``ConstraintViolations``
+    when any ERROR-severity constraint (scoped to the batch) fires; the
+    transaction rolls back.  WARNING-severity constraints are logged but
+    never block ingest.
     """
-    from knot.spec.compile.postgres import compile_constraint
     from knot.spec.metaschema import Severity
 
     # Convenience alias: the Source object (used for extension events).
@@ -146,6 +188,11 @@ async def ingest_rows(
 
     # 0. Apply field mappings (rename source_field → slot_name, apply defaults).
     mapped_rows = [_apply_mappings(binding, r) for r in rows]
+
+    # 0b. Resolve raw source-native IDs in ClassRef slots to canonical_ids.
+    mapped_rows = [
+        _resolve_classref_values(binding, r, source.name) for r in mapped_rows
+    ]
 
     # 1. Pydantic validation
     RowModel = build_row_model(binding)
@@ -179,8 +226,8 @@ async def ingest_rows(
     wire_rows = [r.model_dump(exclude_none=False) for r in pre.rows]
 
     async with conn.transaction():
-        # 4. INSERT
-        count = await graph_store.insert_rows(
+        # 4. INSERT — returns (knot_row_ids, count) for batch-scoped checks.
+        inserted_row_ids, count = await graph_store.insert_rows(
             conn,
             source=source,
             cls=cls,
@@ -189,54 +236,94 @@ async def ingest_rows(
             canonical_ids=pre.canonical_ids,
         )
 
-        # 5. Built-in: post-INSERT ERROR-severity constraint check (opt-in).
-        if validate_constraints:
-            violations: list[dict[str, Any]] = []
-            relevant = [
-                c
-                for c in spec.constraints
-                if c.primary.name == cls.name
-                and getattr(c, "severity", Severity.ERROR) == Severity.ERROR
-            ]
+        # 5. Built-in: post-INSERT constraint checks, scoped to this batch.
+        #    ERROR-severity: always run; violations → 422 + rollback.
+        #    WARNING-severity: always run; violations logged, never block.
+        #
+        #    Batch scope: the compiled constraint SQL is wrapped as a subquery
+        #    and filtered to rows whose _knot_row_id is in the batch, so
+        #    pre-existing violating rows don't taint the new batch.
+        error_violations: list[dict[str, Any]] = []
+        relevant = [c for c in spec.constraints if c.primary.name == cls.name]
+        if relevant:
+            from knot.spec.compile.postgres._context import CompileContext
+            from knot.spec.compile.postgres._naming import bindings_table_id, table_id
+            from knot.spec.sql_validate import compile_to_sql
+
             for constraint in relevant:
+                is_error = getattr(constraint, "severity", Severity.ERROR) == Severity.ERROR
+                ctx2 = CompileContext(primary_class=cls, alias="s")
                 try:
-                    stmt, params = compile_constraint(constraint, cls)
+                    body_sql = compile_to_sql(constraint.body, cls, ctx2)
                 except Exception as exc:
-                    violations.append(
-                        {
-                            "rule_id": constraint.name,
-                            "class_name": constraint.primary.name,
-                            "slot_name": None,
-                            "offending_pk": "*",
-                            "detail": f"compile failure: {exc}",
-                        }
-                    )
+                    if is_error:
+                        error_violations.append(
+                            {
+                                "rule_id": constraint.name,
+                                "class_name": constraint.primary.name,
+                                "slot_name": None,
+                                "offending_pk": "*",
+                                "detail": f"compile failure: {exc}",
+                            }
+                        )
                     continue
+
+                # Batch-scoped constraint query: only rows in this batch.
+                scoped_stmt = sql.SQL(
+                    "SELECT"
+                    " {rule_id} AS rule_id,"
+                    " {class_name} AS class_name,"
+                    " NULL::text AS slot_name,"
+                    " b.canonical_id AS offending_pk,"
+                    " row_to_json(s)::text AS detail"
+                    " FROM {src_table} s"
+                    " JOIN {bind_table} b"
+                    "   ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL"
+                    " WHERE NOT ({body})"
+                    "   AND s._knot_row_id = ANY(%s::uuid[])"
+                ).format(
+                    rule_id=sql.Literal(constraint.name),
+                    class_name=sql.Literal(cls.name),
+                    src_table=table_id(cls),
+                    bind_table=bindings_table_id(cls),
+                    body=body_sql,
+                )
+
                 try:
-                    result_rows = await (await conn.execute(stmt, params)).fetchall()
+                    result_rows = await (
+                        await conn.execute(scoped_stmt, [inserted_row_ids])
+                    ).fetchall()
                 except Exception as exc:
-                    violations.append(
-                        {
-                            "rule_id": constraint.name,
-                            "class_name": constraint.primary.name,
-                            "slot_name": None,
-                            "offending_pk": "*",
-                            "detail": f"execute failure: {exc}",
-                        }
-                    )
+                    if is_error:
+                        error_violations.append(
+                            {
+                                "rule_id": constraint.name,
+                                "class_name": constraint.primary.name,
+                                "slot_name": None,
+                                "offending_pk": "*",
+                                "detail": f"execute failure: {exc}",
+                            }
+                        )
                     continue
+
                 for r in result_rows:
-                    violations.append(
-                        {
-                            "rule_id": r[0],
-                            "class_name": r[1],
-                            "slot_name": r[2],
-                            "offending_pk": str(r[3]),
-                            "detail": r[4] or "",
-                        }
-                    )
-            if violations:
-                raise ConstraintViolations(violations)
+                    entry = {
+                        "rule_id": r[0],
+                        "class_name": r[1],
+                        "slot_name": r[2],
+                        "offending_pk": str(r[3]),
+                        "detail": r[4] or "",
+                    }
+                    if is_error:
+                        error_violations.append(entry)
+                    else:
+                        _logger.warning(
+                            "Constraint warning %s on %s pk=%s: %s",
+                            r[0], r[1], r[3], r[4] or "",
+                        )
+
+        if error_violations:
+            raise ConstraintViolations(error_violations)
 
         # 6. Built-in: DQ recording (always).
         await dq.record_incremental(

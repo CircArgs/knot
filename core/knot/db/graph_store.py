@@ -94,7 +94,7 @@ async def insert_rows(
     spec_revision: int,
     rows: list[dict[str, Any]],
     canonical_ids: list[str],
-) -> int:
+) -> tuple[list[Any], int]:
     """Upsert a batch of source rows. For each row:
       1. INSERT/UPDATE the source-row table (preserves _knot_row_id on conflict).
       2. INSERT a binding (canonical_id from caller, valid_to NULL,
@@ -104,7 +104,9 @@ async def insert_rows(
     ``cls`` is the OntologyClass being written to (provided explicitly now
     that Source is a thin identity object without entity_class).
     ``canonical_ids`` must be parallel to ``rows`` (same length, same order).
-    Returns the number of source rows written.
+    Returns ``(knot_row_ids, count)`` — the list of ``_knot_row_id`` values
+    for the inserted/updated rows (used for batch-scoped constraint checks)
+    and the total row count.
     """
     slot_names = _stored_slot_names(cls)
     user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
@@ -138,7 +140,7 @@ async def insert_rows(
         ")"
     ).format(bindings=_bindings_id(cls))
 
-    count = 0
+    knot_row_ids: list[Any] = []
     async with conn.transaction():
         for row, canonical_id in zip(rows, canonical_ids, strict=False):
             values: list[Any] = [
@@ -153,8 +155,8 @@ async def insert_rows(
                 binding_insert_stmt,
                 (knot_row_id, canonical_id, spec_revision, knot_row_id),
             )
-            count += 1
-    return count
+            knot_row_ids.append(knot_row_id)
+    return knot_row_ids, len(knot_row_ids)
 
 
 # ─── User-correction-row upsert ─────────────────────────────────────────────

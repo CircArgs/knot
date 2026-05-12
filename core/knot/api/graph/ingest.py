@@ -44,15 +44,6 @@ async def ingest(
             "classes; optional when only one binding exists for the source."
         ),
     ),
-    validate_constraints: bool = Query(
-        False,
-        description=(
-            "When true, run all published ERROR-severity constraints whose "
-            "primary_class matches the source's class after INSERTs. If any "
-            "violation is found the entire batch is rolled back and a 422 is "
-            "returned with the violation list."
-        ),
-    ),
 ) -> IngestResponse:
     """Push a batch of rows attributed to a known source binding.
 
@@ -62,8 +53,10 @@ async def ingest(
       - 422 with FastAPI-shaped error detail if any row fails Pydantic
         validation against the binding's class slot shape.
 
-    When ``validate_constraints=true``, post-INSERT constraint check runs
-    inside a transaction; violations roll back the batch.
+    ERROR-severity constraints are always evaluated after INSERT and scoped
+    to the batch. Any violation rolls back the batch and returns 422 with
+    a ``violations`` detail list.  WARNING-severity constraints are logged
+    but never block ingest.
     """
     async with db.connect() as conn:
         spec = await published_or_409(conn)
@@ -81,7 +74,6 @@ async def ingest(
                 spec_revision=revision,
                 rows=body.rows,
                 batch_id=get_request_id(),
-                validate_constraints=validate_constraints,
             )
         except graph_ingest.IngestValidationError as exc:
             raise HTTPException(422, detail=exc.errors) from exc
