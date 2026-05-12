@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>knot — the postgres data model, explained</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --bg-soft: #161922;
+    --bg-code: #1a1e2a;
+    --fg: #d8dee9;
+    --fg-dim: #9aa3b2;
+    --accent: #7aa2f7;
+    --accent-soft: #3d59a1;
+    --green: #9ece6a;
+    --orange: #ff9e64;
+    --red: #f7768e;
+    --yellow: #e0af68;
+    --border: #2a2e3a;
+  }
+  * { box-sizing: border-box; }
+  html, body { background: var(--bg); color: var(--fg); margin: 0; padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif;
+    line-height: 1.55; font-size: 16px; }
+  .layout { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+  nav { position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    background: var(--bg-soft); border-right: 1px solid var(--border); padding: 24px 18px; }
+  nav h1 { font-size: 1.1rem; margin: 0 0 4px 0; color: var(--accent); }
+  nav .tag { color: var(--fg-dim); font-size: 0.8rem; margin-bottom: 18px; display: block; }
+  nav ol { list-style: none; padding: 0; margin: 0; counter-reset: nav; }
+  nav ol li { counter-increment: nav; margin: 4px 0; }
+  nav ol li::before { content: counter(nav) ". "; color: var(--fg-dim); font-variant-numeric: tabular-nums; }
+  nav a { color: var(--fg); text-decoration: none; font-size: 0.92rem; }
+  nav a:hover { color: var(--accent); }
+  main { max-width: 920px; padding: 32px 48px 96px 48px; }
+  h1.main-title { font-size: 2rem; margin: 0 0 4px 0; }
+  .subtitle { color: var(--fg-dim); font-size: 1rem; margin: 0 0 32px 0; }
+  h2 { font-size: 1.5rem; margin-top: 48px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+  h3 { font-size: 1.15rem; margin-top: 28px; color: var(--accent); }
+  h4 { font-size: 1.0rem; margin-top: 22px; color: var(--fg); }
+  p, li { color: var(--fg); }
+  code { background: var(--bg-code); padding: 1px 5px; border-radius: 3px; font-size: 0.9em;
+    font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace; color: var(--accent); }
+  pre { background: var(--bg-code); padding: 14px 18px; border-radius: 6px; overflow-x: auto;
+    border: 1px solid var(--border); font-size: 0.86em; line-height: 1.5;
+    font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace; }
+  pre code { background: none; padding: 0; color: var(--fg); }
+  .keyword { color: #bb9af7; }
+  .string { color: var(--green); }
+  .number { color: var(--orange); }
+  .comment { color: var(--fg-dim); font-style: italic; }
+  .ident { color: var(--accent); }
+  .type { color: var(--yellow); }
+  table { border-collapse: collapse; width: 100%; margin: 16px 0; font-size: 0.92em; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { color: var(--accent); font-weight: 600; }
+  td code { background: transparent; padding: 0; }
+  .callout { background: var(--bg-soft); border-left: 3px solid var(--accent); padding: 12px 18px;
+    border-radius: 0 6px 6px 0; margin: 18px 0; }
+  .callout.warn { border-color: var(--orange); }
+  .callout.danger { border-color: var(--red); }
+  .callout strong { color: var(--accent); }
+  .callout.warn strong { color: var(--orange); }
+  .callout.danger strong { color: var(--red); }
+  .schema-box { display: flex; gap: 18px; margin: 18px 0; }
+  .schema-card { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 8px;
+    padding: 18px; flex: 1; }
+  .schema-card h4 { margin-top: 0; color: var(--accent); }
+  .schema-card .name { font-family: monospace; color: var(--green); font-weight: 600; }
+  .table-render { background: var(--bg-code); border: 1px solid var(--border); border-radius: 6px;
+    padding: 12px; margin: 12px 0; overflow-x: auto; }
+  .table-render .tablename { color: var(--accent); font-weight: 600; font-family: monospace;
+    margin-bottom: 6px; font-size: 0.95em; }
+  .table-render table { font-size: 0.84em; margin: 0; }
+  .table-render th { color: var(--yellow); font-weight: 500; }
+  .table-render td, .table-render th { padding: 4px 10px; }
+  .sys-col { color: var(--fg-dim); }
+  .pill { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 0.74em;
+    font-weight: 600; letter-spacing: 0.04em; margin-left: 6px; vertical-align: middle; }
+  .pill.A { background: rgba(247, 118, 142, 0.18); color: var(--red); }
+  .pill.B { background: rgba(224, 175, 104, 0.18); color: var(--yellow); }
+  .pill.C { background: rgba(158, 206, 106, 0.18); color: var(--green); }
+  .arrow { color: var(--fg-dim); margin: 0 6px; }
+  hr { border: none; border-top: 1px solid var(--border); margin: 36px 0; }
+  details { background: var(--bg-soft); border: 1px solid var(--border); border-radius: 6px;
+    padding: 8px 14px; margin: 10px 0; }
+  details summary { cursor: pointer; color: var(--accent); font-weight: 500; }
+  details[open] summary { margin-bottom: 8px; }
+</style>
+</head>
+<body>
+<div class="layout">
+<nav>
+  <h1>knot</h1>
+  <span class="tag">postgres data model</span>
+  <ol>
+    <li><a href="#mental-model">The mental model</a></li>
+    <li><a href="#two-schemas">Two postgres schemas</a></li>
+    <li><a href="#control-plane">Control plane</a></li>
+    <li><a href="#per-class">Per-class storage shape</a></li>
+    <li><a href="#type-mapping">Type expression mapping</a></li>
+    <li><a href="#scenario">Walkthrough: Movie scenario</a></li>
+    <li><a href="#ingest-flow">What happens at ingest</a></li>
+    <li><a href="#er-merges">ER merges &amp; SCD2</a></li>
+    <li><a href="#corrections">User corrections</a></li>
+    <li><a href="#migrations">How migrations work</a></li>
+    <li><a href="#change-types">The Change-type catalog</a></li>
+    <li><a href="#publish-gate">The publish gate</a></li>
+    <li><a href="#cheatsheet">Cheat sheet</a></li>
+  </ol>
+</nav>
+
+<main>
+<h1 class="main-title">knot — the postgres data model</h1>
+<p class="subtitle">How a spec compiles to tables, what a row really looks like, and what migrations do underneath.</p>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="mental-model">1. The mental model</h2>
+
+<p>knot is a <strong>compiler</strong>. The user writes an ontology spec — classes, slots, sources,
+constraints — and knot translates that into postgres DDL plus a small runtime
+that ingests rows, resolves multi-source conflicts, and emits GraphQL.</p>
+
+<p>Three things are worth pinning down before any tables are explained:</p>
+
+<ol>
+  <li><strong>Two postgres schemas, two jobs.</strong>
+    <code>public</code> holds <em>what knot knows</em> (the spec itself, audit logs,
+    trust config). <code>knot_data</code> holds <em>what knot stores</em> (per-class fact
+    tables compiled from the spec).</li>
+  <li><strong>Source rows are immortal; bindings tell the story.</strong>
+    A row arrives from a source (imdb, tmdb, …) and lands in
+    <code>knot_data.&lt;class&gt;</code> once and never moves. A <em>second</em> table,
+    <code>knot_data.&lt;class&gt;_bindings</code>, holds the <strong>SCD2 history</strong> of which
+    canonical-id that row currently maps to. Merges, splits, and corrections
+    rewrite bindings — they don't rewrite source rows.</li>
+  <li><strong>Drafts are mutable, published revisions are frozen.</strong>
+    Spec edits accumulate on a draft row in <code>spec_revisions</code> with
+    <code>published=FALSE</code>. Publish flips that bit, runs the migration diff
+    against the previous published revision, and emits DDL.</li>
+</ol>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="two-schemas">2. Two postgres schemas</h2>
+
+<div class="schema-box">
+  <div class="schema-card">
+    <h4>schema <span class="name">public</span></h4>
+    <p>The control plane. <em>What knot knows.</em></p>
+    <ul>
+      <li><code>spec_revisions</code> — every draft and every publish</li>
+      <li><code>trust_config</code> — per-source trust scores (runtime)</li>
+      <li><code>trust_posteriors</code> — Beta posteriors for bandit resolution</li>
+      <li><code>_user_corrections</code> — audit log of corrections</li>
+      <li><code>canonical_id_lineage</code> — merge / split / add events</li>
+      <li><code>users</code> — API key principals</li>
+      <li><code>dq_observations</code> — data-quality stats per ingest</li>
+    </ul>
+  </div>
+  <div class="schema-card">
+    <h4>schema <span class="name">knot_data</span></h4>
+    <p>The data plane. <em>What knot stores.</em></p>
+    <ul>
+      <li><code>knot_data.&lt;class&gt;</code> — source-row facts (one per ingested row)</li>
+      <li><code>knot_data.&lt;class&gt;_bindings</code> — SCD2 history of which row currently maps to which canonical_id</li>
+    </ul>
+    <p class="comment">Every concrete (non-abstract) class on the published spec
+    has these two tables. Created at publish time by the migration emitter;
+    altered there too.</p>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="control-plane">3. The control plane</h2>
+
+<h3>spec_revisions</h3>
+<p>One row per authoring revision. Drafts are <code>published=FALSE</code> and mutable
+(updated in place). Published rows are frozen. A partial unique index enforces
+"<strong>at most one published row at a time</strong>".</p>
+
+<pre><code><span class="keyword">CREATE TABLE</span> <span class="ident">spec_revisions</span> (
+    <span class="ident">revision</span>         <span class="type">SERIAL</span>       <span class="keyword">PRIMARY KEY</span>,
+    <span class="ident">spec</span>             <span class="type">JSONB</span>        <span class="keyword">NOT NULL</span>,        <span class="comment">-- full-fidelity Pydantic dump</span>
+    <span class="ident">content_hash</span>     <span class="type">CHAR(64)</span>     <span class="keyword">NOT NULL</span>,        <span class="comment">-- canonical_dump → sha256</span>
+    <span class="ident">published</span>        <span class="type">BOOLEAN</span>      <span class="keyword">NOT NULL DEFAULT</span> <span class="keyword">FALSE</span>,
+    <span class="ident">parent_revision</span>  <span class="type">INT</span>          <span class="keyword">REFERENCES</span> spec_revisions(revision),
+    <span class="ident">label</span>            <span class="type">TEXT</span>,
+    <span class="ident">created_at</span>       <span class="type">TIMESTAMPTZ</span>  <span class="keyword">NOT NULL DEFAULT</span> now(),
+    <span class="ident">published_at</span>     <span class="type">TIMESTAMPTZ</span>
+);
+
+<span class="keyword">CREATE UNIQUE INDEX</span> spec_revisions_one_published
+    <span class="keyword">ON</span> spec_revisions (published) <span class="keyword">WHERE</span> published = <span class="keyword">TRUE</span>;</code></pre>
+
+<div class="callout">
+  <strong>Why JSONB?</strong> The spec is a typed Pydantic tree with real object
+  references between entities (slot → class, source → class, constraints with
+  expression trees). knot serialises that tree to JSONB at publish, then rehydrates
+  it from JSONB on every read. <code>content_hash</code> is a sha256 over the
+  canonicalised JCS bytes so revision identity is content-addressable.
+</div>
+
+<h3>The other control tables (one-liners)</h3>
+<table>
+  <tr><th>table</th><th>what it holds</th></tr>
+  <tr><td><code>trust_config</code></td><td>Per-source scalar trust score, runtime-editable, used by <code>ARGMAX_TRUST</code> resolution.</td></tr>
+  <tr><td><code>trust_posteriors</code></td><td>Per-(source, slot) Beta posterior <code>(alpha, beta)</code>; updated by correction feedback. Drives <code>POSTERIOR_MEAN</code> / <code>LCB</code>.</td></tr>
+  <tr><td><code>_user_corrections</code></td><td>Immortal audit log: every property correction / merge / split / add / tombstone, with payload + applied_revision.</td></tr>
+  <tr><td><code>canonical_id_lineage</code></td><td>Append-only event log of canonical_id transitions (merge / split / add / tombstone) — human-readable derived view of binding history.</td></tr>
+  <tr><td><code>dq_observations</code></td><td>Per-(source, class, slot) stats from every ingest batch and every full scan.</td></tr>
+</table>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="per-class">4. Per-class storage shape</h2>
+
+<p>For every concrete (non-abstract, non-defined) class on the published spec,
+knot emits <strong>two tables</strong> at publish time:</p>
+
+<div class="schema-box">
+  <div class="schema-card">
+    <h4><code>knot_data.&lt;class&gt;</code></h4>
+    <p>Source-row facts. One row per (<code>_source</code>, <code>_source_row_id</code>) — what
+    the source said.</p>
+    <p><strong>System columns:</strong></p>
+    <ul>
+      <li><code>_knot_row_id UUID</code> — stable internal anchor</li>
+      <li><code>_source TEXT</code> — name of the Source that pushed the row</li>
+      <li><code>_source_row_id TEXT</code> — source-native id (e.g. <code>tt0111161</code>)</li>
+      <li><code>_ingest_at TIMESTAMPTZ</code></li>
+      <li><code>_spec_revision INTEGER</code> — FK to <code>spec_revisions</code></li>
+    </ul>
+    <p>Primary key: <code>(_source, _source_row_id)</code>.<br>
+    Plus one column per stored slot.</p>
+  </div>
+  <div class="schema-card">
+    <h4><code>knot_data.&lt;class&gt;_bindings</code></h4>
+    <p>SCD2 binding history. One row per (<code>knot_row_id</code>, <code>valid_from</code>) —
+    "this row was bound to this canonical_id from then until <code>valid_to</code>".</p>
+    <p><strong>Columns:</strong></p>
+    <ul>
+      <li><code>knot_row_id UUID</code> — points to a row in the source table</li>
+      <li><code>canonical_id TEXT</code> — current logical identity</li>
+      <li><code>valid_from TIMESTAMPTZ</code></li>
+      <li><code>valid_to TIMESTAMPTZ NULL</code> — <code>NULL</code> means "currently active"</li>
+      <li><code>change_type TEXT</code> — <code>ingest</code> / <code>merge</code> / <code>split</code> / <code>correction</code></li>
+      <li><code>applied_revision INTEGER</code> — FK to <code>spec_revisions</code></li>
+      <li><code>correction_id INTEGER NULL</code> — FK to <code>_user_corrections</code> if applicable</li>
+    </ul>
+  </div>
+</div>
+
+<h4>The two indexes that matter</h4>
+<table>
+  <tr><th>index</th><th>purpose</th></tr>
+  <tr><td><code>&lt;cls&gt;_bindings_current</code></td>
+    <td>Partial index on <code>(canonical_id) WHERE valid_to IS NULL</code> — the hottest read path. Every "find the source rows for this canonical_id" lookup uses this.</td></tr>
+  <tr><td><code>&lt;cls&gt;_bindings_one_current_per_row</code></td>
+    <td>Partial <strong>unique</strong> index on <code>(knot_row_id) WHERE valid_to IS NULL</code> — enforces the invariant that any given source row has <strong>at most one current binding</strong>. Catches race conditions in merge / split that escape <code>FOR UPDATE</code>.</td></tr>
+</table>
+
+<div class="callout">
+<strong>The big idea.</strong> A <em>read</em> of a class's current state is a JOIN of
+the source table against the bindings table where <code>valid_to IS NULL</code>. An
+<em>ER merge</em> doesn't rewrite source rows — it closes one binding (<code>UPDATE
+SET valid_to = now()</code>) and opens another (<code>INSERT</code> with the new canonical_id
+and <code>valid_to NULL</code>). All history is preserved because closed bindings stay.
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="type-mapping">5. Type expression → postgres column type</h2>
+
+<p>Every slot in the spec carries a <code>TypeExpression</code> (a recursive sum:
+<code>Primitive</code>, <code>Array(of=...)</code>, <code>ClassRef(target_class=...)</code>). The
+postgres compile dispatches over that tree to produce a column type from a
+<strong>whitelist</strong> — type names never get spliced raw into DDL.</p>
+
+<table>
+  <tr><th>TypeExpression</th><th>Postgres column type</th></tr>
+  <tr><td><code>Primitive("string")</code></td><td><code>TEXT</code></td></tr>
+  <tr><td><code>Primitive("integer")</code></td><td><code>INTEGER</code></td></tr>
+  <tr><td><code>Primitive("float")</code></td><td><code>DOUBLE PRECISION</code></td></tr>
+  <tr><td><code>Primitive("boolean")</code></td><td><code>BOOLEAN</code></td></tr>
+  <tr><td><code>Primitive("datetime")</code></td><td><code>TIMESTAMPTZ</code></td></tr>
+  <tr><td><code>Primitive("date")</code></td><td><code>DATE</code></td></tr>
+  <tr><td><code>Array(of=Primitive("string"))</code></td><td><code>TEXT[]</code></td></tr>
+  <tr><td><code>Array(of=Primitive("integer"))</code></td><td><code>INTEGER[]</code></td></tr>
+  <tr><td><code>ClassRef(target_class=Movie)</code></td><td><code>TEXT</code> <span class="comment">(holds a canonical_id)</span></td></tr>
+  <tr><td><code>Array(of=ClassRef(...))</code></td><td><code>TEXT[]</code></td></tr>
+  <tr><td><code>None</code> <span class="comment">(derived / untyped)</span></td><td><code>TEXT</code> <span class="comment">(default)</span></td></tr>
+</table>
+
+<div class="callout">
+<strong>Why ClassRef is just TEXT.</strong> A class-reference slot stores the
+target's <code>canonical_id</code>, not a numeric FK. This is deliberate: canonical_ids
+are stable across merges (the bindings table changes, the value in the column
+doesn't), and they're meaningful to humans (<code>imdb:tt0111161</code> beats
+<code>17394</code>). Joins happen via <code>knot_data.&lt;target&gt;_bindings.canonical_id</code>
+with <code>valid_to IS NULL</code>.
+</div>
+
+<h3>Derived slots are skipped</h3>
+<p>A slot with a non-<code>None</code> <code>derivation</code> (a <code>RelationCount</code>,
+<code>RelationAggregate</code>, etc.) gets <strong>no column</strong>. The value is computed
+at query time. The migration emitter calls <code>is_stored(slot)</code> when walking
+effective slots and only emits columns for stored ones.</p>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="scenario">6. Walkthrough: a Movie scenario</h2>
+
+<p>Here's a concrete spec. Three sources for movies: imdb, tmdb, wiki. Each
+source has its <em>own</em> native identifier slot — because ER hasn't happened
+yet, we don't pretend they share an id.</p>
+
+<pre><code><span class="comment"># Pydantic spec construction</span>
+imdb_id   = Slot(name=<span class="string">"imdb_id"</span>,   type=Primitive(name=<span class="string">"string"</span>), identifier=<span class="keyword">True</span>, required=<span class="keyword">True</span>)
+tmdb_id   = Slot(name=<span class="string">"tmdb_id"</span>,   type=Primitive(name=<span class="string">"string"</span>), identifier=<span class="keyword">True</span>)
+wiki_slug = Slot(name=<span class="string">"wiki_slug"</span>, type=Primitive(name=<span class="string">"string"</span>), identifier=<span class="keyword">True</span>)
+title     = Slot(name=<span class="string">"title"</span>,     type=Primitive(name=<span class="string">"string"</span>))
+year      = Slot(name=<span class="string">"year"</span>,      type=Primitive(name=<span class="string">"integer"</span>))
+genres    = Slot(name=<span class="string">"genres"</span>,    type=Array(of=Primitive(name=<span class="string">"string"</span>)))
+
+Movie = OntologyClass(name=<span class="string">"Movie"</span>, slots=[imdb_id, tmdb_id, wiki_slug, title, year, genres])
+
+imdb_src = Source(name=<span class="string">"imdb"</span>, entity_class=Movie, identifier_slot=imdb_id,   trust_score=<span class="number">0.9</span>)
+tmdb_src = Source(name=<span class="string">"tmdb"</span>, entity_class=Movie, identifier_slot=tmdb_id,   trust_score=<span class="number">0.7</span>)
+wiki_src = Source(name=<span class="string">"wiki"</span>, entity_class=Movie, identifier_slot=wiki_slug, trust_score=<span class="number">0.5</span>)
+
+spec = Spec(id=<span class="string">"media"</span>, version=<span class="string">"1.0.0"</span>,
+            slots=[imdb_id, tmdb_id, wiki_slug, title, year, genres],
+            classes=[Movie],
+            sources=[imdb_src, tmdb_src, wiki_src])</code></pre>
+
+<h3>What knot creates at publish time</h3>
+
+<pre><code><span class="comment">-- 1. Source-row table</span>
+<span class="keyword">CREATE TABLE</span> knot_data.movie (
+    _knot_row_id    <span class="type">UUID</span>        <span class="keyword">NOT NULL DEFAULT</span> gen_random_uuid() <span class="keyword">UNIQUE</span>,
+    _source         <span class="type">TEXT</span>        <span class="keyword">NOT NULL</span>,
+    _source_row_id  <span class="type">TEXT</span>        <span class="keyword">NOT NULL</span>,
+    _ingest_at      <span class="type">TIMESTAMPTZ</span> <span class="keyword">NOT NULL DEFAULT</span> now(),
+    _spec_revision  <span class="type">INTEGER</span>     <span class="keyword">NOT NULL REFERENCES</span> public.spec_revisions(revision),
+    <span class="keyword">PRIMARY KEY</span> (_source, _source_row_id),
+
+    <span class="ident">imdb_id</span>     <span class="type">TEXT</span>     <span class="keyword">NULL</span>,
+    <span class="ident">tmdb_id</span>     <span class="type">TEXT</span>     <span class="keyword">NULL</span>,
+    <span class="ident">wiki_slug</span>   <span class="type">TEXT</span>     <span class="keyword">NULL</span>,
+    <span class="ident">title</span>       <span class="type">TEXT</span>     <span class="keyword">NULL</span>,
+    <span class="ident">year</span>        <span class="type">INTEGER</span>  <span class="keyword">NULL</span>,
+    <span class="ident">genres</span>      <span class="type">TEXT[]</span>   <span class="keyword">NULL</span>
+);
+
+<span class="comment">-- 2. Bindings table (SCD2)</span>
+<span class="keyword">CREATE TABLE</span> knot_data.movie_bindings (
+    knot_row_id        <span class="type">UUID</span>        <span class="keyword">NOT NULL</span>,
+    canonical_id       <span class="type">TEXT</span>        <span class="keyword">NOT NULL</span>,
+    valid_from         <span class="type">TIMESTAMPTZ</span> <span class="keyword">NOT NULL DEFAULT</span> now(),
+    valid_to           <span class="type">TIMESTAMPTZ</span>,
+    change_type        <span class="type">TEXT</span>        <span class="keyword">NOT NULL</span>,
+    applied_revision   <span class="type">INTEGER</span>     <span class="keyword">NOT NULL REFERENCES</span> public.spec_revisions(revision),
+    correction_id      <span class="type">INTEGER</span>     <span class="keyword">REFERENCES</span> public._user_corrections(id),
+    <span class="keyword">PRIMARY KEY</span> (knot_row_id, valid_from)
+);
+
+<span class="comment">-- 3. Indexes</span>
+<span class="keyword">CREATE INDEX</span> movie_bindings_current
+    <span class="keyword">ON</span> knot_data.movie_bindings (canonical_id) <span class="keyword">WHERE</span> valid_to <span class="keyword">IS NULL</span>;
+
+<span class="keyword">CREATE UNIQUE INDEX</span> movie_bindings_one_current_per_row
+    <span class="keyword">ON</span> knot_data.movie_bindings (knot_row_id) <span class="keyword">WHERE</span> valid_to <span class="keyword">IS NULL</span>;</code></pre>
+
+<p>Notice what is <em>not</em> there: no <code>movies</code> plural, no per-source tables. The
+class name lowercased is the table name. All three sources write into the
+same <code>knot_data.movie</code> table; <code>_source</code> distinguishes them.</p>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="ingest-flow">7. What happens at ingest</h2>
+
+<p>An ingest call looks like:</p>
+<pre><code>POST /graph/ingest/imdb
+{
+  "rows": [
+    { "imdb_id": "tt0111161", "title": "The Shawshank Redemption", "year": 1994 },
+    { "imdb_id": "tt0068646", "title": "The Godfather",            "year": 1972 }
+  ]
+}</code></pre>
+
+<p>knot's <code>ingest_rows</code> does this in one transaction:</p>
+
+<ol>
+  <li><strong>Validate</strong> rows with a Pydantic model built from the source's class
+  (typed fields, required-slot checks). Failures abort with 422.</li>
+  <li><strong>Fire <code>RowsIngesting</code></strong> on the extension dispatcher. Team-written ER
+  may run, set canonical_ids. If <code>KNOT_ER_URL</code> is set, the built-in ER shim
+  POSTs to the sibling <code>er/</code> service.</li>
+  <li><strong>Default canonical_id</strong> if nothing was set: <code>{source_name}:{source_row_id}</code>.
+  So an imdb row with <code>imdb_id="tt0111161"</code> gets canonical_id <code>imdb:tt0111161</code>.
+  Debuggable; ER can collapse it later.</li>
+  <li><strong>INSERT</strong> rows into <code>knot_data.movie</code> + bindings rows into
+  <code>knot_data.movie_bindings</code>. Re-pushing the same <code>(_source, _source_row_id)</code>
+  updates the existing row in place — the binding is preserved (no new row in the
+  bindings table) so the canonical_id stays.</li>
+  <li><strong>Optional constraint check</strong> if <code>?validate_constraints=true</code>.
+  Compiles every ERROR-severity constraint whose <code>primary</code> class matches this
+  source's class, runs it, raises <code>422</code> on any violation, transaction rolls back.</li>
+  <li><strong>DQ recording</strong>: row count, null count, distinct count, min/max
+  per slot get appended to <code>dq_observations</code> tagged with this ingest's batch_id.</li>
+  <li><strong>Fire <code>RowsIngested</code></strong> on the extension dispatcher (post-insert audit
+  hooks).</li>
+</ol>
+
+<h3>What the tables look like after ingest</h3>
+
+<div class="table-render">
+  <div class="tablename">knot_data.movie</div>
+  <table>
+    <tr><th class="sys-col">_knot_row_id</th><th class="sys-col">_source</th><th class="sys-col">_source_row_id</th><th>imdb_id</th><th>tmdb_id</th><th>wiki_slug</th><th>title</th><th>year</th></tr>
+    <tr><td class="sys-col">uuid-a1…</td><td class="sys-col">imdb</td><td class="sys-col">tt0111161</td><td>tt0111161</td><td>NULL</td><td>NULL</td><td>The Shawshank Redemption</td><td>1994</td></tr>
+    <tr><td class="sys-col">uuid-b2…</td><td class="sys-col">imdb</td><td class="sys-col">tt0068646</td><td>tt0068646</td><td>NULL</td><td>NULL</td><td>The Godfather</td><td>1972</td></tr>
+  </table>
+</div>
+
+<div class="table-render">
+  <div class="tablename">knot_data.movie_bindings</div>
+  <table>
+    <tr><th>knot_row_id</th><th>canonical_id</th><th>valid_from</th><th>valid_to</th><th>change_type</th></tr>
+    <tr><td>uuid-a1…</td><td><strong>imdb:tt0111161</strong></td><td>t₀</td><td><em>NULL</em></td><td>ingest</td></tr>
+    <tr><td>uuid-b2…</td><td><strong>imdb:tt0068646</strong></td><td>t₀</td><td><em>NULL</em></td><td>ingest</td></tr>
+  </table>
+</div>
+
+<p>Now imagine the tmdb source pushes a row that's <em>actually the same movie</em>:</p>
+<pre><code>POST /graph/ingest/tmdb
+{ "rows": [{ "tmdb_id": "278", "title": "Shawshank", "year": 1994 }] }</code></pre>
+
+<p>Without ER, you get three independent canonical entities:</p>
+<div class="table-render">
+  <div class="tablename">knot_data.movie_bindings (after tmdb ingest)</div>
+  <table>
+    <tr><th>knot_row_id</th><th>canonical_id</th><th>valid_to</th><th>change_type</th></tr>
+    <tr><td>uuid-a1…</td><td>imdb:tt0111161</td><td><em>NULL</em></td><td>ingest</td></tr>
+    <tr><td>uuid-b2…</td><td>imdb:tt0068646</td><td><em>NULL</em></td><td>ingest</td></tr>
+    <tr><td>uuid-c3…</td><td><strong>tmdb:278</strong></td><td><em>NULL</em></td><td>ingest</td></tr>
+  </table>
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="er-merges">8. ER merges — SCD2 in action</h2>
+
+<p>ER decides <code>tmdb:278</code> is the same as <code>imdb:tt0111161</code>. The merge API closes the
+losing binding and opens a new one pointing the same source row at the
+surviving canonical_id. Source data is <strong>never touched</strong>.</p>
+
+<pre><code><span class="comment">-- Inside graph_store.merge_canonical_ids():</span>
+<span class="keyword">UPDATE</span> knot_data.movie_bindings
+   <span class="keyword">SET</span> valid_to = now()
+ <span class="keyword">WHERE</span> canonical_id = <span class="string">'tmdb:278'</span> <span class="keyword">AND</span> valid_to <span class="keyword">IS NULL</span>;
+
+<span class="keyword">INSERT INTO</span> knot_data.movie_bindings
+       (knot_row_id, canonical_id, valid_from, valid_to,
+        change_type, applied_revision)
+<span class="keyword">SELECT</span> knot_row_id, <span class="string">'imdb:tt0111161'</span>, now(), <span class="keyword">NULL</span>,
+       <span class="string">'merge'</span>, &lt;current_revision&gt;
+  <span class="keyword">FROM</span> knot_data.movie_bindings
+ <span class="keyword">WHERE</span> canonical_id = <span class="string">'tmdb:278'</span>
+   <span class="keyword">AND</span> valid_to IS NOT <span class="keyword">NULL</span>
+   <span class="keyword">AND</span> valid_to = (<span class="comment">-- the row we just closed</span>
+       <span class="keyword">SELECT</span> max(valid_to) <span class="keyword">FROM</span> ...);
+
+<span class="comment">-- Plus an event row in canonical_id_lineage:</span>
+<span class="comment">--   from_canonical_ids = ['tmdb:278'], to_canonical_ids = ['imdb:tt0111161']</span></code></pre>
+
+<div class="table-render">
+  <div class="tablename">knot_data.movie_bindings (after merge)</div>
+  <table>
+    <tr><th>knot_row_id</th><th>canonical_id</th><th>valid_from</th><th>valid_to</th><th>change_type</th></tr>
+    <tr><td>uuid-a1…</td><td>imdb:tt0111161</td><td>t₀</td><td><em>NULL</em></td><td>ingest</td></tr>
+    <tr><td>uuid-b2…</td><td>imdb:tt0068646</td><td>t₀</td><td><em>NULL</em></td><td>ingest</td></tr>
+    <tr><td>uuid-c3…</td><td>tmdb:278</td><td>t₀</td><td>t₁</td><td>ingest</td></tr>
+    <tr><td>uuid-c3…</td><td><strong>imdb:tt0111161</strong></td><td>t₁</td><td><em>NULL</em></td><td>merge</td></tr>
+  </table>
+</div>
+
+<p>Reading <code>knot_data.movie</code> for <code>canonical_id = 'imdb:tt0111161'</code> now returns
+<em>two</em> source rows: the original imdb one and the tmdb one — both contribute
+to that entity. Resolution policy on a slot decides which value wins for
+multi-source conflicts.</p>
+
+<div class="callout">
+<strong>SCD2 invariant</strong>: for any <code>knot_row_id</code>, there is at most one row
+with <code>valid_to IS NULL</code>. Enforced by a partial unique index. A split
+operation does the inverse — opens multiple new bindings out of one closed
+one.
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="corrections">9. User corrections</h2>
+
+<p>Six correction operations are wired in. Each lands as an audit row in
+<code>_user_corrections</code> <strong>and</strong> a data-plane effect.</p>
+
+<table>
+  <tr><th>operation</th><th>data-plane effect</th></tr>
+  <tr><td><code>property</code></td><td>Upsert a row in <code>knot_data.&lt;class&gt;</code> tagged <code>_source = '_user_corrections'</code> with just the corrected slot value. Bumps the Beta posteriors for the original sources (agreement → α++, disagreement → β++).</td></tr>
+  <tr><td><code>merge</code></td><td>Close N bindings; open 1 binding to the surviving canonical_id. Emits a <code>canonical_id_lineage</code> event. Cross-class <code>ClassRef</code> columns that pointed at the merged-away id get UPDATE-rewritten.</td></tr>
+  <tr><td><code>split</code></td><td>Close 1 binding; open N new bindings partitioned by source.</td></tr>
+  <tr><td><code>add</code></td><td>Insert a synthetic source row tagged <code>_source = '_user_corrections'</code>, open one binding to a brand-new canonical_id.</td></tr>
+  <tr><td><code>tombstone</code></td><td>Close the current binding; never open a replacement. <code>include_tombstoned=True</code> on reads can still surface the rows.</td></tr>
+  <tr><td><code>reject_contribution</code></td><td>Close just the binding from one specific source. The canonical_id survives if other sources still contribute.</td></tr>
+</table>
+
+<p>The <code>_user_corrections</code> source-name is a synthetic value — there's no
+<code>Source</code> entity in the spec for it. It's just a sentinel in the <code>_source</code>
+column so corrections are distinguishable from source-pushed facts.</p>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="migrations">10. How migrations work</h2>
+
+<p>When the user publishes a draft, knot:</p>
+
+<ol>
+  <li><strong>Loads</strong> the previous published spec from JSONB.</li>
+  <li><strong>Diffs</strong> previous vs. candidate via <code>diff_specs()</code>, producing a list of typed <code>Change</code> dataclasses.</li>
+  <li><strong>Classifies</strong> each change into one of three buckets (below).</li>
+  <li><strong>Gates</strong> on:
+    <ul>
+      <li>Any <strong>Bucket A</strong> (DDL-destructive) change without <code>allow_destructive=true</code> → reject with <code>PublishGateError</code>.</li>
+      <li>Any new or changed constraint that fails over current data → reject.</li>
+    </ul>
+  </li>
+  <li><strong>Emits DDL</strong> via <code>emit_ddl()</code> — single-dispatch on the Change subtype, runs the corresponding postgres statement.</li>
+  <li><strong>Updates</strong> <code>spec_revisions</code>: <code>published = TRUE</code> on the draft, <code>FALSE</code> on the previous (via the partial unique index).</li>
+</ol>
+
+<h3>The three buckets</h3>
+
+<div class="schema-box">
+  <div class="schema-card" style="border-color: var(--red);">
+    <h4 style="color: var(--red);">A — DDL-destructive</h4>
+    <p>Storage shape changes that can lose data. Refused unless
+    <code>allow_destructive=true</code>.</p>
+    <p><code>DropClass</code>, <code>DropSlot</code>, <code>DropDefinedClass</code>, <code>DropSource</code>,
+    <code>ChangeSlotTypeExpression</code>, <code>ChangeClassAbstract</code>,
+    <code>ChangeSourceEntityClass</code>, <code>ChangeSourceIdentifierSlot</code>.</p>
+  </div>
+  <div class="schema-card" style="border-color: var(--yellow);">
+    <h4 style="color: var(--yellow);">B — Data-revalidation</h4>
+    <p>Constraint tightens; old data may now violate. No DDL, but the publish
+    gate <em>runs the constraint check over current data</em>.</p>
+    <p><code>ChangeSlotPattern</code>, <code>ChangeSlotPermissibleValues</code>,
+    <code>ChangeSlotMinimum</code>, <code>ChangeSlotMaximum</code>, <code>ChangeConstraintBody</code>.</p>
+  </div>
+  <div class="schema-card" style="border-color: var(--green);">
+    <h4 style="color: var(--green);">C — Spec-only / runtime</h4>
+    <p>No DDL, no data revalidation. Audit records.</p>
+    <p><code>ChangeSlotResolutionPolicy</code>, <code>ChangeConstraintSeverity</code>,
+    <code>ChangeSourceTrustScore</code>, <code>ChangeSourceSlotPrior</code>,
+    <code>ChangeClassMixins</code>, <code>ChangeClassIsA</code> (concrete classes), <code>AddSource</code>, etc.</p>
+  </div>
+</div>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="change-types">11. The Change-type catalog</h2>
+
+<p>What each change emits, end-to-end. <code>cls</code> means the candidate-side class object.</p>
+
+<h3>Class-level</h3>
+<table>
+  <tr><th>Change</th><th>Bucket</th><th>DDL emitted</th></tr>
+  <tr><td><code>AddClass(cls)</code></td>
+      <td><span class="pill C">C</span></td>
+      <td><code>CREATE TABLE knot_data.&lt;cls&gt;</code> + bindings table + 2 indexes</td></tr>
+  <tr><td><code>DropClass(class_name)</code></td>
+      <td><span class="pill A">A</span></td>
+      <td><code>DROP TABLE knot_data.&lt;cls&gt;_bindings CASCADE</code> + <code>DROP TABLE knot_data.&lt;cls&gt; CASCADE</code></td></tr>
+  <tr><td><code>AddDefinedClass(cls)</code></td>
+      <td><span class="pill C">C</span></td>
+      <td><code>CREATE OR REPLACE VIEW knot_data.&lt;cls&gt; AS …</code> over the parent class with the compiled <code>definition</code> body as WHERE.</td></tr>
+  <tr><td><code>DropDefinedClass</code></td>
+      <td><span class="pill A">A</span></td>
+      <td><code>DROP VIEW IF EXISTS knot_data.&lt;cls&gt; CASCADE</code></td></tr>
+  <tr><td><code>ChangeClassAbstract</code></td>
+      <td><span class="pill A">A</span></td>
+      <td>abstract → concrete: same as AddClass. concrete → abstract: refuses on non-empty table; otherwise DROP TABLEs.</td></tr>
+  <tr><td><code>ChangeClassIsA</code></td>
+      <td><span class="pill C">C</span></td>
+      <td>Concrete: no-op (<code>is_a</code> doesn't drive DDL — own table, own slots).
+          Defined: re-emit the VIEW with the new parent.</td></tr>
+  <tr><td><code>ChangeClassMixins</code></td>
+      <td><span class="pill C">C</span></td>
+      <td>Audit-only. The actual column adds/drops ride on AddSlot/DropSlot records.</td></tr>
+  <tr><td><code>ChangeClassDefinition</code></td>
+      <td><span class="pill C">C</span></td>
+      <td><code>CREATE OR REPLACE VIEW</code> — idempotent, no data loss.</td></tr>
+</table>
+
+<h3>Slot-level</h3>
+<table>
+  <tr><th>Change</th><th>Bucket</th><th>DDL emitted</th></tr>
+  <tr><td><code>AddSlot(cls, slot)</code></td>
+      <td><span class="pill C">C</span></td>
+      <td><code>ALTER TABLE knot_data.&lt;cls&gt; ADD COLUMN &lt;slot&gt; &lt;pgtype&gt; NULL</code></td></tr>
+  <tr><td><code>DropSlot(cls, slot_name)</code></td>
+      <td><span class="pill A">A</span></td>
+      <td><code>ALTER TABLE knot_data.&lt;cls&gt; DROP COLUMN &lt;slot&gt;</code></td></tr>
+  <tr><td><code>ChangeSlotTypeExpression(slot, prev_pg_type, new_pg_type)</code></td>
+      <td><span class="pill A">A</span></td>
+      <td><code>ALTER TABLE … ALTER COLUMN &lt;slot&gt; TYPE &lt;new&gt; USING &lt;slot&gt;::&lt;new&gt;</code>. Aborts the whole migration if any row's cast fails.</td></tr>
+  <tr><td><code>ChangeSlotRequired</code></td>
+      <td><span class="pill C">C</span></td>
+      <td>None — API-enforced (correction rows are partial).</td></tr>
+  <tr><td><code>ChangeSlotPattern</code> / <code>PermissibleValues</code> / <code>Minimum</code> / <code>Maximum</code></td>
+      <td><span class="pill B">B</span></td>
+      <td>None. Publish gate revalidates current data against the new constraint.</td></tr>
+  <tr><td><code>ChangeSlotIdentifier</code></td>
+      <td><span class="pill C">C</span></td>
+      <td>None — storage PK is <code>(_source, _source_row_id)</code>; the identifier flag is ER/SCD2 advisory.</td></tr>
+  <tr><td><code>ChangeSlotResolutionPolicy</code></td>
+      <td><span class="pill C">C</span></td>
+      <td>None — query-time behavior.</td></tr>
+  <tr><td><code>ChangeSlotDerivation</code></td>
+      <td><span class="pill C">C</span></td>
+      <td>None — derivations are query-time projections.</td></tr>
+</table>
+
+<h3>Source-level</h3>
+<table>
+  <tr><th>Change</th><th>Bucket</th><th>DDL emitted</th></tr>
+  <tr><td><code>AddSource</code></td><td><span class="pill C">C</span></td><td>None — sources are runtime entities.</td></tr>
+  <tr><td><code>DropSource</code></td><td><span class="pill A">A</span></td><td>None directly, but rows from that source become orphaned in <code>knot_data.&lt;cls&gt;</code>.</td></tr>
+  <tr><td><code>ChangeSourceEntityClass</code></td><td><span class="pill A">A</span></td><td><strong>Refused</strong> — requires manual data migration (drop + re-add).</td></tr>
+  <tr><td><code>ChangeSourceIdentifierSlot</code></td><td><span class="pill A">A</span></td><td><code>UPDATE knot_data.&lt;cls&gt; SET _source_row_id = &lt;new_slot&gt;::TEXT WHERE _source = …</code>. NOT-NULL / collision violations surface naturally.</td></tr>
+  <tr><td><code>ChangeSourceTrustScore</code></td><td><span class="pill C">C</span></td><td>None — written to <code>trust_config</code> at runtime.</td></tr>
+  <tr><td><code>ChangeSourceSlotPrior</code></td><td><span class="pill C">C</span></td><td>None — written to <code>trust_posteriors</code> at runtime (seeded from priors).</td></tr>
+</table>
+
+<h3>Constraint-level</h3>
+<table>
+  <tr><th>Change</th><th>Bucket</th><th>DDL emitted</th></tr>
+  <tr><td><code>AddConstraint</code></td><td><span class="pill B">B</span></td><td>None directly — publish gate runs the constraint over current data; failure aborts publish.</td></tr>
+  <tr><td><code>DropConstraint</code></td><td><span class="pill C">C</span></td><td>None.</td></tr>
+  <tr><td><code>ChangeConstraintPrimary</code> / <code>Body</code></td><td><span class="pill B">B</span></td><td>None — gate revalidates.</td></tr>
+  <tr><td><code>ChangeConstraintSeverity</code></td><td><span class="pill C">C</span></td><td>None — runtime-only.</td></tr>
+</table>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="publish-gate">12. The publish gate</h2>
+
+<p>Two gates run before any DDL touches postgres:</p>
+
+<div class="callout danger">
+<strong>Gate 1 — Destructive change refusal.</strong>
+If any change in the diff is in <code>_DESTRUCTIVE_CHANGE_TYPES</code> and the caller
+did not pass <code>allow_destructive=true</code>, publish fails with
+<code>PublishGateError("destructive change without allow_destructive: …")</code>. The
+draft stays in place; nothing in postgres changes.
+</div>
+
+<div class="callout warn">
+<strong>Gate 2 — Constraint revalidation.</strong>
+For every constraint that was added or changed, knot compiles its SQL body
+and runs it against the current published data. Any rows that <em>would</em>
+violate the constraint after publish are reported as
+<code>PublishGateError("constraint violations: …")</code>. Same as Gate 1: draft
+stays, nothing changes.
+</div>
+
+<p>Only if both gates pass does <code>apply_migration</code> walk the change list and
+call <code>emit_ddl</code> for each one inside a single transaction. If any DDL fails,
+the whole publish aborts and rolls back — postgres atomic DDL.</p>
+
+<details>
+<summary>What about the spec_revisions row itself?</summary>
+<p>The draft row already exists (created by <code>POST /spec/drafts</code> and mutated
+by every <code>POST /spec/drafts/{id}/...</code>). Publish sets <code>published = TRUE</code> and
+<code>published_at = now()</code>. The partial unique index forces the previous
+published row (if any) to flip to <code>FALSE</code> in the same transaction.</p>
+</details>
+
+<!-- ────────────────────────────────────────────────────────────────────── -->
+<h2 id="cheatsheet">13. Cheat sheet</h2>
+
+<p>For talking-points / explaining-to-someone-else:</p>
+
+<table>
+  <tr><th>Question</th><th>Answer</th></tr>
+  <tr><td>"Where is the schema?"</td><td><code>knot_data.&lt;class.name.lower()&gt;</code> for source rows, <code>knot_data.&lt;cls&gt;_bindings</code> for SCD2 history. The spec itself lives in <code>public.spec_revisions</code> as JSONB.</td></tr>
+  <tr><td>"How are merges represented?"</td><td>Close the losing binding (<code>valid_to = now()</code>); open a new binding pointing the same <code>knot_row_id</code> at the surviving canonical_id. Source data is never moved.</td></tr>
+  <tr><td>"How are types mapped?"</td><td>Recursive walk of <code>Slot.type</code>: <code>Primitive</code> via whitelist, <code>Array</code> appends <code>[]</code>, <code>ClassRef</code> is always <code>TEXT</code> (holds a canonical_id).</td></tr>
+  <tr><td>"How do you handle nullability?"</td><td>Every slot column is <code>NULL</code>-able regardless of <code>required=True</code>. Correction rows are partial by construction (they update one slot), so column-level NOT NULL would break them. <code>required</code> is enforced at the API layer.</td></tr>
+  <tr><td>"How are derived slots stored?"</td><td>They aren't. <code>is_stored(slot)</code> returns False when <code>derivation</code> is non-None; no column is emitted. The GraphQL layer computes them as correlated subqueries at query time.</td></tr>
+  <tr><td>"What happens if I rename a slot?"</td><td>The diff sees DropSlot + AddSlot. Bucket A → publish refuses without <code>allow_destructive</code>. There's no rename track-record because the canonical name in the spec is the only identity a slot has.</td></tr>
+  <tr><td>"How are migrations atomic?"</td><td>All DDL for a publish runs in one transaction. Postgres supports transactional DDL — any failure rolls back the whole publish.</td></tr>
+  <tr><td>"What's the difference between abstract and defined classes?"</td><td>Abstract: not concrete, no table. Used as a mixin or <code>is_a</code> parent. Defined: has a body (a predicate over a parent class); compiled to a <code>VIEW</code> over the parent's table.</td></tr>
+  <tr><td>"What's <code>_user_corrections</code> in <code>_source</code>?"</td><td>Synthetic source-name sentinel for correction rows. No <code>Source</code> entity for it exists in the spec; it's a hardcoded constant for separating user-pushed facts from source-pushed facts.</td></tr>
+</table>
+
+<hr>
+<p class="comment">
+Generated 2026-05-11 against the trim-down branch.
+Source-of-truth for everything here:
+<code>core/knot/spec/compile/postgres/</code> (DDL emission),
+<code>core/knot/db/control_schema.sql</code> (control plane),
+<code>core/knot/graph/ingest.py</code> (ingest flow),
+<code>core/knot/db/graph_store.py</code> (DML).
+</p>
+
+</main>
+</div>
+</body>
+</html>
