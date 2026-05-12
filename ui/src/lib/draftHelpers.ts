@@ -9,60 +9,17 @@ import type { PublishedSpec } from "../types/spec";
 import * as api from "./draftApi";
 
 /**
- * Detach a slot from every class that lists it, run `mutate`, then re-attach.
- * Used to delete+add a slot while preserving its references.
+ * For non-class entities (Source, Constraint), edit = delete + add.
  */
-export async function withSlotDetached<T>(
-  draftId: number,
-  spec: PublishedSpec,
-  slotName: string,
-  mutate: () => Promise<T>,
-): Promise<T> {
-  const attachedClasses = spec.classes.filter((c) => c.slotNames.includes(slotName));
-  // Detach.
-  for (const c of attachedClasses) {
-    await api.updateClass(draftId, c.name, {
-      slot_names: c.slotNames.filter((s) => s !== slotName),
-    });
-  }
-  try {
-    return await mutate();
-  } finally {
-    // Re-attach (best-effort; if mutate created a slot with the same name,
-    // restoring is correct; if it failed, we still try to put references back).
-    for (const c of attachedClasses) {
-      try {
-        await api.updateClass(draftId, c.name, {
-          slot_names: c.slotNames,
-        });
-      } catch {
-        /* swallow — slot may not exist if mutate aborted */
-      }
-    }
-  }
-}
-
-/**
- * For non-class entities (Slot, Source, Constraint), edit = delete + add
- * with detaching of any referencing class slot_names. Returns the new spec
- * after the mutation, by ID.
- */
-export type EditableKind = "slot" | "source" | "constraint";
+export type EditableKind = "source" | "constraint";
 
 export async function editEntityViaDeleteAdd(
   draftId: number,
-  spec: PublishedSpec,
+  _spec: PublishedSpec,
   kind: EditableKind,
   oldName: string,
   performAdd: () => Promise<unknown>,
 ): Promise<void> {
-  if (kind === "slot") {
-    await withSlotDetached(draftId, spec, oldName, async () => {
-      await api.deleteSlot(draftId, oldName);
-      await performAdd();
-    });
-    return;
-  }
   if (kind === "source") {
     await api.deleteSource(draftId, oldName);
     await performAdd();
@@ -77,8 +34,7 @@ export async function editEntityViaDeleteAdd(
 
 /**
  * Auto-detach handler used by the cascade-delete flow. Given a 409 referenced
- * error, the body string typically lists the references; we parse it best-
- * effort by checking which entities mention the name, then PATCH them off.
+ * error, detaches all references to the named entity and retries.
  *
  * This is a structural heuristic because knot core's `ReferencedEntityError`
  * yields a free-form string. We over-detach (anything referencing) rather
@@ -90,16 +46,6 @@ export async function autoDetach(
   kind: EditableKind | "class",
   name: string,
 ): Promise<void> {
-  if (kind === "slot") {
-    for (const c of spec.classes) {
-      if (c.slotNames.includes(name)) {
-        await api.updateClass(draftId, c.name, {
-          slot_names: c.slotNames.filter((s) => s !== name),
-        });
-      }
-    }
-    return;
-  }
   if (kind === "class") {
     // Detach is_a / mixins from any class that points here.
     for (const c of spec.classes) {

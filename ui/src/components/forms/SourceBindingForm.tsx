@@ -75,13 +75,11 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
 
   const className = watch("class_name");
 
-  // Slots available on the selected class (including inherited via is_a + mixins).
+  // Slots available on the selected class (own slots; effectiveSlots includes inherited).
   const classSlots = useMemo(() => {
     if (!className) return [];
     const cls = spec.classes.find((c) => c.name === className);
-    if (!cls) return [];
-    const onClass = new Set(cls.slotNames);
-    return spec.slots.filter((s) => onClass.has(s.name));
+    return cls?.effectiveSlots ?? [];
   }, [className, spec]);
 
   // Identifier slots (subset of class slots marked identifier=true).

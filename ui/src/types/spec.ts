@@ -35,7 +35,8 @@ export interface SpecClass {
   description: string | null;
   isAName: string | null;
   mixinNames: string[];
-  slotNames: string[];
+  slots: SpecSlot[];
+  effectiveSlots: SpecSlot[];
 }
 
 export interface SpecSource {
@@ -77,7 +78,6 @@ export interface PublishedSpec {
   version: string;
   revision: number;
   contentHash: string;
-  slots: SpecSlot[];
   classes: SpecClass[];
   sources: SpecSource[];
   sourceBindings: SpecSourceBinding[];

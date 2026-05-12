@@ -4,33 +4,42 @@ import { gql } from "@apollo/client";
  * Full published spec — every field that nodes/edges/property-panel need.
  * Mirrors `knot.api.spec_graphql.PublishedSpec`.
  */
+const SLOT_FIELDS = gql`
+  fragment SlotFields on SlotGQL {
+    name
+    identifier
+    required
+    description
+    pattern
+    minimumValue
+    maximumValue
+    permissibleValues
+    resolutionPolicy
+    typeKind
+    typeName
+  }
+`;
+
 export const PUBLISHED_SPEC = gql`
+  ${SLOT_FIELDS}
   query PublishedSpec {
     publishedSpec {
       id
       version
       revision
       contentHash
-      slots {
-        name
-        identifier
-        required
-        description
-        pattern
-        minimumValue
-        maximumValue
-        permissibleValues
-        resolutionPolicy
-        typeKind
-        typeName
-      }
       classes {
         name
         abstract
         description
         isAName
         mixinNames
-        slotNames
+        slots {
+          ...SlotFields
+        }
+        effectiveSlots {
+          ...SlotFields
+        }
       }
       sources {
         name

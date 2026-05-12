@@ -33,7 +33,7 @@ export const ENDPOINTS: Record<EndpointKey, EndpointDef> = {
     contentHash
     classes {
       name
-      slotNames
+      slots { name }
     }
   }
 }

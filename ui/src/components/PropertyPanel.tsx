@@ -71,10 +71,6 @@ export function resolveSelection(
   sel: SpecSelection,
 ): SpecEntity | null {
   switch (sel.kind) {
-    case "slot": {
-      const v = spec.slots.find((s) => s.name === sel.name);
-      return v ? { kind: "slot", value: v } : null;
-    }
     case "class": {
       const v = spec.classes.find((c) => c.name === sel.name);
       return v ? { kind: "class", value: v } : null;
@@ -94,6 +90,8 @@ export function resolveSelection(
       const v = spec.constraints.find((k) => k.name === sel.name);
       return v ? { kind: "constraint", value: v } : null;
     }
+    default:
+      return null;
   }
 }
 

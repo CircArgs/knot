@@ -20,31 +20,23 @@ const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 
 // ── Inline slot row types ────────────────────────────────────────────────────
 
-export type InlineSlotMode = "new" | "existing";
-
 export type TypeKindValue = "" | "primitive" | "array_of_primitive" | "class" | "array_of_class";
 
 export interface InlineSlotRow {
-  mode: InlineSlotMode;
-  // "new" fields
   name: string;
   typeKind: TypeKindValue;
   typeName: string;
   identifier: boolean;
   required: boolean;
-  // "existing" field
-  existingName: string;
 }
 
 function emptySlotRow(): InlineSlotRow {
   return {
-    mode: "new",
     name: "",
     typeKind: "primitive",
     typeName: "string",
     identifier: false,
     required: false,
-    existingName: "",
   };
 }
 
@@ -60,10 +52,8 @@ const Schema = z.object({
 });
 
 export type ClassFormValues = z.infer<typeof Schema> & {
-  /** Resolved slot name list (new + existing). Populated by the form's submit. */
-  slotNames: string[];
-  /** New slot rows that need to be created via POST /slots before the class. */
-  newSlots: InlineSlotRow[];
+  /** Inline slot definitions for this class. */
+  slots: InlineSlotRow[];
 };
 
 interface Props {
@@ -110,15 +100,13 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
   // ── Inline slot rows state ────────────────────────────────────────────────
   const [slotRows, setSlotRows] = useState<InlineSlotRow[]>(() => {
     if (initialSlotRows && initialSlotRows.length > 0) return initialSlotRows;
-    if (initial?.slotNames && initial.slotNames.length > 0) {
-      return initial.slotNames.map((n) => ({
-        mode: "existing" as InlineSlotMode,
-        name: "",
-        typeKind: "primitive" as TypeKindValue,
-        typeName: "",
-        identifier: false,
-        required: false,
-        existingName: n,
+    if (initial?.slots && initial.slots.length > 0) {
+      return initial.slots.map((s) => ({
+        name: s.name,
+        typeKind: (s.typeKind ?? "primitive") as TypeKindValue,
+        typeName: s.typeName ?? "",
+        identifier: s.identifier,
+        required: s.required,
       }));
     }
     return [];
@@ -132,7 +120,6 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
 
   const otherClasses = spec.classes.filter((c) => c.name !== initial?.name);
   const classOptions = otherClasses.map((c) => ({ value: c.name, label: c.name }));
-  const existingSlotOptions = spec.slots.map((s) => ({ value: s.name, label: s.name }));
 
   const toggleMixin = (name: string) => {
     const cur = mixinNames as string[];
@@ -143,20 +130,8 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
   };
 
   const submit = handleSubmit(async (base) => {
-    // Build resolved slot name list and new slot list from inline rows.
-    const slotNames: string[] = [];
-    const newSlots: InlineSlotRow[] = [];
-    for (const row of slotRows) {
-      if (row.mode === "existing") {
-        if (row.existingName) slotNames.push(row.existingName);
-      } else {
-        if (row.name) {
-          slotNames.push(row.name);
-          newSlots.push(row);
-        }
-      }
-    }
-    await onSubmit({ ...base, slotNames, newSlots });
+    const slots = slotRows.filter((r) => r.name.trim() !== "");
+    await onSubmit({ ...base, slots });
   });
 
   return (
@@ -237,7 +212,6 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
             row={row}
             idx={idx}
             classOptions={classOptions}
-            existingSlotOptions={existingSlotOptions}
             onChange={(patch) => updateSlotRow(idx, patch)}
             onRemove={() => removeSlotRow(idx)}
           />
@@ -285,14 +259,12 @@ function InlineSlotEditor({
   row,
   idx,
   classOptions,
-  existingSlotOptions,
   onChange,
   onRemove,
 }: {
   row: InlineSlotRow;
   idx: number;
   classOptions: { value: string; label: string }[];
-  existingSlotOptions: { value: string; label: string }[];
   onChange: (patch: Partial<InlineSlotRow>) => void;
   onRemove: () => void;
 }) {
@@ -307,124 +279,101 @@ function InlineSlotEditor({
 
   return (
     <div className="mb-2 p-2 border border-slate-200 rounded bg-slate-50/60 relative">
-      {/* Mode toggle */}
       <div className="flex items-center justify-between mb-1.5 gap-2">
         <span className="text-[10px] uppercase tracking-wide text-slate-400 font-medium">
           slot {idx + 1}
         </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() =>
-              onChange({ mode: row.mode === "new" ? "existing" : "new" })
-            }
-            className="text-[10px] text-blue-600 hover:text-blue-800 underline"
-          >
-            {row.mode === "new" ? "use existing" : "define new"}
-          </button>
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-rose-400 hover:text-rose-600 text-sm leading-none"
-            title="Remove slot"
-          >
-            ✕
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={onRemove}
+          className="text-rose-400 hover:text-rose-600 text-sm leading-none"
+          title="Remove slot"
+        >
+          ✕
+        </button>
       </div>
 
-      {row.mode === "existing" ? (
-        <SearchableSelect
-          options={existingSlotOptions}
-          value={row.existingName}
-          onChange={(v) => onChange({ existingName: v })}
-          placeholder="Search existing slots…"
-        />
-      ) : (
-        <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 items-end">
-          {/* name */}
-          <div>
-            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">name</label>
-            <input
-              type="text"
-              value={row.name}
-              onChange={(e) => onChange({ name: e.target.value })}
-              className={inputClass}
-              placeholder="slot_name"
-            />
-          </div>
+      <div className="grid grid-cols-[1fr_auto_1fr] gap-1.5 items-end">
+        {/* name */}
+        <div>
+          <label className="block text-[10px] uppercase text-slate-500 mb-0.5">name</label>
+          <input
+            type="text"
+            value={row.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            className={inputClass}
+            placeholder="slot_name"
+          />
+        </div>
 
-          {/* typeKind */}
-          <div>
-            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">kind</label>
+        {/* typeKind */}
+        <div>
+          <label className="block text-[10px] uppercase text-slate-500 mb-0.5">kind</label>
+          <select
+            value={row.typeKind}
+            onChange={(e) =>
+              onChange({
+                typeKind: e.target.value as TypeKindValue,
+                typeName: "",
+              })
+            }
+            className={inputClass + " bg-white"}
+          >
+            {TYPE_KIND_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* typeName */}
+        <div>
+          <label className="block text-[10px] uppercase text-slate-500 mb-0.5">type</label>
+          {isClassRange ? (
+            <SearchableSelect
+              options={classOptions}
+              value={row.typeName}
+              onChange={(v) => onChange({ typeName: v })}
+              placeholder="class name…"
+              disabled={!row.typeKind}
+            />
+          ) : (
             <select
-              value={row.typeKind}
-              onChange={(e) =>
-                onChange({
-                  typeKind: e.target.value as TypeKindValue,
-                  typeName: "",
-                })
-              }
+              value={row.typeName}
+              onChange={(e) => onChange({ typeName: e.target.value })}
+              disabled={!row.typeKind}
               className={inputClass + " bg-white"}
             >
-              {TYPE_KIND_OPTIONS.map((o) => (
+              <option value="">—</option>
+              {typeNameOptions.map((o) => (
                 <option key={o.value} value={o.value}>
                   {o.label}
                 </option>
               ))}
             </select>
-          </div>
-
-          {/* typeName */}
-          <div>
-            <label className="block text-[10px] uppercase text-slate-500 mb-0.5">type</label>
-            {isClassRange ? (
-              <SearchableSelect
-                options={classOptions}
-                value={row.typeName}
-                onChange={(v) => onChange({ typeName: v })}
-                placeholder="class name…"
-                disabled={!row.typeKind}
-              />
-            ) : (
-              <select
-                value={row.typeName}
-                onChange={(e) => onChange({ typeName: e.target.value })}
-                disabled={!row.typeKind}
-                className={inputClass + " bg-white"}
-              >
-                <option value="">—</option>
-                {typeNameOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-            )}
-          </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {row.mode === "new" && (
-        <div className="flex gap-4 mt-1.5">
-          <label className="flex items-center gap-1 text-xs text-slate-700">
-            <input
-              type="checkbox"
-              checked={row.identifier}
-              onChange={(e) => onChange({ identifier: e.target.checked })}
-            />
-            identifier
-          </label>
-          <label className="flex items-center gap-1 text-xs text-slate-700">
-            <input
-              type="checkbox"
-              checked={row.required}
-              onChange={(e) => onChange({ required: e.target.checked })}
-            />
-            required
-          </label>
-        </div>
-      )}
+      <div className="flex gap-4 mt-1.5">
+        <label className="flex items-center gap-1 text-xs text-slate-700">
+          <input
+            type="checkbox"
+            checked={row.identifier}
+            onChange={(e) => onChange({ identifier: e.target.checked })}
+          />
+          identifier
+        </label>
+        <label className="flex items-center gap-1 text-xs text-slate-700">
+          <input
+            type="checkbox"
+            checked={row.required}
+            onChange={(e) => onChange({ required: e.target.checked })}
+          />
+          required
+        </label>
+      </div>
     </div>
   );
 }

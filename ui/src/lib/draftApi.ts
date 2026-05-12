@@ -116,18 +116,39 @@ export async function getDraftSpec(id: number): Promise<PublishedSpec> {
   return normalizeDraftSpec(raw, { revision: id });
 }
 
+/** Normalize a slot dict from the spec_to_dict payload into a SpecSlot. */
+function normalizeSlot(s: Record<string, any>): SpecSlot {
+  const typeKind: SlotTypeKind = s.type_kind ?? null;
+  const typeName: string | null = s.type_name ?? null;
+  const permVals = (s.permissible_values ?? []).map((pv: any) =>
+    typeof pv === "string" ? pv : pv?.text ?? String(pv?.value ?? ""),
+  );
+  return {
+    name: s.name,
+    identifier: !!s.identifier,
+    required: !!s.required,
+    description: s.description ?? null,
+    pattern: s.pattern ?? null,
+    minimumValue: s.minimum_value ?? null,
+    maximumValue: s.maximum_value ?? null,
+    permissibleValues: permVals,
+    resolutionPolicy: s.resolution_policy ?? "argmax_trust",
+    typeKind,
+    typeName,
+  };
+}
+
 /**
  * Convert the cycle-safe spec_to_dict payload to the flat GraphQL-shape used
  * by the UI. References are dereferenced via `$uid` -> first definition.
  *
- * The payload's slot type is encoded as (type_kind, type_name) on each slot
- * object — same shape as the REST `/spec/published/slots` and GraphQL endpoints.
+ * Slots are now inline on each OntologyClass; there is no top-level slots list.
  */
 export function normalizeDraftSpec(
   raw: Record<string, any>,
   override: { revision?: number; contentHash?: string } = {},
 ): PublishedSpec {
-  // Build uid -> name map across slots/classes for $ref resolution.
+  // Build uid -> name map across all named entities for $ref resolution.
   const uidNames = new Map<number, string>();
   const walkForNames = (node: unknown) => {
     if (!node) return;
@@ -152,41 +173,44 @@ export function normalizeDraftSpec(
     return null;
   };
 
-  const slots: SpecSlot[] = (raw.slots ?? []).map(
-    (s: Record<string, any>): SpecSlot => {
-      // The spec_to_dict payload encodes TypeExpression inline on the slot:
-      // type_kind and type_name are top-level fields (mirrors the REST summary).
-      // If they're absent (older payload), fall back gracefully to null.
-      const typeKind: SlotTypeKind = s.type_kind ?? null;
-      const typeName: string | null = s.type_name ?? null;
-      const permVals = (s.permissible_values ?? []).map((pv: any) =>
-        typeof pv === "string" ? pv : pv?.text ?? String(pv?.value ?? ""),
-      );
-      return {
-        name: s.name,
-        identifier: !!s.identifier,
-        required: !!s.required,
-        description: s.description ?? null,
-        pattern: s.pattern ?? null,
-        minimumValue: s.minimum_value ?? null,
-        maximumValue: s.maximum_value ?? null,
-        permissibleValues: permVals,
-        resolutionPolicy: s.resolution_policy ?? "argmax_trust",
-        typeKind,
-        typeName,
-      };
-    },
-  );
+  // Build uid -> slot object map for resolving $ref'd slots inside classes.
+  const uidSlots = new Map<number, SpecSlot>();
+  const walkForSlots = (node: unknown) => {
+    if (!node) return;
+    if (Array.isArray(node)) { node.forEach(walkForSlots); return; }
+    if (typeof node !== "object") return;
+    const obj = node as Record<string, any>;
+    if (obj.$kind === "Slot" && typeof obj.$uid === "number" && typeof obj.name === "string") {
+      uidSlots.set(obj.$uid, normalizeSlot(obj));
+    }
+    for (const v of Object.values(obj)) walkForSlots(v);
+  };
+  walkForSlots(raw);
+
+  const resolveSlot = (node: unknown): SpecSlot | null => {
+    if (!node || typeof node !== "object") return null;
+    const obj = node as Record<string, any>;
+    if (typeof obj.$ref === "number") return uidSlots.get(obj.$ref) ?? null;
+    if (obj.$kind === "Slot" && typeof obj.name === "string") return normalizeSlot(obj);
+    return null;
+  };
 
   const classes: SpecClass[] = (raw.classes ?? []).map(
-    (c: Record<string, any>): SpecClass => ({
-      name: c.name,
-      abstract: !!c.abstract,
-      description: c.description ?? null,
-      isAName: resolveName(c.is_a),
-      mixinNames: (c.mixins ?? []).map((m: any) => resolveName(m) ?? "").filter(Boolean),
-      slotNames: (c.slots ?? []).map((s: any) => resolveName(s) ?? "").filter(Boolean),
-    }),
+    (c: Record<string, any>): SpecClass => {
+      const ownSlots: SpecSlot[] = (c.slots ?? [])
+        .map((s: unknown) => resolveSlot(s))
+        .filter((s: SpecSlot | null): s is SpecSlot => s !== null);
+      return {
+        name: c.name,
+        abstract: !!c.abstract,
+        description: c.description ?? null,
+        isAName: resolveName(c.is_a),
+        mixinNames: (c.mixins ?? []).map((m: any) => resolveName(m) ?? "").filter(Boolean),
+        slots: ownSlots,
+        // effectiveSlots not available in REST payload — use own slots as fallback
+        effectiveSlots: ownSlots,
+      };
+    },
   );
 
   const sources: SpecSource[] = (raw.sources ?? []).map(
@@ -232,7 +256,6 @@ export function normalizeDraftSpec(
     version: raw.version ?? "",
     revision: override.revision ?? 0,
     contentHash: override.contentHash ?? "",
-    slots,
     classes,
     sources,
     sourceBindings,
@@ -258,7 +281,7 @@ export interface SlotCreate {
 }
 export interface ClassCreate {
   name: string;
-  slot_names?: string[];
+  slots?: SlotCreate[];
   is_a_name?: string | null;
   mixin_names?: string[];
   abstract?: boolean;
@@ -266,7 +289,7 @@ export interface ClassCreate {
   definition?: unknown;
 }
 export interface ClassUpdate {
-  slot_names?: string[] | null;
+  slots?: SlotCreate[] | null;
   is_a_name?: string | null;
   mixin_names?: string[] | null;
   abstract?: boolean | null;
@@ -300,12 +323,6 @@ export interface ConstraintCreate {
   severity?: Severity;
   message?: string | null;
 }
-
-export const addSlot = (id: number, body: SlotCreate) =>
-  request<MutationResponse>(`/spec/drafts/${id}/slots`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
 
 export const addClass = (id: number, body: ClassCreate) =>
   request<MutationResponse>(`/spec/drafts/${id}/classes`, {
@@ -357,9 +374,6 @@ export const addConstraint = (id: number, body: ConstraintCreate) =>
     method: "POST",
     body: JSON.stringify(body),
   });
-
-export const deleteSlot = (id: number, name: string) =>
-  request<MutationResponse>(`/spec/drafts/${id}/slots/${name}`, { method: "DELETE" });
 
 export const deleteClass = (id: number, name: string) =>
   request<MutationResponse>(`/spec/drafts/${id}/classes/${name}`, { method: "DELETE" });

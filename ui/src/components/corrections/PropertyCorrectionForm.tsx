@@ -56,10 +56,9 @@ export default function PropertyCorrectionForm({
 }: Props) {
   const cls = spec.classes.find((c) => c.name === className);
   // Stored slots only: typeKind must be set (derived slots have null).
-  const slotsByName = new Map(spec.slots.map((s) => [s.name, s]));
-  const storedSlots: SpecSlot[] = (cls?.slotNames ?? [])
-    .map((n) => slotsByName.get(n))
-    .filter((s): s is SpecSlot => !!s && s.typeKind !== null);
+  const storedSlots: SpecSlot[] = (cls?.slots ?? []).filter(
+    (s): s is SpecSlot => s.typeKind !== null,
+  );
 
   const {
     register,

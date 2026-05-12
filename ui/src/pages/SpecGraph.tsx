@@ -27,7 +27,6 @@ import PropertyPanel, {
 import Toolbar, { type AddKind } from "../components/Toolbar";
 import ClassForm, { type ClassFormValues, type InlineSlotRow } from "../components/forms/ClassForm";
 import ConstraintForm from "../components/forms/ConstraintForm";
-import SlotForm from "../components/forms/SlotForm";
 import SourceForm from "../components/forms/SourceForm";
 import SourceBindingForm from "../components/forms/SourceBindingForm";
 import { PUBLISHED_SPEC } from "../graphql/queries";
@@ -268,8 +267,6 @@ export default function SpecGraph() {
       if (!ok) return;
       const attempt = async () => {
         switch (entity.kind) {
-          case "slot":
-            return api.deleteSlot(draftId, name);
           case "class":
             return api.deleteClass(draftId, name);
           case "source":
@@ -297,7 +294,7 @@ export default function SpecGraph() {
             await autoDetach(
               draftId,
               spec,
-              entity.kind as "class" | "slot" | "source" | "constraint",
+              entity.kind as "class" | "source" | "constraint",
               name,
             );
             await attempt();
@@ -359,55 +356,22 @@ export default function SpecGraph() {
   );
 
   // ── Form submit handlers ──────────────────────────────────────────────────
-  /** Create any new inline slot rows before the class POST/PATCH. */
-  const createNewSlots = useCallback(
-    async (newSlots: InlineSlotRow[]) => {
-      if (draftId === null) return;
-      for (const row of newSlots) {
-        await api.addSlot(draftId, {
-          name: row.name,
-          type_kind: row.typeKind || null,
-          type_name: row.typeName || null,
-          identifier: row.identifier,
-          required: row.required,
-        });
-      }
-    },
-    [draftId],
-  );
-
   const handleFormSubmit = useCallback(
     async (kind: SpecEntityKind, vals: any, editing: SpecEntity | null) => {
       if (draftId === null || !spec) return;
       const performAdd = async () => {
         switch (kind) {
-          case "slot":
-            return api.addSlot(draftId, {
-              name: vals.name,
-              type_kind: vals.typeKind || null,
-              type_name: vals.typeName || null,
-              identifier: vals.identifier,
-              required: vals.required,
-              resolution_policy: vals.resolutionPolicy,
-              pattern: vals.pattern || null,
-              minimum_value: vals.minimumValue ? Number(vals.minimumValue) : null,
-              maximum_value: vals.maximumValue ? Number(vals.maximumValue) : null,
-              permissible_values: vals.permissibleValues
-                ? vals.permissibleValues
-                    .split(",")
-                    .map((s: string) => s.trim())
-                    .filter(Boolean)
-                : null,
-              description: vals.description || null,
-              derivation: vals.derivation ? JSON.parse(vals.derivation) : null,
-            });
           case "class": {
-            // Slots must exist before the class references them.
             const classVals = vals as ClassFormValues;
-            await createNewSlots(classVals.newSlots ?? []);
             return api.addClass(draftId, {
               name: classVals.name,
-              slot_names: classVals.slotNames,
+              slots: classVals.slots.map((r) => ({
+                name: r.name,
+                type_kind: r.typeKind || null,
+                type_name: r.typeName || null,
+                identifier: r.identifier,
+                required: r.required,
+              })),
               is_a_name: classVals.isAName || null,
               mixin_names: classVals.mixinNames,
               abstract: classVals.abstract,
@@ -456,12 +420,16 @@ export default function SpecGraph() {
         if (!editing) {
           await performAdd();
         } else if (kind === "class") {
-          // The only PATCH-able entity. Create new inline slots first.
           const classVals = vals as ClassFormValues;
-          await createNewSlots(classVals.newSlots ?? []);
           const editingName = (editing.value as { name: string }).name;
           await api.updateClass(draftId, editingName, {
-            slot_names: classVals.slotNames,
+            slots: classVals.slots.map((r) => ({
+              name: r.name,
+              type_kind: r.typeKind || null,
+              type_name: r.typeName || null,
+              identifier: r.identifier,
+              required: r.required,
+            })),
             is_a_name: classVals.isAName || null,
             mixin_names: classVals.mixinNames,
             abstract: classVals.abstract,
@@ -477,7 +445,7 @@ export default function SpecGraph() {
           await editEntityViaDeleteAdd(
             draftId,
             spec,
-            kind as "slot" | "source" | "constraint",
+            kind as "source" | "constraint",
             (editing.value as { name: string }).name,
             performAdd,
           );
@@ -495,7 +463,7 @@ export default function SpecGraph() {
         toast.error(`Save failed: ${formatErr(e)}`);
       }
     },
-    [draftId, spec, reloadDraft, createNewSlots],
+    [draftId, spec, reloadDraft],
   );
 
   // ── Loading / error ───────────────────────────────────────────────────────
@@ -595,26 +563,15 @@ function renderForm(
   onSubmit: (vals: any) => Promise<void>,
 ) {
   switch (kind) {
-    case "slot":
-      return (
-        <SlotForm
-          spec={spec}
-          initial={editing?.kind === "slot" ? editing.value : undefined}
-          lockName={!!editing}
-          onSubmit={onSubmit}
-        />
-      );
     case "class": {
       const editingClass = editing?.kind === "class" ? editing.value : undefined;
-      // Pre-populate inline slot rows from the existing class's slotNames.
-      const initialSlotRows: InlineSlotRow[] = editingClass?.slotNames.map((n) => ({
-        mode: "existing" as const,
-        name: "",
-        typeKind: "primitive" as const,
-        typeName: "",
-        identifier: false,
-        required: false,
-        existingName: n,
+      // Pre-populate inline slot rows from the existing class's own slots.
+      const initialSlotRows: InlineSlotRow[] = editingClass?.slots.map((s) => ({
+        name: s.name,
+        typeKind: (s.typeKind ?? "primitive") as import("../components/forms/ClassForm").TypeKindValue,
+        typeName: s.typeName ?? "",
+        identifier: s.identifier,
+        required: s.required,
       })) ?? [];
       return (
         <ClassForm
@@ -660,45 +617,11 @@ function renderForm(
 class InvalidConnectionError extends Error {}
 
 async function applyConnection(
-  draftId: number,
-  spec: PublishedSpec,
+  _draftId: number,
+  _spec: PublishedSpec,
   src: SpecEntity,
   tgt: SpecEntity,
 ): Promise<void> {
-  // Slot → Class : add slot to class slot_names.
-  if (src.kind === "slot" && tgt.kind === "class") {
-    const cls = tgt.value;
-    if (cls.slotNames.includes(src.value.name)) {
-      throw new InvalidConnectionError(
-        `${cls.name} already has slot ${src.value.name}`,
-      );
-    }
-    await api.updateClass(draftId, cls.name, {
-      slot_names: [...cls.slotNames, src.value.name],
-    });
-    return;
-  }
-  // Slot → Class (range): delete + add slot with new class range.
-  if (src.kind === "slot" && tgt.kind === "class") {
-    const slot = src.value;
-    await editEntityViaDeleteAdd(draftId, spec, "slot", slot.name, async () => {
-      await api.addSlot(draftId, {
-        name: slot.name,
-        type_kind: "class",
-        type_name: tgt.value.name,
-        identifier: slot.identifier,
-        required: slot.required,
-        resolution_policy: String(slot.resolutionPolicy),
-        pattern: slot.pattern,
-        minimum_value: slot.minimumValue,
-        maximum_value: slot.maximumValue,
-        permissible_values: slot.permissibleValues.length ? slot.permissibleValues : null,
-        description: slot.description,
-        derivation: null,
-      });
-    });
-    return;
-  }
   // Source → Class / Slot : Sources are now thin labels.
   // The (Source, Class) binding relationship lives on SourceBinding.
   // Use "+ Binding" in the toolbar to create a SourceBinding.

@@ -42,10 +42,9 @@ type FormValues = z.infer<typeof Schema>;
  */
 export default function AddForm({ spec, className, onSubmit }: Props) {
   const cls = spec.classes.find((c) => c.name === className);
-  const slotsByName = new Map(spec.slots.map((s) => [s.name, s]));
-  const storedSlots: SpecSlot[] = (cls?.slotNames ?? [])
-    .map((n) => slotsByName.get(n))
-    .filter((s): s is SpecSlot => !!s && s.typeKind !== null);
+  const storedSlots: SpecSlot[] = (cls?.slots ?? []).filter(
+    (s): s is SpecSlot => s.typeKind !== null,
+  );
 
   const {
     register,

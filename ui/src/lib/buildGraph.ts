@@ -30,7 +30,7 @@ export interface SpecNodeData extends Record<string, unknown> {
 
 export interface ClassCard {
   cls: SpecClass;
-  /** Resolved slot objects in the order they appear in `cls.slotNames`. */
+  /** The class's own slots (inline on the class). */
   slots: SpecSlot[];
   /** Constraints that reference this class as `primaryClassName`. */
   constraints: SpecConstraint[];
@@ -103,7 +103,6 @@ export function buildGraph(
   const nodes: SpecNode[] = [];
   const edges: SpecEdge[] = [];
 
-  const slotByName = new Map(spec.slots.map((s) => [s.name, s]));
   const classNames = new Set(spec.classes.map((c) => c.name));
 
   // Pre-bucket constraints by their owning class.
@@ -116,9 +115,7 @@ export function buildGraph(
 
   // — CLASS CARDS —
   for (const cls of spec.classes) {
-    const slots = cls.slotNames
-      .map((n) => slotByName.get(n))
-      .filter((s): s is SpecSlot => !!s);
+    const slots = cls.slots;
     const card: ClassCard = {
       cls,
       slots,
@@ -210,17 +207,15 @@ export function buildGraph(
 
   // — Cross-class ClassRef edges (FKs, anchored at slot rows) —
   for (const cls of spec.classes) {
-    for (const slotName of cls.slotNames) {
-      const slot = slotByName.get(slotName);
-      if (!slot) continue;
+    for (const slot of cls.slots) {
       if (!isClassKind(slot.typeKind) || !slot.typeName) continue;
       if (!classNames.has(slot.typeName)) continue;
       edges.push({
-        id: `edge:fk:${cls.name}.${slotName}->${slot.typeName}`,
+        id: `edge:fk:${cls.name}.${slot.name}->${slot.typeName}`,
         source: nodeId("class", cls.name),
-        sourceHandle: slotHandleId(slotName),
+        sourceHandle: slotHandleId(slot.name),
         target: nodeId("class", slot.typeName),
-        label: slotName,
+        label: slot.name,
         markerEnd: { type: MarkerType.ArrowClosed, color: "#2563eb" },
         style: { stroke: "#2563eb", strokeWidth: 1.5 },
         labelStyle: { fontSize: 10, fill: "#2563eb" },
