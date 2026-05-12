@@ -74,7 +74,7 @@ class _LiteralJson(_JsonBase):
 
 
 class _SlotPathJson(_JsonBase):
-    """Slot names as strings; resolved against spec.slots at translate time."""
+    """Slot names as strings; resolved against the slots of any class in spec.classes at translate time."""
 
     kind: Literal["slot_path"]
     slots: list[str]
@@ -95,20 +95,20 @@ class _BoolExprJson(_JsonBase):
 
 class _WithinJson(_JsonBase):
     kind: Literal["within"]
-    slot: str  # slot name; resolved against spec.slots
+    slot: str  # slot name; resolved against the slots of any class in spec.classes
     values: list[Any]
 
 
 class _BetweenJson(_JsonBase):
     kind: Literal["between"]
-    slot: str  # slot name; resolved against spec.slots
+    slot: str  # slot name; resolved against the slots of any class in spec.classes
     low: Any
     high: Any
 
 
 class _MatchesJson(_JsonBase):
     kind: Literal["matches"]
-    slot: str  # slot name; resolved against spec.slots
+    slot: str  # slot name; resolved against the slots of any class in spec.classes
     pattern: str
 
 
@@ -265,10 +265,14 @@ def _relation_target_class(relation: Any, spec: Spec) -> OntologyClass:
         return _relation_target_class(relation.relation, spec)
     if isinstance(relation, RelationRef):
         slot = relation.slot
-        if isinstance(slot.range, OntologyClass):
-            return slot.range
+        from knot.spec.metaschema import Array, ClassRef
+
+        if isinstance(slot.type, ClassRef):
+            return slot.type.target_class
+        if isinstance(slot.type, Array) and isinstance(slot.type.of, ClassRef):
+            return slot.type.of.target_class
         raise ExprTranslationError(
-            f"RelationRef slot {slot.name!r} has no OntologyClass range; "
+            f"RelationRef slot {slot.name!r} has no ClassRef type; "
             "cannot infer target class for projection."
         )
     raise ExprTranslationError(

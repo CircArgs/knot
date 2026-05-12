@@ -12,7 +12,7 @@ Per `spec-versioning.md`:
 Cycle handling (CANONICAL_DUMP_VERSION = 4): named SpecBase nodes (those
 with a `name: str` field) are tracked by object id.  First visit emits the
 full canonical form; subsequent visits emit `{"$ref": "<name>"}`.  This
-breaks cycles from cross-class `slot.range` references without losing
+breaks cycles from cross-class `slot.type` references without losing
 identity.  Version 4: Spec.slots removed; slots are now inline on each
 OntologyClass.
 """

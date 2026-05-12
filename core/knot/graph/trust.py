@@ -37,8 +37,10 @@ def _check_source(spec: Spec, source: str) -> None:
 
 
 def _check_slot(spec: Spec, slot: str) -> None:
-    if not any(s.name == slot for s in spec.slots):
-        raise SlotNotOnSpecError(slot)
+    for cls in spec.classes:
+        if any(s.name == slot for s in cls.slots):
+            return
+    raise SlotNotOnSpecError(slot)
 
 
 # ─── Scalar trust config ────────────────────────────────────────────────────

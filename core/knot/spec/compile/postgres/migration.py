@@ -59,8 +59,8 @@ C. **Spec-only / runtime-behavior.** No DDL, or DDL that doesn't lose
    ``ChangeSlotIdentifier`` (the storage PK is ``(_source,
    _source_row_id)``; the ``identifier`` flag is ER/SCD2 advisory and
    doesn't drive DDL), ``AddSource`` (new pathway, doesn't lose data),
-   ``ChangeSourceTrustScore`` (runtime trust, no DDL),
-   ``ChangeSourceSlotPrior`` (runtime prior, no DDL).
+   ``ChangeSourceBindingTrust`` (runtime trust, no DDL),
+   ``ChangeSourceBindingMapping`` (runtime prior, no DDL).
    ``ChangeClassIsA`` is here for concrete classes (no DDL — own table,
    own slots) and for defined-class body changes (``CREATE OR REPLACE
    VIEW``); the destructive transitions (concrete↔defined) are caught
@@ -1517,10 +1517,8 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 #     the rows / column / view that hold the data.
 #   - **Storage-shape rewrites**: ChangeSlotTypeExpression (column type),
 #     ChangeClassAbstract (table appears/disappears).
-#   - **Source rekey**: ChangeSourceEntityClass (rows now belong to a
-#     different class — refused, manual migration required) and
-#     ChangeSourceIdentifierSlot (rows are now keyed by a different slot
-#     — UPDATE rekeys ``_source_row_id``).
+#   - **Source rekey**: ChangeSourceBindingIdentifierSlot (rows are now
+#     keyed by a different slot — UPDATE rekeys ``_source_row_id``).
 #
 # NOT enumerated here:
 #
@@ -1537,7 +1535,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 #     VIEW; concrete↔defined transitions surface as ``Drop*`` / ``Add*``.
 #   - ChangeClassDefinition — defined-class body change is CREATE OR
 #     REPLACE VIEW (idempotent, no data loss).
-#   - ChangeSourceTrustScore / ChangeSourceSlotPrior — runtime config, no DDL.
+#   - ChangeSourceBindingTrust / ChangeSourceBindingMapping — runtime config, no DDL.
 _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
     DropClass,
     DropSlot,
