@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -102,6 +103,8 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
   const typeKind = watch("typeKind") as TypeKindValue;
   const isPrimitive = typeKind === "primitive" || typeKind === "array_of_primitive";
   const isClass = typeKind === "class" || typeKind === "array_of_class";
+  const [identifier, required] = [watch("identifier"), watch("required")];
+  const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // Dropdown options for typeName depend on typeKind.
   const typeNameOptions: string[] = isPrimitive
@@ -109,8 +112,6 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
     : isClass
       ? spec.classes.map((c) => c.name)
       : [];
-
-  const [identifier, required] = [watch("identifier"), watch("required")];
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -206,14 +207,28 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
         <textarea {...register("description")} className={textareaClass} />
       </FieldRow>
 
-      <FieldRow>
-        <Label>derivation (JSON, advanced)</Label>
-        <textarea
-          {...register("derivation")}
-          className={textareaClass}
-          placeholder='{"$kind": "FormatDerivation", ...}'
-        />
-      </FieldRow>
+      {/* ── Advanced: derivation ──────────────────────────────────────────── */}
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((b) => !b)}
+          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+        >
+          <span>{advancedOpen ? "▾" : "▸"}</span>
+          Advanced (JSON)
+        </button>
+        {advancedOpen && (
+          <div className="mt-2">
+            <Label>derivation (JSON)</Label>
+            <textarea
+              {...register("derivation")}
+              className={textareaClass}
+              placeholder='{"$kind": "FormatDerivation", ...}'
+              rows={4}
+            />
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-end">
         <Submit busy={isSubmitting}>Save slot</Submit>

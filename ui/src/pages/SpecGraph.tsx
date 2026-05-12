@@ -25,7 +25,7 @@ import PropertyPanel, {
   type SpecSelection,
 } from "../components/PropertyPanel";
 import Toolbar, { type AddKind } from "../components/Toolbar";
-import ClassForm from "../components/forms/ClassForm";
+import ClassForm, { type ClassFormValues, type InlineSlotRow } from "../components/forms/ClassForm";
 import ConstraintForm from "../components/forms/ConstraintForm";
 import SlotForm from "../components/forms/SlotForm";
 import SourceForm from "../components/forms/SourceForm";
@@ -359,6 +359,23 @@ export default function SpecGraph() {
   );
 
   // ── Form submit handlers ──────────────────────────────────────────────────
+  /** Create any new inline slot rows before the class POST/PATCH. */
+  const createNewSlots = useCallback(
+    async (newSlots: InlineSlotRow[]) => {
+      if (draftId === null) return;
+      for (const row of newSlots) {
+        await api.addSlot(draftId, {
+          name: row.name,
+          type_kind: row.typeKind || null,
+          type_name: row.typeName || null,
+          identifier: row.identifier,
+          required: row.required,
+        });
+      }
+    },
+    [draftId],
+  );
+
   const handleFormSubmit = useCallback(
     async (kind: SpecEntityKind, vals: any, editing: SpecEntity | null) => {
       if (draftId === null || !spec) return;
@@ -384,16 +401,20 @@ export default function SpecGraph() {
               description: vals.description || null,
               derivation: vals.derivation ? JSON.parse(vals.derivation) : null,
             });
-          case "class":
+          case "class": {
+            // Slots must exist before the class references them.
+            const classVals = vals as ClassFormValues;
+            await createNewSlots(classVals.newSlots ?? []);
             return api.addClass(draftId, {
-              name: vals.name,
-              slot_names: vals.slotNames,
-              is_a_name: vals.isAName || null,
-              mixin_names: vals.mixinNames,
-              abstract: vals.abstract,
-              description: vals.description || null,
-              definition: vals.definition ? JSON.parse(vals.definition) : null,
+              name: classVals.name,
+              slot_names: classVals.slotNames,
+              is_a_name: classVals.isAName || null,
+              mixin_names: classVals.mixinNames,
+              abstract: classVals.abstract,
+              description: classVals.description || null,
+              definition: classVals.definition ? JSON.parse(classVals.definition) : null,
             });
+          }
           case "source":
             return api.addSource(draftId, {
               name: vals.name,
@@ -435,14 +456,16 @@ export default function SpecGraph() {
         if (!editing) {
           await performAdd();
         } else if (kind === "class") {
-          // The only PATCH-able entity.
+          // The only PATCH-able entity. Create new inline slots first.
+          const classVals = vals as ClassFormValues;
+          await createNewSlots(classVals.newSlots ?? []);
           const editingName = (editing.value as { name: string }).name;
           await api.updateClass(draftId, editingName, {
-            slot_names: vals.slotNames,
-            is_a_name: vals.isAName || null,
-            mixin_names: vals.mixinNames,
-            abstract: vals.abstract,
-            description: vals.description || null,
+            slot_names: classVals.slotNames,
+            is_a_name: classVals.isAName || null,
+            mixin_names: classVals.mixinNames,
+            abstract: classVals.abstract,
+            description: classVals.description || null,
           });
         } else if (kind !== "sourceBinding") {
           // sourceBinding edits are handled as delete+re-add at the API level;
@@ -472,7 +495,7 @@ export default function SpecGraph() {
         toast.error(`Save failed: ${formatErr(e)}`);
       }
     },
-    [draftId, spec, reloadDraft],
+    [draftId, spec, reloadDraft, createNewSlots],
   );
 
   // ── Loading / error ───────────────────────────────────────────────────────
@@ -581,15 +604,28 @@ function renderForm(
           onSubmit={onSubmit}
         />
       );
-    case "class":
+    case "class": {
+      const editingClass = editing?.kind === "class" ? editing.value : undefined;
+      // Pre-populate inline slot rows from the existing class's slotNames.
+      const initialSlotRows: InlineSlotRow[] = editingClass?.slotNames.map((n) => ({
+        mode: "existing" as const,
+        name: "",
+        typeKind: "primitive" as const,
+        typeName: "",
+        identifier: false,
+        required: false,
+        existingName: n,
+      })) ?? [];
       return (
         <ClassForm
           spec={spec}
-          initial={editing?.kind === "class" ? editing.value : undefined}
+          initial={editingClass}
+          initialSlotRows={initialSlotRows}
           lockName={!!editing}
           onSubmit={onSubmit}
         />
       );
+    }
     case "source":
       return (
         <SourceForm

@@ -13,8 +13,8 @@ interface Props {
   publishing?: boolean;
 }
 
-const KIND_LABELS: Record<AddKind, string> = {
-  slot: "Slot",
+// "slot" is intentionally absent — slots are created inline inside ClassForm.
+const KIND_LABELS: Partial<Record<AddKind, string>> = {
   class: "Class",
   source: "Source",
   sourceBinding: "Binding",

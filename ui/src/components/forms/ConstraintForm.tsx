@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +13,7 @@ import {
   selectClass,
   textareaClass,
 } from "./fields";
+import SearchableSelect from "./SearchableSelect";
 
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const SEVERITIES = ["error", "warning"] as const;
@@ -45,6 +47,8 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
   const {
     register,
     handleSubmit,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ConstraintFormValues>({
     resolver: zodResolver(Schema),
@@ -56,6 +60,13 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
       message: initial?.message ?? "",
     },
   });
+
+  const primaryClassName = watch("primaryClassName");
+  const body = watch("body");
+  const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  const classOptions = spec.classes.map((c) => ({ value: c.name, label: c.name }));
+
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
       <FieldRow>
@@ -68,18 +79,18 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
         />
         <ErrText error={errors.name} />
       </FieldRow>
+
       <FieldRow>
         <Label required>primary class</Label>
-        <select {...register("primaryClassName")} className={selectClass}>
-          <option value="">(pick a class)</option>
-          {spec.classes.map((c) => (
-            <option key={c.name} value={c.name}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <SearchableSelect
+          options={[{ value: "", label: "(pick a class)" }, ...classOptions]}
+          value={primaryClassName}
+          onChange={(v) => setValue("primaryClassName", v)}
+          placeholder="Search classes…"
+        />
         <ErrText error={errors.primaryClassName} />
       </FieldRow>
+
       <FieldRow>
         <Label>severity</Label>
         <select {...register("severity")} className={selectClass}>
@@ -90,19 +101,44 @@ export default function ConstraintForm({ spec, initial, lockName, onSubmit }: Pr
           ))}
         </select>
       </FieldRow>
-      <FieldRow>
-        <Label required>body (JSON ExprTree, advanced)</Label>
-        <textarea
-          {...register("body")}
-          className={textareaClass}
-          placeholder='{"$kind": "BoolExpr", "op": "and", "args": [...]}'
-        />
-        <ErrText error={errors.body} />
-      </FieldRow>
+
       <FieldRow>
         <Label>message</Label>
         <input {...register("message")} className={inputClass} />
       </FieldRow>
+
+      {/* ── Advanced: body ─────────────────────────────────────────────────── */}
+      <div className="mb-3">
+        <button
+          type="button"
+          onClick={() => setAdvancedOpen((b) => !b)}
+          className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
+        >
+          <span>{advancedOpen ? "▾" : "▸"}</span>
+          Advanced — body (JSON ExprTree) <span className="text-rose-500 ml-0.5">*</span>
+        </button>
+        {advancedOpen && (
+          <div className="mt-2">
+            <textarea
+              {...register("body")}
+              className={`${textareaClass} ${
+                errors.body && !body ? "border-rose-400 ring-1 ring-rose-300" : ""
+              }`}
+              placeholder='{"$kind": "BoolExpr", "op": "and", "args": [...]}'
+              rows={5}
+            />
+            {errors.body && (
+              <p className="text-xs text-rose-600 mt-1">{errors.body.message}</p>
+            )}
+          </div>
+        )}
+        {!advancedOpen && errors.body && (
+          <p className="text-xs text-rose-600 mt-1">
+            constraint requires a body — expand Advanced to fill it in
+          </p>
+        )}
+      </div>
+
       <div className="flex justify-end">
         <Submit busy={isSubmitting}>Save constraint</Submit>
       </div>
