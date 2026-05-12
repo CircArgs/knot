@@ -86,6 +86,8 @@ __all__ = (
     "remove_source",
     "remove_source_binding",
     "remove_constraint",
+    "rename_slot",
+    "rename_class",
     # Publish / rollback / preview
     "publish_draft",
     "rollback",
@@ -618,6 +620,150 @@ async def add_constraint(
                 message=message,
             )
         )
+    return spec
+
+
+# ─── Renames ────────────────────────────────────────────────────────────────
+
+
+async def rename_slot(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    class_name: str,
+    old_name: str,
+    new_name: str,
+) -> Spec:
+    """Rename a slot on a specific class, recording a rename hint for publish time.
+
+    The slot is renamed in-memory on the given class. All references from
+    SourceBindings and SlotMappings that point at the old slot object continue
+    to work because they hold Python object references, which follow the rename.
+
+    A rename hint ``{class_name, old_name, new_name}`` is appended to
+    ``spec_revisions.pending_renames`` for every concrete class that has the
+    slot as a stored column (including the class itself and any concrete
+    subclasses that inherit it), so ``diff_specs`` at publish time can emit a
+    non-destructive ``RenameSlot`` instead of ``DropSlot + AddSlot``.
+
+    Raises ``CollisionError`` if ``new_name`` already exists on the class (via
+    effective_slots).
+    Raises ``EntityNotOnDraftError`` if ``class_name`` or ``old_name`` isn't on
+    the draft.
+    Raises ``DraftAlreadyPublishedError`` if the draft is already published.
+    """
+    import json as _json
+
+    from knot.spec import effective_slots as _effective_slots
+    from knot.spec import is_stored as _is_stored
+
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        cls = _find_class(spec, class_name)
+
+        # Check collision against effective slots of this class.
+        all_slots = {s.name.lower(): s for s in _effective_slots(cls)}
+        if new_name.lower() in all_slots:
+            raise CollisionError("Slot", new_name)
+
+        # Find the slot on the class itself (not inherited — we only rename own slots).
+        target = next((s for s in cls.slots if s.name == old_name), None)
+        if target is None:
+            raise EntityNotOnDraftError("Slot", old_name)
+
+        # Collect concrete classes that have this slot as a stored column
+        # (the class itself + any concrete subclasses that inherit it).
+        rename_hints: list[dict] = []
+        for c in spec.classes:
+            if c.abstract:
+                continue
+            stored_names = {s.name for s in _effective_slots(c) if _is_stored(s)}
+            if old_name in stored_names:
+                rename_hints.append(
+                    {
+                        "class_name": c.name,
+                        "old_name": old_name,
+                        "new_name": new_name,
+                    }
+                )
+
+        # Rename the slot in-memory on the class.
+        target.name = new_name
+
+    # Append slot rename hints to pending_renames OUTSIDE the edit_draft context
+    # (which has already committed the spec update above).
+    if rename_hints:
+        existing_row = await (
+            await conn.execute(
+                "SELECT pending_renames FROM spec_revisions WHERE revision = %s",
+                (draft_id,),
+            )
+        ).fetchone()
+        existing: dict = {}
+        if existing_row and existing_row[0]:
+            raw = existing_row[0]
+            existing = raw if isinstance(raw, dict) else _json.loads(raw)
+        slot_renames = existing.get("slot_renames", [])
+        slot_renames.extend(rename_hints)
+        existing["slot_renames"] = slot_renames
+        await conn.execute(
+            "UPDATE spec_revisions SET pending_renames = %s WHERE revision = %s",
+            (_json.dumps(existing), draft_id),
+        )
+
+    return spec
+
+
+async def rename_class(
+    conn: psycopg.AsyncConnection,
+    draft_id: int,
+    old_name: str,
+    new_name: str,
+) -> Spec:
+    """Rename an OntologyClass on a draft, recording a rename hint for publish time.
+
+    Because all cross-references (is_a, mixins, SourceBinding.class_,
+    SlotMapping.slot type ClassRef, Constraint.primary) are Python object
+    references rather than name strings, renaming cls.name in-place is
+    sufficient — all referencing structures automatically see the new name.
+
+    A class rename hint ``{old_name, new_name}`` is appended to
+    ``spec_revisions.pending_renames``, so ``diff_specs`` at publish time can
+    emit ``RenameClass`` (non-destructive) instead of ``DropClass + AddClass``.
+
+    Raises ``CollisionError`` if ``new_name`` already exists (case-insensitive).
+    Raises ``EntityNotOnDraftError`` if ``old_name`` isn't on the draft.
+    Raises ``DraftAlreadyPublishedError`` if the draft is already published.
+    """
+    import json as _json
+
+    async with spec_store.edit_draft(conn, draft_id) as spec:
+        # Collision check.
+        if any(c.name.lower() == new_name.lower() for c in spec.classes):
+            raise CollisionError("OntologyClass", new_name)
+
+        target = _find_class(spec, old_name)
+
+        # Rename in-place. All object refs automatically reflect the new name.
+        target.name = new_name
+
+    # Append class rename hint to pending_renames outside the edit_draft context.
+    existing_row = await (
+        await conn.execute(
+            "SELECT pending_renames FROM spec_revisions WHERE revision = %s",
+            (draft_id,),
+        )
+    ).fetchone()
+    existing: dict = {}
+    if existing_row and existing_row[0]:
+        raw = existing_row[0]
+        existing = raw if isinstance(raw, dict) else _json.loads(raw)
+    class_renames = existing.get("class_renames", [])
+    class_renames.append({"old_name": old_name, "new_name": new_name})
+    existing["class_renames"] = class_renames
+    await conn.execute(
+        "UPDATE spec_revisions SET pending_renames = %s WHERE revision = %s",
+        (_json.dumps(existing), draft_id),
+    )
+
     return spec
 
 

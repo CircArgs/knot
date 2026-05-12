@@ -646,13 +646,36 @@ class GateReport:
         self.prev = prev
 
 
+class _PendingRenames:
+    """Parsed pending_renames payload for a draft."""
+
+    def __init__(
+        self,
+        slot_renames: dict[str, dict[str, str]],
+        class_renames: list[dict[str, str]],
+    ) -> None:
+        # {class_name: {old_slot_name: new_slot_name}}
+        self.slot_renames = slot_renames
+        # [{"old_name": ..., "new_name": ...}, ...]
+        self.class_renames = class_renames
+
+    def has_slot_renames(self) -> bool:
+        return bool(self.slot_renames)
+
+    def has_class_renames(self) -> bool:
+        return bool(self.class_renames)
+
+
 async def _get_pending_renames(
     conn: psycopg.AsyncConnection, draft_id: int
-) -> dict[str, dict[str, str]]:
+) -> _PendingRenames:
     """Load pending rename hints for a draft from spec_revisions.pending_renames.
 
-    Returns ``{class_name: {old_slot_name: new_slot_name}}``.
-    Returns an empty dict if the column doesn't exist yet (migration guard).
+    The column stores a JSON object with two keys:
+      - ``slot_renames``: list of {class_name, old_name, new_name}
+      - ``class_renames``: list of {old_name, new_name}
+
+    Returns an empty ``_PendingRenames`` if the column doesn't exist or is empty.
     """
     try:
         row = await (
@@ -663,19 +686,32 @@ async def _get_pending_renames(
         ).fetchone()
     except Exception:
         # Column may not exist on older DBs before the migration runs.
-        return {}
+        return _PendingRenames({}, [])
     if not row or not row[0]:
-        return {}
-    raw: list[dict] = row[0] if isinstance(row[0], list) else json.loads(row[0])
-    # Build nested dict: {class_name: {old_name: new_name}}.
-    out: dict[str, dict[str, str]] = {}
-    for entry in raw:
+        return _PendingRenames({}, [])
+
+    raw = row[0]
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+
+    # Handle old format: a plain list (legacy slot_renames only).
+    if isinstance(raw, list):
+        slot_entries = raw
+        class_entries: list[dict] = []
+    else:
+        slot_entries = raw.get("slot_renames", [])
+        class_entries = raw.get("class_renames", [])
+
+    # Build nested slot dict: {class_name: {old_name: new_name}}.
+    slot_map: dict[str, dict[str, str]] = {}
+    for entry in slot_entries:
         cls_name = entry.get("class_name", "")
         old = entry.get("old_name", "")
         new = entry.get("new_name", "")
         if cls_name and old and new:
-            out.setdefault(cls_name, {})[old] = new
-    return out
+            slot_map.setdefault(cls_name, {})[old] = new
+
+    return _PendingRenames(slot_map, class_entries)
 
 
 async def evaluate_gates(
@@ -708,10 +744,15 @@ async def evaluate_gates(
     publish_gate(candidate)
     prev = await get_published(conn)
 
-    # Load rename hints accumulated by the rename-slot API.
-    pending_renames = await _get_pending_renames(conn, draft_id)
+    # Load rename hints accumulated by the rename-slot / rename-class APIs.
+    pending = await _get_pending_renames(conn, draft_id)
 
-    changes = diff_specs(prev, candidate, renames=pending_renames if pending_renames else None)
+    changes = diff_specs(
+        prev,
+        candidate,
+        renames=pending.slot_renames if pending.has_slot_renames() else None,
+        class_renames=pending.class_renames if pending.has_class_renames() else None,
+    )
     destructive_names = [type(c).__name__ for c in changes if is_destructive(c)]
     requires_allow_destructive = bool(destructive_names)
 

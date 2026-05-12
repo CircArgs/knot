@@ -153,6 +153,14 @@ class ClassUpdate(_StrictBase):
     description: str | None = None
 
 
+class SlotRename(_StrictBase):
+    new_name: str = Field(pattern=_NAME_PATTERN)
+
+
+class ClassRename(_StrictBase):
+    new_name: str = Field(pattern=_NAME_PATTERN)
+
+
 class SourceCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
     description: str | None = None
@@ -676,6 +684,70 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ExprTranslationError as exc:
             raise HTTPException(404, str(exc)) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+# ─── Draft renames ──────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/drafts/{draft_id}/classes/{class_name}/slots/{slot_name}/rename",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+    summary="Rename a slot on a class (non-destructive RENAME COLUMN at publish)",
+)
+async def rename_slot(
+    draft_id: int, class_name: str, slot_name: str, body: SlotRename
+) -> MutationResponse:
+    """Rename a slot on a specific class in a draft.
+
+    Records a rename hint so that ``publish`` emits ``ALTER TABLE … RENAME COLUMN``
+    instead of the destructive ``DROP + ADD`` pair. The spec is updated in-place
+    on the draft; object references from SourceBindings / SlotMappings are preserved.
+    """
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.rename_slot(
+                conn, draft_id, class_name, slot_name, body.new_name
+            )
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
+        except graph_spec.DraftAlreadyPublishedError as exc:
+            raise _map_already_published(exc) from exc
+    return _response(draft_id, spec)
+
+
+@router.post(
+    "/drafts/{draft_id}/classes/{class_name}/rename",
+    response_model=MutationResponse,
+    dependencies=[Depends(require_user)],
+    summary="Rename a class (non-destructive ALTER TABLE … RENAME at publish)",
+)
+async def rename_class(
+    draft_id: int, class_name: str, body: ClassRename
+) -> MutationResponse:
+    """Rename an OntologyClass on a draft.
+
+    Records a rename hint so that ``publish`` emits non-destructive
+    ``ALTER TABLE … RENAME TO`` (plus bindings table, indexes, and CHECK
+    constraints) instead of the destructive ``DROP + ADD`` pair.
+    All in-spec references (is_a, mixins, SourceBinding.class_, ClassRef types,
+    Constraint.primary) are Python object references and automatically reflect
+    the new name without explicit patching.
+    """
+    async with db.connect() as conn:
+        try:
+            spec = await graph_spec.rename_class(
+                conn, draft_id, class_name, body.new_name
+            )
+        except graph_spec.CollisionError as exc:
+            raise _map_collision(exc) from exc
+        except graph_spec.EntityNotOnDraftError as exc:
+            raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)

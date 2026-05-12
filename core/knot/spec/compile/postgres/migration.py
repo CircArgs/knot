@@ -307,6 +307,25 @@ class RenameSlot(Change):
 
 
 @dataclass
+class RenameClass(Change):
+    """Bucket C — rename a class table without touching data.
+
+    Renames the source table, the bindings table, the two partial indexes, and
+    every required-slot CHECK constraint whose name embeds the class name.
+    No data loss; no ``allow_destructive`` needed.
+
+    This change is produced by ``diff_specs`` only when the caller passes a
+    ``class_renames`` hint listing ``{old_name, new_name}`` pairs.
+    Without that hint, a class name change appears as ``DropClass + AddClass``
+    (destructive).
+    """
+
+    old_name: str
+    new_name: str
+    cls: OntologyClass  # candidate-side class object (carries the new name)
+
+
+@dataclass
 class ChangeSlotTypeExpression(Change):
     """Bucket A — the slot's TypeExpression changed, which means the postgres
     column type changed. Carries prev and new pg types for the ALTER COLUMN."""
@@ -757,8 +776,20 @@ def _diff_sources(prev: Spec | None, candidate: Spec) -> list[Change]:
     return changes
 
 
-def _diff_source_bindings(prev: Spec | None, candidate: Spec) -> list[Change]:
+def _diff_source_bindings(
+    prev: Spec | None,
+    candidate: Spec,
+    *,
+    cls_old_to_new: dict[str, str] | None = None,
+) -> list[Change]:
     """Diff SourceBinding entities keyed by (source.name, class_.name).
+
+    When ``cls_old_to_new`` is provided (a class-rename hint mapping old→new
+    class names), prev-side binding keys with a renamed class are remapped
+    to the new class name before matching against the candidate side. This
+    ensures a class rename doesn't surface as ``DropSourceBinding +
+    AddSourceBinding`` (which would be Bucket A and fail the destructive
+    gate); the binding survives the rename intact.
 
     Change taxonomy:
       - AddSourceBinding       Bucket C — new pathway, no data loss
@@ -769,12 +800,19 @@ def _diff_source_bindings(prev: Spec | None, candidate: Spec) -> list[Change]:
       - ChangeSourceBindingRequired        Bucket C — enforced at ingest time
     """
     changes: list[Change] = []
+    rename_map = cls_old_to_new or {}
 
     def _key(b: SourceBinding) -> tuple[str, str]:
         return (b.source.name, b.class_.name)
 
+    def _prev_key(b: SourceBinding) -> tuple[str, str]:
+        # Remap the class name through any pending class-rename so the binding
+        # matches its candidate-side counterpart by (source, new_class_name).
+        cls_name = rename_map.get(b.class_.name, b.class_.name)
+        return (b.source.name, cls_name)
+
     prev_bindings: dict[tuple[str, str], SourceBinding] = {
-        _key(b): b for b in (prev.source_bindings if prev else [])
+        _prev_key(b): b for b in (prev.source_bindings if prev else [])
     }
     cand_bindings: dict[tuple[str, str], SourceBinding] = {
         _key(b): b for b in candidate.source_bindings
@@ -896,19 +934,105 @@ def diff_specs(
     candidate: Spec,
     *,
     renames: dict[str, dict[str, str]] | None = None,
+    class_renames: list[dict[str, str]] | None = None,
 ) -> list[Change]:
     """Diff two specs into a list of typed Change records.
 
-    ``renames`` is an optional hint map: ``{class_name: {old_slot_name: new_slot_name}}``.
+    ``renames`` is an optional slot-rename hint map:
+    ``{class_name: {old_slot_name: new_slot_name}}``.
     When provided, a slot whose name changed according to the hint emits a
     ``RenameSlot`` instead of the default ``DropSlot + AddSlot`` pair (which
     would require ``allow_destructive``).
+
+    ``class_renames`` is an optional list of ``{old_name, new_name}`` dicts.
+    When provided, a class whose name changed according to the hint emits a
+    ``RenameClass`` instead of the default ``DropClass + AddClass`` pair.
+    Class renames are applied first so that slot renames on the same draft
+    can reference the new class name.
     """
     changes: list[Change] = []
     prev_classes = {c.name: c for c in (prev.classes if prev else [])}
     cand_classes = {c.name: c for c in candidate.classes}
 
-    for name in cand_classes.keys() - prev_classes.keys():
+    # Build class-rename lookup: old_name → new_name and new_name → old_name.
+    cls_old_to_new: dict[str, str] = {}
+    cls_new_to_old: dict[str, str] = {}
+    if class_renames:
+        for entry in class_renames:
+            old_n = entry.get("old_name", "")
+            new_n = entry.get("new_name", "")
+            if old_n and new_n:
+                cls_old_to_new[old_n] = new_n
+                cls_new_to_old[new_n] = old_n
+
+    # Names only in cand (candidate), excluding those that are the new name of a rename.
+    added_class_names = cand_classes.keys() - prev_classes.keys()
+    # Names only in prev, excluding those that are the old name of a rename.
+    dropped_class_names = prev_classes.keys() - cand_classes.keys()
+
+    # Emit RenameClass for confirmed class renames, remove from add/drop sets,
+    # and diff their slots (since the class won't appear in the intersection loop).
+    for new_n, old_n in cls_new_to_old.items():
+        if old_n in dropped_class_names and new_n in added_class_names:
+            cand_cls = cand_classes[new_n]
+            prev_cls_renamed = prev_classes[old_n]
+            if not cand_cls.abstract and not _is_defined(cand_cls):
+                changes.append(
+                    RenameClass(old_name=old_n, new_name=new_n, cls=cand_cls)
+                )
+                # Diff slots between the old and new class — the table is the
+                # same table (just renamed), so we emit AddSlot/DropSlot/RenameSlot
+                # relative to the CANDIDATE class object (new name).
+                # Slot rename hints for renamed classes may be keyed by new class name.
+                slot_hint: dict[str, str] = {}
+                if renames:
+                    slot_hint = renames.get(new_n, {})
+                new_to_old_slot = {v: k for k, v in slot_hint.items()}
+                prev_stored = _stored_slots_by_name(prev_cls_renamed)
+                cand_stored = _stored_slots_by_name(cand_cls)
+                prev_all = {s.name: s for s in _effective_slots(prev_cls_renamed)}
+                cand_all = {s.name: s for s in _effective_slots(cand_cls)}
+                added_sn = cand_stored.keys() - prev_stored.keys()
+                dropped_sn = prev_stored.keys() - cand_stored.keys()
+                for new_sn, old_sn in new_to_old_slot.items():
+                    if old_sn in dropped_sn and new_sn in added_sn:
+                        changes.append(
+                            RenameSlot(
+                                cls=cand_cls,
+                                slot=cand_stored[new_sn],
+                                old_name=old_sn,
+                                new_name=new_sn,
+                            )
+                        )
+                        added_sn = added_sn - {new_sn}
+                        dropped_sn = dropped_sn - {old_sn}
+                for s_name in added_sn:
+                    changes.append(AddSlot(cls=cand_cls, slot=cand_stored[s_name]))
+                for s_name in dropped_sn:
+                    changes.append(DropSlot(cls=cand_cls, slot_name=s_name))
+                for s_name in cand_stored.keys() & prev_stored.keys():
+                    ps, cs = prev_stored[s_name], cand_stored[s_name]
+                    prev_t = _slot_pg_type(ps)
+                    new_t = _slot_pg_type(cs)
+                    if prev_t != new_t:
+                        changes.append(
+                            ChangeSlotTypeExpression(
+                                cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t
+                            )
+                        )
+                    if ps.required != cs.required:
+                        changes.append(
+                            ChangeSlotRequired(
+                                cls=cand_cls, slot=cs, slot_name=s_name, new_required=cs.required
+                            )
+                        )
+                for s_name in cand_all.keys() & prev_all.keys():
+                    ps2, cs2 = prev_all[s_name], cand_all[s_name]
+                    changes.extend(_diff_slot_fields(cand_cls, ps2, cs2))
+            added_class_names = added_class_names - {new_n}
+            dropped_class_names = dropped_class_names - {old_n}
+
+    for name in added_class_names:
         c = cand_classes[name]
         if not c.abstract:
             if _is_defined(c):
@@ -916,7 +1040,7 @@ def diff_specs(
             else:
                 changes.append(AddClass(cls=c))
 
-    for name in prev_classes.keys() - cand_classes.keys():
+    for name in dropped_class_names:
         c = prev_classes[name]
         if not c.abstract:
             if _is_defined(c):
@@ -1071,7 +1195,7 @@ def diff_specs(
             changes.extend(_diff_slot_fields(cand_cls, ps, cs))
 
     changes.extend(_diff_sources(prev, candidate))
-    changes.extend(_diff_source_bindings(prev, candidate))
+    changes.extend(_diff_source_bindings(prev, candidate, cls_old_to_new=cls_old_to_new))
     changes.extend(_diff_constraints(prev, candidate))
     return changes
 
@@ -1251,6 +1375,62 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             )
             # Re-add under new name.
             await conn.execute(_required_check_sql(change.cls, change.slot))
+
+    elif isinstance(change, RenameClass):
+        old_lower = change.old_name.lower()
+        new_lower = change.new_name.lower()
+        # Step 1: rename the source table.
+        await conn.execute(
+            sql.SQL("ALTER TABLE {old} RENAME TO {new}").format(
+                old=sql.Identifier(schema(), old_lower),
+                new=sql.Identifier(new_lower),
+            )
+        )
+        # Step 2: rename the bindings table.
+        await conn.execute(
+            sql.SQL("ALTER TABLE {old} RENAME TO {new}").format(
+                old=sql.Identifier(schema(), f"{old_lower}_bindings"),
+                new=sql.Identifier(f"{new_lower}_bindings"),
+            )
+        )
+        # Step 3: rename the two partial indexes on the bindings table.
+        old_idx_current = f"{old_lower}_bindings_current"
+        new_idx_current = f"{new_lower}_bindings_current"
+        await conn.execute(
+            sql.SQL("ALTER INDEX IF EXISTS {old} RENAME TO {new}").format(
+                old=sql.Identifier(schema(), old_idx_current),
+                new=sql.Identifier(new_idx_current),
+            )
+        )
+        old_idx_one = f"{old_lower}_bindings_one_current_per_row"
+        new_idx_one = f"{new_lower}_bindings_one_current_per_row"
+        await conn.execute(
+            sql.SQL("ALTER INDEX IF EXISTS {old} RENAME TO {new}").format(
+                old=sql.Identifier(schema(), old_idx_one),
+                new=sql.Identifier(new_idx_one),
+            )
+        )
+        # Step 4: rename every required-slot CHECK constraint whose name embeds
+        # the old class name. Postgres has no RENAME CONSTRAINT; we drop + re-add.
+        # The cls object now has the new name, so _required_check_name gives new names.
+        for slot in _effective_slots(change.cls):
+            if not _is_stored(slot) or not slot.required:
+                continue
+            old_slot_for_cls = type(
+                "FakeCls", (), {"name": change.old_name}
+            )()  # lightweight stand-in for old class name
+            old_chk = f"{old_lower}_{slot.name}_required_chk"
+            new_chk = _required_check_name(change.cls, slot)
+            if old_chk != new_chk:
+                await conn.execute(
+                    sql.SQL(
+                        "ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {old_chk}"
+                    ).format(
+                        tbl=_table_id(change.cls),
+                        old_chk=sql.Identifier(old_chk),
+                    )
+                )
+                await conn.execute(_required_check_sql(change.cls, slot))
 
     elif isinstance(change, ChangeClassAbstract):
         # abstract toggles whether the class has a table.
