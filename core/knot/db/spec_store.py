@@ -71,8 +71,12 @@ def _detect_mixin_slot_collision(
 ) -> tuple[str, str, str] | None:
     """Walk the effective slot set; return ``(slot_name, source_a, source_b)``
     if two distinct mixins contribute the same slot name. Own slots shadow
-    mixin slots silently and are not a collision."""
-    own_names = {s.name for s in start.slots}
+    mixin slots silently and are not a collision.
+
+    Accepts both OntologyClass (own slots) and DefinedClass (no own slots —
+    inherits via is_a parent table); ``getattr`` default handles the latter.
+    """
+    own_names = {s.name for s in getattr(start, "slots", [])}
     contributors: dict[str, str] = {}
     visited: list[OntologyClass] = []
     queue: list[OntologyClass] = list(start.mixins)
@@ -136,8 +140,11 @@ def publish_gate(candidate: Spec) -> None:
             return [type_expr]
         return []
 
-    # Validate slots inline on each class.
+    # Validate slots inline on each class. DefinedClass instances have no
+    # own slots (the VIEW inherits its parent's columns), so skip them here.
     for c in candidate.classes:
+        if not hasattr(c, "slots"):
+            continue
         for slot in c.slots:
             if slot.type is None:
                 # Derived slots with deferred type are valid; structural slots
@@ -201,14 +208,14 @@ def publish_gate(candidate: Spec) -> None:
                 f"between mixins {source_a!r} and {source_b!r}."
             )
 
-    # Defined-class validation (classes with a definition body — VIEW-backed).
+    # Defined-class validation (VIEW-backed DefinedClass entries).
+    from knot.spec.metaschema import DefinedClass as _DefinedClass
+
     for c in candidate.classes:
-        if c.definition is None:
+        if not isinstance(c, _DefinedClass):
             continue
-        # is_a must be set for defined classes.
-        if c.is_a is None:
-            errors.append(f"Defined class {c.name!r} must have is_a set to a parent class.")
-            continue
+        # is_a is required and must be on spec.classes (Pydantic typing requires
+        # it to be set; only the spec-membership check is needed here).
         if id(c.is_a) not in classes_by_id:
             errors.append(
                 f"Defined class {c.name!r}.is_a references OntologyClass "

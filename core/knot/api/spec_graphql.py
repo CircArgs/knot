@@ -176,16 +176,25 @@ def _to_slot(s: Slot) -> SlotGQL:
     )
 
 
-def _to_class(c: OntologyClass) -> OntologyClassGQL:
+def _to_class(c: Any) -> OntologyClassGQL:
+    """Adapt either OntologyClass or DefinedClass to the unified GraphQL type.
+
+    OntologyClass has slots + optional is_a + abstract flag.
+    DefinedClass has definition + required is_a + no own slots.
+    The GraphQL type carries `kind`, surfaces both, and the UI branches.
+    """
+    from knot.spec.metaschema import DefinedClass
+
+    is_defined = isinstance(c, DefinedClass)
     return OntologyClassGQL(
         name=c.name,
-        abstract=c.abstract,
+        abstract=False if is_defined else c.abstract,
         description=c.description,
         is_a_name=c.is_a.name if c.is_a is not None else None,
         mixin_names=[m.name for m in c.mixins],
-        slots=[_to_slot(s) for s in c.slots],
+        slots=[] if is_defined else [_to_slot(s) for s in c.slots],
         effective_slots=[_to_slot(s) for s in _effective_slots(c)],
-        definition=c.definition,
+        definition=c.definition if is_defined else None,
     )
 
 

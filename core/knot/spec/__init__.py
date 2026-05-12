@@ -14,6 +14,7 @@ from knot.spec.errors import (
 )
 from knot.spec.metaschema import (
     STANDARD_PRIMITIVE_NAMES,
+    AnyClass,
     Array,
     BoolExpr,
     BoolOpKind,
@@ -21,6 +22,7 @@ from knot.spec.metaschema import (
     Compare,
     CompareOp,
     Constraint,
+    DefinedClass,
     DerivedSlot,
     Literal_,
     NullSemantics,
@@ -51,6 +53,8 @@ __all__ = [
     # entity types
     "Spec",
     "OntologyClass",
+    "DefinedClass",
+    "AnyClass",
     "Slot",
     "Source",
     "SlotMapping",

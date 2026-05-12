@@ -41,6 +41,7 @@ from knot.spec import (
     Spec,
     compute_content_hash,
 )
+from knot.spec.metaschema import DefinedClass
 from knot.spec.expressions import ExprJson, ExprTranslationError, translate_expr
 from knot.spec.metaschema import (
     Array,
@@ -149,11 +150,25 @@ class RollbackToCurrentError(Exception):
 # ─── Local helpers — name lookups raise EntityNotOnDraftError ───────────────
 
 
-def _find_class(spec: Spec, name: str) -> OntologyClass:
+def _find_class(spec: Spec, name: str) -> OntologyClass | DefinedClass:
     for c in spec.classes:
         if c.name == name:
             return c
     raise EntityNotOnDraftError("OntologyClass", name)
+
+
+def _find_ontology_class(spec: Spec, name: str) -> OntologyClass:
+    """Like _find_class but asserts the result is an OntologyClass (not DefinedClass).
+
+    Use when the call site needs a concrete/abstract class for is_a / mixin refs.
+    """
+    cls = _find_class(spec, name)
+    if not isinstance(cls, OntologyClass):
+        raise EntityNotOnDraftError(
+            "OntologyClass",
+            f"{name} (found a DefinedClass; only OntologyClass allowed here)",
+        )
+    return cls
 
 
 def _find_source(spec: Spec, name: str) -> Source:
@@ -335,67 +350,82 @@ async def add_class(
         if any(c.name.lower() == name.lower() for c in spec.classes):
             raise CollisionError("OntologyClass", name)
 
-        is_a = _find_class(spec, is_a_name) if is_a_name else None
-        mixins = [_find_class(spec, n) for n in mixin_names]
-
-        # Build the class first (needed as context for any derivation exprs)
-        new_cls = OntologyClass(
-            name=name,
-            slots=[],
-            is_a=is_a,
-            mixins=mixins,
-            abstract=abstract,
-            description=description,
-        )
-
-        # Build inline slots
-        slot_names_seen: set[str] = set()
-        built_slots: list[Slot] = []
-        for slot_def in slots or []:
-            sname = slot_def.get("name", "")
-            if sname.lower() in slot_names_seen:
-                raise CollisionError("Slot", sname)
-            slot_names_seen.add(sname.lower())
-            constraints_raw = slot_def.get("constraints")
-            slot_constraints: SlotConstraints | None = None
-            if constraints_raw:
-                slot_constraints = SlotConstraints(
-                    pattern=constraints_raw.get("pattern"),
-                    min_value=constraints_raw.get("min_value"),
-                    max_value=constraints_raw.get("max_value"),
-                    permissible_values=constraints_raw.get("permissible_values"),
-                )
-            rp_raw = slot_def.get("resolution_policy", ResolutionPolicy.ARGMAX_TRUST)
-            rp = rp_raw if isinstance(rp_raw, ResolutionPolicy) else ResolutionPolicy(rp_raw)
-            built_slots.append(
-                _build_slot(
-                    name=sname,
-                    type_kind=slot_def.get("type_kind"),
-                    type_name=slot_def.get("type_name"),
-                    identifier=bool(slot_def.get("identifier", False)),
-                    required=bool(slot_def.get("required", False)),
-                    resolution_policy=rp,
-                    constraints=slot_constraints,
-                    description=slot_def.get("description"),
-                    derivation=slot_def.get("derivation"),
-                    spec=spec,
-                    primary_class=new_cls,
-                )
-            )
-
-        new_cls.slots = built_slots
+        is_a = _find_ontology_class(spec, is_a_name) if is_a_name else None
+        mixins = [_find_ontology_class(spec, n) for n in mixin_names]
 
         if definition is not None:
-            # Validate the SQL predicate parses cleanly before storing.
+            # DefinedClass branch — validate SQL predicate then build VIEW-backed class.
             from knot.spec.sql_validate import SqlPredicateError, parse_predicate
 
             try:
                 parse_predicate(definition)
             except SqlPredicateError as exc:
                 raise ExprTranslationError(str(exc)) from exc
-            new_cls.definition = definition
 
-        spec.classes.append(new_cls)
+            if is_a is None:
+                raise ExprTranslationError(
+                    f"DefinedClass {name!r} requires is_a to be set to a parent OntologyClass."
+                )
+            if not isinstance(is_a, OntologyClass):
+                raise ExprTranslationError(
+                    f"DefinedClass {name!r}: is_a must be an OntologyClass, not a DefinedClass."
+                )
+            new_defined = DefinedClass(
+                name=name,
+                is_a=is_a,
+                definition=definition,
+                mixins=mixins,
+                description=description,
+            )
+            spec.classes.append(new_defined)
+        else:
+            # OntologyClass branch (concrete or abstract).
+            new_cls = OntologyClass(
+                name=name,
+                kind="abstract" if abstract else "concrete",
+                slots=[],
+                is_a=is_a,
+                mixins=mixins,
+                description=description,
+            )
+
+            # Build inline slots
+            slot_names_seen: set[str] = set()
+            built_slots: list[Slot] = []
+            for slot_def in slots or []:
+                sname = slot_def.get("name", "")
+                if sname.lower() in slot_names_seen:
+                    raise CollisionError("Slot", sname)
+                slot_names_seen.add(sname.lower())
+                constraints_raw = slot_def.get("constraints")
+                slot_constraints: SlotConstraints | None = None
+                if constraints_raw:
+                    slot_constraints = SlotConstraints(
+                        pattern=constraints_raw.get("pattern"),
+                        min_value=constraints_raw.get("min_value"),
+                        max_value=constraints_raw.get("max_value"),
+                        permissible_values=constraints_raw.get("permissible_values"),
+                    )
+                rp_raw = slot_def.get("resolution_policy", ResolutionPolicy.ARGMAX_TRUST)
+                rp = rp_raw if isinstance(rp_raw, ResolutionPolicy) else ResolutionPolicy(rp_raw)
+                built_slots.append(
+                    _build_slot(
+                        name=sname,
+                        type_kind=slot_def.get("type_kind"),
+                        type_name=slot_def.get("type_name"),
+                        identifier=bool(slot_def.get("identifier", False)),
+                        required=bool(slot_def.get("required", False)),
+                        resolution_policy=rp,
+                        constraints=slot_constraints,
+                        description=slot_def.get("description"),
+                        derivation=slot_def.get("derivation"),
+                        spec=spec,
+                        primary_class=new_cls,
+                    )
+                )
+
+            new_cls.slots = built_slots
+            spec.classes.append(new_cls)
     return spec
 
 
@@ -489,11 +519,16 @@ async def update_class(
             cls.slots = built_slots
 
         if is_a_name is not None:
-            cls.is_a = _find_class(spec, is_a_name) if is_a_name else None
+            cls.is_a = _find_ontology_class(spec, is_a_name) if is_a_name else None
         if mixin_names is not None:
-            cls.mixins = [_find_class(spec, n) for n in mixin_names]
+            cls.mixins = [_find_ontology_class(spec, n) for n in mixin_names]
         if abstract is not None:
-            cls.abstract = abstract
+            if not isinstance(cls, OntologyClass):
+                raise ExprTranslationError(
+                    f"Cannot change abstract flag on DefinedClass {cls.name!r}; "
+                    "use kind='defined' at creation time."
+                )
+            cls.kind = "abstract" if abstract else "concrete"
         if description is not None:
             cls.description = description
     return spec

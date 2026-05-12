@@ -28,8 +28,8 @@ from knot.spec import (
 )
 from knot.spec.canonical import CANONICAL_DUMP_VERSION
 
-PINNED_HASH = "22b9a187352dd5064a0e8fa2676a379031c8301c5c702370b115b4cdd9f7c9b4"
-PINNED_VERSION = 4
+PINNED_HASH = "9b274228e91cf4d8bfa8a909055bce65eb440379a4b8032fd321fdee5cd5660f"
+PINNED_VERSION = 5
 
 
 def _fixture_spec() -> Spec:

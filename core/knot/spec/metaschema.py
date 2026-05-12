@@ -12,11 +12,13 @@ Build order in this file:
      Matches, RecursiveTraversal)
   5. Slot (with SDK descriptor methods)
   6. OntologyClass
-  7. Constraint
-  8. Source (thin — name + description only)
-  9. NullSemantics, SlotMapping, SourceBinding (reified (Source, Class) binding)
- 10. Spec root
- 11. model_rebuild() calls to resolve forward refs
+  7. DefinedClass
+  8. AnyClass discriminated union
+  9. Constraint
+ 10. Source (thin — name + description only)
+ 11. NullSemantics, SlotMapping, SourceBinding (reified (Source, Class) binding)
+ 12. Spec root
+ 13. model_rebuild() calls to resolve forward refs
 
 The SDK affordance — `Movie.year > 1900`, `Movie.imdb_id.from_source(s).is_not_null()`,
 `Movie.credits.where(...).collect(...)` — is woven into Slot's operator
@@ -29,7 +31,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Any, ClassVar, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # ---------------------------------------------------------------------------
 # 1. SpecBase — shared Pydantic configuration
@@ -563,25 +565,42 @@ DerivedSlot = Slot
 
 
 class OntologyClass(SpecBase):
-    """A typed entity class in the ontology.
+    """A typed entity class in the ontology (concrete or abstract).
+
+    ``kind`` discriminates between "concrete" (ingestable, has a table) and
+    "abstract" (not ingestable, no table — used as a mixin/parent only).
+    The ``abstract`` property is kept for backward-compat reads.
 
     `__getattr__` resolves slot names so impl authors write
     `Movie.imdb_id` rather than indexing into a slot list.  Walks the
     is_a chain + mixins to inherit slot visibility.
-
-    ``definition`` — SQL predicate string (WHERE-clause).  When set, the
-    class is a *defined class* backed by a VIEW rather than a table.
-    The VIEW selects rows from the ``is_a`` parent table that satisfy
-    the predicate.  Validated via sqlglot at publish time.
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
+    kind: Literal["concrete", "abstract"] = "concrete"
     is_a: OntologyClass | None = None
     mixins: list[OntologyClass] = Field(default_factory=list)
     slots: list[Slot] = Field(default_factory=list)
-    abstract: bool = False
     description: str | None = None
-    definition: str | None = None  # SQL predicate; presence makes this a defined class (VIEW)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_abstract_kw(cls, data: Any) -> Any:
+        """Accept legacy ``abstract: bool`` at construction and map to ``kind``.
+
+        Existing test fixtures and external callers pass ``abstract=True/False``;
+        translate at the pre-validation stage so the new ``kind`` discriminator
+        gets the right value without breaking the call sites.
+        """
+        if isinstance(data, dict) and "abstract" in data and "kind" not in data:
+            abstract_val = data.pop("abstract")
+            data["kind"] = "abstract" if abstract_val else "concrete"
+        return data
+
+    @property
+    def abstract(self) -> bool:
+        """Backward-compat read: True when kind == 'abstract'."""
+        return self.kind == "abstract"
 
     def __getattr__(self, item: str) -> Slot:
         # Pydantic and Python internals probe for sentinel attributes; raise
@@ -629,6 +648,38 @@ class OntologyClass(SpecBase):
         start = RelationRef(from_class=self, slot=is_a_slot)
         step = SlotPath(from_class=self, slots=[is_a_slot])
         return RecursiveTraversal(start=start, step=step, max_depth=max_depth)
+
+
+class DefinedClass(SpecBase):
+    """A class backed by a VIEW rather than a table (OWL-DL defined class).
+
+    Structurally distinct from OntologyClass:
+      - ``definition`` (SQL predicate) is mandatory — it is the WHERE-clause
+        of the VIEW that selects rows from the ``is_a`` parent table.
+      - ``is_a`` is required: must point to a concrete or abstract OntologyClass
+        (no DefinedClass nesting).
+      - No ``slots`` field — own slots are meaningless for a VIEW; the VIEW
+        inherits all columns from the parent table.
+      - Storage is a VIEW; the DDL emitter never creates a table for this class.
+
+    ``kind`` is a fixed discriminator literal ("defined") used by the
+    ``AnyClass`` discriminated union.
+    """
+
+    name: str = Field(pattern=_ENTITY_NAME_PATTERN)
+    kind: Literal["defined"] = "defined"
+    is_a: OntologyClass  # required; no DefinedClass nesting
+    definition: str  # SQL predicate (WHERE-clause body), validated via sqlglot at publish
+    mixins: list[OntologyClass] = Field(default_factory=list)
+    description: str | None = None
+
+    def __hash__(self) -> int:
+        return id(self)
+
+
+# AnyClass — discriminated union over the two class kinds.
+# Pydantic uses the ``kind`` field to route deserialization.
+AnyClass = Annotated[OntologyClass | DefinedClass, Field(discriminator="kind")]
 
 
 # Sentinel `from_class` used by Slot operator overloads.  Replaced by the
@@ -755,7 +806,7 @@ class Spec(SpecBase):
 
     id: str
     version: str
-    classes: list[OntologyClass] = Field(default_factory=list)
+    classes: list[AnyClass] = Field(default_factory=list)
     sources: list[Source] = Field(default_factory=list)
     source_bindings: list[SourceBinding] = Field(default_factory=list)
     constraints: list[Constraint] = Field(default_factory=list)
@@ -792,6 +843,7 @@ ScalarDerivation.model_rebuild()
 FormatDerivation.model_rebuild()
 Slot.model_rebuild()
 OntologyClass.model_rebuild()
+DefinedClass.model_rebuild()
 Constraint.model_rebuild()
 Source.model_rebuild()
 SlotMapping.model_rebuild()
@@ -842,6 +894,8 @@ __all__ = [
     "Slot",
     "DerivedSlot",
     "OntologyClass",
+    "DefinedClass",
+    "AnyClass",
     # constraints + sources + bindings + root
     "Constraint",
     "Source",

@@ -31,6 +31,7 @@ from knot.spec.metaschema import (
     ClassRef,
     Compare,
     Constraint,
+    DefinedClass,
     FilteredRelation,
     FormatDerivation,
     Literal_,
@@ -63,7 +64,7 @@ from knot.spec.metaschema import Between as _Between
 # Named entities tracked by $uid for cycle-safe serialization.
 # SourceBinding and SlotMapping are NOT named (no .name field) — they
 # serialize fresh each visit like Constraint.
-_NAMED_CLASSES = (Slot, OntologyClass, Source, Constraint)
+_NAMED_CLASSES = (Slot, OntologyClass, DefinedClass, Source, Constraint)
 
 
 def _is_named(obj: Any) -> bool:
@@ -145,6 +146,7 @@ _KIND_REGISTRY: dict[str, type] = {
     "SlotConstraints": SlotConstraints,
     "Slot": Slot,
     "OntologyClass": OntologyClass,
+    "DefinedClass": DefinedClass,
     "Constraint": Constraint,
     "Source": Source,
     "SlotMapping": SlotMapping,
@@ -187,6 +189,7 @@ class _Index:
 _PLACEHOLDER_KINDS = {
     "Slot": Slot,
     "OntologyClass": OntologyClass,
+    "DefinedClass": DefinedClass,
     "Source": Source,
     "Constraint": Constraint,
 }
@@ -213,13 +216,16 @@ def _pass1_build(d: Any, index: _Index) -> None:
     name = d.get("name")
     placeholder_cls = _PLACEHOLDER_KINDS.get(kind) if isinstance(kind, str) else None
 
-    if (
-        placeholder_cls in (Slot, OntologyClass)
-        and isinstance(uid, int)
-        and isinstance(name, str)
-        and uid not in index.by_uid
-    ):
-        index.by_uid[uid] = placeholder_cls(name=name)
+    if isinstance(uid, int) and isinstance(name, str) and uid not in index.by_uid:
+        if placeholder_cls in (Slot, OntologyClass):
+            index.by_uid[uid] = placeholder_cls(name=name)
+        elif placeholder_cls is DefinedClass:
+            # DefinedClass requires is_a + definition at construction.
+            # Build a placeholder with sentinels; pass 2 patches the real values.
+            _sentinel_oc = OntologyClass(name="__placeholder__")
+            index.by_uid[uid] = DefinedClass(
+                name=name, is_a=_sentinel_oc, definition="__placeholder__"
+            )
 
     for value in d.values():
         _pass1_build(value, index)
@@ -266,7 +272,7 @@ def _resolve(d: Any, index: _Index) -> Any:
     uid = d.get("$uid")
     if isinstance(uid, int) and uid in index.by_uid:
         existing = index.by_uid[uid]
-        if isinstance(existing, (Slot, OntologyClass)):
+        if isinstance(existing, (Slot, OntologyClass, DefinedClass)):
             for k, v in kwargs.items():
                 if k != "name":
                     setattr(existing, k, v)

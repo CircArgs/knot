@@ -28,7 +28,7 @@ from pydantic_core import PydanticUndefined
 
 from knot.spec.metaschema import Primitive
 
-CANONICAL_DUMP_VERSION: int = 4
+CANONICAL_DUMP_VERSION: int = 5
 
 
 # ---------------------------------------------------------------------------

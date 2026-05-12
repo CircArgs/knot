@@ -91,6 +91,7 @@ from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._dispatch import CompilerError
 from knot.spec.compile.postgres._types import slot_pg_type as _slot_pg_type
+from knot.spec.metaschema import DefinedClass
 
 from ._naming import (
     bindings_table_id as _bindings_table_id,
@@ -101,11 +102,6 @@ from ._naming import (
 from ._naming import (
     table_id as _table_id,
 )
-
-
-def _is_defined(cls: OntologyClass) -> bool:
-    """True when the class is a defined class (has a definition — becomes a VIEW)."""
-    return getattr(cls, "definition", None) is not None
 
 
 def _bindings_index_id(cls: OntologyClass) -> sql.Identifier:
@@ -261,7 +257,7 @@ class DropClass(Change):
 class AddDefinedClass(Change):
     """Create a VIEW for a defined class (equivalentClass / OWL DL defined)."""
 
-    cls: OntologyClass
+    cls: DefinedClass
 
 
 @dataclass
@@ -442,7 +438,7 @@ class ChangeClassAbstract(Change):
     the source table when going abstract → concrete (it needs slots, not
     just the name)."""
 
-    cls: OntologyClass
+    cls: OntologyClass  # Only OntologyClass can flip abstract; DefinedClass never does
     class_name: str
     old_value: bool
     new_value: bool
@@ -465,9 +461,9 @@ class ChangeClassIsA(Change):
     record itself is not destructive.
 
     ``cls`` is the candidate-side class object so the emitter can dispatch
-    on its definition status (concrete vs defined)."""
+    on its kind (concrete/abstract vs defined)."""
 
-    cls: OntologyClass
+    cls: OntologyClass | DefinedClass
     class_name: str
     old_parent: str | None
     new_parent: str | None
@@ -502,7 +498,7 @@ class ChangeClassDefinition(Change):
     ``cls`` is the candidate-side class object so the emitter can re-emit
     the VIEW with the new compiled body."""
 
-    cls: OntologyClass
+    cls: DefinedClass
     class_name: str
     had_definition_before: bool
     has_definition_now: bool
@@ -637,9 +633,10 @@ class ChangeConstraintSeverity(Change):
 # ─── Diff visitor ───────────────────────────────────────────────────────────
 
 
-def _stored_slots_by_name(cls: OntologyClass) -> dict[str, Slot]:
+def _stored_slots_by_name(cls: OntologyClass | DefinedClass) -> dict[str, Slot]:
     # Walks own + mixin slots so adding/removing a mixin shows up as
     # AddSlot/DropSlot in the diff.
+    # DefinedClass has no own columns — returns {} (effective_slots walks parent).
     return {s.name: s for s in _effective_slots(cls) if _is_stored(s)}
 
 
@@ -974,7 +971,7 @@ def diff_specs(
         if old_n in dropped_class_names and new_n in added_class_names:
             cand_cls = cand_classes[new_n]
             prev_cls_renamed = prev_classes[old_n]
-            if not cand_cls.abstract and not _is_defined(cand_cls):
+            if isinstance(cand_cls, OntologyClass) and not cand_cls.abstract:
                 changes.append(RenameClass(old_name=old_n, new_name=new_n, cls=cand_cls))
                 # Diff slots between the old and new class — the table is the
                 # same table (just renamed), so we emit AddSlot/DropSlot/RenameSlot
@@ -1030,33 +1027,36 @@ def diff_specs(
 
     for name in added_class_names:
         c = cand_classes[name]
-        if not c.abstract:
-            if _is_defined(c):
-                changes.append(AddDefinedClass(cls=c))
-            else:
-                changes.append(AddClass(cls=c))
+        if isinstance(c, DefinedClass):
+            changes.append(AddDefinedClass(cls=c))
+        elif not c.abstract:
+            changes.append(AddClass(cls=c))
 
     for name in dropped_class_names:
         c = prev_classes[name]
-        if not c.abstract:
-            if _is_defined(c):
-                changes.append(DropDefinedClass(class_name=name))
-            else:
-                changes.append(DropClass(class_name=name))
+        if isinstance(c, DefinedClass):
+            changes.append(DropDefinedClass(class_name=name))
+        elif not c.abstract:
+            changes.append(DropClass(class_name=name))
 
     for name in cand_classes.keys() & prev_classes.keys():
         prev_cls, cand_cls = prev_classes[name], cand_classes[name]
 
         # Class-level field changes (abstract / is_a / mixins) — emitted
-        # regardless of the abstract / defined status switch. ``abstract``
-        # toggling between true/false is itself a category-A change.
-        if prev_cls.abstract != cand_cls.abstract:
+        # regardless of the abstract / defined status switch.
+        # abstract toggling between true/false is a category-A change —
+        # but only meaningful when both sides are OntologyClass.
+        prev_abstract = prev_cls.abstract if isinstance(prev_cls, OntologyClass) else False
+        cand_abstract = cand_cls.abstract if isinstance(cand_cls, OntologyClass) else False
+        if prev_abstract != cand_abstract:
+            # Both must be OntologyClass for this to fire (DefinedClass never flips abstract).
+            assert isinstance(cand_cls, OntologyClass)
             changes.append(
                 ChangeClassAbstract(
                     cls=cand_cls,
                     class_name=name,
-                    old_value=prev_cls.abstract,
-                    new_value=cand_cls.abstract,
+                    old_value=prev_abstract,
+                    new_value=cand_abstract,
                 )
             )
 
@@ -1083,11 +1083,11 @@ def diff_specs(
                 )
             )
 
-        if cand_cls.abstract or prev_cls.abstract:
+        if cand_abstract or prev_abstract:
             continue
 
-        prev_defined = _is_defined(prev_cls)
-        cand_defined = _is_defined(cand_cls)
+        prev_defined = isinstance(prev_cls, DefinedClass)
+        cand_defined = isinstance(cand_cls, DefinedClass)
 
         # Concrete ↔ defined transition is always destructive: the storage
         # type changes (table ↔ view).  Emit as drop+add to force the
@@ -1096,22 +1096,24 @@ def diff_specs(
             if prev_defined:
                 # Was a view, now concrete: drop view + add table.
                 changes.append(DropDefinedClass(class_name=name))
+                assert isinstance(cand_cls, OntologyClass)
                 changes.append(AddClass(cls=cand_cls))
             else:
                 # Was concrete, now defined: drop table + add view.
                 changes.append(DropClass(class_name=name))
+                assert isinstance(cand_cls, DefinedClass)
                 changes.append(AddDefinedClass(cls=cand_cls))
             continue
 
         if cand_defined:
             # Both defined: re-create view if definition changed (simplest
             # approach; view DDL is idempotent via CREATE OR REPLACE).
+            assert isinstance(cand_cls, DefinedClass)
+            assert isinstance(prev_cls, DefinedClass)
             changes.append(AddDefinedClass(cls=cand_cls))
             from knot.spec.sql_validate import canonical_hash as _canonical_hash
 
-            prev_def = prev_cls.definition or ""
-            cand_def = cand_cls.definition or ""
-            if _canonical_hash(prev_def) != _canonical_hash(cand_def):
+            if _canonical_hash(prev_cls.definition) != _canonical_hash(cand_cls.definition):
                 changes.append(
                     ChangeClassDefinition(
                         cls=cand_cls,
@@ -1236,14 +1238,12 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         )
 
     elif isinstance(change, AddDefinedClass):
-        """Create (or replace) a VIEW for the defined class."""
+        # Create (or replace) a VIEW for the defined class.
         from knot.spec.compile.postgres._context import CompileContext
         from knot.spec.sql_validate import compile_to_sql
 
         cls = change.cls
-        if cls.is_a is None:
-            raise ValueError(f"Defined class {cls.name!r} must have is_a set to a parent class.")
-        parent = cls.is_a
+        parent = cls.is_a  # always set — DefinedClass.is_a is required
 
         ctx = CompileContext(primary_class=parent, alias="s")
         where_sql = compile_to_sql(cls.definition, parent, ctx)
@@ -1456,7 +1456,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         # Concrete classes: is_a is structural-only at the DDL layer (own
         # table, own slots; effective_slots doesn't walk is_a). No-op.
         # Defined classes: re-emit the VIEW with the new parent as FROM.
-        if _is_defined(change.cls):
+        if isinstance(change.cls, DefinedClass):
             await emit_ddl(AddDefinedClass(cls=change.cls), conn)
         # else: no-op for concrete
 

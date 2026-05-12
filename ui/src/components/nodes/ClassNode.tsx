@@ -109,23 +109,24 @@ export default function ClassNode({
               junction
             </span>
           )}
-          {cls.definition !== null && (
+          {cls.definition !== null ? (
             <span
               className="text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide bg-sky-100 text-sky-800"
               title={`Defined class — SQL predicate: ${cls.definition}`}
             >
               defined
             </span>
+          ) : (
+            <span
+              className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide ${
+                cls.abstract
+                  ? "bg-slate-200 text-slate-700"
+                  : "bg-emerald-100 text-emerald-800"
+              }`}
+            >
+              {cls.abstract ? "abstract" : "concrete"}
+            </span>
           )}
-          <span
-            className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide ${
-              cls.abstract
-                ? "bg-slate-200 text-slate-700"
-                : "bg-emerald-100 text-emerald-800"
-            }`}
-          >
-            {cls.abstract ? "abstract" : "concrete"}
-          </span>
         </div>
       </div>
 
