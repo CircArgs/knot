@@ -1,10 +1,10 @@
 """Data-quality observation tests.
 
 Coverage:
-  1. Incremental write on /graph/ingest emits one observation per stored prop.
+  1. Incremental write on /graph/ingest emits one observation per stored slot.
   2. Stats math: row_count, null_count, distinct_count, min, max.
   3. Add correction emits incremental obs under the _user_corrections source.
-  4. Property correction emits an obs only for the touched prop.
+  4. Property correction emits an obs only for the touched slot.
   5. Full scan reads aggregate stats from the per-class table and writes
      full_scan rows.
   6. /dq/observations time-series read with filters.
@@ -22,7 +22,7 @@ from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
 from knot.db import dq
 from knot.graph.corrections import apply_add, apply_property_correction
-from knot.spec import OntologyClass, Primitive, Property, Source, Spec
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.compile.postgres._naming import user_corrections_source
 from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
@@ -33,12 +33,12 @@ def _dev_principal() -> Principal:
 
 
 def _spec() -> tuple[Spec, OntologyClass, Source]:
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"))
-    year = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id, title, year])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    year = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="dq",
         version="1.0.0",
@@ -99,7 +99,7 @@ async def test_ingest_emits_dq_observations(published, client):
     assert r.status_code == 200, r.text
 
     obs = await dq.query_observations(conn, source="imdb")
-    by_slot = {o["property"]: o for o in obs}
+    by_slot = {o["slot"]: o for o in obs}
     assert set(by_slot) == {"imdb_id", "title", "year"}
 
     # imdb_id: 3 rows, 0 nulls, 3 distinct
@@ -143,7 +143,7 @@ async def test_add_correction_emits_dq(published):
         spec_revision=rev,
     )
     obs = await dq.query_observations(conn, source=user_corrections_source())
-    by_slot = {o["property"]: o for o in obs}
+    by_slot = {o["slot"]: o for o in obs}
     assert by_slot["title"]["row_count"] == 1
     assert by_slot["title"]["null_count"] == 0
     assert by_slot["year"]["row_count"] == 1
@@ -172,13 +172,13 @@ async def test_property_correction_emits_dq_for_one_slot(published):
         conn,
         cls=movie,
         canonical_id="tt_prop",
-        property_name="title",
+        slot_name="title",
         value="New Title",
         spec_revision=rev,
     )
 
     obs = await dq.query_observations(conn, source=user_corrections_source())
-    assert {o["property"] for o in obs} == {"title"}
+    assert {o["slot"] for o in obs} == {"title"}
     assert obs[0]["row_count"] == 1
     assert obs[0]["null_count"] == 0
     assert obs[0]["distinct_count"] == 1
@@ -211,7 +211,7 @@ async def test_full_scan_writes_full_scan_rows(published, client):
     assert body["observations_inserted"] >= 3  # one per stored slot
 
     obs = await dq.query_observations(conn, source="imdb", kind="full_scan")
-    by_slot = {o["property"]: o for o in obs}
+    by_slot = {o["slot"]: o for o in obs}
     assert by_slot["title"]["row_count"] == 3
     assert by_slot["title"]["null_count"] == 1
     # full_scan rows have NULL batch_id.
@@ -231,13 +231,13 @@ def test_api_observations_endpoint(published, client):
     )
     assert r.status_code == 200
 
-    r = client.get("/dq/observations?source=imdb&class=Movie&property=title")
+    r = client.get("/dq/observations?source=imdb&class=Movie&slot=title")
     assert r.status_code == 200, r.text
     rows = r.json()
     assert len(rows) == 1
     assert rows[0]["source"] == "imdb"
     assert rows[0]["class"] == "Movie"
-    assert rows[0]["property"] == "title"
+    assert rows[0]["slot"] == "title"
 
 
 # ---------------------------------------------------------------------------
@@ -261,7 +261,7 @@ def test_api_summary_null_rate(published, client):
     r = client.get("/dq/observations/summary")
     assert r.status_code == 200, r.text
     rows = r.json()
-    title_row = next(r for r in rows if r["property"] == "title")
+    title_row = next(r for r in rows if r["slot"] == "title")
     assert title_row["total_rows"] == 2
     assert title_row["total_nulls"] == 1
     assert title_row["null_rate"] == 0.5

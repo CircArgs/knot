@@ -14,7 +14,7 @@ compile_value(node, ctx) -> sql.Composable
 
 compile_constraint(constraint, cls) -> (sql.Composable, list[Any])
     Emit a SELECT returning offending rows in the uniform violation shape:
-        (rule_id, class_name, property_name, offending_pk, detail)
+        (rule_id, class_name, slot_name, offending_pk, detail)
 
 CompileContext
     Mutable dataclass threaded through a compilation pass.
@@ -81,7 +81,7 @@ def compile_constraint(
         SELECT
             '<rule_id>' AS rule_id,
             '<class_name>' AS class_name,
-            NULL::text AS property_name,
+            NULL::text AS slot_name,
             b.canonical_id AS offending_pk,
             row_to_json(s)::text AS detail
         FROM knot_data.<class> s

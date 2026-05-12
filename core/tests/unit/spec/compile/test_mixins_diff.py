@@ -1,7 +1,7 @@
 """Pure-Python diff tests for mixin slot composition.
 
 Adding / removing a mixin should cause the contributed slots to surface
-as AddProperty / DropProperty records in ``diff_specs`` — no DDL execution
+as AddSlot / DropSlot records in ``diff_specs`` — no DDL execution
 needed. The DDL-applying mixin tests (column materialisation, GraphQL
 queryability, collision / cycle rejection) live in
 ``tests/integration/spec/compile/test_mixins.py``.
@@ -9,29 +9,29 @@ queryability, collision / cycle rejection) live in
 
 from __future__ import annotations
 
-from knot.spec import OntologyClass, Primitive, Property, Spec
+from knot.spec import OntologyClass, Primitive, Slot, Spec
 from knot.spec.compile.postgres import migration
 
 
 def test_add_mixin_emits_addslot_diff():
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie_v1 = OntologyClass(name="Movie", properties=[imdb_id])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie_v1 = OntologyClass(name="Movie", slots=[imdb_id])
     spec_v1 = Spec(
         id="add_mixin",
         version="1.0.0",
         classes=[movie_v1],
     )
 
-    created_at = Property(name="created_at", type=Primitive(name="datetime"))
+    created_at = Slot(name="created_at", type=Primitive(name="datetime"))
     timestamped = OntologyClass(
         name="Timestamped",
-        properties=[created_at],
+        slots=[created_at],
         abstract=True,
     )
-    imdb_id2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v2 = OntologyClass(
         name="Movie",
-        properties=[imdb_id2],
+        slots=[imdb_id2],
         mixins=[timestamped],
     )
     spec_v2 = Spec(
@@ -41,22 +41,22 @@ def test_add_mixin_emits_addslot_diff():
     )
 
     changes = migration.diff_specs(spec_v1, spec_v2)
-    add_slot_changes = [c for c in changes if isinstance(c, migration.AddProperty)]
-    added_names = {c.prop.name for c in add_slot_changes}
+    add_slot_changes = [c for c in changes if isinstance(c, migration.AddSlot)]
+    added_names = {c.slot.name for c in add_slot_changes}
     assert "created_at" in added_names
 
 
 def test_remove_mixin_emits_dropslot_diff():
-    created_at = Property(name="created_at", type=Primitive(name="datetime"))
+    created_at = Slot(name="created_at", type=Primitive(name="datetime"))
     timestamped = OntologyClass(
         name="Timestamped",
-        properties=[created_at],
+        slots=[created_at],
         abstract=True,
     )
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v1 = OntologyClass(
         name="Movie",
-        properties=[imdb_id],
+        slots=[imdb_id],
         mixins=[timestamped],
     )
     spec_v1 = Spec(
@@ -65,8 +65,8 @@ def test_remove_mixin_emits_dropslot_diff():
         classes=[movie_v1, timestamped],
     )
 
-    imdb_id2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie_v2 = OntologyClass(name="Movie", properties=[imdb_id2])
+    imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie_v2 = OntologyClass(name="Movie", slots=[imdb_id2])
     spec_v2 = Spec(
         id="remove_mixin",
         version="1.0.0",
@@ -74,6 +74,6 @@ def test_remove_mixin_emits_dropslot_diff():
     )
 
     changes = migration.diff_specs(spec_v1, spec_v2)
-    drop_slot_changes = [c for c in changes if isinstance(c, migration.DropProperty)]
-    dropped_names = {c.property_name for c in drop_slot_changes}
+    drop_slot_changes = [c for c in changes if isinstance(c, migration.DropSlot)]
+    dropped_names = {c.slot_name for c in drop_slot_changes}
     assert "created_at" in dropped_names

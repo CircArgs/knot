@@ -8,7 +8,7 @@ module decides what postgres column type it becomes.
 
 from __future__ import annotations
 
-from knot.spec.metaschema import Array, ClassRef, Primitive, Property
+from knot.spec.metaschema import Array, ClassRef, Primitive, Slot
 
 _PG_TYPE_FOR_PRIMITIVE: dict[str, str] = {
     "string": "TEXT",
@@ -33,10 +33,10 @@ def _type_expr_pg(type_expr: Primitive | Array | ClassRef) -> str:  # type: igno
     return "TEXT"
 
 
-def property_pg_type(prop: Slot) -> str:
-    """Postgres column type for a stored property.
+def slot_pg_type(slot: Slot) -> str:
+    """Postgres column type for a stored slot.
 
-    Dispatches on property.type (TypeExpression):
+    Dispatches on slot.type (TypeExpression):
       Primitive("string")      → TEXT
       Primitive("integer")     → INTEGER
       Primitive("float")       → DOUBLE PRECISION
@@ -48,6 +48,6 @@ def property_pg_type(prop: Slot) -> str:
       Array(ClassRef(...))     → TEXT[]
       None                     → TEXT (derived / untyped slots)
     """
-    if property.type is None:
+    if slot.type is None:
         return "TEXT"
-    return _type_expr_pg(property.type)
+    return _type_expr_pg(slot.type)

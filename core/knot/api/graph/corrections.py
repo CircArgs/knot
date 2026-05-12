@@ -23,7 +23,7 @@ class PropertyCorrection(StrictBase):
     type: Literal["property"] = "property"
     class_name: str
     canonical_id: str
-    property: str
+    slot: str
     value: Any
 
 
@@ -110,7 +110,7 @@ async def _apply(
             conn,
             cls=cls,
             canonical_id=body.canonical_id,
-            property_name=body.property,
+            slot_name=body.slot,
             value=body.value,
             spec_revision=spec_revision,
             applied_by=principal.username,

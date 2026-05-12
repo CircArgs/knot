@@ -15,7 +15,7 @@ router = APIRouter()
 class ViolationRow(StrictBase):
     rule_id: str
     class_name: str
-    property_name: str | None
+    slot_name: str | None
     offending_pk: str
     detail: str
 
@@ -33,7 +33,7 @@ async def check_constraints() -> ConstraintCheckResponse:
     """Run every published constraint against the current data plane.
 
     Returns the union of offending rows across all constraints in the
-    uniform violation shape: (rule_id, class_name, property_name, offending_pk,
+    uniform violation shape: (rule_id, class_name, slot_name, offending_pk,
     detail). An empty ``violations`` list means all constraints pass.
     """
     async with db.connect() as conn:
@@ -45,7 +45,7 @@ async def check_constraints() -> ConstraintCheckResponse:
             ViolationRow(
                 rule_id=v.rule_id,
                 class_name=v.class_name,
-                property_name=v.property_name,
+                slot_name=v.slot_name,
                 offending_pk=v.offending_pk,
                 detail=v.detail,
             )

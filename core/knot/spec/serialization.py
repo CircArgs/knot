@@ -6,15 +6,15 @@ Distinct from `canonical.py`:
   - `serialization.py` — full-fidelity round-trip used for persistence
                          to `spec_revisions` and rehydration on read.
 
-Cycle handling: named SpecBase nodes (Property, OntologyClass, Source, Constraint)
+Cycle handling: named SpecBase nodes (Slot, OntologyClass, Source, Constraint)
 are tracked by counter `$uid`; second visit emits
 `{"$ref": <uid>, "$kind": "..."}` so two entities with the same name
 (e.g. Movie.imdb_id vs Person.imdb_id) round-trip as distinct objects.
 
 Two-pass rehydration: classes → sources → source_bindings → constraints,
 since each layer's cross-refs need the prior layer's entities indexed.
-Properties are now inline on each OntologyClass (by-copy); there is no top-level
-properties list. SourceBinding is not a "named" entity (no .name field) so it
+Slots are now inline on each OntologyClass (by-copy); there is no top-level
+slots list. SourceBinding is not a "named" entity (no .name field) so it
 isn't pre-built in pass-1; it's constructed fresh in pass-2 like Constraint.
 """
 
@@ -38,10 +38,6 @@ from knot.spec.metaschema import (
     Matches,
     OntologyClass,
     Primitive,
-    Property,
-    PropertyConstraints,
-    PropertyMapping,
-    PropertyPath,
     RecursiveTraversal,
     RelationAggregate,
     RelationAll,
@@ -52,6 +48,10 @@ from knot.spec.metaschema import (
     RelationRef,
     ReverseRelation,
     ScalarDerivation,
+    Slot,
+    SlotConstraints,
+    SlotMapping,
+    SlotPath,
     Source,
     SourceBinding,
     Spec,
@@ -62,9 +62,9 @@ from knot.spec.metaschema import Between as _Between
 # ─── Serializer ─────────────────────────────────────────────────────────────
 
 # Named entities tracked by $uid for cycle-safe serialization.
-# SourceBinding and PropertyMapping are NOT named (no .name field) — they
+# SourceBinding and SlotMapping are NOT named (no .name field) — they
 # serialize fresh each visit like Constraint.
-_NAMED_CLASSES = (Property, OntologyClass, DefinedClass, Source, Constraint)
+_NAMED_CLASSES = (Slot, OntologyClass, DefinedClass, Source, Constraint)
 
 
 def _is_named(obj: Any) -> bool:
@@ -143,17 +143,17 @@ _KIND_REGISTRY: dict[str, type] = {
     "Primitive": Primitive,
     "Array": Array,
     "ClassRef": ClassRef,
-    "PropertyConstraints": PropertyConstraints,
-    "Property": Property,
+    "SlotConstraints": SlotConstraints,
+    "Slot": Slot,
     "OntologyClass": OntologyClass,
     "DefinedClass": DefinedClass,
     "Constraint": Constraint,
     "Source": Source,
-    "PropertyMapping": PropertyMapping,
+    "SlotMapping": SlotMapping,
     "SourceBinding": SourceBinding,
     "Spec": Spec,
     "Literal_": Literal_,
-    "PropertyPath": PropertyPath,
+    "SlotPath": SlotPath,
     "Compare": Compare,
     "BoolExpr": BoolExpr,
     "Within": Within,
@@ -187,7 +187,7 @@ class _Index:
 
 
 _PLACEHOLDER_KINDS = {
-    "Property": Property,
+    "Slot": Slot,
     "OntologyClass": OntologyClass,
     "DefinedClass": DefinedClass,
     "Source": Source,
@@ -199,7 +199,7 @@ def _pass1_build(d: Any, index: _Index) -> None:
     """Recursively walk the JSON tree; for each named entity that carries a
     `$uid`, create a name-only placeholder keyed by uid.  Source and
     Constraint placeholders are built later in pass 2 because their
-    cross-refs (entity_class, identifier_property, primary, body) need to
+    cross-refs (entity_class, identifier_slot, primary, body) need to
     resolve through the uid index.
     """
     if isinstance(d, list):
@@ -217,7 +217,7 @@ def _pass1_build(d: Any, index: _Index) -> None:
     placeholder_cls = _PLACEHOLDER_KINDS.get(kind) if isinstance(kind, str) else None
 
     if isinstance(uid, int) and isinstance(name, str) and uid not in index.by_uid:
-        if placeholder_cls in (Property, OntologyClass):
+        if placeholder_cls in (Slot, OntologyClass):
             index.by_uid[uid] = placeholder_cls(name=name)
         elif placeholder_cls is DefinedClass:
             # DefinedClass requires is_a + definition at construction.
@@ -272,7 +272,7 @@ def _resolve(d: Any, index: _Index) -> Any:
     uid = d.get("$uid")
     if isinstance(uid, int) and uid in index.by_uid:
         existing = index.by_uid[uid]
-        if isinstance(existing, (Property, OntologyClass, DefinedClass)):
+        if isinstance(existing, (Slot, OntologyClass, DefinedClass)):
             for k, v in kwargs.items():
                 if k != "name":
                     setattr(existing, k, v)

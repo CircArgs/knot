@@ -46,8 +46,8 @@ from knot.spec.metaschema import (
     RelationProject,
     RelationRef,
     ReverseRelation,
-    Property,
-    PropertyPath,
+    Slot,
+    SlotPath,
     Spec,
     Within,
 )
@@ -77,7 +77,7 @@ class _SlotPathJson(_JsonBase):
     """Slot names as strings; resolved against the slots of any class in spec.classes at translate time."""
 
     kind: Literal["slot_path"]
-    properties: list[str]
+    slots: list[str]
 
 
 class _CompareJson(_JsonBase):
@@ -95,20 +95,20 @@ class _BoolExprJson(_JsonBase):
 
 class _WithinJson(_JsonBase):
     kind: Literal["within"]
-    property: str  # slot name; resolved against the slots of any class in spec.classes
+    slot: str  # slot name; resolved against the slots of any class in spec.classes
     values: list[Any]
 
 
 class _BetweenJson(_JsonBase):
     kind: Literal["between"]
-    property: str  # slot name; resolved against the slots of any class in spec.classes
+    slot: str  # slot name; resolved against the slots of any class in spec.classes
     low: Any
     high: Any
 
 
 class _MatchesJson(_JsonBase):
     kind: Literal["matches"]
-    property: str  # slot name; resolved against the slots of any class in spec.classes
+    slot: str  # slot name; resolved against the slots of any class in spec.classes
     pattern: str
 
 
@@ -125,7 +125,7 @@ class _RelationAnyJson(_JsonBase):
 
 
 class _ReverseRelationJson(_JsonBase):
-    """Reverse-FK traversal: all rows of target_class whose fk_property matches
+    """Reverse-FK traversal: all rows of target_class whose fk_slot matches
     the outer row's canonical_id.
 
     ``target_class_name`` — name of the class being traversed to (e.g. "Credit").
@@ -142,12 +142,12 @@ class _RelationRefJson(_JsonBase):
     """Forward relation traversal: follow a slot whose range is another class.
 
     ``from_class_name`` — name of the source class (e.g. "Movie").
-    ``property_name``       — name of the FK slot on the source class (e.g. "director").
+    ``slot_name``       — name of the FK slot on the source class (e.g. "director").
     """
 
     kind: Literal["relation_ref"]
     from_class_name: str
-    property_name: str
+    slot_name: str
 
 
 class _FilteredRelationJson(_JsonBase):
@@ -163,12 +163,12 @@ class _RelationProjectJson(_JsonBase):
 
     ``relation``  — the relation to traverse (RelationRef, ReverseRelation,
                     or FilteredRelation wrapping one of those).
-    ``property_name`` — the slot on the target class to project.
+    ``slot_name`` — the slot on the target class to project.
     """
 
     kind: Literal["relation_project"]
     relation: ExprJson
-    property_name: str
+    slot_name: str
 
 
 class _RelationCountJson(_JsonBase):
@@ -183,14 +183,14 @@ class _RelationAggregateJson(_JsonBase):
     """Aggregate a slot over rows in the relation.
 
     ``func``      — aggregation function (AggFunc enum value as string).
-    ``property_name`` — slot on target class to aggregate (required for all funcs
+    ``slot_name`` — slot on target class to aggregate (required for all funcs
                     except COUNT).
     """
 
     kind: Literal["relation_aggregate"]
     relation: ExprJson
     func: AggFunc
-    property_name: str | None = None
+    slot_name: str | None = None
     distinct: bool = False
 
 
@@ -241,7 +241,7 @@ def _find_slot(spec: Spec, name: str) -> Slot:
     that belong to the constraint's primary class or a related class.
     """
     for c in spec.classes:
-        for s in c.properties:
+        for s in c.slots:
             if s.name == name:
                 return s
     raise ExprTranslationError(f"Slot {name!r} not found on any class in this draft")
@@ -257,22 +257,22 @@ def _find_class(spec: Spec, name: str) -> OntologyClass:
 def _relation_target_class(relation: Any, spec: Spec) -> OntologyClass:
     """Extract the target OntologyClass from a resolved relation node.
 
-    Used to build ``PropertyPath.from_class`` for project/aggregate operands.
+    Used to build ``SlotPath.from_class`` for project/aggregate operands.
     """
     if isinstance(relation, ReverseRelation):
         return relation.target_class
     if isinstance(relation, FilteredRelation):
         return _relation_target_class(relation.relation, spec)
     if isinstance(relation, RelationRef):
-        slot = relation.property
+        slot = relation.slot
         from knot.spec.metaschema import Array, ClassRef
 
-        if isinstance(property.type, ClassRef):
-            return property.type.target_class
-        if isinstance(property.type, Array) and isinstance(property.type.of, ClassRef):
-            return property.type.of.target_class
+        if isinstance(slot.type, ClassRef):
+            return slot.type.target_class
+        if isinstance(slot.type, Array) and isinstance(slot.type.of, ClassRef):
+            return slot.type.of.target_class
         raise ExprTranslationError(
-            f"RelationRef slot {property.name!r} has no ClassRef type; "
+            f"RelationRef slot {slot.name!r} has no ClassRef type; "
             "cannot infer target class for projection."
         )
     raise ExprTranslationError(
@@ -284,7 +284,7 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
     """Walk the JSON expression tree, resolving slot names to metaschema Slot objects.
 
     ``primary_class`` is the constraint's primary class; it is used as
-    ``PropertyPath.from_class`` for all slot-path nodes.
+    ``SlotPath.from_class`` for all slot-path nodes.
 
     Raises ``ExprTranslationError`` on unknown slot/class reference or
     unsupported kind.
@@ -293,8 +293,8 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
         return Literal_(value=node_json.value)
 
     if isinstance(node_json, _SlotPathJson):
-        slots = [_find_slot(spec, name) for name in node_json.properties]
-        return PropertyPath(from_class=primary_class, properties=slots)
+        slots = [_find_slot(spec, name) for name in node_json.slots]
+        return SlotPath(from_class=primary_class, slots=slots)
 
     if isinstance(node_json, _CompareJson):
         left = translate_expr(node_json.left, spec, primary_class)
@@ -310,13 +310,13 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
         return BoolExpr(op=node_json.op, operands=operands)
 
     if isinstance(node_json, _WithinJson):
-        slot = _find_slot(spec, node_json.property)
-        left = PropertyPath(from_class=primary_class, properties=[property])
+        slot = _find_slot(spec, node_json.slot)
+        left = SlotPath(from_class=primary_class, slots=[slot])
         return Within(left=left, values=[Literal_(value=v) for v in node_json.values])
 
     if isinstance(node_json, _BetweenJson):
-        slot = _find_slot(spec, node_json.property)
-        left = PropertyPath(from_class=primary_class, properties=[property])
+        slot = _find_slot(spec, node_json.slot)
+        left = SlotPath(from_class=primary_class, slots=[slot])
         return Between(
             left=left,
             lower=Literal_(value=node_json.low),
@@ -324,8 +324,8 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
         )
 
     if isinstance(node_json, _MatchesJson):
-        slot = _find_slot(spec, node_json.property)
-        left = PropertyPath(from_class=primary_class, properties=[property])
+        slot = _find_slot(spec, node_json.slot)
+        left = SlotPath(from_class=primary_class, slots=[slot])
         return Matches(left=left, pattern=node_json.pattern)
 
     if isinstance(node_json, _RelationAllJson):
@@ -341,13 +341,13 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
 
     if isinstance(node_json, _ReverseRelationJson):
         target_cls = _find_class(spec, node_json.target_class_name)
-        fk_property = _find_slot(spec, node_json.fk_slot_name)
-        return ReverseRelation(target_class=target_cls, fk_property=fk_property)
+        fk_slot = _find_slot(spec, node_json.fk_slot_name)
+        return ReverseRelation(target_class=target_cls, fk_slot=fk_slot)
 
     if isinstance(node_json, _RelationRefJson):
         from_cls = _find_class(spec, node_json.from_class_name)
-        slot = _find_slot(spec, node_json.property_name)
-        return RelationRef(from_class=from_cls, slot=property)
+        slot = _find_slot(spec, node_json.slot_name)
+        return RelationRef(from_class=from_cls, slot=slot)
 
     if isinstance(node_json, _FilteredRelationJson):
         relation = translate_expr(node_json.relation, spec, primary_class)
@@ -357,10 +357,10 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
     if isinstance(node_json, _RelationProjectJson):
         relation = translate_expr(node_json.relation, spec, primary_class)
         # Resolve the projected slot against the target class of the relation.
-        proj_slot = _find_slot(spec, node_json.property_name)
-        # Determine the target class for PropertyPath.from_class.
+        proj_slot = _find_slot(spec, node_json.slot_name)
+        # Determine the target class for SlotPath.from_class.
         target_cls = _relation_target_class(relation, spec)
-        project = PropertyPath(from_class=target_cls, properties=[proj_slot])
+        project = SlotPath(from_class=target_cls, slots=[proj_slot])
         return RelationProject(relation=relation, project=project)
 
     if isinstance(node_json, _RelationCountJson):
@@ -370,10 +370,10 @@ def translate_expr(node_json: ExprJson, spec: Spec, primary_class: OntologyClass
     if isinstance(node_json, _RelationAggregateJson):
         relation = translate_expr(node_json.relation, spec, primary_class)
         operand = None
-        if node_json.property_name is not None:
-            agg_slot = _find_slot(spec, node_json.property_name)
+        if node_json.slot_name is not None:
+            agg_slot = _find_slot(spec, node_json.slot_name)
             target_cls = _relation_target_class(relation, spec)
-            operand = PropertyPath(from_class=target_cls, properties=[agg_slot])
+            operand = SlotPath(from_class=target_cls, slots=[agg_slot])
         return RelationAggregate(
             relation=relation,
             func=node_json.func,

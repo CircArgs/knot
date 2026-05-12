@@ -9,7 +9,7 @@
 export interface PublishedClass {
   name: string;
   abstract: boolean;
-  properties: string[];
+  slots: string[];
 }
 
 export async function getPublishedClasses(): Promise<PublishedClass[]> {

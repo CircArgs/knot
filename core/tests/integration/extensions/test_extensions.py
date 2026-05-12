@@ -25,7 +25,7 @@ from knot.api.row_models import build_row_model
 from knot.db import graph_store
 from knot.extensions import RequestContext, Session, _Dispatcher
 from knot.extensions.events import RowsIngested, RowsIngesting
-from knot.spec import OntologyClass, Primitive, Property, Source, Spec
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
@@ -39,11 +39,11 @@ def _dev_principal() -> Principal:
 
 
 def _build_movie_spec() -> tuple[Spec, OntologyClass, Source, SourceBinding]:
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id, title])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id, title])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="ext_test",
         version="1.0.0",
@@ -236,10 +236,10 @@ async def test_er_handler_http_delegates_when_url_set(pg_conn, monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
 
     try:
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True, required=True)
-        cls = OntologyClass(name="X", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+        cls = OntologyClass(name="X", slots=[id_slot])
         src = Source(name="_http_delegate_test")
-        er_binding = SourceBinding(source=src, class_=cls, identifier_property=id_slot)  # type: ignore[call-arg]
+        er_binding = SourceBinding(source=src, class_=cls, identifier_slot=id_slot)  # type: ignore[call-arg]
         spec = Spec(
             id="http_delegate_test",
             version="1.0.0",
@@ -264,7 +264,7 @@ async def test_er_handler_http_delegates_when_url_set(pg_conn, monkeypatch):
         assert posted["url"] == "http://er.test/resolve"
         assert posted["json"]["source"] == "_http_delegate_test"
         assert posted["json"]["class_name"] == "X"
-        assert posted["json"]["identifier_property"] == "id"
+        assert posted["json"]["identifier_slot"] == "id"
         assert posted["json"]["rows"] == [{"id": "x1"}, {"id": "x2"}]
     finally:
         monkeypatch.delenv("KNOT_ER_URL", raising=False)

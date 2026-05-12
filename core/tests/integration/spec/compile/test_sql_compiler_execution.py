@@ -25,7 +25,7 @@ from knot.spec.metaschema import (
     OntologyClass,
     Primitive,
     Severity,
-    Property,
+    Slot,
     Source,
     SourceBinding,
     Spec,
@@ -59,13 +59,13 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     conn = clean_db
 
     # Build spec with constraint: year must be >= 1888 AND <= 2100
-    imdb_id_slot = Property(
+    imdb_id_slot = Slot(
         name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    year_slot = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id_slot, year_slot])
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     constraint = Constraint(
         name="year_in_range",
@@ -108,10 +108,10 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     rows = await cur.fetchall()
 
     assert len(rows) == 1
-    rule_id, class_name, property_name, offending_pk, detail = rows[0]
+    rule_id, class_name, slot_name, offending_pk, detail = rows[0]
     assert rule_id == "year_in_range"
     assert class_name == "Movie"
-    assert property_name is None
+    assert slot_name is None
     assert offending_pk == "tt0000002"
 
 
@@ -119,13 +119,13 @@ async def test_compile_constraint_no_violations(clean_db):
     """All rows valid → constraint returns zero offending rows."""
     conn = clean_db
 
-    imdb_id_slot = Property(
+    imdb_id_slot = Slot(
         name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    year_slot = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id_slot, year_slot])
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     constraint = Constraint(
         name="year_gte_1888",
@@ -174,13 +174,13 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     """
     conn = clean_db
 
-    imdb_id_slot = Property(
+    imdb_id_slot = Slot(
         name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    year_slot = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id_slot, year_slot])
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     # v1: no constraints
     spec_v1 = Spec(
@@ -232,13 +232,13 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     """Same setup but constraint is WARNING → publish succeeds."""
     conn = clean_db
 
-    imdb_id_slot = Property(
+    imdb_id_slot = Slot(
         name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    year_slot = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id_slot, year_slot])
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     spec_v1 = Spec(
         id="test",
@@ -301,16 +301,16 @@ async def test_publish_gate_inherits_constraint_from_parent(clean_db):
     """
     conn = clean_db
 
-    imdb_id_slot = Property(
+    imdb_id_slot = Slot(
         name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    year_slot = Property(name="year", type=Primitive(name="integer"))
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
     media = OntologyClass(
-        name="MediaItem", kind="abstract", properties=[imdb_id_slot, year_slot]
+        name="MediaItem", kind="abstract", slots=[imdb_id_slot, year_slot]
     )
     movie = OntologyClass(name="Movie", is_a=media)
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
     # v1: no constraints.
     spec_v1 = Spec(
@@ -369,16 +369,16 @@ async def test_ingest_inherits_constraint_from_parent(clean_db):
 
     conn = clean_db
 
-    imdb_id_slot = Property(
+    imdb_id_slot = Slot(
         name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    year_slot = Property(name="year", type=Primitive(name="integer"))
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
     media = OntologyClass(
-        name="MediaItem", kind="abstract", properties=[imdb_id_slot, year_slot]
+        name="MediaItem", kind="abstract", slots=[imdb_id_slot, year_slot]
     )
     movie = OntologyClass(name="Movie", is_a=media)
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
     constraint = Constraint(
         name="year_gte_1888",
         primary=media,

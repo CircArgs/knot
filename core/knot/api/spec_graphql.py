@@ -27,8 +27,8 @@ from knot import db
 from knot.api.graph._common import StrictBase
 from knot.db import spec_store
 from knot.graph import spec as graph_spec
-from knot.spec import Array, ClassRef, OntologyClass, Primitive, Property, Source, SourceBinding, Spec
-from knot.spec.effective_properties import effective_properties as _effective_slots
+from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, SourceBinding, Spec
+from knot.spec.effective_slots import effective_slots as _effective_slots
 from knot.spec.metaschema import Constraint
 
 router = APIRouter()
@@ -61,7 +61,7 @@ def _graphiql_html() -> str:
 
 
 @strawberry.type
-class PropertyGQL:
+class SlotGQL:
     name: str
     identifier: bool
     required: bool
@@ -82,8 +82,8 @@ class OntologyClassGQL:
     description: str | None
     is_a_name: str | None
     mixin_names: list[str]
-    properties: list[PropertyGQL]
-    effective_properties: list[PropertyGQL]
+    slots: list[SlotGQL]
+    effective_slots: list[SlotGQL]
     definition: str | None  # SQL predicate body when this is a defined class (VIEW)
 
 
@@ -95,7 +95,7 @@ class SourceGQL:
 
 @strawberry.type
 class SlotMappingGQL:
-    property_name: str
+    slot_name: str
     source_field: str
     null_semantics: str
     has_prior: bool
@@ -157,11 +157,11 @@ def _type_kind_name(s: Slot) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _to_property(s: Slot) -> PropertyGQL:
+def _to_slot(s: Slot) -> SlotGQL:
     type_kind, type_name = _type_kind_name(s)
     rp = s.resolution_policy
     c = s.constraints
-    return PropertyGQL(
+    return SlotGQL(
         name=s.name,
         identifier=s.identifier,
         required=s.required,
@@ -192,8 +192,8 @@ def _to_class(c: Any) -> OntologyClassGQL:
         description=c.description,
         is_a_name=c.is_a.name if c.is_a is not None else None,
         mixin_names=[m.name for m in c.mixins],
-        properties=[] if is_defined else [_to_property(s) for s in c.properties],
-        effective_properties=[_to_property(s) for s in _effective_slots(c)],
+        slots=[] if is_defined else [_to_slot(s) for s in c.slots],
+        effective_slots=[_to_slot(s) for s in _effective_slots(c)],
         definition=c.definition if is_defined else None,
     )
 
@@ -202,10 +202,10 @@ def _to_source(s: Source) -> SourceGQL:
     return SourceGQL(name=s.name, description=s.description)
 
 
-def _to_property_mapping(m: Any) -> SlotMappingGQL:
+def _to_slot_mapping(m: Any) -> SlotMappingGQL:
     ns = m.null_semantics
     return SlotMappingGQL(
-        property_name=m.property.name,
+        slot_name=m.slot.name,
         source_field=m.source_field,
         null_semantics=ns.value if hasattr(ns, "value") else str(ns),
         has_prior=m.prior is not None,
@@ -217,10 +217,10 @@ def _to_source_binding(b: SourceBinding) -> SourceBindingGQL:
         binding_id=b.binding_id,
         source_name=b.source.name,
         class_name=b.class_.name,
-        identifier_slot_name=b.identifier_property.name,
+        identifier_slot_name=b.identifier_slot.name,
         trust_prior=list(b.trust_prior),
-        required_slot_names=[s.name for s in b.required_properties],
-        mappings=[_to_property_mapping(m) for m in b.mappings],
+        required_slot_names=[s.name for s in b.required_slots],
+        mappings=[_to_slot_mapping(m) for m in b.mappings],
         description=b.description,
     )
 

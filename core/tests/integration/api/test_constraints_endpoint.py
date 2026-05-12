@@ -21,7 +21,7 @@ from knot.db.spec_store import (
     get_revision,
     update_draft,
 )
-from knot.spec import OntologyClass, Primitive, Property, Source, Spec
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.metaschema import SourceBinding
 
 # ---------------------------------------------------------------------------
@@ -31,11 +31,11 @@ from knot.spec.metaschema import SourceBinding
 
 def _make_spec() -> Spec:
     """Spec with Movie class having year (int) and imdb_id (str identifier)."""
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year = Property(name="year", type=Primitive(name="integer"), required=False)
-    movie = OntologyClass(name="Movie", properties=[imdb_id, year])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Slot(name="year", type=Primitive(name="integer"), required=False)
+    movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb_movies")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="test",
         version="1.0.0",

@@ -5,7 +5,7 @@ is operator-facing data, not part of the data plane consumers traverse.
 
 Endpoints:
   - ``GET  /dq/observations``         time-series query with filters
-  - ``GET  /dq/observations/summary`` per-(source, class, property) roll-up
+  - ``GET  /dq/observations/summary`` per-(source, class, slot) roll-up
   - ``POST /dq/scan``                 snapshot the current data plane
 """
 
@@ -47,7 +47,7 @@ class ScanResponse(BaseModel):
 async def list_observations(
     source: str | None = Query(None),
     class_name: str | None = Query(None, alias="class"),
-    property: str | None = Query(None),
+    slot: str | None = Query(None),
     since: datetime | None = Query(None),
     until: datetime | None = Query(None),
     kind: str | None = Query(None, pattern="^(incremental|full_scan)$"),
@@ -59,7 +59,7 @@ async def list_observations(
             conn,
             source=source,
             class_name=class_name,
-            slot=property,
+            slot=slot,
             since=since,
             until=until,
             kind=kind,
@@ -72,7 +72,7 @@ async def summary(
     since: datetime | None = Query(None),
     until: datetime | None = Query(None),
 ) -> list[dict[str, Any]]:
-    """Roll-up per (source, class, property) over the time window."""
+    """Roll-up per (source, class, slot) over the time window."""
     async with db.connect() as conn:
         return await graph_dq.summarize(conn, since=since, until=until)
 
@@ -90,7 +90,7 @@ async def scan(
         description="Restrict scan to one class.",
     ),
 ) -> ScanResponse:
-    """Snapshot per-(source, class, property) stats from the current data plane."""
+    """Snapshot per-(source, class, slot) stats from the current data plane."""
     async with db.connect() as conn:
         try:
             inserted, revision = await graph_dq.scan(

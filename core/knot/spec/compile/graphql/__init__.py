@@ -62,7 +62,7 @@ from knot.spec.metaschema import (
     OntologyClass,
     Primitive,
     Slot,
-    PropertyPath,
+    SlotPath,
     Spec,
 )
 
@@ -96,7 +96,7 @@ _PRIMITIVE_TO_PYTHON: dict[str, type] = {
 }
 
 
-def _all_slots(oc: OntologyClass) -> list[Property]:
+def _all_slots(oc: OntologyClass) -> list[Slot]:
     """Collect the full slot set for a class, walking is_a + mixins.
 
     Defined classes inherit all slots from their parent (is_a) structurally;
@@ -104,7 +104,7 @@ def _all_slots(oc: OntologyClass) -> list[Property]:
     mixin slots of the same name.
     """
     seen_names: set[str] = set()
-    result: list[Property] = []
+    result: list[Slot] = []
     visited: list[OntologyClass] = []
     queue: list[OntologyClass] = [oc]
     while queue:
@@ -114,10 +114,10 @@ def _all_slots(oc: OntologyClass) -> list[Property]:
         visited.append(current)
         # DefinedClass has no own slots (the VIEW inherits parent columns);
         # the walk continues into is_a / mixins below.
-        for prop in getattr(current, "slots", []):
-            if property.name not in seen_names:
-                seen_names.add(property.name)
-                result.append(property)
+        for slot in getattr(current, "slots", []):
+            if slot.name not in seen_names:
+                seen_names.add(slot.name)
+                result.append(slot)
         if current.is_a is not None:
             queue.append(current.is_a)
         queue.extend(current.mixins)
@@ -141,10 +141,10 @@ def _type_expr_python(type_expr: Any) -> type:
     return str
 
 
-def _property_python_type(prop: Slot) -> type:
-    if property.type is None:
+def _slot_python_type(slot: Slot) -> type:
+    if slot.type is None:
         return str
-    return _type_expr_python(property.type)
+    return _type_expr_python(slot.type)
 
 
 # ---------------------------------------------------------------------------
@@ -152,10 +152,10 @@ def _property_python_type(prop: Slot) -> type:
 # ---------------------------------------------------------------------------
 
 
-def _make_slot_where_type(prop: Slot, class_name: str) -> type:
+def _make_slot_where_type(slot: Slot, class_name: str) -> type:
     """Build a strawberry.input type for one slot's comparison ops."""
-    py = _property_python_type(property)
-    type_name = f"WhereInput_{class_name}_{property.name}"
+    py = _slot_python_type(slot)
+    type_name = f"WhereInput_{class_name}_{slot.name}"
 
     annotations: dict[str, Any] = {
         "eq": py | None,
@@ -176,7 +176,7 @@ def _make_slot_where_type(prop: Slot, class_name: str) -> type:
 
 
 def _make_class_where_type(oc: OntologyClass) -> type:
-    """Build the top-level WhereInput for a class (one field per property).
+    """Build the top-level WhereInput for a class (one field per slot).
 
     Both stored slots and derived slots appear in WhereInput.  Filtering on a
     derived slot compiles its derivation expression as a subquery placed in the
@@ -200,10 +200,10 @@ def _make_class_where_type(oc: OntologyClass) -> type:
 
 
 def _make_class_object_type(oc: OntologyClass) -> type:
-    """Strawberry object type with one Optional field per property.
+    """Strawberry object type with one Optional field per slot.
 
     Every field is Optional because contributions may be partial (a row from
-    one source may not carry every property). ``canonical_id`` is exposed as a
+    one source may not carry every slot). ``canonical_id`` is exposed as a
     convenience system field; if a class actually declares a slot named
     ``canonical_id`` it shadows the system field (slot wins).
     """
@@ -211,12 +211,12 @@ def _make_class_object_type(oc: OntologyClass) -> type:
     annotations: dict[str, Any] = {}
     ns: dict[str, Any] = {}
 
-    for prop in _all_slots(oc):
+    for slot in _all_slots(oc):
         # ``py`` is already the full python type (``list[str]`` for Array,
         # ``str``/``int``/... for Primitive). No extra wrapping needed.
-        py = _property_python_type(property)
-        annotations[property.name] = py | None
-        ns[property.name] = None
+        py = _slot_python_type(slot)
+        annotations[slot.name] = py | None
+        ns[slot.name] = None
 
     if "canonical_id" not in annotations:
         annotations["canonical_id"] = str | None
@@ -231,13 +231,13 @@ def _row_to_typed(class_type: type, oc: OntologyClass, row: Any) -> Any:
 
     Returns None if the input is None. The graph_store dict uses ``_canonical_id``
     for the system-attribution canonical id; we surface that as ``canonical_id``
-    on the GraphQL type unless the class shadows it with its own property.
+    on the GraphQL type unless the class shadows it with its own slot.
     """
     if row is None:
         return None
-    property_names = {s.name for s in _all_slots(oc)}
-    kwargs: dict[str, Any] = {n: row.get(n) for n in property_names}
-    if "canonical_id" not in property_names:
+    slot_names = {s.name for s in _all_slots(oc)}
+    kwargs: dict[str, Any] = {n: row.get(n) for n in slot_names}
+    if "canonical_id" not in slot_names:
         kwargs["canonical_id"] = row.get("_canonical_id") or row.get("canonical_id")
     return class_type(**kwargs)
 
@@ -312,7 +312,7 @@ _UNARY_OPS = {CompareOp.IS_NULL, CompareOp.IS_NOT_NULL}
 
 
 def _slot_where_to_predicates(
-    property: Slot,
+    slot: Slot,
     slot_where: Any,
     oc: OntologyClass,
 ) -> list[Any]:
@@ -322,7 +322,7 @@ def _slot_where_to_predicates(
     slots see ``_derived_slot_where_to_sql``.
     """
     predicates: list[Any] = []
-    path = PropertyPath(from_class=oc, properties=[property])
+    path = SlotPath(from_class=oc, slots=[slot])
 
     for field_name, op in _OP_MAP.items():
         val = getattr(slot_where, field_name, strawberry.UNSET)
@@ -344,7 +344,7 @@ def _slot_where_to_predicates(
 
 
 def _derived_slot_where_to_sql(
-    property: Slot,
+    slot: Slot,
     slot_where: Any,
     storage_class: OntologyClass,
     alias: str,
@@ -359,7 +359,7 @@ def _derived_slot_where_to_sql(
     ``slot_where``).  The ctx.params list is mutated in place as each operator
     is processed.
     """
-    derivation = property.derivation
+    derivation = slot.derivation
     # Compile the derivation expression — params for it go into ctx first.
     deriv_ctx = CompileContext(primary_class=storage_class, alias=alias, params=ctx.params)
     deriv_sql = compile_value(derivation, deriv_ctx)
@@ -451,27 +451,27 @@ def build_predicate_sql(
     ctx = CompileContext(primary_class=storage_class, alias=alias)
     all_fragments: list[sql.Composable] = []
 
-    for prop in _all_slots(oc):
-        slot_where = getattr(where_input, property.name, strawberry.UNSET)
+    for slot in _all_slots(oc):
+        slot_where = getattr(where_input, slot.name, strawberry.UNSET)
         if slot_where is strawberry.UNSET or slot_where is None:
             continue
 
-        if getattr(property, "derivation", None) is None:
-            # Stored property: use the expression-tree path.
+        if getattr(slot, "derivation", None) is None:
+            # Stored slot: use the expression-tree path.
             # Resolve the slot against the storage class for slot-identity check.
             storage_slot = slot
             if storage_class is not oc:
                 storage_slot = next(
-                    (s for s in _all_slots(storage_class) if s.name == property.name),
-                    property,
+                    (s for s in _all_slots(storage_class) if s.name == slot.name),
+                    slot,
                 )
             tree_predicates = _slot_where_to_predicates(storage_slot, slot_where, storage_class)
             if tree_predicates:
                 for pred in tree_predicates:
                     all_fragments.append(compile_predicate(pred, ctx))
         else:
-            # Derived property: inline the derivation expression as a subquery.
-            frags = _derived_slot_where_to_sql(property, slot_where, storage_class, alias, ctx)
+            # Derived slot: inline the derivation expression as a subquery.
+            frags = _derived_slot_where_to_sql(slot, slot_where, storage_class, alias, ctx)
             all_fragments.extend(frags)
 
     if not all_fragments:
@@ -494,15 +494,15 @@ def _build_order_by_sql(
 
     Returns (None, []) when the list is empty/unset (caller uses default sort).
 
-    For stored properties, emits ``s.<col> ASC|DESC``.
-    For derived properties, inlines the derivation expression as the sort key —
+    For stored slots, emits ``s.<col> ASC|DESC``.
+    For derived slots, inlines the derivation expression as the sort key —
     the derivation subquery is compiled and used directly in ORDER BY.
     """
     if order_by_list is strawberry.UNSET or not order_by_list:
         return None, []
 
     # Build a slot-name → Slot map for quick lookup.
-    slot_by_name: dict[str, Property] = {s.name: s for s in _all_slots(oc)}
+    slot_by_name: dict[str, Slot] = {s.name: s for s in _all_slots(oc)}
 
     # For defined classes, the storage class is the parent.
     storage_class = oc
@@ -517,14 +517,14 @@ def _build_order_by_sql(
         field_name = item.field.value
         direction = item.direction.value
         slot = slot_by_name.get(field_name)
-        if slot is None or getattr(property, "derivation", None) is None:
+        if slot is None or getattr(slot, "derivation", None) is None:
             # Stored slot (or unknown) — handled by compile_order_by.
             stored_terms.append((field_name, direction))
         else:
             # Derived slot — inline derivation expression.
             dir_upper = direction.upper()
             ctx = CompileContext(primary_class=storage_class, alias=alias, params=derived_params)
-            deriv_sql = compile_value(property.derivation, ctx)
+            deriv_sql = compile_value(slot.derivation, ctx)
             derived_parts.append(
                 sql.SQL("({expr}) {dir}").format(
                     expr=deriv_sql,
@@ -538,17 +538,17 @@ def _build_order_by_sql(
     all_params: list[Any] = list(derived_params)
 
     # Re-iterate to emit in input order.
-    slot_by_name2: dict[str, Property] = {s.name: s for s in _all_slots(oc)}
+    slot_by_name2: dict[str, Slot] = {s.name: s for s in _all_slots(oc)}
     CompileContext(primary_class=storage_class, alias=alias, params=[])
     for item in order_by_list:
         field_name = item.field.value
         direction = item.direction.value.upper()
         slot = slot_by_name2.get(field_name)
-        if slot is not None and getattr(property, "derivation", None) is not None:
+        if slot is not None and getattr(slot, "derivation", None) is not None:
             # Derived: compile fresh to get params in order.
             item_params: list[Any] = []
             ctx_item = CompileContext(primary_class=storage_class, alias=alias, params=item_params)
-            deriv_sql = compile_value(property.derivation, ctx_item)
+            deriv_sql = compile_value(slot.derivation, ctx_item)
             all_params.extend(item_params)
             all_parts.append(
                 sql.SQL("({expr}) {dir}").format(
@@ -582,10 +582,10 @@ def _merge_contributions(
 ) -> dict[str, Any]:
     """Merge multiple per-source contribution dicts into one.
 
-    Scalar properties: value from alphabetically-first source that provides a
+    Scalar slots: value from alphabetically-first source that provides a
     non-null value (contribs are already ordered by _source from
     get_canonical_contributions).
-    Multivalued properties: union across sources in source order, deduped.
+    Multivalued slots: union across sources in source order, deduped.
     System columns (_canonical_id, _source, etc.) taken from first contrib.
     """
     if not contribs:
@@ -597,12 +597,12 @@ def _merge_contributions(
         if k.startswith("_"):
             merged[k] = v
 
-    for prop in _all_slots(oc):
-        if isinstance(property.type, Array):
+    for slot in _all_slots(oc):
+        if isinstance(slot.type, Array):
             flat: list[Any] = []
             seen_set: set = set()
             for c in contribs:
-                vals = c.get(property.name)
+                vals = c.get(slot.name)
                 if vals is None:
                     continue
                 for v in vals:
@@ -613,13 +613,13 @@ def _merge_contributions(
                     except TypeError:
                         if v not in flat:
                             flat.append(v)
-            merged[property.name] = flat if flat else None
+            merged[slot.name] = flat if flat else None
         else:
-            merged[property.name] = None
+            merged[slot.name] = None
             for c in contribs:
-                val = c.get(property.name)
+                val = c.get(slot.name)
                 if val is not None:
-                    merged[property.name] = val
+                    merged[slot.name] = val
                     break  # first non-null alphabetical source wins
     return merged
 
@@ -636,10 +636,10 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
     is numeric (BIGINT / DOUBLE PRECISION), adds sum/avg/min/max fields.
 
     Returns ``(strawberry_type, agg_fields)`` where ``agg_fields`` is the list
-    of ``(agg_func, property_name, result_key)`` triples passed to
+    of ``(agg_func, slot_name, result_key)`` triples passed to
     ``graph_store.aggregate_rows``.
     """
-    from knot.spec.compile.postgres._types import property_pg_type
+    from knot.spec.compile.postgres._types import slot_pg_type
 
     type_name = f"AggregateResult_{oc.name}"
 
@@ -649,17 +649,17 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
     annotations: dict[str, Any] = {"count": int}
     ns: dict[str, Any] = {"count": 0}
 
-    for prop in _all_slots(oc):
-        if getattr(property, "derivation", None) is not None:
+    for slot in _all_slots(oc):
+        if getattr(slot, "derivation", None) is not None:
             continue  # derived slots have no column to aggregate
-        pg_type = property_pg_type(property).upper()
+        pg_type = slot_pg_type(slot).upper()
         if pg_type not in _NUMERIC_PG_TYPES:
             continue
         for func in ("sum", "avg", "min", "max"):
-            result_key = f"{func}_{property.name}".replace("-", "_")
+            result_key = f"{func}_{slot.name}".replace("-", "_")
             # Title-case the func for the GraphQL field name: sumYear, avgYear…
-            gql_key = f"{func}{property.name.capitalize()}"
-            agg_fields.append((func, property.name, result_key))
+            gql_key = f"{func}{slot.name.capitalize()}"
+            agg_fields.append((func, slot.name, result_key))
             annotations[gql_key] = float | None
             ns[gql_key] = None
 
@@ -826,18 +826,18 @@ def _build_schema(spec: Spec) -> Schema:
                 f"    as_of: int | None = None,\n"
                 f") -> {ctype_name} | None:\n"
                 f"    from knot.spec.compile.postgres import CompileContext, compile_predicate\n"
-                f"    from knot.spec.metaschema import BoolExpr, BoolOpKind, Compare, CompareOp, Literal_, PropertyPath\n"
+                f"    from knot.spec.metaschema import BoolExpr, BoolOpKind, Compare, CompareOp, Literal_, SlotPath\n"
                 f"    oc = {oc_key}\n"
-                f"    class_slot = next(s for s in oc.properties if s.name == {_disc_class_slot_name!r})\n"
-                f"    key_slot = next(s for s in oc.properties if s.name == {_disc_key_slot_name!r})\n"
+                f"    class_slot = next(s for s in oc.slots if s.name == {_disc_class_slot_name!r})\n"
+                f"    key_slot = next(s for s in oc.slots if s.name == {_disc_key_slot_name!r})\n"
                 f"    pred_class = Compare(\n"
                 f"        op=CompareOp.EQ,\n"
-                f"        left=PropertyPath(from_class=oc, properties=[class_slot]),\n"
+                f"        left=SlotPath(from_class=oc, slots=[class_slot]),\n"
                 f"        right=Literal_(value=target_class),\n"
                 f"    )\n"
                 f"    pred_key = Compare(\n"
                 f"        op=CompareOp.EQ,\n"
-                f"        left=PropertyPath(from_class=oc, properties=[key_slot]),\n"
+                f"        left=SlotPath(from_class=oc, slots=[key_slot]),\n"
                 f"        right=Literal_(value=key),\n"
                 f"    )\n"
                 f"    combined = BoolExpr(op=BoolOpKind.AND, operands=[pred_class, pred_key])\n"

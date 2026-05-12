@@ -16,13 +16,13 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.spec import OntologyClass, Property, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, Spec
 from knot.spec.metaschema import (
     ClassRef,
     Constraint,
     Primitive,
     Severity,
-    PropertyConstraints,
+    SlotConstraints,
     SourceBinding,
 )
 from tests._helpers import publish_spec
@@ -43,34 +43,34 @@ def _build_spec() -> Spec:
     """Movie + Person spec with two sources and a trivial constraint —
     exercises every entity kind the GraphQL schema surfaces.
     """
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"), required=True)
-    year = Property(
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), required=True)
+    year = Slot(
         name="year",
         type=Primitive(name="integer"),
-        constraints=PropertyConstraints(min_value=1888.0, max_value=2100.0),
+        constraints=SlotConstraints(min_value=1888.0, max_value=2100.0),
     )
-    person_id = Property(
+    person_id = Slot(
         name="person_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    name = Property(name="name", type=Primitive(name="string"), required=True)
+    name = Slot(name="name", type=Primitive(name="string"), required=True)
 
     person = OntologyClass(
         name="Person",
-        properties=[person_id, name],
+        slots=[person_id, name],
         description="A human associated with a Movie.",
     )
-    directed_by = Property(name="directed_by", type=ClassRef(target_class=person))
+    directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))
     movie = OntologyClass(
         name="Movie",
-        properties=[imdb_id, title, year, directed_by],
+        slots=[imdb_id, title, year, directed_by],
         description="A theatrical motion picture.",
     )
 
     imdb_src = Source(name="imdb", description="IMDb data feed.")
     wiki_src = Source(name="wiki")
-    imdb_binding = SourceBinding(source=imdb_src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
-    wiki_binding = SourceBinding(source=wiki_src, class_=person, identifier_property=person_id)  # type: ignore[call-arg]
+    imdb_binding = SourceBinding(source=imdb_src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    wiki_binding = SourceBinding(source=wiki_src, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
 
     # Constraint: year must be > 1900 (toy invariant exercising surface).
     year_check = Constraint(

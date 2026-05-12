@@ -1,4 +1,4 @@
-"""Trust orchestration — per-source scores + per-(source, property) Beta posteriors.
+"""Trust orchestration — per-source scores + per-(source, slot) Beta posteriors.
 
 Composes ``knot.db.trust_config`` (scalar trust) and
 ``knot.db.trust_posteriors`` (Beta posteriors). Validates that the source
@@ -26,7 +26,7 @@ class SourceNotOnSpecError(Exception):
 class SlotNotOnSpecError(Exception):
     """Raised when ``slot`` isn't a Slot on the published spec."""
 
-    def __init__(self, prop: str) -> None:
+    def __init__(self, slot: str) -> None:
         self.slot = slot
         super().__init__(f"Slot {slot!r} not on the published spec.")
 
@@ -36,11 +36,11 @@ def _check_source(spec: Spec, source: str) -> None:
         raise SourceNotOnSpecError(source)
 
 
-def _check_slot(spec: Spec, prop: str) -> None:
+def _check_slot(spec: Spec, slot: str) -> None:
     for cls in spec.classes:
-        if any(s.name == slot for s in cls.properties):
+        if any(s.name == slot for s in cls.slots):
             return
-    raise SlotNotOnSpecError(property)
+    raise SlotNotOnSpecError(slot)
 
 
 # ─── Scalar trust config ────────────────────────────────────────────────────
@@ -74,22 +74,22 @@ async def list_posteriors(conn: psycopg.AsyncConnection) -> list[Posterior]:
 
 
 async def get_posterior(
-    conn: psycopg.AsyncConnection, *, spec: Spec, source: str, prop: str
+    conn: psycopg.AsyncConnection, *, spec: Spec, source: str, slot: str
 ) -> Posterior:
-    """Posterior for ``(source, property)``. Validates source+slot on spec."""
+    """Posterior for ``(source, slot)``. Validates source+slot on spec."""
     _check_source(spec, source)
-    _check_slot(spec, property)
-    return await trust_posteriors.get_posterior(conn, source, property)
+    _check_slot(spec, slot)
+    return await trust_posteriors.get_posterior(conn, source, slot)
 
 
-async def reset_posterior(conn: psycopg.AsyncConnection, *, source: str, prop: str) -> bool:
-    """Drop the per-(source, property) posterior, reverting to the uniform prior.
+async def reset_posterior(conn: psycopg.AsyncConnection, *, source: str, slot: str) -> bool:
+    """Drop the per-(source, slot) posterior, reverting to the uniform prior.
 
     No spec validation: a posterior may exist for sources/slots that have
     since been removed from the spec; admins should still be able to clean
     those up.
     """
-    return await trust_posteriors.reset_posterior(conn, source, property)
+    return await trust_posteriors.reset_posterior(conn, source, slot)
 
 
 async def record_feedback(
@@ -97,10 +97,10 @@ async def record_feedback(
     *,
     spec: Spec,
     source: str,
-    property: str,
+    slot: str,
     success: bool,
 ) -> Posterior:
     """Record one Bernoulli observation. Validates source+slot on spec."""
     _check_source(spec, source)
-    _check_slot(spec, property)
-    return await trust_posteriors.record_feedback(conn, source, property, success)
+    _check_slot(spec, slot)
+    return await trust_posteriors.record_feedback(conn, source, slot, success)

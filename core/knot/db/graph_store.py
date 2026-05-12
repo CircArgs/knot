@@ -33,8 +33,8 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from knot.spec import Array, ClassRef, OntologyClass, Source, Spec, effective_properties, is_stored
-from knot.spec import stored_property_names as _stored_slot_names
+from knot.spec import Array, ClassRef, OntologyClass, Source, Spec, effective_slots, is_stored
+from knot.spec import stored_slot_names as _stored_slot_names
 from knot.spec.compile.postgres._naming import (
     bindings_table_id as _bindings_id,
 )
@@ -108,8 +108,8 @@ async def insert_rows(
     for the inserted/updated rows (used for batch-scoped constraint checks)
     and the total row count.
     """
-    property_names = _stored_slot_names(cls)
-    user_cols = ["_source", "_source_row_id", "_spec_revision", *property_names]
+    slot_names = _stored_slot_names(cls)
+    user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
     cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
     placeholders = sql.SQL(", ").join(sql.Placeholder() * len(user_cols))
     update_set = sql.SQL(", ").join(
@@ -148,8 +148,8 @@ async def insert_rows(
                 canonical_id,
                 spec_revision,
             ]
-            for property_name in property_names:
-                values.append(row.get(property_name))
+            for slot_name in slot_names:
+                values.append(row.get(slot_name))
             knot_row_id = (await (await conn.execute(upsert_stmt, values)).fetchone())[0]
             await conn.execute(
                 binding_insert_stmt,
@@ -167,27 +167,27 @@ async def upsert_user_correction_row(
     *,
     cls: OntologyClass,
     canonical_id: str,
-    property_name: str,
+    slot_name: str,
     value: Any,
     spec_revision: int,
 ) -> str:
     """Upsert the user-correction row for a canonical_id, setting only the
-    corrected property. Other slot columns remain NULL on first insert and
+    corrected slot. Other slot columns remain NULL on first insert and
     unchanged on subsequent corrections. Also opens a binding to the
     canonical_id if none is current. Returns _knot_row_id (str)."""
-    property_names = _stored_slot_names(cls)
-    user_cols = ["_source", "_source_row_id", "_spec_revision", *property_names]
+    slot_names = _stored_slot_names(cls)
+    user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
     placeholder_values: list[Any] = [
         user_corrections_source(),
         canonical_id,  # _source_row_id = canonical_id at correction time
         spec_revision,
     ]
-    for sn in property_names:
-        placeholder_values.append(value if sn == property_name else None)
+    for sn in slot_names:
+        placeholder_values.append(value if sn == slot_name else None)
 
     cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
     placeholders = sql.SQL(", ").join(sql.Placeholder() * len(user_cols))
-    upsert_set = sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(property_name))
+    upsert_set = sql.SQL("{c} = EXCLUDED.{c}").format(c=sql.Identifier(slot_name))
     upsert_stmt = sql.SQL(
         "INSERT INTO {table} ({cols}) VALUES ({ph}) "
         "ON CONFLICT (_source, _source_row_id) DO UPDATE "
@@ -433,9 +433,9 @@ async def aggregate_rows(
 ) -> dict[str, Any]:
     """Run one SELECT with COUNT(*) plus requested aggregates over filtered rows.
 
-    ``agg_fields`` is a list of ``(agg_func, property_name, result_key)`` triples:
+    ``agg_fields`` is a list of ``(agg_func, slot_name, result_key)`` triples:
       - ``agg_func``   — SQL aggregate function name: ``sum``, ``avg``, ``min``, ``max``
-      - ``property_name``  — stored slot column name
+      - ``slot_name``  — stored slot column name
       - ``result_key`` — key in the returned dict
 
     Returns a dict with ``count`` (int) plus one entry per agg_fields element.
@@ -466,7 +466,7 @@ async def aggregate_rows(
 
     # Build SELECT list: count(*) first, then each requested aggregate.
     select_parts: list[sql.Composable] = [sql.SQL("count(*) AS _count")]
-    for agg_func, property_name, result_key in agg_fields:
+    for agg_func, slot_name, result_key in agg_fields:
         if agg_func.lower() not in _ALLOWED_AGG_FUNCS:
             raise ValueError(
                 f"aggregate_rows: unsupported agg_func {agg_func!r}; "
@@ -475,7 +475,7 @@ async def aggregate_rows(
         select_parts.append(
             sql.SQL("{func}(s.{col}) AS {alias}").format(
                 func=sql.SQL(agg_func.lower()),
-                col=sql.Identifier(property_name),
+                col=sql.Identifier(slot_name),
                 alias=sql.Identifier(result_key),
             )
         )
@@ -516,7 +516,7 @@ async def get_disagreeing_contributions(
     *,
     cls: OntologyClass,
     canonical_id: str,
-    property_name: str,
+    slot_name: str,
 ) -> list[tuple[str, Any]]:
     """For bandit-feedback emission: per-source non-null values for one
     slot under the current binding for ``canonical_id``, excluding the
@@ -530,7 +530,7 @@ async def get_disagreeing_contributions(
         "  AND s._source <> %s "
         "  AND s.{col} IS NOT NULL"
     ).format(
-        col=sql.Identifier(property_name),
+        col=sql.Identifier(slot_name),
         source=_table_id(cls),
         bindings=_bindings_id(cls),
     )
@@ -639,11 +639,11 @@ async def update_cross_class_references(
             continue
         if getattr(cls, "definition", None) is not None:
             continue
-        for prop in effective_properties(cls):
-            if not is_stored(property):
+        for slot in effective_slots(cls):
+            if not is_stored(slot):
                 continue
             # Check if this slot references merged_class (ClassRef or Array[ClassRef])
-            slot_type = property.type
+            slot_type = slot.type
             if isinstance(slot_type, Array):
                 inner = slot_type.of
                 if not (isinstance(inner, ClassRef) and inner.target_class is merged_class):
@@ -653,7 +653,7 @@ async def update_cross_class_references(
                     continue
             else:
                 continue
-            col = sql.Identifier(property.name)
+            col = sql.Identifier(slot.name)
             for old_id, new_id in id_remap.items():
                 if isinstance(slot_type, Array):
                     stmt = sql.SQL(
@@ -753,8 +753,8 @@ async def insert_synthetic_row(
     ``values`` must contain only stored-slot names for the class. Returns
     the new ``_knot_row_id`` (str).
     """
-    property_names = _stored_slot_names(cls)
-    user_cols = ["_source", "_source_row_id", "_spec_revision", *property_names]
+    slot_names = _stored_slot_names(cls)
+    user_cols = ["_source", "_source_row_id", "_spec_revision", *slot_names]
     cols_sql = sql.SQL(", ").join(sql.Identifier(c) for c in user_cols)
     placeholders = sql.SQL(", ").join(sql.Placeholder() * len(user_cols))
     placeholder_values: list[Any] = [
@@ -762,7 +762,7 @@ async def insert_synthetic_row(
         new_canonical_id,
         spec_revision,
     ]
-    for sn in property_names:
+    for sn in slot_names:
         placeholder_values.append(values.get(sn))
 
     knot_row_id = (

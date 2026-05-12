@@ -84,7 +84,7 @@ export default function PropertyPanel({ selection, spec, onClose }: Props) {
       >
         {dragHandle}
         <div className="italic">
-          Select a class, property, source, or constraint to inspect its properties.
+          Select a class, slot, source, or constraint to inspect its properties.
         </div>
       </aside>
     );
@@ -144,16 +144,16 @@ export function resolveSelection(
       const v = spec.classes.find((c) => c.name === sel.name);
       return v ? { kind: "class", value: v } : null;
     }
-    case "property": {
+    case "slot": {
       // Slots are owned by their class (by-copy model). Resolve via the
-      // owning class's effectiveProperties so mixin/is_a-inherited slots also
+      // owning class's effectiveSlots so mixin/is_a-inherited slots also
       // surface in the panel.
       if (!sel.className) return null;
       const cls = spec.classes.find((c) => c.name === sel.className);
       if (!cls) return null;
-      const pool = cls.effectiveProperties?.length ? cls.effectiveProperties : cls.properties;
+      const pool = cls.effectiveSlots?.length ? cls.effectiveSlots : cls.slots;
       const v = pool.find((s) => s.name === sel.name);
-      return v ? { kind: "property", value: v } : null;
+      return v ? { kind: "slot", value: v } : null;
     }
     case "source": {
       const v = spec.sources.find((src) => src.name === sel.name);

@@ -6,22 +6,22 @@ Names live only at the persistence boundary.
 Build order in this file:
   1. SpecBase + enums
   2. TypeExpression hierarchy (Primitive, Array, ClassRef)
-  3. PropertyConstraints
-  4. Expression tree (Literal_, PropertyPath, Compare, BoolExpr,
+  3. SlotConstraints
+  4. Expression tree (Literal_, SlotPath, Compare, BoolExpr,
      Relation*, ScalarDerivation, FormatDerivation, Within, Between,
      Matches, RecursiveTraversal)
-  5. Property (with SDK descriptor methods)
+  5. Slot (with SDK descriptor methods)
   6. OntologyClass
   7. DefinedClass
   8. AnyClass discriminated union
   9. Constraint
  10. Source (thin — name + description only)
- 11. NullSemantics, PropertyMapping, SourceBinding (reified (Source, Class) binding)
+ 11. NullSemantics, SlotMapping, SourceBinding (reified (Source, Class) binding)
  12. Spec root
  13. model_rebuild() calls to resolve forward refs
 
 The SDK affordance — `Movie.year > 1900`, `Movie.imdb_id.from_source(s).is_not_null()`,
-`Movie.credits.where(...).collect(...)` — is woven into Property's operator
+`Movie.credits.where(...).collect(...)` — is woven into Slot's operator
 overloads + OntologyClass.__getattr__.  The metaschema entities double as
 the SDK; no two-class generation per `auto-generated-sdk.md` simplification.
 """
@@ -66,7 +66,7 @@ class SpecBase(BaseModel):
 
 
 class ResolutionPolicy(StrEnum):
-    """Per-property reduction under a `RESOLVED`-stance protocol
+    """Per-slot reduction under a `RESOLVED`-stance protocol
     (per `multi-valued-semantics.md`).
     """
 
@@ -127,7 +127,7 @@ class GroupByMode(StrEnum):
 # ---------------------------------------------------------------------------
 # 3. TypeExpression hierarchy
 #
-# Recursive sum type: every property's `type` field is one of these.
+# Recursive sum type: every slot's `type` field is one of these.
 #   Primitive("string")           — a named scalar type
 #   Array(of=Primitive("string")) — homogeneous array of any TypeExpression
 #   ClassRef(target_class=Movie)  — canonical_id FK to another class
@@ -176,18 +176,18 @@ class ClassRef(SpecBase):
         return id(self)
 
 
-# TypeExpression — the sum type for all property types.
+# TypeExpression — the sum type for all slot types.
 # Defined after the three concrete classes exist so the union is valid at runtime.
 TypeExpression = Primitive | Array | ClassRef
 
 
 # ---------------------------------------------------------------------------
-# 4. PropertyConstraints — all property-level constraint data in one place
+# 4. SlotConstraints — all slot-level constraint data in one place
 # ---------------------------------------------------------------------------
 
 
-class PropertyConstraints(SpecBase):
-    """Optional constraints layered on a property's type."""
+class SlotConstraints(SpecBase):
+    """Optional constraints layered on a slot's type."""
 
     pattern: str | None = None
     min_value: float | None = None
@@ -199,7 +199,7 @@ class PropertyConstraints(SpecBase):
 # 5. Expression tree — the unified expression substrate
 #
 # These nodes appear in:
-#   - Property.derivation                   (forward + backward chain)
+#   - Slot.derivation                       (forward + backward chain)
 #   - Constraint.body                       (validation)
 #   - DataContext bodies (modeling layer)   (impl reads — out of scope here)
 #   - SDK expression construction           (impl-author ergonomics)
@@ -216,11 +216,11 @@ class Literal_(SpecBase):
     value: Any = None
 
 
-class PropertyPath(SpecBase):
-    """Walk from a class through an ordered chain of properties to a terminal value."""
+class SlotPath(SpecBase):
+    """Walk from a class through an ordered chain of slots to a terminal value."""
 
     from_class: OntologyClass
-    properties: list[Property] = Field(default_factory=list)
+    slots: list[Slot] = Field(default_factory=list)
 
 
 # Boolean composition mixin — applied to every node that should support
@@ -242,15 +242,15 @@ class Compare(SpecBase, _BoolComposable):
     """Comparison predicate: `left op right`."""
 
     op: CompareOp
-    left: PropertyPath | Literal_
-    right: PropertyPath | Literal_ | None = None  # None for unary ops
+    left: SlotPath | Literal_
+    right: SlotPath | Literal_ | None = None  # None for unary ops
 
 
 class Within(SpecBase, _BoolComposable):
     """Set-membership predicate — emits SQL `IN (...)`."""
 
     op: ClassVar[Literal["within"]] = "within"
-    left: PropertyPath
+    left: SlotPath
     values: list[Literal_] = Field(default_factory=list)
 
 
@@ -258,7 +258,7 @@ class Between(SpecBase, _BoolComposable):
     """Range predicate: `lower ≤ value ≤ upper`."""
 
     op: ClassVar[Literal["between"]] = "between"
-    left: PropertyPath
+    left: SlotPath
     lower: Literal_
     upper: Literal_
     inclusive: bool = True
@@ -268,7 +268,7 @@ class Matches(SpecBase, _BoolComposable):
     """String pattern predicate — emits SQL `LIKE` or regex."""
 
     op: ClassVar[Literal["matches"]] = "matches"
-    left: PropertyPath
+    left: SlotPath
     pattern: str
 
 
@@ -282,10 +282,10 @@ class BoolExpr(SpecBase, _BoolComposable):
 
 
 class RelationRef(SpecBase):
-    """Follow a property whose range is another class — `Movie.credits`."""
+    """Follow a slot whose range is another class — `Movie.credits`."""
 
     from_class: OntologyClass
-    property: Property
+    slot: Slot
 
     def transitive(
         self,
@@ -294,7 +294,7 @@ class RelationRef(SpecBase):
         max_depth: int | None = None,
     ) -> RecursiveTraversal:
         """Walk this relation recursively: `Person.knows.transitive(max_depth=3)`."""
-        step = PropertyPath(from_class=self.from_class, properties=[self.property])
+        step = SlotPath(from_class=self.from_class, slots=[self.slot])
         return RecursiveTraversal(start=self, step=step, until=until, max_depth=max_depth)
 
     def where(self, predicate: Any) -> FilteredRelation:
@@ -315,10 +315,10 @@ class FilteredRelation(SpecBase):
 
 
 class RelationProject(SpecBase):
-    """Surface a property value from each row of the relation."""
+    """Surface a slot value from each row of the relation."""
 
     relation: RelationRef | FilteredRelation | ReverseRelation
-    project: PropertyPath
+    project: SlotPath
 
 
 class RelationCount(SpecBase):
@@ -333,10 +333,10 @@ class RelationAggregate(SpecBase):
 
     relation: RelationRef | FilteredRelation | ReverseRelation
     func: AggFunc
-    operand: PropertyPath | None = None
+    operand: SlotPath | None = None
     distinct: bool = False
     group_by: GroupByMode = GroupByMode.NONE
-    order_by: list[PropertyPath] = Field(default_factory=list)
+    order_by: list[SlotPath] = Field(default_factory=list)
     pivot: bool = False  # only valid when group_by == SOURCE
 
 
@@ -357,8 +357,8 @@ class RelationFirst(SpecBase):
     """Surface the first row's projection by an ordering."""
 
     relation: RelationRef | FilteredRelation | ReverseRelation
-    project: PropertyPath
-    order_by: list[PropertyPath] = Field(default_factory=list)
+    project: SlotPath
+    order_by: list[SlotPath] = Field(default_factory=list)
     assert_unique: bool = False
 
 
@@ -371,42 +371,42 @@ class RecursiveTraversal(SpecBase):
 
     op: ClassVar[Literal["recursive"]] = "recursive"
     start: RelationRef
-    step: PropertyPath
+    step: SlotPath
     until: Any | None = None  # Compare | BoolExpr
     max_depth: int | None = None
 
 
 class ReverseRelation(SpecBase):
-    """Reverse-FK traversal: all rows of target_class whose fk_property value
+    """Reverse-FK traversal: all rows of target_class whose fk_slot value
     matches the canonical_id of the primary (outer) row.
 
     Represents: "all Credit rows whose Credit.person == this.canonical_id".
     Used as the ``relation`` argument to RelationAll / RelationAny / RelationFirst
     when traversing from parent-class rows back to referencing rows.
 
-    ``target_class``  — the class being traversed to (e.g. Credit).
-    ``fk_property``   — the property on target_class that holds the FK back to
-                        the primary class (e.g. Credit.person).
+    ``target_class`` — the class being traversed to (e.g. Credit).
+    ``fk_slot``      — the slot on target_class that holds the FK back to
+                       the primary class (e.g. Credit.person).
     """
 
     target_class: OntologyClass
-    fk_property: Property
+    fk_slot: Slot
 
 
 class ScalarDerivation(SpecBase):
     """Within-row computed value — no relation traversal."""
 
-    expression: Any  # PropertyPath | Literal_ | Compare | BoolExpr
+    expression: Any  # SlotPath | Literal_ | Compare | BoolExpr
 
 
 class FormatDerivation(SpecBase):
     """Pattern-string serialization: `'{last}, {first}'`."""
 
     template: str
-    properties: list[PropertyPath] = Field(default_factory=list)
+    slots: list[SlotPath] = Field(default_factory=list)
 
 
-# Union type for the `derivation` field on Property.
+# Union type for the `derivation` field on Slot.
 DerivationExpr = (
     RelationProject
     | RelationCount
@@ -420,43 +420,43 @@ DerivationExpr = (
 
 
 # ---------------------------------------------------------------------------
-# 6. Property + SDK affordances
+# 6. Slot + SDK affordances
 #
-# Operator overloads on Property return expression-tree nodes that bind by
-# property identity but use a shared sentinel `from_class`.  The class context
+# Operator overloads on Slot return expression-tree nodes that bind by
+# slot identity but use a shared sentinel `from_class`.  The class context
 # is inferred from the surrounding DataContext / Constraint.primary at
 # fulfill time, so the sentinel is a placeholder, not a runtime defect.
 # ---------------------------------------------------------------------------
 
 
-class _SourceFilteredProperty:
-    """Intermediate from `Property.from_source(source)` — exposes `.is_null()` /
+class _SourceFilteredSlot:
+    """Intermediate from `Slot.from_source(source)` — exposes `.is_null()` /
     `.is_not_null()` so impl writers can spell per-source predicates fluidly.
     """
 
-    def __init__(self, prop: Property, source: Any) -> None:
-        self._property = property
+    def __init__(self, slot: Slot, source: Any) -> None:
+        self._slot = slot
         self._source = source
 
     def is_null(self) -> Compare:
-        path = PropertyPath(from_class=_sentinel_class, properties=[self._property])
+        path = SlotPath(from_class=_sentinel_class, slots=[self._slot])
         return Compare(op=CompareOp.IS_NULL, left=path)
 
     def is_not_null(self) -> Compare:
-        path = PropertyPath(from_class=_sentinel_class, properties=[self._property])
+        path = SlotPath(from_class=_sentinel_class, slots=[self._slot])
         return Compare(op=CompareOp.IS_NOT_NULL, left=path)
 
 
-def _coerce_right(other: Any) -> PropertyPath | Literal_:
-    """Coerce a comparison RHS into a tree node — properties/paths/literals all welcomed."""
-    if isinstance(other, (PropertyPath, Literal_)):
+def _coerce_right(other: Any) -> SlotPath | Literal_:
+    """Coerce a comparison RHS into a tree node — slots/paths/literals all welcomed."""
+    if isinstance(other, (SlotPath, Literal_)):
         return other
-    if isinstance(other, Property):
-        return PropertyPath(from_class=_sentinel_class, properties=[other])
+    if isinstance(other, Slot):
+        return SlotPath(from_class=_sentinel_class, slots=[other])
     return Literal_(value=other)
 
 
-class Property(SpecBase):
+class Slot(SpecBase):
     """A property of an OntologyClass.
 
     Operator overloads (`__gt__`, `__lt__`, `__eq__`, `.in_`, `.between`,
@@ -469,7 +469,7 @@ class Property(SpecBase):
     identifier: bool = False
     required: bool = False
     resolution_policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST
-    constraints: PropertyConstraints | None = None
+    constraints: SlotConstraints | None = None
     derivation: Any | None = None  # DerivationExpr
     description: str | None = None
 
@@ -477,8 +477,8 @@ class Property(SpecBase):
     # Comparison operators — each returns a Compare node
     # ------------------------------------------------------------------
 
-    def _path(self) -> PropertyPath:
-        return PropertyPath(from_class=_sentinel_class, properties=[self])
+    def _path(self) -> SlotPath:
+        return SlotPath(from_class=_sentinel_class, slots=[self])
 
     def __eq__(self, other: object) -> Any:  # type: ignore[override]
         return Compare(op=CompareOp.EQ, left=self._path(), right=_coerce_right(other))
@@ -550,13 +550,13 @@ class Property(SpecBase):
     def ends_with(self, suffix: str) -> Matches:
         return self.matches("%" + suffix)
 
-    def from_source(self, source: Any) -> _SourceFilteredProperty:
+    def from_source(self, source: Any) -> _SourceFilteredSlot:
         """Per-source predicate intermediate (per `er-and-storage.md` § ER impl)."""
-        return _SourceFilteredProperty(self, source)
+        return _SourceFilteredSlot(self, source)
 
 
-# DerivedProperty — annotation alias; a `Property` whose `derivation` is non-None.
-DerivedProperty = Property
+# DerivedSlot — annotation alias; a `Slot` whose `derivation` is non-None.
+DerivedSlot = Slot
 
 
 # ---------------------------------------------------------------------------
@@ -571,16 +571,16 @@ class OntologyClass(SpecBase):
     "abstract" (not ingestable, no table — used as a mixin/parent only).
     The ``abstract`` property is kept for backward-compat reads.
 
-    `__getattr__` resolves property names so impl authors write
-    `Movie.imdb_id` rather than indexing into a property list.  Walks the
-    is_a chain + mixins to inherit property visibility.
+    `__getattr__` resolves slot names so impl authors write
+    `Movie.imdb_id` rather than indexing into a slot list.  Walks the
+    is_a chain + mixins to inherit slot visibility.
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     kind: Literal["concrete", "abstract"] = "concrete"
     is_a: OntologyClass | None = None
     mixins: list[OntologyClass] = Field(default_factory=list)
-    properties: list[Property] = Field(default_factory=list)
+    slots: list[Slot] = Field(default_factory=list)
     description: str | None = None
 
     @model_validator(mode="before")
@@ -602,28 +602,28 @@ class OntologyClass(SpecBase):
         """Backward-compat read: True when kind == 'abstract'."""
         return self.kind == "abstract"
 
-    def __getattr__(self, item: str) -> Property:
+    def __getattr__(self, item: str) -> Slot:
         # Pydantic and Python internals probe for sentinel attributes; raise
-        # AttributeError without searching properties so they fall back cleanly.
+        # AttributeError without searching slots so they fall back cleanly.
         if item.startswith("_") or item.startswith("model_"):
             raise AttributeError(item)
         for cls in self._class_chain():
             try:
-                properties_list = object.__getattribute__(cls, "__dict__").get("__pydantic_fields_set__")
+                slots_list = object.__getattribute__(cls, "__dict__").get("__pydantic_fields_set__")
             except Exception:
                 pass
             try:
-                properties_list = type.__getattribute__(type(cls), "model_fields") and getattr(
-                    cls, "properties", None
+                slots_list = type.__getattribute__(type(cls), "model_fields") and getattr(
+                    cls, "slots", None
                 )
             except Exception:
-                properties_list = getattr(cls, "properties", None)
-            if not properties_list:
+                slots_list = getattr(cls, "slots", None)
+            if not slots_list:
                 continue
-            for prop in properties_list:
-                if getattr(property, "name", None) == item:
-                    return property
-        raise AttributeError(f"OntologyClass {self.name!r} has no property {item!r}")
+            for slot in slots_list:
+                if getattr(slot, "name", None) == item:
+                    return slot
+        raise AttributeError(f"OntologyClass {self.name!r} has no slot {item!r}")
 
     def __hash__(self) -> int:
         return id(self)
@@ -644,9 +644,9 @@ class OntologyClass(SpecBase):
 
     def descendants(self, *, max_depth: int | None = None) -> RecursiveTraversal:
         """Walk the is_a chain downward."""
-        is_a_property = Property(name="is_a", type=ClassRef(target_class=self))
-        start = RelationRef(from_class=self, property=is_a_property)
-        step = PropertyPath(from_class=self, properties=[is_a_property])
+        is_a_slot = Slot(name="is_a", type=ClassRef(target_class=self))
+        start = RelationRef(from_class=self, slot=is_a_slot)
+        step = SlotPath(from_class=self, slots=[is_a_slot])
         return RecursiveTraversal(start=start, step=step, max_depth=max_depth)
 
 
@@ -658,7 +658,7 @@ class DefinedClass(SpecBase):
         of the VIEW that selects rows from the ``is_a`` parent table.
       - ``is_a`` is required: must point to a concrete or abstract OntologyClass
         (no DefinedClass nesting).
-      - No ``properties`` field — own properties are meaningless for a VIEW; the VIEW
+      - No ``slots`` field — own slots are meaningless for a VIEW; the VIEW
         inherits all columns from the parent table.
       - Storage is a VIEW; the DDL emitter never creates a table for this class.
 
@@ -682,7 +682,7 @@ class DefinedClass(SpecBase):
 AnyClass = Annotated[OntologyClass | DefinedClass, Field(discriminator="kind")]
 
 
-# Sentinel `from_class` used by Property operator overloads.  Replaced by the
+# Sentinel `from_class` used by Slot operator overloads.  Replaced by the
 # real class context at SQL-gen / DataContext-fulfill time.  Never stored
 # in a published spec.
 _sentinel_class = OntologyClass(name="__sentinel__")
@@ -698,7 +698,7 @@ class Constraint(SpecBase):
 
     ``body`` is a SQL predicate string (WHERE-clause fragment) validated via
     sqlglot at publish time.  Knot's SQL generator emits validation SQL with
-    the uniform ``(rule_id, class_name, property_name, offending_pk, detail)``
+    the uniform ``(rule_id, class_name, slot_name, offending_pk, detail)``
     shape per the constraint spec.
 
     Example body: ``year >= 1888``
@@ -734,7 +734,7 @@ class Source(SpecBase):
 
 
 # ---------------------------------------------------------------------------
-# 10. NullSemantics, PropertyMapping, SourceBinding — reified (Source, Class) binding
+# 10. NullSemantics, SlotMapping, SourceBinding — reified (Source, Class) binding
 # ---------------------------------------------------------------------------
 
 
@@ -745,17 +745,17 @@ class NullSemantics(StrEnum):
     ASSERTED_ABSENT = "asserted_absent"  # NULL means "I assert this has no value"
 
 
-class PropertyMapping(SpecBase):
-    """How one source field projects to one class property.
+class SlotMapping(SpecBase):
+    """How one source field projects to one class slot.
 
-    ``property``      — target Property on the class.
-    ``source_field``  — field name in the source's row payload (may differ from property.name).
+    ``slot``          — target Slot on the class.
+    ``source_field``  — field name in the source's row payload (may differ from slot.name).
     ``default``       — value to use when the source omits the field entirely.
     ``null_semantics``— how to handle explicit NULL from the source.
-    ``prior``         — optional per-property Beta(α,β) prior overriding the binding-level prior.
+    ``prior``         — optional per-slot Beta(α,β) prior overriding the binding-level prior.
     """
 
-    property: Property
+    slot: Slot
     source_field: str
     default: Any | None = None
     null_semantics: NullSemantics = NullSemantics.NO_CLAIM
@@ -769,22 +769,22 @@ class SourceBinding(SpecBase):
     fat ``Source`` carried beyond its name. A single Source can have multiple
     bindings (one per class it contributes to).
 
-    ``source``             — the named external system.
-    ``class_``             — the OntologyClass this binding feeds.
-    ``identifier_property``— which class property is the source-native identifier.
-    ``mappings``           — optional per-property projection rules (source_field → property).
-                             Properties not covered by any mapping are passed through by name.
-    ``trust_prior``        — Beta(α,β) seed for POSTERIOR_MEAN / LCB.  Beta(1,1) = uniform.
-    ``required_properties``— properties that must be non-null; batch rejected with 422 on violation.
-    ``description``        — human-readable note on this binding.
+    ``source``          — the named external system.
+    ``class_``          — the OntologyClass this binding feeds.
+    ``identifier_slot`` — which class slot is the source-native identifier.
+    ``mappings``        — optional per-slot projection rules (source_field → slot).
+                          Slots not covered by any mapping are passed through by name.
+    ``trust_prior``     — Beta(α,β) seed for POSTERIOR_MEAN / LCB.  Beta(1,1) = uniform.
+    ``required_slots``  — slots that must be non-null; batch rejected with 422 on violation.
+    ``description``     — human-readable note on this binding.
     """
 
     source: Source
     class_: OntologyClass = Field(alias="class")
-    identifier_property: Property
-    mappings: list[PropertyMapping] = Field(default_factory=list)
+    identifier_slot: Slot
+    mappings: list[SlotMapping] = Field(default_factory=list)
     trust_prior: tuple[float, float] = (1.0, 1.0)  # Beta(α,β)
-    required_properties: list[Property] = Field(default_factory=list)
+    required_slots: list[Slot] = Field(default_factory=list)
     description: str | None = None
 
     def __hash__(self) -> int:
@@ -822,8 +822,8 @@ class Spec(SpecBase):
 Primitive.model_rebuild()
 Array.model_rebuild()
 ClassRef.model_rebuild()
-PropertyConstraints.model_rebuild()
-PropertyPath.model_rebuild()
+SlotConstraints.model_rebuild()
+SlotPath.model_rebuild()
 Compare.model_rebuild()
 Within.model_rebuild()
 Between.model_rebuild()
@@ -841,12 +841,12 @@ RecursiveTraversal.model_rebuild()
 ReverseRelation.model_rebuild()
 ScalarDerivation.model_rebuild()
 FormatDerivation.model_rebuild()
-Property.model_rebuild()
+Slot.model_rebuild()
 OntologyClass.model_rebuild()
 DefinedClass.model_rebuild()
 Constraint.model_rebuild()
 Source.model_rebuild()
-PropertyMapping.model_rebuild()
+SlotMapping.model_rebuild()
 SourceBinding.model_rebuild()
 Spec.model_rebuild()
 
@@ -867,11 +867,11 @@ __all__ = [
     "Primitive",
     "Array",
     "ClassRef",
-    # property constraints
-    "PropertyConstraints",
+    # slot constraints
+    "SlotConstraints",
     # expression tree
     "Literal_",
-    "PropertyPath",
+    "SlotPath",
     "Compare",
     "BoolExpr",
     "Within",
@@ -890,16 +890,16 @@ __all__ = [
     "ScalarDerivation",
     "FormatDerivation",
     "DerivationExpr",
-    # properties + classes
-    "Property",
-    "DerivedProperty",
+    # slots + classes
+    "Slot",
+    "DerivedSlot",
     "OntologyClass",
     "DefinedClass",
     "AnyClass",
     # constraints + sources + bindings + root
     "Constraint",
     "Source",
-    "PropertyMapping",
+    "SlotMapping",
     "SourceBinding",
     "Spec",
 ]

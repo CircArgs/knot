@@ -2,7 +2,7 @@
 
 A constraint with ``primary=MediaItem`` applies to ``MediaItem`` *and* every
 class that has ``MediaItem`` reachable via is_a or mixin. The walk mirrors
-``effective_properties``: own → is_a chain → mixin chain.
+``effective_slots``: own → is_a chain → mixin chain.
 
 For DefinedClass: inherits constraints from its is_a parent + mixins. The
 class itself can't be a constraint primary (``Constraint.primary`` is typed

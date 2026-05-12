@@ -8,7 +8,7 @@ What's inside:
                                                        + user-correction row upsert
   - ``corrections``                                  — _user_corrections audit-log CRUD
   - ``trust_config``                                 — per-source scalar trust CRUD
-  - ``trust_posteriors``                             — per-(source, property) Beta posterior CRUD
+  - ``trust_posteriors``                             — per-(source, slot) Beta posterior CRUD
 
 Spec → SQL compilation (DDL emission, predicate compilation, lake SELECTs,
 GraphQL schema generation) lives under ``knot.spec.compile`` — not here.

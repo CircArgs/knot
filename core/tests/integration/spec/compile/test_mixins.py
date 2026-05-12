@@ -7,8 +7,8 @@ Coverage:
   4. Own slot shadows a mixin slot of the same name (no error, own wins).
   5. Two mixins contributing the same slot name → PublishGateError.
   6. Cyclic mixin chain (A → B → A) → PublishGateError.
-  7. Adding a mixin to an existing class triggers AddProperty DDL on republish.
-  8. Removing a mixin triggers DropProperty DDL on republish.
+  7. Adding a mixin to an existing class triggers AddSlot DDL on republish.
+  8. Removing a mixin triggers DropSlot DDL on republish.
   9. Mixin slot referenced via apply_add is stored and reads back.
 """
 
@@ -26,7 +26,7 @@ from knot.db.spec_store import (
 from knot.graph.corrections import apply_add
 from knot.spec import (
     OntologyClass,
-    Property,
+    Slot,
     Source,
     SourceBinding,
     Spec,
@@ -52,24 +52,24 @@ async def _reset(conn):
 
 def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]:
     """Movie includes a Timestamped mixin contributing created_at/updated_at."""
-    created_at = Property(name="created_at", type=Primitive(name="datetime"))
-    updated_at = Property(name="updated_at", type=Primitive(name="datetime"))
+    created_at = Slot(name="created_at", type=Primitive(name="datetime"))
+    updated_at = Slot(name="updated_at", type=Primitive(name="datetime"))
     timestamped = OntologyClass(
         name="Timestamped",
-        properties=[created_at, updated_at],
+        slots=[created_at, updated_at],
         abstract=True,
     )
 
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"))
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(
         name="Movie",
-        properties=[imdb_id, title],
+        slots=[imdb_id, title],
         mixins=[timestamped],
     )
 
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_test",
         version="1.0.0",
@@ -151,22 +151,22 @@ async def test_mixin_slot_is_queryable_via_graphql(pg_conn):
 async def test_transitive_mixin_chain(pg_conn):
     await _reset(pg_conn)
 
-    audited_at = Property(name="audited_at", type=Primitive(name="datetime"))
-    audited = OntologyClass(name="Audited", properties=[audited_at], abstract=True)
+    audited_at = Slot(name="audited_at", type=Primitive(name="datetime"))
+    audited = OntologyClass(name="Audited", slots=[audited_at], abstract=True)
 
-    created_at = Property(name="created_at", type=Primitive(name="datetime"))
+    created_at = Slot(name="created_at", type=Primitive(name="datetime"))
     timestamped = OntologyClass(
         name="Timestamped",
-        properties=[created_at],
+        slots=[created_at],
         mixins=[audited],
         abstract=True,
     )
 
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", properties=[imdb_id], mixins=[timestamped])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[timestamped])
 
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_chain",
         version="1.0.0",
@@ -198,19 +198,19 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
     await _reset(pg_conn)
 
     # Mixin contributes a `name` slot of type datetime
-    mixin_name = Property(name="name", type=Primitive(name="datetime"))
-    bad_mixin = OntologyClass(name="BadMixin", properties=[mixin_name], abstract=True)
+    mixin_name = Slot(name="name", type=Primitive(name="datetime"))
+    bad_mixin = OntologyClass(name="BadMixin", slots=[mixin_name], abstract=True)
 
     # Own `name` slot of type str — should win.
-    own_name = Property(name="name", type=Primitive(name="string"))
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    own_name = Slot(name="name", type=Primitive(name="string"))
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(
         name="Movie",
-        properties=[imdb_id, own_name],
+        slots=[imdb_id, own_name],
         mixins=[bad_mixin],
     )
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="own_shadows_mixin",
         version="1.0.0",
@@ -242,17 +242,17 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
 async def test_mixin_slot_collision_rejected(pg_conn):
     await _reset(pg_conn)
 
-    a_label = Property(name="label", type=Primitive(name="string"))
-    a = OntologyClass(name="A", properties=[a_label], abstract=True)
+    a_label = Slot(name="label", type=Primitive(name="string"))
+    a = OntologyClass(name="A", slots=[a_label], abstract=True)
 
-    b_label = Property(name="label", type=Primitive(name="string"))
-    b = OntologyClass(name="B", properties=[b_label], abstract=True)
+    b_label = Slot(name="label", type=Primitive(name="string"))
+    b = OntologyClass(name="B", slots=[b_label], abstract=True)
 
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", properties=[imdb_id], mixins=[a, b])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[a, b])
 
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_collision",
         version="1.0.0",
@@ -275,15 +275,15 @@ async def test_mixin_slot_collision_rejected(pg_conn):
 async def test_mixin_cycle_rejected(pg_conn):
     await _reset(pg_conn)
 
-    a = OntologyClass(name="A", properties=[], abstract=True)
-    b = OntologyClass(name="B", properties=[], abstract=True, mixins=[a])
+    a = OntologyClass(name="A", slots=[], abstract=True)
+    b = OntologyClass(name="B", slots=[], abstract=True, mixins=[a])
     a.mixins = [b]  # close the cycle: A → B → A
 
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", properties=[imdb_id], mixins=[a])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[a])
 
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="mixin_cycle",
         version="1.0.0",
@@ -301,7 +301,7 @@ async def test_mixin_cycle_rejected(pg_conn):
 # ---------------------------------------------------------------------------
 # 7. Mixin slot is read/written via apply_add
 #
-# Pure-Python diff tests for AddProperty / DropProperty emission on mixin add /
+# Pure-Python diff tests for AddSlot / DropSlot emission on mixin add /
 # remove live in tests/unit/spec/compile/test_mixins_diff.py.
 # ---------------------------------------------------------------------------
 

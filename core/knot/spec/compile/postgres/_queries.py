@@ -14,7 +14,7 @@ from typing import Any
 
 from psycopg import sql
 
-from knot.spec import effective_properties as _effective_slots
+from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.metaschema import OntologyClass
 
@@ -70,7 +70,7 @@ def select_with_binding(
 def derived_column_exprs(
     cls: OntologyClass,
 ) -> tuple[list[sql.Composable], list[Any]]:
-    """Build ``(<subquery>) AS <property_name>`` fragments for derived properties,
+    """Build ``(<subquery>) AS <slot_name>`` fragments for derived slots,
     plus the accumulated positional parameters for those subqueries.
 
     Returns ``([], [])`` when the class has no derived slots (the common case).
@@ -84,10 +84,10 @@ def derived_column_exprs(
 
     derived_cols: list[sql.Composable] = []
     derived_params: list[Any] = []
-    for prop in _effective_slots(cls):
-        if _is_stored(property):
+    for slot in _effective_slots(cls):
+        if _is_stored(slot):
             continue
-        derivation = getattr(property, "derivation", None)
+        derivation = getattr(slot, "derivation", None)
         if derivation is None:
             continue
         ctx = CompileContext(primary_class=cls, alias="s")
@@ -95,7 +95,7 @@ def derived_column_exprs(
         derived_cols.append(
             sql.SQL("({expr}) AS {col}").format(
                 expr=expr_sql,
-                col=sql.Identifier(property.name),
+                col=sql.Identifier(slot.name),
             )
         )
         derived_params.extend(ctx.params)
@@ -107,7 +107,7 @@ def select_with_derivations(
     include_tombstoned: bool = False,
 ) -> tuple[sql.Composable, list[Any]]:
     """Same as :func:`select_with_binding` but appends a computed column
-    per derived property, compiled via the SQL compiler.
+    per derived slot, compiled via the SQL compiler.
 
     Returns ``(sql_composable, derived_params)``. Caller must prepend the
     params to the outer query's parameter list (SELECT params come before

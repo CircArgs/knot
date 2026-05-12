@@ -29,7 +29,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Property, Source, Spec
+from knot.spec import OntologyClass, Slot, Source, Spec
 from knot.spec.metaschema import Primitive, SourceBinding
 
 
@@ -39,10 +39,10 @@ def _dev_principal() -> Principal:
 
 def _spec_v1() -> Spec:
     """Movie with imdb_id only."""
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", properties=[imdb_id])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", slots=[imdb_id])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="rollback_test",
         version="1.0.0",
@@ -53,17 +53,17 @@ def _spec_v1() -> Spec:
 
 
 def _spec_v2() -> Spec:
-    """Movie with imdb_id + title (extra prop, plus a new Person class)."""
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"))
-    movie = OntologyClass(name="Movie", properties=[imdb_id, title])
+    """Movie with imdb_id + title (extra slot, plus a new Person class)."""
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    movie = OntologyClass(name="Movie", slots=[imdb_id, title])
     src_movie = Source(name="imdb")
-    binding_movie = SourceBinding(source=src_movie, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding_movie = SourceBinding(source=src_movie, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
 
-    nm = Property(name="nm_id", type=Primitive(name="string"), identifier=True, required=True)
-    person = OntologyClass(name="Person", properties=[nm])
+    nm = Slot(name="nm_id", type=Primitive(name="string"), identifier=True, required=True)
+    person = OntologyClass(name="Person", slots=[nm])
     src_person = Source(name="imdb_people")
-    binding_person = SourceBinding(source=src_person, class_=person, identifier_property=nm)  # type: ignore[call-arg]
+    binding_person = SourceBinding(source=src_person, class_=person, identifier_slot=nm)  # type: ignore[call-arg]
 
     return Spec(
         id="rollback_test",
@@ -132,7 +132,7 @@ async def test_rollback_via_publish_draft(clean):
     )[0] == 1
 
     # Rollback to v1: requires allow_destructive because the diff drops
-    # Person + the title prop.
+    # Person + the title slot.
     await publish_draft(clean, rev1, allow_destructive=True)
     assert await get_published_revision(clean) == rev1
     # Person table should be gone.
@@ -209,7 +209,7 @@ async def test_api_rollback_destructive_requires_flag(clean, client):
     await update_draft(clean, rev2, _spec_v2())
     await publish_draft(clean, rev2)
 
-    # No allow_destructive — diff drops Person and the title prop.
+    # No allow_destructive — diff drops Person and the title slot.
     r = client.post(f"/spec/rollback/{rev1}")
     assert r.status_code == 400
     assert "destructive" in r.json()["detail"].lower()

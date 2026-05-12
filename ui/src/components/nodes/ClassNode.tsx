@@ -2,11 +2,11 @@ import { Handle, Position } from "@xyflow/react";
 import type { NodeProps } from "@xyflow/react";
 
 import type { SpecNodeData } from "../../lib/buildGraph";
-import { propertyHandleId } from "../../lib/buildGraph";
+import { slotHandleId } from "../../lib/buildGraph";
 import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../types/spec";
 import type {
   SpecConstraint,
-  SpecProperty,
+  SpecSlot,
 } from "../../types/spec";
 import KindBadge from "./KindBadge";
 
@@ -17,7 +17,7 @@ import KindBadge from "./KindBadge";
  * entity" event via `data.onSelect` (set by the page wrapping `nodeTypes`).
  *
  * Reified-relation classes (`card.isJunction === true` — classes with ≥2
- * ClassRef properties, like a `Credit` between `Movie` and `Person`) get a
+ * ClassRef slots, like a `Credit` between `Movie` and `Person`) get a
  * cut-corner octagon clip + violet accent so they're scannable in dense
  * graphs.
  */
@@ -29,15 +29,15 @@ export default function ClassNode({
   const cls = data.entity.value;
   const card = data.card;
 
-  const properties = card?.properties ?? [];
+  const slots = card?.slots ?? [];
   const constraints = card?.constraints ?? [];
   const isJunction = card?.isJunction === true;
 
-  // Inherited slots — anything in effectiveProperties that isn't own. Rendered
+  // Inherited slots — anything in effectiveSlots that isn't own. Rendered
   // in a separate, muted section so the user can see the full effective
   // contract of the class without confusing inherited slots with owned ones.
-  const ownNames = new Set(properties.map((s) => s.name));
-  const inheritedProperties = (cls.effectiveProperties ?? []).filter(
+  const ownNames = new Set(slots.map((s) => s.name));
+  const inheritedSlots = (cls.effectiveSlots ?? []).filter(
     (s) => !ownNames.has(s.name),
   );
 
@@ -131,12 +131,12 @@ export default function ClassNode({
       </div>
 
       {/* Slot rows — own slots first */}
-      {properties.length === 0 && inheritedProperties.length === 0 ? (
+      {slots.length === 0 && inheritedSlots.length === 0 ? (
         <div className="px-3 py-2 italic text-slate-400">no slots</div>
       ) : (
         <div className="py-1">
-          {properties.map((s) => (
-            <PropertyRow
+          {slots.map((s) => (
+            <SlotRow
               key={s.name}
               slot={s}
               className={cls.name}
@@ -148,7 +148,7 @@ export default function ClassNode({
 
       {/* Inherited slots — from mixins or is_a parent. Visually muted so
           they're distinguishable from owned slots without disappearing. */}
-      {inheritedProperties.length > 0 && (
+      {inheritedSlots.length > 0 && (
         <>
           <div className="border-t border-slate-200" />
           <div className="px-3 pt-1.5 pb-0.5 flex items-center gap-1.5">
@@ -160,8 +160,8 @@ export default function ClassNode({
             </span>
           </div>
           <div className="py-1 opacity-60">
-            {inheritedProperties.map((s) => (
-              <PropertyRow
+            {inheritedSlots.map((s) => (
+              <SlotRow
                 key={s.name}
                 slot={s}
                 className={cls.name}
@@ -196,13 +196,13 @@ export default function ClassNode({
 // Slot row
 // ──────────────────────────────────────────────────────────────────────────
 
-function PropertyRow({
-  property,
+function SlotRow({
+  slot,
   className,
   onSelect,
   inherited = false,
 }: {
-  property: SpecProperty;
+  slot: SpecSlot;
   className: string;
   onSelect?: SelectFn;
   inherited?: boolean;
@@ -216,7 +216,7 @@ function PropertyRow({
       tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect?.({ kind: "property", name: slot.name, className });
+        onSelect?.({ kind: "slot", name: slot.name, className });
       }}
       className={`relative px-3 py-1 hover:bg-slate-50 cursor-pointer flex items-center gap-2 ${
         inherited ? "italic" : ""
@@ -232,8 +232,8 @@ function PropertyRow({
       >
         {slot.name}
       </span>
-      <PropertyRange slot={slot} />
-      <PropertyChips slot={slot} />
+      <SlotRange slot={slot} />
+      <SlotChips slot={slot} />
 
       {/* Per-row source handle for cross-class FK edges. Always present so
           React Flow can match `sourceHandle: slot-${name}` regardless of
@@ -243,7 +243,7 @@ function PropertyRow({
         <Handle
           type="source"
           position={Position.Right}
-          id={propertyHandleId(slot.name)}
+          id={slotHandleId(slot.name)}
           className="!bg-blue-500 !w-1.5 !h-1.5"
         />
       )}
@@ -251,7 +251,7 @@ function PropertyRow({
   );
 }
 
-function PropertyRange({ slot }: { property: SpecProperty }) {
+function SlotRange({ slot }: { slot: SpecSlot }) {
   if (!slot.typeKind || !slot.typeName) {
     return <span className="text-slate-400 italic">derived</span>;
   }
@@ -279,7 +279,7 @@ function PropertyRange({ slot }: { property: SpecProperty }) {
   );
 }
 
-function PropertyChips({ slot }: { property: SpecProperty }) {
+function SlotChips({ slot }: { slot: SpecSlot }) {
   const chips: { label: string; tone: string }[] = [];
   if (slot.identifier)
     chips.push({ label: "ID", tone: "bg-emerald-600 text-white" });
@@ -302,7 +302,7 @@ function PropertyChips({ slot }: { property: SpecProperty }) {
   );
 }
 
-function slotIcon(property: SpecProperty): string {
+function slotIcon(slot: SpecSlot): string {
   if (slot.identifier) return "◆";
   if (isClassKind(slot.typeKind)) return "→";
   if (!slot.typeKind) return "λ"; // derived
@@ -362,7 +362,7 @@ function ConstraintChip({
 // ──────────────────────────────────────────────────────────────────────────
 
 type SelectFn = (sel: {
-  kind: "class" | "property" | "source" | "constraint";
+  kind: "class" | "slot" | "source" | "constraint";
   name: string;
   className?: string;
 }) => void;

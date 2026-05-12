@@ -23,7 +23,7 @@ from __future__ import annotations
 from psycopg import sql
 
 from knot.spec import OntologyClass
-from knot.spec import effective_properties as _effective_slots
+from knot.spec import effective_slots as _effective_slots
 from knot.spec import is_stored as _is_stored
 
 from ._naming import (
@@ -45,9 +45,9 @@ def is_materializable(cls: OntologyClass) -> bool:
 
 def _slot_cols(cls: OntologyClass) -> list[sql.Composable]:
     return [
-        sql.SQL("s.{}").format(sql.Identifier(property.name))
-        for prop in _effective_slots(cls)
-        if _is_stored(property)
+        sql.SQL("s.{}").format(sql.Identifier(slot.name))
+        for slot in _effective_slots(cls)
+        if _is_stored(slot)
     ]
 
 
@@ -55,7 +55,7 @@ def materialize_current(cls: OntologyClass) -> str:
     """SELECT body for a flat current snapshot of ``cls``.
 
     Columns: canonical_id, source, source_row_id, ingest_at,
-    spec_revision, valid_from (= bound_at), then every stored property.
+    spec_revision, valid_from (= bound_at), then every stored slot.
     """
     body = sql.SQL(
         "SELECT b.canonical_id, "
@@ -81,7 +81,7 @@ def materialize_history(cls: OntologyClass) -> str:
     """SELECT body for the full SCD2 timeline of ``cls``.
 
     Columns: canonical_id, valid_from, valid_to, change_type, source,
-    source_row_id, ingest_at, spec_revision, then every stored property.
+    source_row_id, ingest_at, spec_revision, then every stored slot.
     Closed (valid_to IS NOT NULL) and current (valid_to IS NULL) bindings
     are both emitted.
     """

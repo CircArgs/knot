@@ -25,7 +25,7 @@ async def list_observations(
     *,
     source: str | None = None,
     class_name: str | None = None,
-    property: str | None = None,
+    slot: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
     kind: str | None = None,
@@ -36,7 +36,7 @@ async def list_observations(
         conn,
         source=source,
         class_name=class_name,
-        slot=property,
+        slot=slot,
         since=since,
         until=until,
         kind=kind,
@@ -50,7 +50,7 @@ async def summarize(
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Per-(source, class, property) roll-up over a time window."""
+    """Per-(source, class, slot) roll-up over a time window."""
     return await db_dq.summarize(conn, since=since, until=until)
 
 
@@ -60,7 +60,7 @@ async def scan(
     source_filter: str | None = None,
     class_filter: str | None = None,
 ) -> tuple[int, int]:
-    """Snapshot per-(source, class, property) stats from the current data plane.
+    """Snapshot per-(source, class, slot) stats from the current data plane.
 
     Returns ``(observations_inserted, spec_revision)``. Raises
     ``NoSpecPublishedError`` if no spec is currently published.

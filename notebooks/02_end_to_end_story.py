@@ -135,7 +135,7 @@ def _(draft_id, post):
 def _(draft_id, post):
     post(
         f"/spec/drafts/{draft_id}/classes",
-        {"name": "Movie", "property_names": ["imdb_id", "title", "year"]},
+        {"name": "Movie", "slot_names": ["imdb_id", "title", "year"]},
     )
     post(
         f"/spec/drafts/{draft_id}/sources",

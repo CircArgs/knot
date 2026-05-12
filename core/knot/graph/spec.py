@@ -14,7 +14,7 @@ maps to HTTP. The route layer keeps the Pydantic request/response shapes
 and the per-entity summary helpers — those are HTTP-shape concerns.
 
 Slots are now inline on each OntologyClass (by-copy). There is no top-level
-Spec.properties list. add_class accepts inline slot definitions; update_class
+Spec.slots list. add_class accepts inline slot definitions; update_class
 accepts a full slot replacement list.
 """
 
@@ -34,8 +34,8 @@ from knot.spec import (
     OntologyClass,
     PublishGateError,
     ResolutionPolicy,
-    Property,
-    PropertyMapping,
+    Slot,
+    SlotMapping,
     Source,
     SourceBinding,
     Spec,
@@ -49,7 +49,7 @@ from knot.spec.metaschema import (
     Constraint,
     Primitive,
     Severity,
-    PropertyConstraints,
+    SlotConstraints,
     TypeExpression,
 )
 
@@ -88,7 +88,7 @@ __all__ = (
     "remove_source",
     "remove_source_binding",
     "remove_constraint",
-    "rename_property",
+    "rename_slot",
     "rename_class",
     # Publish / rollback / preview
     "publish_draft",
@@ -124,7 +124,7 @@ class InvalidTypeExprError(Exception):
 
 
 class InvalidIdentifierSlotError(Exception):
-    """Raised when a Source's identifier_property isn't on the entity_class."""
+    """Raised when a Source's identifier_slot isn't on the entity_class."""
 
 
 class ReferencedEntityError(Exception):
@@ -196,7 +196,7 @@ def _build_type_expr(
       "primitive"  — type_name must be a STANDARD_PRIMITIVE_NAMES entry
       "class"      — type_name must be an OntologyClass on the draft
       "array"      — not a top-level kind; handled via array_of_kind + array_of_name
-      None         — no type (derived property)
+      None         — no type (derived slot)
     """
     if type_kind is None:
         return None
@@ -240,7 +240,7 @@ def _build_slot(
     identifier: bool,
     required: bool,
     resolution_policy: ResolutionPolicy,
-    constraints: PropertyConstraints | None,
+    constraints: SlotConstraints | None,
     description: str | None,
     derivation: ExprJson | None,
     spec: Spec,
@@ -331,7 +331,7 @@ async def add_class(
     draft_id: int,
     *,
     name: str,
-    properties: list[dict] | None = None,
+    slots: list[dict] | None = None,
     is_a_name: str | None,
     mixin_names: list[str],
     abstract: bool,
@@ -383,7 +383,7 @@ async def add_class(
             new_cls = OntologyClass(
                 name=name,
                 kind="abstract" if abstract else "concrete",
-                properties=[],
+                slots=[],
                 is_a=is_a,
                 mixins=mixins,
                 description=description,
@@ -391,16 +391,16 @@ async def add_class(
 
             # Build inline slots
             slot_names_seen: set[str] = set()
-            built_slots: list[Property] = []
+            built_slots: list[Slot] = []
             for slot_def in slots or []:
                 sname = slot_def.get("name", "")
                 if sname.lower() in slot_names_seen:
                     raise CollisionError("Slot", sname)
                 slot_names_seen.add(sname.lower())
                 constraints_raw = slot_def.get("constraints")
-                slot_constraints: PropertyConstraints | None = None
+                slot_constraints: SlotConstraints | None = None
                 if constraints_raw:
-                    slot_constraints = PropertyConstraints(
+                    slot_constraints = SlotConstraints(
                         pattern=constraints_raw.get("pattern"),
                         min_value=constraints_raw.get("min_value"),
                         max_value=constraints_raw.get("max_value"),
@@ -424,22 +424,22 @@ async def add_class(
                     )
                 )
 
-            new_cls.properties = built_slots
+            new_cls.slots = built_slots
             spec.classes.append(new_cls)
     return spec
 
 
 class IdentifierSlotRemovalError(Exception):
-    """Raised when a PATCH would remove a slot that is an identifier_property on a SourceBinding."""
+    """Raised when a PATCH would remove a slot that is an identifier_slot on a SourceBinding."""
 
-    def __init__(self, class_name: str, property_name: str, binding_ids: list[str]) -> None:
+    def __init__(self, class_name: str, slot_name: str, binding_ids: list[str]) -> None:
         self.class_name = class_name
-        self.property_name = property_name
+        self.slot_name = slot_name
         self.binding_ids = binding_ids
         ids_str = ", ".join(binding_ids)
         super().__init__(
-            f"Cannot remove slot {property_name!r} from class {class_name!r}: "
-            f"it is the identifier_property for SourceBinding(s): {ids_str}."
+            f"Cannot remove slot {slot_name!r} from class {class_name!r}: "
+            f"it is the identifier_slot for SourceBinding(s): {ids_str}."
         )
 
 
@@ -448,7 +448,7 @@ async def update_class(
     draft_id: int,
     name: str,
     *,
-    properties: list[dict] | None = None,
+    slots: list[dict] | None = None,
     is_a_name: str | None = None,
     mixin_names: list[str] | None = None,
     abstract: bool | None = None,
@@ -461,7 +461,7 @@ async def update_class(
     If omitted, the existing slots are unchanged.
 
     Pre-flight: if any SourceBinding whose class_ is this class has its
-    ``identifier_property`` removed by the patch, raises ``IdentifierSlotRemovalError``
+    ``identifier_slot`` removed by the patch, raises ``IdentifierSlotRemovalError``
     with a 409. This prevents silent publish failures later.
     """
     async with spec_store.edit_draft(conn, draft_id) as spec:
@@ -470,30 +470,30 @@ async def update_class(
         if slots is not None:
             new_slot_names = {slot_def.get("name", "").lower() for slot_def in slots}
 
-            # Pre-flight: check if any binding's identifier_property is being removed.
+            # Pre-flight: check if any binding's identifier_slot is being removed.
             affected_bindings: list[str] = []
             missing_slot_name: str = ""
             for b in spec.source_bindings:
                 if b.class_ is not cls:
                     continue
-                if b.identifier_property.name.lower() not in new_slot_names:
+                if b.identifier_slot.name.lower() not in new_slot_names:
                     affected_bindings.append(b.binding_id)
                     if not missing_slot_name:
-                        missing_slot_name = b.identifier_property.name
+                        missing_slot_name = b.identifier_slot.name
             if affected_bindings:
                 raise IdentifierSlotRemovalError(name, missing_slot_name, affected_bindings)
 
             slot_names_seen: set[str] = set()
-            built_slots: list[Property] = []
-            for slot_def in properties:
+            built_slots: list[Slot] = []
+            for slot_def in slots:
                 sname = slot_def.get("name", "")
                 if sname.lower() in slot_names_seen:
                     raise CollisionError("Slot", sname)
                 slot_names_seen.add(sname.lower())
                 constraints_raw = slot_def.get("constraints")
-                slot_constraints: PropertyConstraints | None = None
+                slot_constraints: SlotConstraints | None = None
                 if constraints_raw:
-                    slot_constraints = PropertyConstraints(
+                    slot_constraints = SlotConstraints(
                         pattern=constraints_raw.get("pattern"),
                         min_value=constraints_raw.get("min_value"),
                         max_value=constraints_raw.get("max_value"),
@@ -516,7 +516,7 @@ async def update_class(
                         primary_class=cls,
                     )
                 )
-            cls.properties = built_slots
+            cls.slots = built_slots
 
         if is_a_name is not None:
             cls.is_a = _find_ontology_class(spec, is_a_name) if is_a_name else None
@@ -579,11 +579,11 @@ async def add_source_binding(
     """Add a SourceBinding (source, class) to the draft.
 
     ``mappings`` is a list of dicts with keys:
-      property_name, source_field, default (optional), null_semantics (optional), prior (optional).
+      slot_name, source_field, default (optional), null_semantics (optional), prior (optional).
 
-    ``identifier_slot_name`` must be a slot on the class (via effective_properties).
+    ``identifier_slot_name`` must be a slot on the class (via effective_slots).
     """
-    from knot.spec import effective_properties
+    from knot.spec import effective_slots as _effective_slots
 
     async with spec_store.edit_draft(conn, draft_id) as spec:
         src = _find_source(spec, source_name)
@@ -596,21 +596,21 @@ async def add_source_binding(
         ):
             raise CollisionError("SourceBinding", f"{source_name}__{class_name}")
 
-        # Resolve identifier_property from effective slots (includes inherited)
-        all_slots = {s.name: s for s in _effective_properties(cls)}
+        # Resolve identifier_slot from effective slots (includes inherited)
+        all_slots = {s.name: s for s in _effective_slots(cls)}
         id_slot = all_slots.get(identifier_slot_name)
         if id_slot is None:
             raise InvalidIdentifierSlotError(
                 f"Slot {identifier_slot_name!r} is not on class {cls.name!r}"
             )
 
-        # Build PropertyMapping objects
-        slot_mappings: list[PropertyMapping] = []
+        # Build SlotMapping objects
+        slot_mappings: list[SlotMapping] = []
         for m in mappings or []:
-            slot = all_slots.get(m["property_name"])
+            slot = all_slots.get(m["slot_name"])
             if slot is None:
                 raise InvalidIdentifierSlotError(
-                    f"Slot {m['property_name']!r} is not on class {cls.name!r}"
+                    f"Slot {m['slot_name']!r} is not on class {cls.name!r}"
                 )
             null_sem_val = m.get("null_semantics", NullSemantics.NO_CLAIM)
             if isinstance(null_sem_val, str):
@@ -620,9 +620,9 @@ async def add_source_binding(
             if prior_raw is not None:
                 prior = (float(prior_raw[0]), float(prior_raw[1]))
             slot_mappings.append(
-                PropertyMapping(
-                    slot=property,
-                    source_field=m.get("source_field", property.name),
+                SlotMapping(
+                    slot=slot,
+                    source_field=m.get("source_field", slot.name),
                     default=m.get("default"),
                     null_semantics=null_sem_val,
                     prior=prior,
@@ -630,7 +630,7 @@ async def add_source_binding(
             )
 
         # Resolve required slots
-        req_slots: list[Property] = []
+        req_slots: list[Slot] = []
         for rname in required_slot_names or []:
             rslot = all_slots.get(rname)
             if rslot is None:
@@ -643,10 +643,10 @@ async def add_source_binding(
             SourceBinding(
                 source=src,
                 class_=cls,  # type: ignore[call-arg]  # populate_by_name=True allows class_= at runtime
-                identifier_property=id_slot,
+                identifier_slot=id_slot,
                 mappings=slot_mappings,
                 trust_prior=trust_prior,
-                required_properties=req_slots,
+                required_slots=req_slots,
                 description=description,
             )
         )
@@ -707,7 +707,7 @@ async def add_constraint(
 # ─── Renames ────────────────────────────────────────────────────────────────
 
 
-async def rename_property(
+async def rename_slot(
     conn: psycopg.AsyncConnection,
     draft_id: int,
     class_name: str,
@@ -724,29 +724,29 @@ async def rename_property(
     ``spec_revisions.pending_renames`` for every concrete class that has the
     slot as a stored column (including the class itself and any concrete
     subclasses that inherit it), so ``diff_specs`` at publish time can emit a
-    non-destructive ``RenameProperty`` instead of ``DropProperty + AddProperty``.
+    non-destructive ``RenameSlot`` instead of ``DropSlot + AddSlot``.
 
     Raises ``CollisionError`` if ``new_name`` already exists on the class (via
-    effective_properties).
+    effective_slots).
     Raises ``EntityNotOnDraftError`` if ``class_name`` or ``old_name`` isn't on
     the draft.
     Raises ``DraftAlreadyPublishedError`` if the draft is already published.
     """
     import json as _json
 
-    from knot.spec import effective_properties
+    from knot.spec import effective_slots as _effective_slots
     from knot.spec import is_stored as _is_stored
 
     async with spec_store.edit_draft(conn, draft_id) as spec:
         cls = _find_class(spec, class_name)
 
         # Check collision against effective slots of this class.
-        all_slots = {s.name.lower(): s for s in _effective_properties(cls)}
+        all_slots = {s.name.lower(): s for s in _effective_slots(cls)}
         if new_name.lower() in all_slots:
             raise CollisionError("Slot", new_name)
 
         # Find the slot on the class itself (not inherited — we only rename own slots).
-        target = next((s for s in cls.properties if s.name == old_name), None)
+        target = next((s for s in cls.slots if s.name == old_name), None)
         if target is None:
             raise EntityNotOnDraftError("Slot", old_name)
 
@@ -756,7 +756,7 @@ async def rename_property(
         for c in spec.classes:
             if c.abstract:
                 continue
-            stored_names = {s.name for s in _effective_properties(c) if _is_stored(s)}
+            stored_names = {s.name for s in _effective_slots(c) if _is_stored(s)}
             if old_name in stored_names:
                 rename_hints.append(
                     {
@@ -802,7 +802,7 @@ async def rename_class(
     """Rename an OntologyClass on a draft, recording a rename hint for publish time.
 
     Because all cross-references (is_a, mixins, SourceBinding.class_,
-    PropertyMapping.property type ClassRef, Constraint.primary) are Python object
+    SlotMapping.slot type ClassRef, Constraint.primary) are Python object
     references rather than name strings, renaming cls.name in-place is
     sufficient — all referencing structures automatically see the new name.
 
@@ -880,7 +880,7 @@ async def remove_class(
         for c in spec.classes:
             if c is target:
                 continue
-            for s in c.properties:
+            for s in c.slots:
                 if s.type is not None and _type_refs_class(s.type, target):
                     refs.append(("slot", f"{c.name}.{s.name}"))
 
@@ -1044,15 +1044,15 @@ async def preview_publish(
         ChangeClassIsA,
         ChangeConstraintBody,
         ChangeConstraintPrimary,
-        ChangePropertyMaximum,
-        ChangePropertyMinimum,
-        ChangePropertyPattern,
-        ChangePropertyPermissibleValues,
-        ChangePropertyTypeExpression,
+        ChangeSlotMaximum,
+        ChangeSlotMinimum,
+        ChangeSlotPattern,
+        ChangeSlotPermissibleValues,
+        ChangeSlotTypeExpression,
         ChangeSourceBindingIdentifierSlot,
         DropClass,
         DropDefinedClass,
-        DropProperty,
+        DropSlot,
         DropSource,
         DropSourceBinding,
     )
@@ -1060,18 +1060,18 @@ async def preview_publish(
     # Bucket classification (independent of is_destructive — Bucket B and C
     # changes are not in _DESTRUCTIVE_CHANGE_TYPES).
     _BUCKET_B: tuple[type[Change], ...] = (
-        ChangePropertyPattern,
-        ChangePropertyPermissibleValues,
-        ChangePropertyMinimum,
-        ChangePropertyMaximum,
+        ChangeSlotPattern,
+        ChangeSlotPermissibleValues,
+        ChangeSlotMinimum,
+        ChangeSlotMaximum,
         ChangeConstraintBody,
         ChangeConstraintPrimary,
     )
     _BUCKET_A: tuple[type[Change], ...] = (
         DropClass,
-        DropProperty,
+        DropSlot,
         DropDefinedClass,
-        ChangePropertyTypeExpression,
+        ChangeSlotTypeExpression,
         ChangeClassAbstract,
         ChangeClassIsA,
         DropSource,

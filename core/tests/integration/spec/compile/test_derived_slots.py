@@ -63,8 +63,8 @@ from knot.spec.metaschema import (
     RelationProject,
     RelationRef,
     ReverseRelation,
-    Property,
-    PropertyPath,
+    Slot,
+    SlotPath,
     Source,
     SourceBinding,
     Spec,
@@ -101,45 +101,45 @@ def _build_full_spec() -> tuple[
     Source,  # credit_src
 ]:
     # --- Person ---
-    person_id = Property(
+    person_id = Slot(
         name="person_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    person_name_slot = Property(name="name", type=Primitive(name="string"))
-    person_cls = OntologyClass(name="Person", properties=[person_id, person_name_slot])
+    person_name_slot = Slot(name="name", type=Primitive(name="string"))
+    person_cls = OntologyClass(name="Person", slots=[person_id, person_name_slot])
 
     # --- Movie (no derived slots yet — added below after Credit is defined) ---
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"))
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     # Placeholder movie class (needed as FK target for Credit.movie)
-    movie_cls = OntologyClass(name="Movie", properties=[imdb_id, title])
+    movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title])
 
     # --- Credit ---
-    credit_id = Property(
+    credit_id = Slot(
         name="credit_id", type=Primitive(name="string"), identifier=True, required=True
     )
     # movie FK: TEXT column holding the movie's canonical_id
-    credit_movie = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_role = Property(name="role", type=Primitive(name="string"))
-    credit_person_name = Property(name="person_name", type=Primitive(name="string"))
+    credit_movie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_role = Slot(name="role", type=Primitive(name="string"))
+    credit_person_name = Slot(name="person_name", type=Primitive(name="string"))
     credit_cls = OntologyClass(
         name="Credit",
-        properties=[credit_id, credit_movie, credit_role, credit_person_name],
+        slots=[credit_id, credit_movie, credit_role, credit_person_name],
     )
 
     # --- Derived slots on Movie ---
     # directors = array_agg(Credit.person_name) WHERE Credit.movie = movie._canonical_id AND role='director'
-    rev_rel = ReverseRelation(target_class=credit_cls, fk_property=credit_movie)
+    rev_rel = ReverseRelation(target_class=credit_cls, fk_slot=credit_movie)
     role_filter = Compare(
         op=CompareOp.EQ,
-        left=PropertyPath(from_class=credit_cls, properties=[credit_role]),
+        left=SlotPath(from_class=credit_cls, slots=[credit_role]),
         right=Literal_(value="director"),
     )
     filtered_rev = FilteredRelation(relation=rev_rel, filter=role_filter)
     directors_derivation = RelationProject(
         relation=filtered_rev,
-        project=PropertyPath(from_class=credit_cls, properties=[credit_person_name]),
+        project=SlotPath(from_class=credit_cls, slots=[credit_person_name]),
     )
-    directors_slot = Property(
+    directors_slot = Slot(
         name="directors",
         type=Array(of=Primitive(name="string")),
         derivation=directors_derivation,
@@ -147,22 +147,22 @@ def _build_full_spec() -> tuple[
 
     # credit_count = count(*) of all Credits for this Movie
     credit_count_derivation = RelationCount(
-        relation=ReverseRelation(target_class=credit_cls, fk_property=credit_movie),
+        relation=ReverseRelation(target_class=credit_cls, fk_slot=credit_movie),
     )
-    credit_count_slot = Property(
+    credit_count_slot = Slot(
         name="credit_count",
         type=Primitive(name="integer"),
         derivation=credit_count_derivation,
     )
 
     # Patch movie_cls slots to include derived slots
-    movie_cls.properties = [imdb_id, title, directors_slot, credit_count_slot]
+    movie_cls.slots = [imdb_id, title, directors_slot, credit_count_slot]
 
     # --- Sources ---
     movie_src = Source(name="imdb")
     credit_src = Source(name="credits")
-    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_property=imdb_id)  # type: ignore[call-arg]
-    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_property=credit_id)  # type: ignore[call-arg]
+    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_slot=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="derived_test",
@@ -287,16 +287,16 @@ def _make_ctx(cls: OntologyClass) -> CompileContext:
 
 # 1. RelationProject forward FK → array_agg subquery
 def test_relation_project_forward_fk_emits_array_agg():
-    name_slot = Property(name="name", type=Primitive(name="string"))
-    person_cls = OntologyClass(name="Person", properties=[name_slot])
-    fk_property = Property(name="person", type=ClassRef(target_class=person_cls))
-    movie_cls = OntologyClass(name="Movie", properties=[fk_property])
+    name_slot = Slot(name="name", type=Primitive(name="string"))
+    person_cls = OntologyClass(name="Person", slots=[name_slot])
+    fk_slot = Slot(name="person", type=ClassRef(target_class=person_cls))
+    movie_cls = OntologyClass(name="Movie", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
-    ref = RelationRef(from_class=movie_cls, property=fk_property)
+    ref = RelationRef(from_class=movie_cls, slot=fk_slot)
     node = RelationProject(
         relation=ref,
-        project=PropertyPath(from_class=person_cls, properties=[name_slot]),
+        project=SlotPath(from_class=person_cls, slots=[name_slot]),
     )
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -307,17 +307,17 @@ def test_relation_project_forward_fk_emits_array_agg():
 
 # 2. RelationProject ReverseRelation → array_agg subquery
 def test_relation_project_reverse_relation_emits_array_agg():
-    person_name = Property(name="person_name", type=Primitive(name="string"))
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property, person_name])
-    movie_cls.properties = []  # movie has no direct slots for the FK direction
+    person_name = Slot(name="person_name", type=Primitive(name="string"))
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot, person_name])
+    movie_cls.slots = []  # movie has no direct slots for the FK direction
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationProject(
         relation=rev,
-        project=PropertyPath(from_class=credit_cls, properties=[person_name]),
+        project=SlotPath(from_class=credit_cls, slots=[person_name]),
     )
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -328,23 +328,23 @@ def test_relation_project_reverse_relation_emits_array_agg():
 
 # 3. RelationProject with FilteredRelation adds WHERE clause
 def test_relation_project_filtered_adds_where():
-    role_slot = Property(name="role", type=Primitive(name="string"))
-    person_name = Property(name="person_name", type=Primitive(name="string"))
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property, role_slot, person_name])
+    role_slot = Slot(name="role", type=Primitive(name="string"))
+    person_name = Slot(name="person_name", type=Primitive(name="string"))
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot, role_slot, person_name])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     role_eq = Compare(
         op=CompareOp.EQ,
-        left=PropertyPath(from_class=credit_cls, properties=[role_slot]),
+        left=SlotPath(from_class=credit_cls, slots=[role_slot]),
         right=Literal_(value="director"),
     )
     filtered = FilteredRelation(relation=rev, filter=role_eq)
     node = RelationProject(
         relation=filtered,
-        project=PropertyPath(from_class=credit_cls, properties=[person_name]),
+        project=SlotPath(from_class=credit_cls, slots=[person_name]),
     )
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -355,12 +355,12 @@ def test_relation_project_filtered_adds_where():
 
 # 4. RelationCount emits count(*)
 def test_relation_count_emits_count_star():
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property])
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationCount(relation=rev)
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -369,12 +369,12 @@ def test_relation_count_emits_count_star():
 
 # 5. RelationCount distinct emits DISTINCT
 def test_relation_count_distinct_emits_distinct():
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property])
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationCount(relation=rev, distinct=True)
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -392,17 +392,17 @@ def test_relation_count_distinct_emits_distinct():
     ],
 )
 def test_relation_aggregate_standard_funcs(func, expected_sql):
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    score_slot = Property(name="score", type=Primitive(name="integer"))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property, score_slot])
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    score_slot = Slot(name="score", type=Primitive(name="integer"))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot, score_slot])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationAggregate(
         relation=rev,
         func=func,
-        operand=PropertyPath(from_class=credit_cls, properties=[score_slot]),
+        operand=SlotPath(from_class=credit_cls, slots=[score_slot]),
     )
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -412,17 +412,17 @@ def test_relation_aggregate_standard_funcs(func, expected_sql):
 
 # 7. RelationAggregate COLLECT emits array_agg
 def test_relation_aggregate_collect_emits_array_agg():
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    tag_slot = Property(name="tag", type=Primitive(name="string"))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property, tag_slot])
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    tag_slot = Slot(name="tag", type=Primitive(name="string"))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot, tag_slot])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationAggregate(
         relation=rev,
         func=AggFunc.COLLECT,
-        operand=PropertyPath(from_class=credit_cls, properties=[tag_slot]),
+        operand=SlotPath(from_class=credit_cls, slots=[tag_slot]),
     )
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -431,17 +431,17 @@ def test_relation_aggregate_collect_emits_array_agg():
 
 # 8. RelationAggregate FIRST emits LIMIT 1
 def test_relation_aggregate_first_emits_limit_1():
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    name_slot = Property(name="person_name", type=Primitive(name="string"))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property, name_slot])
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    name_slot = Slot(name="person_name", type=Primitive(name="string"))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot, name_slot])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationAggregate(
         relation=rev,
         func=AggFunc.FIRST,
-        operand=PropertyPath(from_class=credit_cls, properties=[name_slot]),
+        operand=SlotPath(from_class=credit_cls, slots=[name_slot]),
     )
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -451,12 +451,12 @@ def test_relation_aggregate_first_emits_limit_1():
 
 # 9. RelationAggregate COUNT emits count(*)
 def test_relation_aggregate_count_emits_count_star():
-    movie_cls = OntologyClass(name="Movie", properties=[])
-    fk_property = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_cls = OntologyClass(name="Credit", properties=[fk_property])
+    movie_cls = OntologyClass(name="Movie", slots=[])
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
-    rev = ReverseRelation(target_class=credit_cls, fk_property=fk_property)
+    rev = ReverseRelation(target_class=credit_cls, fk_slot=fk_slot)
     node = RelationAggregate(relation=rev, func=AggFunc.COUNT)
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
@@ -465,12 +465,12 @@ def test_relation_aggregate_count_emits_count_star():
 
 # 10. FilteredRelation used standalone raises NotImplementedError
 def test_filtered_relation_standalone_raises():
-    prop = Property(name="role", type=Primitive(name="string"))
-    cls = OntologyClass(name="Credit", properties=[prop])
+    slot = Slot(name="role", type=Primitive(name="string"))
+    cls = OntologyClass(name="Credit", slots=[slot])
     ctx = _make_ctx(cls)
 
-    ref = RelationRef(from_class=cls, property=prop)
-    pred = Compare(op=CompareOp.IS_NOT_NULL, left=PropertyPath(from_class=cls, properties=[prop]))
+    ref = RelationRef(from_class=cls, slot=slot)
+    pred = Compare(op=CompareOp.IS_NOT_NULL, left=SlotPath(from_class=cls, slots=[slot]))
     node = FilteredRelation(relation=ref, filter=pred)
     with pytest.raises(NotImplementedError):
         compile_predicate(node, ctx)
@@ -478,8 +478,8 @@ def test_filtered_relation_standalone_raises():
 
 # 11. _derived_column_exprs returns empty lists when no derived slots
 def test_derived_column_exprs_empty_for_stored_only_class():
-    prop = Property(name="title", type=Primitive(name="string"))
-    cls = OntologyClass(name="Movie", properties=[prop])
+    slot = Slot(name="title", type=Primitive(name="string"))
+    cls = OntologyClass(name="Movie", slots=[slot])
     derived_cols, derived_params = _derived_column_exprs(cls)
     assert derived_cols == []
     assert derived_params == []
@@ -489,8 +489,8 @@ def test_derived_column_exprs_empty_for_stored_only_class():
 def test_select_with_derivations_no_derived_slots_same_as_binding():
     from knot.db.graph_store import _select_with_binding
 
-    prop = Property(name="title", type=Primitive(name="string"))
-    cls = OntologyClass(name="Movie", properties=[prop])
+    slot = Slot(name="title", type=Primitive(name="string"))
+    cls = OntologyClass(name="Movie", slots=[slot])
     base = _select_with_binding(cls)
     derived_sql, derived_params = _select_with_derivations(cls)
     assert base.as_string(None) == derived_sql.as_string(None)
@@ -505,9 +505,9 @@ def test_select_with_derivations_no_derived_slots_same_as_binding():
 # 13. Derived slot is_stored returns False
 def test_derived_slot_is_not_stored():
     (spec, movie_cls, *_) = _build_full_spec()
-    directors_slot = next(s for s in movie_cls.properties if s.name == "directors")
+    directors_slot = next(s for s in movie_cls.slots if s.name == "directors")
     assert not is_stored(directors_slot)
-    imdb_id_slot = next(s for s in movie_cls.properties if s.name == "imdb_id")
+    imdb_id_slot = next(s for s in movie_cls.slots if s.name == "imdb_id")
     assert is_stored(imdb_id_slot)
 
 
@@ -562,19 +562,19 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     conn = clean_db
 
     # v1: Movie + Credit (Credit has FK back to Movie)
-    imdb_id_v1 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title_v1 = Property(name="title", type=Primitive(name="string"))
-    movie_v1 = OntologyClass(name="Movie", properties=[imdb_id_v1, title_v1])
-    cid_v1 = Property(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
-    cmovie_v1 = Property(name="movie", type=ClassRef(target_class=movie_v1))
-    credit_v1 = OntologyClass(name="Credit", properties=[cid_v1, cmovie_v1])
+    imdb_id_v1 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title_v1 = Slot(name="title", type=Primitive(name="string"))
+    movie_v1 = OntologyClass(name="Movie", slots=[imdb_id_v1, title_v1])
+    cid_v1 = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    cmovie_v1 = Slot(name="movie", type=ClassRef(target_class=movie_v1))
+    credit_v1 = OntologyClass(name="Credit", slots=[cid_v1, cmovie_v1])
     movie_src_v1 = Source(name="imdb")
     credit_src_v1 = Source(name="credits")
     movie_binding_v1 = SourceBinding(
-        source=movie_src_v1, class_=movie_v1, identifier_property=imdb_id_v1
+        source=movie_src_v1, class_=movie_v1, identifier_slot=imdb_id_v1
     )  # type: ignore[call-arg]
     credit_binding_v1 = SourceBinding(
-        source=credit_src_v1, class_=credit_v1, identifier_property=cid_v1
+        source=credit_src_v1, class_=credit_v1, identifier_slot=cid_v1
     )  # type: ignore[call-arg]
 
     spec_v1 = Spec(
@@ -599,19 +599,19 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
 
     # v2: same Movie + Credit objects, Movie gains a derived slot (no new column).
     count_derivation = RelationCount(
-        relation=ReverseRelation(target_class=credit_v1, fk_property=cmovie_v1),
+        relation=ReverseRelation(target_class=credit_v1, fk_slot=cmovie_v1),
     )
-    count_slot = Property(name="credit_count", derivation=count_derivation)
+    count_slot = Slot(name="credit_count", derivation=count_derivation)
 
     # Patch the same movie object — publish gate validates by identity
-    movie_v1.properties = [imdb_id_v1, title_v1, count_slot]
+    movie_v1.slots = [imdb_id_v1, title_v1, count_slot]
     movie_src_v2 = Source(name="imdb")
     credit_src_v2 = Source(name="credits")
     movie_binding_v2 = SourceBinding(
-        source=movie_src_v2, class_=movie_v1, identifier_property=imdb_id_v1
+        source=movie_src_v2, class_=movie_v1, identifier_slot=imdb_id_v1
     )  # type: ignore[call-arg]
     credit_binding_v2 = SourceBinding(
-        source=credit_src_v2, class_=credit_v1, identifier_property=cid_v1
+        source=credit_src_v2, class_=credit_v1, identifier_slot=cid_v1
     )  # type: ignore[call-arg]
 
     spec_v2 = Spec(
@@ -632,30 +632,30 @@ async def test_integration_relation_aggregate_collect(clean_db):
     """Use a COLLECT derivation directly via graph_store.query_rows."""
     conn = clean_db
 
-    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Property(name="title", type=Primitive(name="string"))
-    movie_cls = OntologyClass(name="Movie", properties=[imdb_id, title])
-    cid = Property(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
-    cmovie = Property(name="movie", type=ClassRef(target_class=movie_cls))
-    crole = Property(name="role", type=Primitive(name="string"))
-    credit_cls = OntologyClass(name="Credit", properties=[cid, cmovie, crole])
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title])
+    cid = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    cmovie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    crole = Slot(name="role", type=Primitive(name="string"))
+    credit_cls = OntologyClass(name="Credit", slots=[cid, cmovie, crole])
 
     roles_derivation = RelationAggregate(
-        relation=ReverseRelation(target_class=credit_cls, fk_property=cmovie),
+        relation=ReverseRelation(target_class=credit_cls, fk_slot=cmovie),
         func=AggFunc.COLLECT,
-        operand=PropertyPath(from_class=credit_cls, properties=[crole]),
+        operand=SlotPath(from_class=credit_cls, slots=[crole]),
     )
-    roles_slot = Property(
+    roles_slot = Slot(
         name="roles",
         type=Array(of=Primitive(name="string")),
         derivation=roles_derivation,
     )
-    movie_cls.properties = [imdb_id, title, roles_slot]
+    movie_cls.slots = [imdb_id, title, roles_slot]
 
     movie_src = Source(name="imdb")
     credit_src = Source(name="credits")
-    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_property=imdb_id)  # type: ignore[call-arg]
-    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_property=cid)  # type: ignore[call-arg]
+    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_slot=cid)  # type: ignore[call-arg]
 
     spec = Spec(
         id="agg_test",

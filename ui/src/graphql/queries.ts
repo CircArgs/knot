@@ -38,7 +38,7 @@ export const PUBLISHED_SPEC = gql`
         slots {
           ...SlotFields
         }
-        effectiveProperties {
+        effectiveSlots {
           ...SlotFields
         }
       }

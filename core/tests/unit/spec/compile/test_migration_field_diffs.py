@@ -23,8 +23,8 @@ from knot.spec import (
     Primitive,
     ResolutionPolicy,
     Severity,
-    Property,
-    PropertyConstraints,
+    Slot,
+    SlotConstraints,
     Source,
     SourceBinding,
     Spec,
@@ -39,14 +39,14 @@ from knot.spec.compile.postgres.migration import (
     ChangeConstraintBody,
     ChangeConstraintPrimary,
     ChangeConstraintSeverity,
-    ChangePropertyDerivation,
-    ChangePropertyIdentifier,
-    ChangePropertyMaximum,
-    ChangePropertyMinimum,
-    ChangePropertyPattern,
-    ChangePropertyPermissibleValues,
-    ChangePropertyResolutionPolicy,
-    ChangePropertyTypeExpression,
+    ChangeSlotDerivation,
+    ChangeSlotIdentifier,
+    ChangeSlotMaximum,
+    ChangeSlotMinimum,
+    ChangeSlotPattern,
+    ChangeSlotPermissibleValues,
+    ChangeSlotResolutionPolicy,
+    ChangeSlotTypeExpression,
     ChangeSourceBindingIdentifierSlot,
     ChangeSourceBindingTrust,
     DropConstraint,
@@ -67,13 +67,13 @@ def _make_spec_pair(*, mutator):
     matches what serialize/rehydrate would produce."""
 
     def _build():
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True, required=True)
-        movie = OntologyClass(name="Movie", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+        movie = OntologyClass(name="Movie", slots=[id_slot])
         src = Source(name="imdb")
         binding = SourceBinding(
             source=src,
             class_=movie,
-            identifier_property=id_slot,
+            identifier_slot=id_slot,
         )
         spec = Spec(
             id="t",
@@ -103,98 +103,98 @@ def _make_spec_pair(*, mutator):
 
 def test_diff_change_slot_pattern_emits_record():
     def mutate(s):
-        s["id_slot"].constraints = PropertyConstraints(pattern=r"^tt[0-9]+$")
+        s["id_slot"].constraints = SlotConstraints(pattern=r"^tt[0-9]+$")
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyPattern)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotPattern)), None)
     assert rec is not None
-    assert rec.property_name == "id"
+    assert rec.slot_name == "id"
     assert rec.old_pattern is None
     assert rec.new_pattern == r"^tt[0-9]+$"
 
 
 def test_change_slot_pattern_is_not_destructive():
-    rec = ChangePropertyPattern(property_name="id", old_pattern=None, new_pattern="^a$")
+    rec = ChangeSlotPattern(slot_name="id", old_pattern=None, new_pattern="^a$")
     assert not is_destructive(rec)
 
 
 def test_diff_change_slot_permissible_values_emits_record():
     def mutate(s):
-        s["id_slot"].constraints = PropertyConstraints(permissible_values=["a", "b"])
+        s["id_slot"].constraints = SlotConstraints(permissible_values=["a", "b"])
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyPermissibleValues)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotPermissibleValues)), None)
     assert rec is not None
-    assert rec.property_name == "id"
+    assert rec.slot_name == "id"
     assert rec.old_values is None
     assert rec.new_values == ["a", "b"]
 
 
 def test_change_slot_permissible_values_is_not_destructive():
-    rec = ChangePropertyPermissibleValues(property_name="id", old_values=None, new_values=["a"])
+    rec = ChangeSlotPermissibleValues(slot_name="id", old_values=None, new_values=["a"])
     assert not is_destructive(rec)
 
 
 def test_diff_change_slot_minimum_emits_record():
     def mutate(s):
-        s["id_slot"].constraints = PropertyConstraints(min_value=0.0)
+        s["id_slot"].constraints = SlotConstraints(min_value=0.0)
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyMinimum)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotMinimum)), None)
     assert rec is not None
-    assert rec.property_name == "id"
+    assert rec.slot_name == "id"
     assert rec.old_value is None
     assert rec.new_value == 0.0
 
 
 def test_change_slot_minimum_is_not_destructive():
-    rec = ChangePropertyMinimum(property_name="id", old_value=None, new_value=0.0)
+    rec = ChangeSlotMinimum(slot_name="id", old_value=None, new_value=0.0)
     assert not is_destructive(rec)
 
 
 def test_diff_change_slot_maximum_emits_record():
     def mutate(s):
-        s["id_slot"].constraints = PropertyConstraints(max_value=100.0)
+        s["id_slot"].constraints = SlotConstraints(max_value=100.0)
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyMaximum)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotMaximum)), None)
     assert rec is not None
-    assert rec.property_name == "id"
+    assert rec.slot_name == "id"
     assert rec.old_value is None
     assert rec.new_value == 100.0
 
 
 def test_change_slot_maximum_is_not_destructive():
-    rec = ChangePropertyMaximum(property_name="id", old_value=None, new_value=100.0)
+    rec = ChangeSlotMaximum(slot_name="id", old_value=None, new_value=100.0)
     assert not is_destructive(rec)
 
 
 def test_diff_change_slot_type_expression_emits_record():
-    """Changing slot type from string→integer emits ChangePropertyTypeExpression."""
-    id_slot = Property(name="id", type=Primitive(name="string"), identifier=True, required=True)
-    year_str = Property(name="year", type=Primitive(name="string"))
-    year_int = Property(name="year", type=Primitive(name="integer"))
-    prev_movie = OntologyClass(name="Movie", properties=[id_slot, year_str])
-    cand_movie = OntologyClass(name="Movie", properties=[id_slot, year_int])
+    """Changing slot type from string→integer emits ChangeSlotTypeExpression."""
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+    year_str = Slot(name="year", type=Primitive(name="string"))
+    year_int = Slot(name="year", type=Primitive(name="integer"))
+    prev_movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
+    cand_movie = OntologyClass(name="Movie", slots=[id_slot, year_int])
     prev = Spec(id="t", version="1.0.0", classes=[prev_movie])
     cand = Spec(id="t", version="1.0.0", classes=[cand_movie])
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyTypeExpression)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotTypeExpression)), None)
     assert rec is not None
-    assert rec.prop.name == "year"
+    assert rec.slot.name == "year"
     assert rec.prev_pg_type == "TEXT"
     assert rec.new_pg_type == "INTEGER"
 
 
 def test_change_slot_type_expression_is_destructive():
-    id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-    cls = OntologyClass(name="Movie", properties=[id_slot])
-    prop = Property(name="year", type=Primitive(name="integer"))
-    rec = ChangePropertyTypeExpression(cls=cls, property=prop, prev_pg_type="TEXT", new_pg_type="INTEGER")
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+    cls = OntologyClass(name="Movie", slots=[id_slot])
+    slot = Slot(name="year", type=Primitive(name="integer"))
+    rec = ChangeSlotTypeExpression(cls=cls, slot=slot, prev_pg_type="TEXT", new_pg_type="INTEGER")
     assert is_destructive(rec)
 
 
@@ -204,9 +204,9 @@ def test_diff_change_slot_identifier_emits_record():
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyIdentifier)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotIdentifier)), None)
     assert rec is not None
-    assert rec.property_name == "id"
+    assert rec.slot_name == "id"
     assert rec.old_value is True
     assert rec.new_value is False
 
@@ -215,7 +215,7 @@ def test_change_slot_identifier_is_not_destructive():
     """The storage PK is (_source, _source_row_id), NOT the slot marked
     identifier=True. The flag is advisory at the storage layer (drives ER /
     SCD2 bindings) and emits no DDL. Audit-only record."""
-    rec = ChangePropertyIdentifier(property_name="id", old_value=True, new_value=False)
+    rec = ChangeSlotIdentifier(slot_name="id", old_value=True, new_value=False)
     assert not is_destructive(rec)
 
 
@@ -225,15 +225,15 @@ def test_diff_change_slot_resolution_policy_emits_record():
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyResolutionPolicy)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotResolutionPolicy)), None)
     assert rec is not None
-    assert rec.property_name == "id"
+    assert rec.slot_name == "id"
     assert rec.old_value == "argmax_trust"
     assert rec.new_value == "lcb"
 
 
 def test_change_slot_resolution_policy_is_not_destructive():
-    rec = ChangePropertyResolutionPolicy(property_name="id", old_value="argmax_trust", new_value="lcb")
+    rec = ChangeSlotResolutionPolicy(slot_name="id", old_value="argmax_trust", new_value="lcb")
     assert not is_destructive(rec)
 
 
@@ -242,14 +242,14 @@ def test_diff_change_slot_derivation_body_change_emits_record():
     from knot.spec.metaschema import ScalarDerivation
 
     def build():
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        title = Property(name="title", type=Primitive(name="string"))
-        derived = Property(
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        title = Slot(name="title", type=Primitive(name="string"))
+        derived = Slot(
             name="upper_title",
             type=Primitive(name="string"),
             derivation=ScalarDerivation(expression=Literal_(value="X")),
         )
-        movie = OntologyClass(name="Movie", properties=[id_slot, title, derived])
+        movie = OntologyClass(name="Movie", slots=[id_slot, title, derived])
         return Spec(
             id="t",
             version="1.0.0",
@@ -261,17 +261,17 @@ def test_diff_change_slot_derivation_body_change_emits_record():
     derived.derivation = ScalarDerivation(expression=Literal_(value="Y"))
 
     changes = diff_specs(prev_spec, cand_spec)
-    rec = next((c for c in changes if isinstance(c, ChangePropertyDerivation)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotDerivation)), None)
     assert rec is not None
-    assert rec.property_name == "upper_title"
+    assert rec.slot_name == "upper_title"
     assert rec.had_derivation_before is True
     assert rec.has_derivation_now is True
     assert rec.derivation_changed is True
 
 
 def test_change_slot_derivation_is_not_destructive():
-    rec = ChangePropertyDerivation(
-        property_name="x",
+    rec = ChangeSlotDerivation(
+        slot_name="x",
         had_derivation_before=True,
         has_derivation_now=True,
         derivation_changed=True,
@@ -286,8 +286,8 @@ def test_change_slot_derivation_is_not_destructive():
 
 def test_diff_change_class_abstract_emits_record():
     def build(*, abstract):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Title", properties=[id_slot], abstract=abstract)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Title", slots=[id_slot], abstract=abstract)
         return Spec(id="t", version="1.0.0", classes=[cls])
 
     changes = diff_specs(build(abstract=False), build(abstract=True))
@@ -299,18 +299,18 @@ def test_diff_change_class_abstract_emits_record():
 
 
 def test_change_class_abstract_is_destructive():
-    cls = OntologyClass(name="Movie", properties=[])
+    cls = OntologyClass(name="Movie", slots=[])
     rec = ChangeClassAbstract(cls=cls, class_name="Movie", old_value=False, new_value=True)
     assert is_destructive(rec)
 
 
 def test_diff_change_class_is_a_emits_record():
     def build(*, parent_name):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        a = OntologyClass(name="A", properties=[id_slot])
-        b = OntologyClass(name="B", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        a = OntologyClass(name="A", slots=[id_slot])
+        b = OntologyClass(name="B", slots=[id_slot])
         child = OntologyClass(
-            name="Child", properties=[id_slot], is_a={"A": a, "B": b, None: None}[parent_name]
+            name="Child", slots=[id_slot], is_a={"A": a, "B": b, None: None}[parent_name]
         )
         classes = [a, b, child]
         return Spec(id="t", version="1.0.0", classes=classes)
@@ -324,19 +324,19 @@ def test_diff_change_class_is_a_emits_record():
 
 
 def test_change_class_is_a_is_destructive():
-    cls = OntologyClass(name="Child", properties=[])
+    cls = OntologyClass(name="Child", slots=[])
     rec = ChangeClassIsA(cls=cls, class_name="Child", old_parent="A", new_parent="B")
     assert is_destructive(rec)
 
 
 def test_diff_change_class_mixins_emits_record():
     def build(*, mixin_names):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        a = OntologyClass(name="A", properties=[])
-        b = OntologyClass(name="B", properties=[])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        a = OntologyClass(name="A", slots=[])
+        b = OntologyClass(name="B", slots=[])
         mx_lookup = {"A": a, "B": b}
         cls = OntologyClass(
-            name="Child", properties=[id_slot], mixins=[mx_lookup[m] for m in mixin_names]
+            name="Child", slots=[id_slot], mixins=[mx_lookup[m] for m in mixin_names]
         )
         return Spec(id="t", version="1.0.0", classes=[a, b, cls])
 
@@ -349,7 +349,7 @@ def test_diff_change_class_mixins_emits_record():
 
 
 def test_change_class_mixins_is_not_destructive():
-    """The slot-level AddProperty / DropProperty records emitted alongside this one
+    """The slot-level AddSlot / DropSlot records emitted alongside this one
     do the destructive gating; the mixins record is audit-only."""
     rec = ChangeClassMixins(class_name="Child", old_mixins=["A"], new_mixins=["A", "B"])
     assert not is_destructive(rec)
@@ -362,8 +362,8 @@ def test_change_class_mixins_is_not_destructive():
 
 def test_diff_add_source_emits_record():
     def build(*, with_source):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
         sources = [Source(name="imdb")] if with_source else []
         return Spec(
             id="t",
@@ -380,8 +380,8 @@ def test_diff_add_source_emits_record():
 
 def test_diff_drop_source_emits_record():
     def build(*, with_source):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
         sources = [Source(name="imdb")] if with_source else []
         return Spec(
             id="t",
@@ -407,11 +407,11 @@ def test_drop_source_is_destructive():
 
 def test_diff_add_source_binding_emits_record():
     def build(*, with_binding):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
         src = Source(name="imdb")
         bindings = (
-            [SourceBinding(source=src, class_=cls, identifier_property=id_slot)] if with_binding else []
+            [SourceBinding(source=src, class_=cls, identifier_slot=id_slot)] if with_binding else []
         )
         return Spec(
             id="t",
@@ -426,16 +426,16 @@ def test_diff_add_source_binding_emits_record():
     assert rec is not None
     assert rec.source_name == "imdb"
     assert rec.class_name == "Movie"
-    assert rec.identifier_property == "id"
+    assert rec.identifier_slot == "id"
 
 
 def test_diff_drop_source_binding_emits_record():
     def build(*, with_binding):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
         src = Source(name="imdb")
         bindings = (
-            [SourceBinding(source=src, class_=cls, identifier_property=id_slot)] if with_binding else []
+            [SourceBinding(source=src, class_=cls, identifier_slot=id_slot)] if with_binding else []
         )
         return Spec(
             id="t",
@@ -458,12 +458,12 @@ def test_drop_source_binding_is_destructive():
 
 def test_diff_change_source_binding_identifier_slot_emits_record():
     def build(*, identifier_name):
-        slot_a = Property(name="id_a", type=Primitive(name="string"), identifier=True)
-        slot_b = Property(name="id_b", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", properties=[slot_a, slot_b])
+        slot_a = Slot(name="id_a", type=Primitive(name="string"), identifier=True)
+        slot_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[slot_a, slot_b])
         src = Source(name="imdb")
         identifier = {"id_a": slot_a, "id_b": slot_b}[identifier_name]
-        binding = SourceBinding(source=src, class_=cls, identifier_property=identifier)
+        binding = SourceBinding(source=src, class_=cls, identifier_slot=identifier)
         return Spec(
             id="t",
             version="1.0.0",
@@ -482,7 +482,7 @@ def test_diff_change_source_binding_identifier_slot_emits_record():
 
 
 def test_change_source_binding_identifier_slot_is_destructive():
-    cls = OntologyClass(name="Movie", properties=[])
+    cls = OntologyClass(name="Movie", slots=[])
     rec = ChangeSourceBindingIdentifierSlot(
         cls=cls, source_name="imdb", class_name="Movie", old_slot="id_a", new_slot="id_b"
     )
@@ -498,11 +498,11 @@ def test_diff_change_source_binding_trust_emits_record():
     """
 
     def build(*, trust_prior):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        cls = OntologyClass(name="Movie", properties=[id_slot])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
         src = Source(name="imdb")
         binding = SourceBinding(
-            source=src, class_=cls, identifier_property=id_slot, trust_prior=trust_prior
+            source=src, class_=cls, identifier_slot=id_slot, trust_prior=trust_prior
         )
         return Spec(
             id="t",
@@ -537,13 +537,13 @@ def test_change_source_binding_trust_is_not_destructive():
 
 
 def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_name="Movie"):
-    id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-    year = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[id_slot, year])
-    series = OntologyClass(name="Series", properties=[id_slot, year])
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[id_slot, year])
+    series = OntologyClass(name="Series", slots=[id_slot, year])
     primary_cls = {"Movie": movie, "Series": series}[primary_name]
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)
     con = Constraint(
         name="year_positive",
         primary=primary_cls,
@@ -561,11 +561,11 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
 
 
 def _build_constraintless_spec():
-    id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-    year = Property(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", properties=[id_slot, year])
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", slots=[id_slot, year])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)
     return Spec(
         id="t",
         version="1.0.0",
@@ -658,9 +658,9 @@ def test_diff_change_constraint_body_different_sql_emits_record():
     """AST-inequivalent SQL bodies produce a ChangeConstraintBody record."""
 
     def build(*, value):
-        id_slot = Property(name="id", type=Primitive(name="string"), identifier=True)
-        year = Property(name="year", type=Primitive(name="integer"))
-        movie = OntologyClass(name="Movie", properties=[id_slot, year])
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        year = Slot(name="year", type=Primitive(name="integer"))
+        movie = OntologyClass(name="Movie", slots=[id_slot, year])
         con = Constraint(name="c", primary=movie, body=f"year > {value}")
         return Spec(
             id="t",

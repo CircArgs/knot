@@ -25,7 +25,7 @@ import PropertyPanel, {
   type SpecSelection,
 } from "../components/PropertyPanel";
 import Toolbar, { type AddKind } from "../components/Toolbar";
-import ClassForm, { type ClassFormValues, type InlinePropertyRow } from "../components/forms/ClassForm";
+import ClassForm, { type ClassFormValues, type InlineSlotRow } from "../components/forms/ClassForm";
 import ConstraintForm from "../components/forms/ConstraintForm";
 import SourceForm from "../components/forms/SourceForm";
 import SourceBindingForm from "../components/forms/SourceBindingForm";
@@ -439,7 +439,7 @@ export default function SpecGraph() {
             const classVals = vals as ClassFormValues;
             return api.addClass(draftId, {
               name: classVals.name,
-              properties: classVals.properties.map((r) => ({
+              slots: classVals.slots.map((r) => ({
                 name: r.name,
                 type_kind: r.typeKind || null,
                 type_name: r.typeName || null,
@@ -462,20 +462,20 @@ export default function SpecGraph() {
             return api.addSourceBinding(draftId, {
               source_name: vals.source_name,
               class_name: vals.class_name,
-              identifier_property_name: vals.identifier_property_name,
+              identifier_slot_name: vals.identifier_slot_name,
               trust_prior: [
                 parseFloat(vals.trust_prior_alpha) || 1,
                 parseFloat(vals.trust_prior_beta) || 1,
               ],
-              required_property_names: vals.required_property_names
-                ? vals.required_property_names
+              required_slot_names: vals.required_slot_names
+                ? vals.required_slot_names
                     .split(",")
                     .map((s: string) => s.trim())
                     .filter(Boolean)
                 : [],
               description: vals.description || null,
               mappings: (vals.mappings ?? []).map((m: any) => ({
-                property_name: m.property_name,
+                slot_name: m.slot_name,
                 source_field: m.source_field,
                 null_semantics: m.null_semantics ?? "no_claim",
               })),
@@ -505,14 +505,14 @@ export default function SpecGraph() {
           }
           // 2. Apply any per-slot renames (originalName set + differs from name).
           //    Address each via the class's current (post-rename) name.
-          for (const row of classVals.properties) {
+          for (const row of classVals.slots) {
             if (row.originalName && row.originalName !== row.name) {
               await api.renameSlot(draftId, currentClassName, row.originalName, row.name);
             }
           }
           // 3. PATCH the class with the final slot list.
           await api.updateClass(draftId, currentClassName, {
-            properties: classVals.properties.map((r) => ({
+            slots: classVals.slots.map((r) => ({
               name: r.name,
               type_kind: r.typeKind || null,
               type_name: r.typeName || null,
@@ -689,8 +689,8 @@ function renderForm(
   switch (kind) {
     case "class": {
       const editingClass = editing?.kind === "class" ? editing.value : undefined;
-      // Pre-populate inline slot rows from the existing class's own properties.
-      const initialSlotRows: InlinePropertyRow[] = editingClass?.properties.map((s) => ({
+      // Pre-populate inline slot rows from the existing class's own slots.
+      const initialSlotRows: InlineSlotRow[] = editingClass?.slots.map((s) => ({
         name: s.name,
         typeKind: (s.typeKind ?? "primitive") as import("../components/forms/ClassForm").TypeKindValue,
         typeName: s.typeName ?? "",

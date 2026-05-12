@@ -104,7 +104,7 @@ def _(draft_id, post):
 def _(draft_id, post):
     post(
         f"/spec/drafts/{draft_id}/classes",
-        {"name": "Movie", "property_names": ["imdb_id", "title"]},
+        {"name": "Movie", "slot_names": ["imdb_id", "title"]},
     )
     return
 
@@ -133,7 +133,7 @@ def _(draft_id, post):
 def _(get):
     {
         "classes": get("/spec/published/classes"),
-        "properties": get("/spec/published/slots"),
+        "slots": get("/spec/published/slots"),
         "types": get("/spec/published/types"),
         "sources": get("/spec/published/sources"),
     }

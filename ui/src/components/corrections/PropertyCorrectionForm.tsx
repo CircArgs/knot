@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { z } from "zod";
 
-import type { PublishedSpec, SpecProperty } from "../../types/spec";
+import type { PublishedSpec, SpecSlot } from "../../types/spec";
 import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../types/spec";
 import {
   CheckboxField,
@@ -23,13 +23,13 @@ interface Props {
   /** Pre-fill the slot dropdown if known. */
   initialSlot?: string;
   onSubmit: (vals: {
-    property: string;
+    slot: string;
     value: unknown;
   }) => Promise<void>;
 }
 
 const Schema = z.object({
-  property: z.string().min(1, "select a slot"),
+  slot: z.string().min(1, "select a slot"),
   /** Raw text input; we coerce per-slot at submit time. */
   text: z.string(),
   bool: z.boolean(),
@@ -43,7 +43,7 @@ type FormValues = z.infer<typeof Schema>;
  * Edit one slot value for one canonical entity.
  *
  * The "value" input is rendered conditionally on the slot's typeKind.
- * For class-range properties, we hand off to CanonicalIdPicker so the operator
+ * For class-range slots, we hand off to CanonicalIdPicker so the operator
  * picks an existing target canonical_id (debounced search, since classes
  * can have thousands of rows).
  */
@@ -56,8 +56,8 @@ export default function PropertyCorrectionForm({
 }: Props) {
   const cls = spec.classes.find((c) => c.name === className);
   // Stored slots only: typeKind must be set (derived slots have null).
-  const storedSlots: SpecProperty[] = (cls?.properties ?? []).filter(
-    (s): s is SpecProperty => s.typeKind !== null,
+  const storedSlots: SpecSlot[] = (cls?.slots ?? []).filter(
+    (s): s is SpecSlot => s.typeKind !== null,
   );
 
   const {
@@ -69,7 +69,7 @@ export default function PropertyCorrectionForm({
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
-      property: initialSlot ?? "",
+      slot: initialSlot ?? "",
       text: "",
       bool: false,
       list: "",
@@ -77,7 +77,7 @@ export default function PropertyCorrectionForm({
     },
   });
 
-  const selectedName = watch("property");
+  const selectedName = watch("slot");
   const slot = storedSlots.find((s) => s.name === selectedName) ?? null;
 
   const [submitErr, setSubmitErr] = useState<string | null>(null);
@@ -89,8 +89,8 @@ export default function PropertyCorrectionForm({
     }
     setSubmitErr(null);
     try {
-      const value = coerceValue(property, vals);
-      await onSubmit({ property: slot.name, value });
+      const value = coerceValue(slot, vals);
+      await onSubmit({ slot: slot.name, value });
     } catch (e) {
       setSubmitErr(String((e as Error).message ?? e));
     }
@@ -109,7 +109,7 @@ export default function PropertyCorrectionForm({
       <FieldRow>
         <Label required>slot</Label>
         <select
-          {...register("property")}
+          {...register("slot")}
           className={inputClass + " bg-white"}
           disabled={!!initialSlot}
         >
@@ -149,14 +149,14 @@ export default function PropertyCorrectionForm({
   );
 }
 
-function rangeLabel(property: SpecProperty): string {
+function rangeLabel(slot: SpecSlot): string {
   if (isClassKind(slot.typeKind)) return `→ ${slot.typeName}`;
   if (isPrimitiveKind(slot.typeKind)) return slot.typeName ?? "primitive";
   return "derived";
 }
 
 function SlotValueInput({
-  property,
+  slot,
   text,
   list,
   bool,
@@ -166,7 +166,7 @@ function SlotValueInput({
   setBool,
   setClassRangeId,
 }: {
-  property: SpecProperty;
+  slot: SpecSlot;
   text: string;
   list: string;
   bool: boolean;
@@ -243,14 +243,14 @@ function SlotValueInput({
  * Walk typeName to find the base primitive. Since types are now language-level
  * (no spec.types lookup), we just check if typeName is directly a builtin.
  */
-function baseTypeFor(property: SpecProperty): string {
+function baseTypeFor(slot: SpecSlot): string {
   if (!isPrimitiveKind(slot.typeKind) || !slot.typeName) return "string";
   const name = slot.typeName.toLowerCase();
   if (BUILTIN_TYPES.has(name)) return name;
   return "string";
 }
 
-function coerceValue(property: SpecProperty, vals: FormValues): unknown {
+function coerceValue(slot: SpecSlot, vals: FormValues): unknown {
   if (isClassKind(slot.typeKind)) {
     if (isArrayKind(slot.typeKind)) {
       return vals.list
