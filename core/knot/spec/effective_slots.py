@@ -23,34 +23,59 @@ def is_stored(slot: Slot) -> bool:
 
 
 def effective_slots(cls: OntologyClass) -> list[Slot]:
-    """All slots a class declares for *its own* table — own + mixin slots.
+    """All slots visible on a class: own slots + inherited is_a slots + mixin slots.
 
-    Walks the mixin chain breadth-first; later mixins do NOT shadow earlier
-    ones (publish-gate rejects collisions before we ever get here). Own slots
-    DO shadow mixin slots of the same name.
+    Walk order (earlier entries shadow later ones):
+      1. Own slots (``cls.slots``)
+      2. is_a ancestor slots, breadth-first up the inheritance chain
+      3. Mixin slots, breadth-first (including mixins of ancestors)
 
-    Does NOT walk ``is_a``: a concrete subclass with its own table inherits
-    its parent's slots structurally via the GraphQL surface, not via column
-    duplication. Mixins, by contrast, are pure trait composition — their
-    slots live on every including class's own table.
+    This mirrors standard OO/RDF inheritance: a concrete subclass carries
+    its parent's slots as real columns on its own table.  The publish gate
+    rejects is_a slot name collisions the same way it does for mixins.
+
+    Own slots shadow ancestor slots of the same name; ancestor slots shadow
+    later-ancestor (grandparent) slots.
     """
     seen: set[str] = set()
     result: list[Slot] = []
-    for s in cls.slots:
-        seen.add(s.name)
-        result.append(s)
-    queue: list[OntologyClass] = list(cls.mixins)
-    visited: list[OntologyClass] = []
-    while queue:
-        current = queue.pop(0)
-        if any(current is v for v in visited):
+
+    # BFS over the is_a chain (including self) then mixins at each level.
+    # We collect classes in BFS order: self → is_a → is_a.is_a → ...
+    # For each class in that order we add own slots then enqueue its mixins.
+    isa_queue: list[OntologyClass] = [cls]
+    isa_visited: list[OntologyClass] = []
+    mixin_queue: list[OntologyClass] = []
+
+    while isa_queue:
+        current = isa_queue.pop(0)
+        if any(current is v for v in isa_visited):
             continue
-        visited.append(current)
+        isa_visited.append(current)
+        # Own slots of this class in the is_a chain.
         for s in current.slots:
             if s.name not in seen:
                 seen.add(s.name)
                 result.append(s)
-        queue.extend(current.mixins)
+        # Enqueue mixins for the mixin pass.
+        mixin_queue.extend(current.mixins)
+        # Walk up is_a.
+        if current.is_a is not None:
+            isa_queue.append(current.is_a)
+
+    # Mixin pass: breadth-first over collected mixins (and their own mixins).
+    mixin_visited: list[OntologyClass] = []
+    while mixin_queue:
+        current = mixin_queue.pop(0)
+        if any(current is v for v in mixin_visited):
+            continue
+        mixin_visited.append(current)
+        for s in current.slots:
+            if s.name not in seen:
+                seen.add(s.name)
+                result.append(s)
+        mixin_queue.extend(current.mixins)
+
     return result
 
 
