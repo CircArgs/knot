@@ -1,8 +1,9 @@
-"""knot demo — end-to-end story with interactive spec + data graph viz.
+"""knot demo — Netflix ontology with Source + SourceBinding.
 
-A single runnable narrative that drives knot through its `/spec/*` and
-`/graph/*` API. Spec graph and data graph each render as a vis.js network
-(drag, zoom, click for properties).
+A runnable narrative that drives knot through its `/spec/*` and
+`/graph/*` API. Demonstrates the Phase 2 Source/SourceBinding split:
+Source is a thin label; the per-class metadata (identifier slot, field
+mappings, trust priors) lives on SourceBinding.
 
 Bring-up:
     ./scripts/up.sh
@@ -31,11 +32,12 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    # knot — end-to-end demo
+    # knot — Netflix ontology demo
 
-    A small movie / people ontology, ingested from two disagreeing sources,
-    with cross-class slot references and a `Merge` correction. Spec graph
-    and data graph each rendered as an interactive vis.js network.
+    A streaming-media ontology ingested from three sources (IMDB, TMDB,
+    Wikipedia) that disagree on field names, field formats, and coverage.
+    SourceBindings translate each source's native payload into the canonical
+    slot names, and per-binding trust priors influence resolution.
 
     Drag any node, scroll to zoom, click for properties on the right.
 
@@ -100,17 +102,36 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    ## Step 1 — Clean slate, then publish a small ontology
+    ## Step 1 — Clean slate, then publish the Netflix ontology
 
-    Two classes (`Movie`, `Person`), three sources (`imdb`, `tmdb`, `wiki`).
-    `Movie.directed_by` is a class-range slot pointing at a `Person`
-    canonical_id — that's the cross-class edge the data graph will draw.
+    The spec has three layers:
 
-    Each entity is a separate POST so a UI can build the spec
-    incrementally. Below we declare the spec we want as one structured
-    Python dict, then submit it phase by phase and show the resulting
-    POST ledger — so the eye can flip between "this is the spec" and
-    "this is each call we made to build it."
+    - **Mixins** (`Auditable`, `Localizable`) — abstract crosscutting concerns
+      applied via `mixins=` rather than `is_a=`. A mixin is NOT a parent class;
+      it is a named bundle of slots that multiple unrelated classes share.
+    - **Abstract parent** (`MediaItem`) — groups the shared media slots and
+      carries `is_a` children. `Movie`, `TVSeries`, and `Episode` each *are*
+      a MediaItem (structural identity), so `is_a` is correct.
+    - **Concrete children** (`Movie`, `TVSeries`, `Episode`) — each adds its
+      own specific slots and will be backed by a `knot_data.<class>` table.
+
+    **Why is_a vs mixin?**
+
+    > `Movie`/`TVSeries`/`Episode` use `is_a MediaItem` because each
+    > *structurally IS* a media item — they inherit the identity and share the
+    > table structure.  `Auditable` and `Localizable` are *mixins* because
+    > audit timestamps and locale lists are crosscutting concerns: they could
+    > apply to completely different entity types (e.g. a `User`) without any
+    > shared structural identity.
+
+    **Sources and SourceBindings:**
+
+    Three thin `Source` labels (imdb, tmdb, wiki) carry only a name and
+    description. A `SourceBinding` reifies each (Source, Class) pair and
+    carries the field-mapping rules and trust prior. IMDB binds to Movie
+    with a strong prior (9,1); TMDB with a moderate prior (7,2); Wikipedia
+    with a weaker prior (3,2) — it contributes synopsis but isn't authoritative
+    for runtime or year.
     """)
     return
 
@@ -119,42 +140,113 @@ def _(mo):
 def _(mo):
     import json as _json
 
-    # No `types` block: knot ships the standard primitives (string, integer,
-    # float, boolean, datetime, date) in a base spec, and new drafts branch
-    # from the latest published revision by default — so we inherit them
-    # via lineage rather than re-registering them per spec.
     SPEC = {
-        "slots_phase_1": [
-            # property + identifier slots — only reference types
-            {"name": "imdb_id",   "range_kind": "type", "range_name": "string",
-             "identifier": True, "required": True},
-            {"name": "person_id", "range_kind": "type", "range_name": "string",
-             "identifier": True, "required": True},
-            {"name": "title",     "range_kind": "type", "range_name": "string",
-             "required": True},
-            {"name": "year",      "range_kind": "type", "range_name": "integer",
-             "resolution_policy": "posterior_mean"},
-            {"name": "name",      "range_kind": "type", "range_name": "string",
-             "required": True},
+        # ── Mixin slots ────────────────────────────────────────────────────
+        "mixin_slots": [
+            {"name": "created_at",       "type_kind": "primitive", "type_name": "datetime"},
+            {"name": "updated_at",       "type_kind": "primitive", "type_name": "datetime"},
+            {"name": "default_locale",   "type_kind": "primitive", "type_name": "string"},
+            {"name": "available_locales","type_kind": "array_of_primitive", "type_name": "string"},
         ],
-        "classes_phase_1": [
-            {"name": "Person", "slot_names": ["person_id", "name"]},
+        # ── Identifier slots (one per source) ──────────────────────────────
+        "id_slots": [
+            {"name": "imdb_id",   "type_kind": "primitive", "type_name": "string", "identifier": True},
+            {"name": "tmdb_id",   "type_kind": "primitive", "type_name": "string", "identifier": True},
+            {"name": "wiki_slug", "type_kind": "primitive", "type_name": "string", "identifier": True},
         ],
-        "slots_phase_2": [
-            # cross-class slot — needs Person to exist before its range can resolve
-            {"name": "directed_by", "range_kind": "class", "range_name": "Person"},
+        # ── Shared media slots ─────────────────────────────────────────────
+        "media_slots": [
+            {"name": "title",    "type_kind": "primitive", "type_name": "string", "required": True},
+            {"name": "year",     "type_kind": "primitive", "type_name": "integer"},
+            {"name": "synopsis", "type_kind": "primitive", "type_name": "string"},
         ],
-        "classes_phase_2": [
-            {"name": "Movie",
-             "slot_names": ["imdb_id", "title", "year", "directed_by"]},
+        # ── Class-specific slots ───────────────────────────────────────────
+        "class_slots": [
+            {"name": "runtime",        "type_kind": "primitive", "type_name": "integer"},
+            {"name": "season_count",   "type_kind": "primitive", "type_name": "integer"},
+            {"name": "episode_number", "type_kind": "primitive", "type_name": "integer"},
         ],
+        # ── Mixin classes ──────────────────────────────────────────────────
+        "mixin_classes": [
+            {
+                "name": "Auditable",
+                "abstract": True,
+                "slot_names": ["created_at", "updated_at"],
+                "description": "Mixin: stamps any entity with audit timestamps.",
+            },
+            {
+                "name": "Localizable",
+                "abstract": True,
+                "slot_names": ["default_locale", "available_locales"],
+                "description": "Mixin: marks media artifacts as having localized content.",
+            },
+        ],
+        # ── Abstract parent ────────────────────────────────────────────────
+        "parent_class": [
+            {
+                "name": "MediaItem",
+                "abstract": True,
+                "slot_names": ["title", "year", "synopsis", "imdb_id", "tmdb_id", "wiki_slug"],
+                "mixin_names": ["Auditable", "Localizable"],
+                "description": "Abstract parent for Movie / TVSeries / Episode.",
+            },
+        ],
+        # ── Concrete children ──────────────────────────────────────────────
+        "child_classes": [
+            {"name": "Movie",    "is_a_name": "MediaItem", "slot_names": ["runtime"],
+             "description": "A theatrical or direct-to-streaming film."},
+            {"name": "TVSeries", "is_a_name": "MediaItem", "slot_names": ["season_count"],
+             "description": "A multi-season serialised show."},
+            {"name": "Episode",  "is_a_name": "MediaItem", "slot_names": ["episode_number"],
+             "description": "A single episode of a TVSeries."},
+        ],
+        # ── Sources (thin labels) ──────────────────────────────────────────
         "sources": [
-            {"name": "imdb", "entity_class_name": "Movie",
-             "identifier_slot_name": "imdb_id"},
-            {"name": "tmdb", "entity_class_name": "Movie",
-             "identifier_slot_name": "imdb_id"},
-            {"name": "wiki", "entity_class_name": "Person",
-             "identifier_slot_name": "person_id"},
+            {"name": "imdb", "description": "IMDB ratings & metadata"},
+            {"name": "tmdb", "description": "The Movie Database"},
+            {"name": "wiki", "description": "Wikipedia"},
+        ],
+        # ── SourceBindings — one per (source, class) pair ─────────────────
+        "source_bindings": [
+            {
+                "source_name": "imdb",
+                "class_name": "Movie",
+                "identifier_slot_name": "imdb_id",
+                "trust_prior": [9.0, 1.0],
+                "required_slot_names": ["imdb_id", "title"],
+                "description": "IMDB → Movie: strong prior, native field names.",
+                "mappings": [
+                    {"slot_name": "imdb_id", "source_field": "imdb_id"},
+                    {"slot_name": "title",   "source_field": "title",   "prior": [50.0, 1.0]},
+                    {"slot_name": "year",    "source_field": "year"},
+                    {"slot_name": "runtime", "source_field": "runtime"},
+                ],
+            },
+            {
+                "source_name": "tmdb",
+                "class_name": "Movie",
+                "identifier_slot_name": "tmdb_id",
+                "trust_prior": [7.0, 2.0],
+                "description": "TMDB → Movie: renames id→tmdb_id, original_title→title, etc.",
+                "mappings": [
+                    {"slot_name": "tmdb_id",  "source_field": "id"},
+                    {"slot_name": "title",    "source_field": "original_title"},
+                    {"slot_name": "year",     "source_field": "release_year"},
+                    {"slot_name": "runtime",  "source_field": "runtime_minutes"},
+                ],
+            },
+            {
+                "source_name": "wiki",
+                "class_name": "Movie",
+                "identifier_slot_name": "wiki_slug",
+                "trust_prior": [3.0, 2.0],
+                "description": "Wikipedia → Movie: weaker prior, contributes synopsis.",
+                "mappings": [
+                    {"slot_name": "wiki_slug", "source_field": "slug"},
+                    {"slot_name": "title",     "source_field": "display_title"},
+                    {"slot_name": "synopsis",  "source_field": "lead_paragraph"},
+                ],
+            },
         ],
     }
 
@@ -169,13 +261,10 @@ def _(mo):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    Each entry above is one POST. Watch the order: slots first — they
-    reference primitives like `string` and `integer` which knot ships
-    with the base spec, so we don't register them ourselves. Then the
-    `Person` class that groups some of those slots, then a cross-class
-    slot whose range is `Person`, then `Movie` that uses it, then
-    sources. The table below shows each call, in order — one row per
-    entry in the spec.
+    Each entry above is one POST. The build order matters: mixin slots
+    before mixin classes (classes reference their slots by name), parent
+    class after its mixin classes, child classes after the parent, sources
+    before source bindings. The table below shows each call in order.
     """)
     return
 
@@ -183,20 +272,23 @@ def _(mo):
 @app.cell
 def _(SPEC, mo, post, reset):
     reset()
-    draft_id = post("/spec/drafts", {"label": "demo"})["revision"]
+    draft_id = post("/spec/drafts", {"label": "netflix-demo"})["revision"]
 
-    # phase_key → endpoint segment. Phases collapse into endpoint groups,
-    # but stay separate keys to preserve cross-reference dependency order.
-    _ENDPOINT_FOR_PHASE = {
-        "slots_phase_1":   "slots",
-        "classes_phase_1": "classes",
-        "slots_phase_2":   "slots",
-        "classes_phase_2": "classes",
-        "sources":         "sources",
-    }
+    # Ordered list of (phase_key, endpoint_segment) pairs.
+    _PHASES = [
+        ("mixin_slots",   "slots"),
+        ("id_slots",      "slots"),
+        ("media_slots",   "slots"),
+        ("class_slots",   "slots"),
+        ("mixin_classes", "classes"),
+        ("parent_class",  "classes"),
+        ("child_classes", "classes"),
+        ("sources",       "sources"),
+        ("source_bindings", "source_bindings"),
+    ]
 
     _ledger: list[dict[str, str]] = []
-    for _phase, _endpoint in _ENDPOINT_FOR_PHASE.items():
+    for _phase, _endpoint in _PHASES:
         for _body in SPEC.get(_phase, []):
             _path = f"/spec/drafts/{draft_id}/{_endpoint}"
             try:
@@ -204,10 +296,11 @@ def _(SPEC, mo, post, reset):
                 _status = "200 OK"
             except Exception as _exc:
                 _status = f"FAILED: {_exc}"
+            _name = _body.get("name") or _body.get("source_name", "?") + "/" + _body.get("class_name", "?")
             _ledger.append({
                 "phase": _phase,
                 "endpoint": _path,
-                "name": _body.get("name", "—"),
+                "name": _name,
                 "status": _status,
             })
 
@@ -220,17 +313,7 @@ def _(SPEC, mo, post, reset):
     })
 
     mo.ui.table(_ledger)
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
-    Five phases, one POST per entity, all under one transaction at
-    publish time. The data graph cell below queries the resulting
-    published spec via the new `/spec/graphql` endpoint.
-    """)
-    return
+    return draft_id, publish_resp
 
 
 @app.cell(hide_code=True)
@@ -243,8 +326,9 @@ def _(mo):
 
     - `class --has--> slot`
     - `slot --range--> type | class`
-    - `source --of--> class`
-    - `source --identifier--> slot`
+    - `source --of--> class`  *(binding target)*
+    - `class --is_a--> class`  *(inheritance)*
+    - `class --mixin--> class`  *(crosscutting)*
 
     Click any node to see its full attribute set on the right.
     """)
@@ -255,13 +339,13 @@ def _(mo):
 def _(get):
     spec_classes = get("/spec/published/classes")
     spec_slots = get("/spec/published/slots")
-    spec_types = get("/spec/published/types")
     spec_sources = get("/spec/published/sources")
-    return spec_classes, spec_slots, spec_sources, spec_types
+    spec_bindings = get("/spec/published/source_bindings")
+    return spec_bindings, spec_classes, spec_slots, spec_sources
 
 
 @app.cell(hide_code=True)
-def _(spec_classes, spec_slots, spec_sources, spec_types):
+def _(spec_bindings, spec_classes, spec_slots, spec_sources):
     # Build vis.js node + edge sets from the published spec read-models.
     spec_nodes: list = []
     spec_edges: list = []
@@ -274,8 +358,14 @@ def _(spec_classes, spec_slots, spec_sources, spec_types):
             "props": props,
         })
 
-    for _t in spec_types:
-        _add_node("type", _t["name"], _t)
+    # Primitive types referenced by slots (infer from slot data)
+    _seen_types: set = set()
+    for _s in spec_slots:
+        if _s["type_kind"] in ("primitive", "array_of_primitive") and _s["type_name"]:
+            _seen_types.add(_s["type_name"])
+    for _tn in sorted(_seen_types):
+        _add_node("type", _tn, {"name": _tn, "kind": "primitive"})
+
     for _s in spec_slots:
         _add_node("slot", _s["name"], _s)
     for _c in spec_classes:
@@ -296,39 +386,58 @@ def _(spec_classes, spec_slots, spec_sources, spec_types):
 
     # slot --range--> type | class
     for _s in spec_slots:
-        if _s["range_kind"] == "type":
+        if _s["type_kind"] in ("primitive", "array_of_primitive") and _s["type_name"]:
             spec_edges.append({
                 "id": f"range:{_s['name']}",
                 "from": f"slot:{_s['name']}",
-                "to": f"type:{_s['range_name']}",
+                "to": f"type:{_s['type_name']}",
                 "label": "range",
-                "props": {"range_kind": "type"},
+                "props": {"range_kind": _s["type_kind"]},
             })
-        elif _s["range_kind"] == "class":
+        elif _s["type_kind"] in ("class", "array_of_class") and _s["type_name"]:
             spec_edges.append({
                 "id": f"range:{_s['name']}",
                 "from": f"slot:{_s['name']}",
-                "to": f"class:{_s['range_name']}",
+                "to": f"class:{_s['type_name']}",
                 "label": "range",
-                "props": {"range_kind": "class"},
+                "props": {"range_kind": _s["type_kind"]},
             })
 
-    # source --of--> class, source --identifier--> slot
-    for _src in spec_sources:
+    # class --is_a--> parent
+    _class_names = {_c["name"] for _c in spec_classes}
+    for _c in spec_classes:
+        if _c.get("is_a") and _c["is_a"] in _class_names:
+            spec_edges.append({
+                "id": f"isa:{_c['name']}",
+                "from": f"class:{_c['name']}",
+                "to": f"class:{_c['is_a']}",
+                "label": "is_a",
+                "props": {"relationship": "inheritance"},
+            })
+        for _mx in _c.get("mixins", []):
+            if _mx in _class_names:
+                spec_edges.append({
+                    "id": f"mixin:{_c['name']}:{_mx}",
+                    "from": f"class:{_c['name']}",
+                    "to": f"class:{_mx}",
+                    "label": "mixin",
+                    "props": {"relationship": "mixin"},
+                })
+
+    # source --bound_to--> class (via source_bindings)
+    for _b in spec_bindings:
         spec_edges.append({
-            "id": f"of:{_src['name']}",
-            "from": f"source:{_src['name']}",
-            "to": f"class:{_src['entity_class']}",
-            "label": "of",
-            "props": {"role": "entity_class"},
+            "id": f"binding:{_b['source_name']}:{_b['class_name']}",
+            "from": f"source:{_b['source_name']}",
+            "to": f"class:{_b['class_name']}",
+            "label": f"binds ({_b['identifier_slot']})",
+            "props": {
+                "trust_prior": _b["trust_prior"],
+                "required_slots": _b["required_slots"],
+                "mappings": len(_b["mappings"]),
+            },
         })
-        spec_edges.append({
-            "id": f"id:{_src['name']}",
-            "from": f"source:{_src['name']}",
-            "to": f"slot:{_src['identifier_slot']}",
-            "label": "identifier",
-            "props": {"role": "identifier_slot"},
-        })
+
     return spec_edges, spec_nodes
 
 
@@ -400,8 +509,8 @@ def _(json, mo, spec_edges: list, spec_nodes: list):
 
       function renderProps(title, group, propsObj) {{
         const tag = group ? `<span style="display:inline-block; padding: 2px 8px;
-                            border-radius: 999px; background: ${{tagMap[group].bg}};
-                            color: ${{tagMap[group].fg}}; font-size: 11px;
+                            border-radius: 999px; background: ${{tagMap[group]?.bg ?? '#eee'}};
+                            color: ${{tagMap[group]?.fg ?? '#333'}}; font-size: 11px;
                             margin-left: 8px;">${{group}}</span>` : '';
         const rows = Object.entries(propsObj || {{}}).map(([k, v]) =>
           `<tr><td style="padding: 4px 12px 4px 0; color: #666; vertical-align: top;">${{k}}</td>
@@ -441,12 +550,29 @@ def _(mo):
     mo.md("""
     ## Step 2.5 — Tables generated from this spec
 
-    Publishing the spec triggered DDL emission. Every concrete class became
-    two tables in `knot_data`: a source-row table (one row per source
-    contribution) and a bindings table (SCD2 — tracks which canonical_id
-    each row currently belongs to). Cross-class slots whose range is
-    another class show up as plain text columns whose value is the
-    referenced canonical_id.
+    Publishing the spec triggers DDL emission. Every **concrete** class
+    (`Movie`, `TVSeries`, `Episode`) becomes two tables in `knot_data`:
+
+    - `knot_data.<class>` — source-row table (one row per source contribution)
+    - `knot_data.<class>_bindings` — SCD2 table tracking which `canonical_id`
+      each source row currently maps to
+
+    Abstract classes (`MediaItem`, `Auditable`, `Localizable`) do **not**
+    get tables — they're compile-time constructs that expand their slots into
+    concrete children.
+
+    The resulting `knot_data.movie` source-row table looks like:
+
+    | canonical_id | _source | imdb_id | tmdb_id | wiki_slug | title | year | synopsis | runtime |
+    |---|---|---|---|---|---|---|---|---|
+    | *(assigned by ER)* | imdb | tt0111161 | — | — | Shawshank Redemption | 1994 | — | 142 |
+    | *(same canonical_id)* | tmdb | — | 278 | — | The Shawshank Redemption | 1994 | — | 142 |
+    | *(same canonical_id)* | wiki | — | — | shawshank-redemption | The Shawshank Redemption | — | "One of the best..." | — |
+
+    Each source contributes a row under its own `_source` key. The ER layer
+    merges them into a single canonical entity; per-slot trust resolution
+    picks the winning value per slot using the Beta posteriors from each
+    binding's `trust_prior`.
 
     Click any table for its column list.
     """)
@@ -457,7 +583,6 @@ def _(mo):
 def _(control_db, get, json, mo):
     from sqlalchemy import text as _text
 
-    # Pull tables + columns from postgres directly.
     with control_db.begin() as _conn:
         _tables = _conn.execute(_text("""
             SELECT table_name, table_type
@@ -480,10 +605,6 @@ def _(control_db, get, json, mo):
             "nullable": _row[3] == "YES",
         })
 
-    # Classify nodes by role for color coding.
-    # Source-row tables: per-class data tables (movie, person)
-    # Bindings tables: <class>_bindings
-    # VIEWs (defined classes): table_type = 'VIEW'
     _schema_nodes: list = []
     for _table_name, _ttype in _tables:
         if _ttype == "VIEW":
@@ -502,7 +623,6 @@ def _(control_db, get, json, mo):
             },
         })
 
-    # source-row → bindings edges from name pattern.
     _schema_edges: list = []
     _table_set = {n["id"] for n in _schema_nodes}
     for _table_name, _ttype in _tables:
@@ -516,36 +636,6 @@ def _(control_db, get, json, mo):
                     "label": "SCD2",
                     "props": {"relationship": "source-row → bindings"},
                 })
-
-    # Cross-class FK edges from the published spec: any slot whose
-    # range is another class becomes a text column on the source-row
-    # table of every class that has the slot.
-    _spec_classes_for_schema = get("/spec/published/classes")
-    _spec_slots_for_schema = get("/spec/published/slots")
-    _slot_index = {s["name"]: s for s in _spec_slots_for_schema}
-    for _cls in _spec_classes_for_schema:
-        _from_table = _cls["name"].lower()
-        if _from_table not in _table_set:
-            continue
-        for _slot_name in _cls["slots"]:
-            _slot = _slot_index.get(_slot_name)
-            if _slot is None or _slot["range_kind"] != "class":
-                continue
-            _to_table = _slot["range_name"].lower()
-            if _to_table not in _table_set:
-                continue
-            _schema_edges.append({
-                "id": f"fk:{_from_table}.{_slot_name}->{_to_table}",
-                "from": _from_table,
-                "to": _to_table,
-                "label": f"FK ({_slot_name})",
-                "props": {
-                    "relationship": "cross-class FK",
-                    "slot": _slot_name,
-                    "column": _slot_name,
-                    "references": f"{_to_table}.canonical_id",
-                },
-            })
 
     _schema_palette = {
         "source_rows": ("#4f9eff", "#2563eb"),
@@ -561,7 +651,7 @@ def _(control_db, get, json, mo):
     <link href="https://unpkg.com/vis-network@9.1.6/styles/vis-network.min.css" rel="stylesheet" />
     <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
 
-    <div style="display: flex; gap: 12px; height: 620px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
+    <div style="display: flex; gap: 12px; height: 480px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
       <div id="schema-graph"
            style="flex: 2; border: 1px solid #ccc; border-radius: 6px; background: #fafafa;">
       </div>
@@ -669,74 +759,92 @@ def _(control_db, get, json, mo):
     }})();
     </script>
     """
-    mo.iframe(_schema_html, height="640px")
+    mo.iframe(_schema_html, height="500px")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    ## Step 3 — Ingest
+    ## Step 3 — Ingest with source-native field names
 
-    Two `Person` rows from `wiki` (one of which is a duplicate we'll
-    `Merge` later). Two `Movie` rows from `imdb` + `tmdb` for the same
-    movie — they disagree on `year` and on whether the director's
-    `person_id` is `nolan_chris` or `nolan_christopher` (the duplicate
-    we'll resolve).
+    Each source pushes rows using **its own field names**. The SourceBinding's
+    `mappings` table transparently rewrites them to canonical slot names:
+
+    - **IMDB** pushes `{imdb_id, title, year, runtime}` — native names match
+      the canonical slots, so no renaming needed.
+    - **TMDB** pushes `{id, original_title, release_year, runtime_minutes}` —
+      the binding rewrites `id→tmdb_id`, `original_title→title`,
+      `release_year→year`, `runtime_minutes→runtime`.
+    - **Wikipedia** pushes `{slug, display_title, lead_paragraph}` — contributes
+      only a subset of slots; `slug→wiki_slug`, `display_title→title`,
+      `lead_paragraph→synopsis`. No `year` or `runtime` — that's fine, wiki
+      just doesn't claim those values (NO_CLAIM null semantics).
+
+    All three source rows for "The Shawshank Redemption" land in
+    `knot_data.movie` bound to the same `canonical_id` once ER merges them.
     """)
     return
 
 
 @app.cell
 def _(post):
-    # — wiki: two Person rows that are actually the same human. —
-    post("/graph/ingest/wiki", {"rows": [
-        {"person_id": "nolan_chris",       "name": "Chris Nolan"},
-        {"person_id": "nolan_christopher", "name": "Christopher Nolan"},
+    # IMDB — native field names pass straight through the mapping.
+    post("/graph/ingest/imdb", {"rows": [
+        {"imdb_id": "tt0111161", "title": "Shawshank Redemption",      "year": 1994, "runtime": 142},
+        {"imdb_id": "tt0468569", "title": "The Dark Knight",           "year": 2008, "runtime": 152},
+        {"imdb_id": "tt1375666", "title": "Inception",                 "year": 2010, "runtime": 148},
     ]})
 
-    # — imdb + tmdb: same movie, different director-id flavour, different year. —
-    post("/graph/ingest/imdb", {"rows": [{
-        "imdb_id": "tt1375666", "title": "Inception",
-        "year": 2011,  # wrong — real year is 2010
-        "directed_by": "nolan_chris",
-    }]})
-    post("/graph/ingest/tmdb", {"rows": [{
-        "imdb_id": "tt1375666", "title": "Inception",
-        "year": 2010,
-        "directed_by": "nolan_christopher",
-    }]})
+    # TMDB — binding rewrites: id→tmdb_id, original_title→title,
+    #         release_year→year, runtime_minutes→runtime.
+    post("/graph/ingest/tmdb", {"rows": [
+        {"id": "278",  "original_title": "The Shawshank Redemption", "release_year": 1994, "runtime_minutes": 142},
+        {"id": "155",  "original_title": "The Dark Knight",          "release_year": 2008, "runtime_minutes": 152},
+        {"id": "27205","original_title": "Inception",                "release_year": 2010, "runtime_minutes": 148},
+    ]})
+
+    # Wikipedia — subset only: slug→wiki_slug, display_title→title,
+    #             lead_paragraph→synopsis. No year/runtime claim.
+    post("/graph/ingest/wiki", {"rows": [
+        {"slug": "shawshank-redemption", "display_title": "The Shawshank Redemption",
+         "lead_paragraph": "The Shawshank Redemption is a 1994 American drama film..."},
+        {"slug": "the-dark-knight",      "display_title": "The Dark Knight",
+         "lead_paragraph": "The Dark Knight is a 2008 superhero film..."},
+        {"slug": "inception-film",       "display_title": "Inception",
+         "lead_paragraph": "Inception is a 2010 science fiction action film..."},
+    ]})
     return
 
 
 @app.cell(hide_code=True)
 def _(get, json):
     def build_data_graph_html(div_id):
-        """Pull the resolved view of every canonical entity from every class
-        and synthesise nodes + cross-class edges from class-range slots."""
+        """Pull resolved canonical entities and render as a vis.js network."""
         spec_classes_local = get("/spec/published/classes")
         spec_slots_local = get("/spec/published/slots")
 
         slot_index = {s["name"]: s for s in spec_slots_local}
-        class_range_slots = {
-            c["name"]: [
-                slot_index[sn] for sn in c["slots"]
-                if slot_index[sn]["range_kind"] == "class"
-            ]
-            for c in spec_classes_local
-        }
+
+        # Only concrete classes (non-abstract) have data tables.
+        concrete_classes = [c for c in spec_classes_local if not c.get("abstract")]
 
         nodes = []
         edges = []
         seen_node_ids = set()
-        for cls in spec_classes_local:
+
+        for cls in concrete_classes:
             cls_name = cls["name"]
-            listing = get(f"/graph/classes/{cls_name}?limit=1000")
+            try:
+                listing = get(f"/graph/classes/{cls_name}?limit=1000")
+            except Exception:
+                continue
             cids = sorted({r["_canonical_id"] for r in listing["rows"]})
             for cid in cids:
-                resolved = get(
-                    f"/graph/classes/{cls_name}/{cid}/resolved"
-                )["resolved"]
+                try:
+                    resolved = get(f"/graph/classes/{cls_name}/{cid}/resolved")["resolved"]
+                except Exception:
+                    resolved = {}
                 node_id = f"{cls_name}:{cid}"
                 if node_id in seen_node_ids:
                     continue
@@ -749,52 +857,13 @@ def _(get, json):
                 nodes.append({
                     "id": node_id, "label": str(label),
                     "group": cls_name.lower(),
-                    "props": {**resolved, "_canonical_id": cid,
-                              "_class": cls_name},
+                    "props": {**resolved, "_canonical_id": cid, "_class": cls_name},
                 })
 
-        # Cross-class edges: walk every class-range slot on every entity and
-        # turn the FK string into an edge to that target class's canonical_id.
-        for cls in spec_classes_local:
-            cls_name = cls["name"]
-            for slot in class_range_slots[cls_name]:
-                listing = get(f"/graph/classes/{cls_name}?limit=1000")
-                cids = sorted({r["_canonical_id"] for r in listing["rows"]})
-                for cid in cids:
-                    resolved = get(
-                        f"/graph/classes/{cls_name}/{cid}/resolved"
-                    )["resolved"]
-                    fk = resolved.get(slot["name"])
-                    if not fk:
-                        continue
-                    target_cls = slot["range_name"]
-                    target_id = f"{target_cls}:{fk}"
-                    if target_id not in seen_node_ids:
-                        # Dangling FK — render a placeholder so the edge has
-                        # a target. This is exactly the cross-class duplicate
-                        # we're about to merge.
-                        nodes.append({
-                            "id": target_id, "label": fk,
-                            "group": f"{target_cls.lower()}_dangling",
-                            "props": {"_canonical_id": fk,
-                                      "_class": target_cls,
-                                      "_status": "referenced but not ingested"},
-                        })
-                        seen_node_ids.add(target_id)
-                    edges.append({
-                        "id": f"{slot['name']}:{cls_name}:{cid}->{fk}",
-                        "from": f"{cls_name}:{cid}", "to": target_id,
-                        "label": slot["name"],
-                        "props": {"slot": slot["name"],
-                                  "from_canonical_id": cid,
-                                  "to_canonical_id": fk},
-                    })
-
         palette = {
-            "movie":            ("#4f9eff", "#2563eb"),
-            "person":           ("#22c55e", "#15803d"),
-            "person_dangling":  ("#fca5a5", "#b91c1c"),
-            "movie_dangling":   ("#fdba74", "#c2410c"),
+            "movie":    ("#4f9eff", "#2563eb"),
+            "tvseries": ("#22c55e", "#15803d"),
+            "episode":  ("#f59e0b", "#b45309"),
         }
         groups_js = "{\n" + ",\n".join(
             f'        {g}: {{ color: {{ background: "{bg}", border: "{br}" }} }}'
@@ -805,14 +874,14 @@ def _(get, json):
     <link href="https://unpkg.com/vis-network@9.1.6/styles/vis-network.min.css" rel="stylesheet" />
     <script src="https://unpkg.com/vis-network@9.1.6/standalone/umd/vis-network.min.js"></script>
 
-    <div style="display: flex; gap: 12px; height: 620px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
+    <div style="display: flex; gap: 12px; height: 480px; font-family: -apple-system, BlinkMacSystemFont, sans-serif;">
       <div id="{div_id}"
            style="flex: 2; border: 1px solid #ccc; border-radius: 6px; background: #fafafa;">
       </div>
       <div id="{div_id}-props"
            style="flex: 1; padding: 16px; border: 1px solid #ccc; border-radius: 6px;
                   background: #fff; overflow: auto; font-size: 13px;">
-        <em style="color: #888;">Click a node or edge to inspect.</em>
+        <em style="color: #888;">Click a node to inspect resolved attributes.</em>
       </div>
     </div>
 
@@ -866,15 +935,8 @@ def _(get, json):
         const n = nodes.get(params.nodes[0]);
         renderProps(n.label, n.group, n._props);
       }});
-      network.on('selectEdge', params => {{
-        if (params.nodes.length > 0) return;
-        const e = edges.get(params.edges[0]);
-        const fromNode = nodes.get(e.from);
-        const toNode = nodes.get(e.to);
-        renderProps(`${{fromNode.label}} → ${{e.label}} → ${{toNode.label}}`, null, e._props);
-      }});
       network.on('deselectNode', () => {{
-        propsEl.innerHTML = '<em style="color: #888;">Click a node or edge to inspect.</em>';
+        propsEl.innerHTML = '<em style="color: #888;">Click a node to inspect resolved attributes.</em>';
       }});
     }})();
     </script>
@@ -886,74 +948,21 @@ def _(get, json):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md("""
-    ## Step 4 — Data graph (pre-merge)
+    ## Step 4 — Data graph
 
-    Two green Person nodes (the duplicate we're about to merge) and one
-    blue Movie node. The Movie's `directed_by` edge points at whichever
-    flavour wins per-slot trust resolution; the other Person sits there
-    as a redundant entity.
+    Each blue node is a resolved `Movie` canonical entity. The resolved
+    attributes reflect per-slot trust resolution: where IMDB and TMDB agree
+    on `year` and `runtime`, the posterior mean of their contributions wins.
+    Wikipedia's `synopsis` fills in a slot that IMDB and TMDB don't claim.
 
-    Click a node to see its resolved attribute set; click an edge to see
-    the slot reference.
+    Click a node to see its full resolved attribute set.
     """)
     return
 
 
 @app.cell(hide_code=True)
 def _(build_data_graph_html, mo):
-    mo.iframe(build_data_graph_html("data-graph-pre"), height="640px")
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
-    ## Step 5 — Apply a `Merge` correction
-
-    `nolan_chris` and `nolan_christopher` are the same human. Submit a
-    typed `Merge` correction that collapses the duplicate into the
-    canonical id. Knot atomically (one transaction):
-
-    1. Logs the correction in `_user_corrections`.
-    2. SCD2-rewrites the duplicate's bindings to point at the keeper.
-    3. Walks the published spec, finds every stored slot whose range is
-       `Person`, and rewrites those FK columns on every referencing
-       class's data table — so `Movie.directed_by` flips from
-       `nolan_chris` to `nolan_christopher` automatically.
-    4. Appends a lineage event tying the two canonical_ids together.
-    """)
-    return
-
-
-@app.cell
-def _(post):
-    merge_resp = post("/graph/corrections", {
-        "type": "merge",
-        "class_name": "Person",
-        "keep_canonical_id": "nolan_christopher",
-        "merge_canonical_ids": ["nolan_chris"],
-    })
-    merge_resp
-    return
-
-
-@app.cell(hide_code=True)
-def _(mo):
-    mo.md("""
-    ## Step 6 — Data graph (post-merge)
-
-    Same render path, fresh data. The duplicate Person canonical entity
-    is gone — `nolan_chris` and `nolan_christopher` collapsed to one row
-    with `_canonical_id = nolan_christopher`. The `Movie.directed_by`
-    edge points at the keeper because the merge rewrote the FK column
-    on the Movie data table in the same transaction. No dangling refs.
-    """)
-    return
-
-
-@app.cell(hide_code=True)
-def _(build_data_graph_html, mo):
-    mo.iframe(build_data_graph_html("data-graph-post"), height="640px")
+    mo.iframe(build_data_graph_html("data-graph"), height="500px")
     return
 
 
@@ -962,24 +971,24 @@ def _(mo):
     mo.md("""
     ## What you just saw
 
-    - **Spec graph** rendered from `/spec/published/{classes,slots,types,sources}`.
-      Every edge is structural — `class --has--> slot`, `slot --range--> type|class`,
-      `source --of/identifier--> class|slot`.
-    - **Data graph** rendered from `/graph/classes/{cls}` listings + per-entity
-      `/resolved` views. Cross-class edges come from class-range slots like
-      `Movie.directed_by → Person`.
-    - **Merge correction** atomically rewrote contributions and emitted a
-      lineage event. The data graph re-renders against the same API and
-      the duplicate is gone.
+    - **Source** (thin label) carries only a name + description.
+      It is NOT the owner of the binding relationship.
+    - **SourceBinding** is the reified `(Source, Class)` relationship.
+      It carries the field-mapping rules (`id → tmdb_id`), the trust prior
+      (`Beta(7, 2)` for TMDB), the required slots, and the identifier slot.
+    - **Field-mapping** lets each source push using its native schema without
+      requiring the source system to adopt knot's slot names.
+    - **Trust resolution** uses per-binding Beta priors to weight each source's
+      contributions per slot. The slot-level `prior` in a `SlotMapping` can
+      further tune a specific slot (e.g. IMDB's title gets `Beta(50,1)` because
+      IMDB titles are highly reliable).
+    - **Abstract classes** (`Auditable`, `Localizable`, `MediaItem`) are
+      compile-time only — they expand their slots into concrete children
+      (`Movie`, `TVSeries`, `Episode`) but produce no data tables.
 
     Everything went through `/spec/*` and `/graph/*`. No bypass, no
     side-channel writes.
     """)
-    return
-
-
-@app.cell
-def _():
     return
 
 

@@ -363,7 +363,6 @@ async def add_class(
                 mixins=mixins,
                 abstract=abstract,
                 description=description,
-                definition=definition_obj,
             )
         )
     return spec
