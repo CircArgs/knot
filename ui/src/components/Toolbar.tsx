@@ -17,6 +17,7 @@ const KIND_LABELS: Record<AddKind, string> = {
   slot: "Slot",
   class: "Class",
   source: "Source",
+  sourceBinding: "Binding",
   constraint: "Constraint",
 };
 

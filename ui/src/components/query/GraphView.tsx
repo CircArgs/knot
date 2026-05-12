@@ -161,6 +161,7 @@ function fillMissing(p: Partial<PublishedSpec>): PublishedSpec {
       slotNames: c.slotNames ?? [],
     })),
     sources: p.sources ?? [],
+    sourceBindings: p.sourceBindings ?? [],
     constraints: p.constraints ?? [],
   };
 }

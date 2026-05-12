@@ -40,10 +40,27 @@ export interface SpecClass {
 
 export interface SpecSource {
   name: string;
-  entityClassName: string;
-  identifierSlotName: string;
   description: string | null;
-  trustScore: number;
+}
+
+export type SpecNullSemantics = "no_claim" | "asserted_absent";
+
+export interface SpecSlotMapping {
+  slotName: string;
+  sourceField: string;
+  default: unknown | null;
+  nullSemantics: SpecNullSemantics;
+  prior: [number, number] | null;
+}
+
+export interface SpecSourceBinding {
+  sourceName: string;
+  className: string;
+  identifierSlotName: string;
+  mappings: SpecSlotMapping[];
+  trustPrior: [number, number];
+  requiredSlotNames: string[];
+  description: string | null;
 }
 
 export type Severity = "error" | "warning";
@@ -63,6 +80,7 @@ export interface PublishedSpec {
   slots: SpecSlot[];
   classes: SpecClass[];
   sources: SpecSource[];
+  sourceBindings: SpecSourceBinding[];
   constraints: SpecConstraint[];
 }
 
@@ -74,6 +92,7 @@ export type SpecEntity =
   | { kind: "slot"; value: SpecSlot }
   | { kind: "class"; value: SpecClass }
   | { kind: "source"; value: SpecSource }
+  | { kind: "sourceBinding"; value: SpecSourceBinding }
   | { kind: "constraint"; value: SpecConstraint };
 
 export type SpecEntityKind = SpecEntity["kind"];

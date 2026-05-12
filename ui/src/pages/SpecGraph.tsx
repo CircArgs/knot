@@ -16,6 +16,8 @@ import toast, { Toaster } from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ClassNode from "../components/nodes/ClassNode";
+import SourceNode from "../components/nodes/SourceNode";
+import SourceBindingNode from "../components/nodes/SourceBindingNode";
 import Legend from "../components/Legend";
 import Modal from "../components/Modal";
 import PropertyPanel, {
@@ -27,6 +29,7 @@ import ClassForm from "../components/forms/ClassForm";
 import ConstraintForm from "../components/forms/ConstraintForm";
 import SlotForm from "../components/forms/SlotForm";
 import SourceForm from "../components/forms/SourceForm";
+import SourceBindingForm from "../components/forms/SourceBindingForm";
 import { PUBLISHED_SPEC } from "../graphql/queries";
 import {
   buildGraph,
@@ -41,10 +44,10 @@ import { autoDetach, editEntityViaDeleteAdd } from "../lib/draftHelpers";
 import { layoutGraph } from "../lib/layout";
 import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
 
-// Only Class is rendered as a node now — slots, sources, and constraints
-// live inline inside the class card.
 const NODE_TYPES = {
   specClass: ClassNode,
+  specSource: SourceNode,
+  specSourceBinding: SourceBindingNode,
 };
 
 interface QueryResult {
@@ -152,7 +155,12 @@ export default function SpecGraph() {
   // ── Selection ─────────────────────────────────────────────────────────────
   const onNodeClick = useCallback((_: unknown, node: Node) => {
     const data = node.data as SpecNodeData;
-    setSelection({ kind: data.entity.kind, name: data.entity.value.name });
+    const entity = data.entity;
+    const name =
+      entity.kind === "sourceBinding"
+        ? `${entity.value.sourceName}__${entity.value.className}`
+        : (entity.value as { name: string }).name;
+    setSelection({ kind: entity.kind, name });
   }, []);
   const onPaneClick = useCallback(() => setSelection(null), []);
 
@@ -252,7 +260,10 @@ export default function SpecGraph() {
   const deleteEntity = useCallback(
     async (entity: SpecEntity) => {
       if (draftId === null || !spec) return;
-      const name = entity.value.name;
+      const name =
+        entity.kind === "sourceBinding"
+          ? `${entity.value.sourceName}__${entity.value.className}`
+          : (entity.value as { name: string }).name;
       const ok = confirm(`Delete ${entity.kind} "${name}"?`);
       if (!ok) return;
       const attempt = async () => {
@@ -263,6 +274,10 @@ export default function SpecGraph() {
             return api.deleteClass(draftId, name);
           case "source":
             return api.deleteSource(draftId, name);
+          case "sourceBinding": {
+            const b = entity.value as import("../types/spec").SpecSourceBinding;
+            return api.deleteSourceBinding(draftId, b.sourceName, b.className);
+          }
           case "constraint":
             return api.deleteConstraint(draftId, name);
         }
@@ -382,9 +397,29 @@ export default function SpecGraph() {
           case "source":
             return api.addSource(draftId, {
               name: vals.name,
-              entity_class_name: vals.entityClassName,
-              identifier_slot_name: vals.identifierSlotName,
               description: vals.description || null,
+            });
+          case "sourceBinding":
+            return api.addSourceBinding(draftId, {
+              source_name: vals.source_name,
+              class_name: vals.class_name,
+              identifier_slot_name: vals.identifier_slot_name,
+              trust_prior: [
+                parseFloat(vals.trust_prior_alpha) || 1,
+                parseFloat(vals.trust_prior_beta) || 1,
+              ],
+              required_slot_names: vals.required_slot_names
+                ? vals.required_slot_names
+                    .split(",")
+                    .map((s: string) => s.trim())
+                    .filter(Boolean)
+                : [],
+              description: vals.description || null,
+              mappings: (vals.mappings ?? []).map((m: any) => ({
+                slot_name: m.slot_name,
+                source_field: m.source_field,
+                null_semantics: m.null_semantics ?? "no_claim",
+              })),
             });
           case "constraint":
             return api.addConstraint(draftId, {
@@ -401,14 +436,17 @@ export default function SpecGraph() {
           await performAdd();
         } else if (kind === "class") {
           // The only PATCH-able entity.
-          await api.updateClass(draftId, editing.value.name, {
+          const editingName = (editing.value as { name: string }).name;
+          await api.updateClass(draftId, editingName, {
             slot_names: vals.slotNames,
             is_a_name: vals.isAName || null,
             mixin_names: vals.mixinNames,
             abstract: vals.abstract,
             description: vals.description || null,
           });
-        } else {
+        } else if (kind !== "sourceBinding") {
+          // sourceBinding edits are handled as delete+re-add at the API level;
+          // for other named entities use the generic delete+add helper.
           const ok = confirm(
             `Editing a ${kind} via delete + add. References will be temporarily detached. Continue?`,
           );
@@ -417,9 +455,14 @@ export default function SpecGraph() {
             draftId,
             spec,
             kind as "slot" | "source" | "constraint",
-            editing.value.name,
+            (editing.value as { name: string }).name,
             performAdd,
           );
+        } else {
+          // sourceBinding: delete the old one, add the new one.
+          const b = editing.value as import("../types/spec").SpecSourceBinding;
+          await api.deleteSourceBinding(draftId, b.sourceName, b.className);
+          await performAdd();
         }
         toast.success(`Saved ${kind}`);
         setAddOpen(null);
@@ -508,7 +551,7 @@ export default function SpecGraph() {
         <Modal
           open
           onClose={() => setEditTarget(null)}
-          title={`Edit ${editTarget.kind} "${editTarget.value.name}"`}
+          title={`Edit ${editTarget.kind} "${editTarget.kind === "sourceBinding" ? `${editTarget.value.sourceName}__${editTarget.value.className}` : (editTarget.value as { name: string }).name}"`}
           widthClass="w-[560px]"
         >
           {renderForm(editTarget.kind, spec, editTarget, (vals) =>
@@ -550,8 +593,16 @@ function renderForm(
     case "source":
       return (
         <SourceForm
-          spec={spec}
           initial={editing?.kind === "source" ? editing.value : undefined}
+          lockName={!!editing}
+          onSubmit={onSubmit}
+        />
+      );
+    case "sourceBinding":
+      return (
+        <SourceBindingForm
+          spec={spec}
+          initial={editing?.kind === "sourceBinding" ? editing.value : undefined}
           lockName={!!editing}
           onSubmit={onSubmit}
         />
@@ -612,29 +663,13 @@ async function applyConnection(
     });
     return;
   }
-  // Source → Class : reset source entity_class via delete + add.
-  if (src.kind === "source" && tgt.kind === "class") {
-    const oldSrc = src.value;
-    await api.deleteSource(draftId, oldSrc.name);
-    await api.addSource(draftId, {
-      name: oldSrc.name,
-      entity_class_name: tgt.value.name,
-      identifier_slot_name: oldSrc.identifierSlotName,
-      description: oldSrc.description,
-    });
-    return;
-  }
-  // Source → Slot : reset identifier_slot via delete + add.
-  if (src.kind === "source" && tgt.kind === "slot") {
-    const oldSrc = src.value;
-    await api.deleteSource(draftId, oldSrc.name);
-    await api.addSource(draftId, {
-      name: oldSrc.name,
-      entity_class_name: oldSrc.entityClassName,
-      identifier_slot_name: tgt.value.name,
-      description: oldSrc.description,
-    });
-    return;
+  // Source → Class / Slot : Sources are now thin labels.
+  // The (Source, Class) binding relationship lives on SourceBinding.
+  // Use "+ Binding" in the toolbar to create a SourceBinding.
+  if (src.kind === "source") {
+    throw new InvalidConnectionError(
+      "Sources are thin labels. Use '+ Binding' in the toolbar to create a SourceBinding for this source.",
+    );
   }
   // Constraint → Class : reset primary via delete + add (constraint body is
   // preserved-as-empty because we don't have the original body in payload).

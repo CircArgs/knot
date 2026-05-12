@@ -8,14 +8,13 @@ import type {
   SpecEntity,
   SpecEntityKind,
   SpecSlot,
-  SpecSource,
 } from "../types/spec";
 import { isClassKind } from "../types/spec";
 
 /**
- * Spec graph: one node shape (Class card), three edge kinds (ClassRef, is_a,
- * mixin). Slots, sources, and constraints live inline inside the class card
- * — a slot is a property of the class table, not a separately-joinable entity.
+ * Spec graph: one node shape (Class card), plus Source cards and
+ * SourceBinding junction nodes. Three edge kinds on class cards (ClassRef,
+ * is_a, mixin). Slots and constraints live inline inside the class card.
  *
  * Reified relations (a class with ≥2 ClassRef slots — the Credit-between-Movie-
  * and-Person pattern) are rendered with the same card shape but get a
@@ -33,8 +32,6 @@ export interface ClassCard {
   cls: SpecClass;
   /** Resolved slot objects in the order they appear in `cls.slotNames`. */
   slots: SpecSlot[];
-  /** Sources that reference this class as `entityClassName`. */
-  sources: SpecSource[];
   /** Constraints that reference this class as `primaryClassName`. */
   constraints: SpecConstraint[];
   /** True when this class has ≥2 ClassRef slots whose targets exist on the
@@ -47,16 +44,13 @@ export interface ClassCard {
 export type SpecNode = Node<SpecNodeData>;
 export type SpecEdge = Edge;
 
-/** Map a class entity to its custom React Flow node-type key.
- *
- *  Today only Class nodes are rendered. The map shape is preserved so the
- *  React Flow `nodeTypes` registration on the page can index by kind without
- *  ad-hoc switching. */
+/** Map a class entity to its custom React Flow node-type key. */
 export const NODE_TYPE_BY_KIND: Record<SpecEntityKind, string> = {
-  slot: "specSlot",        // not currently rendered as a standalone node
+  slot: "specSlot",              // not currently rendered as a standalone node
   class: "specClass",
-  source: "specSource",    // not currently rendered as a standalone node
-  constraint: "specConstraint", // not currently rendered as a standalone node
+  source: "specSource",
+  sourceBinding: "specSourceBinding",
+  constraint: "specConstraint",  // not currently rendered as a standalone node
 };
 
 /** Per-entity-kind ID prefix; entity name space is per-kind, names collide across kinds. */
@@ -64,11 +58,17 @@ const ID_PREFIX: Record<SpecEntityKind, string> = {
   slot: "s",
   class: "c",
   source: "src",
+  sourceBinding: "sb",
   constraint: "k",
 };
 
 export function nodeId(kind: SpecEntityKind, name: string): string {
   return `${ID_PREFIX[kind]}:${name}`;
+}
+
+/** Stable node id for a source binding: sb:{sourceName}__{className} */
+export function bindingNodeId(sourceName: string, className: string): string {
+  return `sb:${sourceName}__${className}`;
 }
 
 /** Stable handle id for the per-slot-row source handle in a class card. */
@@ -106,13 +106,7 @@ export function buildGraph(
   const slotByName = new Map(spec.slots.map((s) => [s.name, s]));
   const classNames = new Set(spec.classes.map((c) => c.name));
 
-  // Pre-bucket sources + constraints by their owning class.
-  const sourcesByClass = new Map<string, SpecSource[]>();
-  for (const src of spec.sources) {
-    const bucket = sourcesByClass.get(src.entityClassName) ?? [];
-    bucket.push(src);
-    sourcesByClass.set(src.entityClassName, bucket);
-  }
+  // Pre-bucket constraints by their owning class.
   const constraintsByClass = new Map<string, SpecConstraint[]>();
   for (const k of spec.constraints) {
     const bucket = constraintsByClass.get(k.primaryClassName) ?? [];
@@ -128,7 +122,6 @@ export function buildGraph(
     const card: ClassCard = {
       cls,
       slots,
-      sources: sourcesByClass.get(cls.name) ?? [],
       constraints: constraintsByClass.get(cls.name) ?? [],
       isJunction: isJunctionClass(slots, classNames),
     };
@@ -142,6 +135,77 @@ export function buildGraph(
         card,
       },
     });
+  }
+
+  // — SOURCE CARDS —
+  for (const src of spec.sources) {
+    nodes.push({
+      id: nodeId("source", src.name),
+      type: NODE_TYPE_BY_KIND.source,
+      position: { x: 0, y: 0 },
+      data: {
+        label: src.name,
+        entity: { kind: "source", value: src },
+      },
+    });
+  }
+
+  // — SOURCE BINDING NODES + EDGES —
+  for (const binding of spec.sourceBindings ?? []) {
+    const bNodeId = bindingNodeId(binding.sourceName, binding.className);
+    nodes.push({
+      id: bNodeId,
+      type: NODE_TYPE_BY_KIND.sourceBinding,
+      position: { x: 0, y: 0 },
+      data: {
+        label: `${binding.sourceName}→${binding.className}`,
+        entity: { kind: "sourceBinding", value: binding },
+      },
+    });
+
+    // Edge: SourceBinding → Source
+    edges.push({
+      id: `edge:sb-src:${binding.sourceName}__${binding.className}`,
+      source: bNodeId,
+      target: nodeId("source", binding.sourceName),
+      label: "source",
+      markerEnd: { type: MarkerType.ArrowClosed, color: "#7c3aed" },
+      style: { stroke: "#7c3aed", strokeWidth: 1.25 },
+      labelStyle: { fontSize: 10, fill: "#7c3aed" },
+      labelBgPadding: [2, 2],
+      labelBgStyle: { fill: "#ffffff", fillOpacity: 0.9 },
+    });
+
+    // Edge: SourceBinding → Class
+    if (classNames.has(binding.className)) {
+      edges.push({
+        id: `edge:sb-cls:${binding.sourceName}__${binding.className}`,
+        source: bNodeId,
+        target: nodeId("class", binding.className),
+        label: "binds",
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#7c3aed" },
+        style: { stroke: "#7c3aed", strokeWidth: 1.25 },
+        labelStyle: { fontSize: 10, fill: "#7c3aed" },
+        labelBgPadding: [2, 2],
+        labelBgStyle: { fill: "#ffffff", fillOpacity: 0.9 },
+      });
+    }
+
+    // Edge: SourceBinding → identifier slot row on the target class card
+    if (binding.identifierSlotName && classNames.has(binding.className)) {
+      edges.push({
+        id: `edge:sb-id:${binding.sourceName}__${binding.className}`,
+        source: bNodeId,
+        target: nodeId("class", binding.className),
+        targetHandle: slotHandleId(binding.identifierSlotName),
+        label: "id slot",
+        markerEnd: { type: MarkerType.ArrowClosed, color: "#a855f7" },
+        style: { stroke: "#a855f7", strokeWidth: 1, strokeDasharray: "3 2" },
+        labelStyle: { fontSize: 9, fill: "#a855f7" },
+        labelBgPadding: [2, 2],
+        labelBgStyle: { fill: "#ffffff", fillOpacity: 0.9 },
+      });
+    }
   }
 
   // — Cross-class ClassRef edges (FKs, anchored at slot rows) —

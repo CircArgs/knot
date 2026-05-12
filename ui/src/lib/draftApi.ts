@@ -18,6 +18,7 @@ import type {
   SpecConstraint,
   SpecSlot,
   SpecSource,
+  SpecSourceBinding,
 } from "../types/spec";
 
 export class ApiError extends Error {
@@ -191,10 +192,29 @@ export function normalizeDraftSpec(
   const sources: SpecSource[] = (raw.sources ?? []).map(
     (src: Record<string, any>): SpecSource => ({
       name: src.name,
-      entityClassName: resolveName(src.entity_class) ?? "",
-      identifierSlotName: resolveName(src.identifier_slot) ?? "",
       description: src.description ?? null,
-      trustScore: src.trust_score ?? 1.0,
+    }),
+  );
+
+  const sourceBindings: SpecSourceBinding[] = (raw.source_bindings ?? []).map(
+    (b: Record<string, any>): SpecSourceBinding => ({
+      sourceName: resolveName(b.source) ?? b.source_name ?? "",
+      className: resolveName(b.class_) ?? b.class_name ?? "",
+      identifierSlotName: resolveName(b.identifier_slot) ?? b.identifier_slot_name ?? "",
+      mappings: (b.mappings ?? []).map((m: Record<string, any>) => ({
+        slotName: resolveName(m.slot) ?? m.slot_name ?? "",
+        sourceField: m.source_field ?? "",
+        default: m.default ?? null,
+        nullSemantics: m.null_semantics ?? "no_claim",
+        prior: m.prior ?? null,
+      })),
+      trustPrior: b.trust_prior
+        ? ([b.trust_prior[0], b.trust_prior[1]] as [number, number])
+        : [1.0, 1.0],
+      requiredSlotNames: (b.required_slots ?? []).map(
+        (s: Record<string, any>) => resolveName(s) ?? s?.name ?? "",
+      ),
+      description: b.description ?? null,
     }),
   );
 
@@ -215,6 +235,7 @@ export function normalizeDraftSpec(
     slots,
     classes,
     sources,
+    sourceBindings,
     constraints,
   };
 }
@@ -253,8 +274,23 @@ export interface ClassUpdate {
 }
 export interface SourceCreate {
   name: string;
-  entity_class_name: string;
+  description?: string | null;
+}
+
+export interface SlotMappingCreate {
+  slot_name: string;
+  source_field: string;
+  null_semantics?: string;
+  prior?: [number, number] | null;
+}
+
+export interface SourceBindingCreate {
+  source_name: string;
+  class_name: string;
   identifier_slot_name: string;
+  mappings?: SlotMappingCreate[];
+  trust_prior?: [number, number];
+  required_slot_names?: string[];
   description?: string | null;
 }
 export interface ConstraintCreate {
@@ -288,6 +324,33 @@ export const addSource = (id: number, body: SourceCreate) =>
     method: "POST",
     body: JSON.stringify(body),
   });
+
+export const addSourceBinding = (id: number, body: SourceBindingCreate) =>
+  request<MutationResponse>(`/spec/drafts/${id}/source_bindings`, {
+    method: "POST",
+    body: JSON.stringify(body),
+  });
+
+export const updateSourceBindingTrust = (
+  id: number,
+  sourceName: string,
+  className: string,
+  body: { trust_prior: [number, number] },
+) =>
+  request<MutationResponse>(
+    `/spec/drafts/${id}/source_bindings/${sourceName}/${className}/trust`,
+    { method: "PATCH", body: JSON.stringify(body) },
+  );
+
+export const deleteSourceBinding = (
+  id: number,
+  sourceName: string,
+  className: string,
+) =>
+  request<MutationResponse>(
+    `/spec/drafts/${id}/source_bindings/${sourceName}/${className}`,
+    { method: "DELETE" },
+  );
 
 export const addConstraint = (id: number, body: ConstraintCreate) =>
   request<MutationResponse>(`/spec/drafts/${id}/constraints`, {

@@ -7,7 +7,6 @@ import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../
 import type {
   SpecConstraint,
   SpecSlot,
-  SpecSource,
 } from "../../types/spec";
 import KindBadge from "./KindBadge";
 
@@ -31,7 +30,6 @@ export default function ClassNode({
   const card = data.card;
 
   const slots = card?.slots ?? [];
-  const sources = card?.sources ?? [];
   const constraints = card?.constraints ?? [];
   const isJunction = card?.isJunction === true;
 
@@ -41,7 +39,7 @@ export default function ClassNode({
       ? "ring-1 ring-violet-300"
       : "";
   const border = isJunction ? "border-violet-400" : "border-slate-300";
-  const hasMeta = sources.length > 0 || constraints.length > 0;
+  const hasMeta = constraints.length > 0;
 
   const onSelect = (data as { onSelect?: SelectFn }).onSelect;
 
@@ -116,13 +114,6 @@ export default function ClassNode({
         <>
           <div className="border-t border-slate-200" />
           <div className="px-3 py-1.5 space-y-1">
-            {sources.length > 0 && (
-              <MetaRow label="sources">
-                {sources.map((src) => (
-                  <SourceChip key={src.name} src={src} onSelect={onSelect} />
-                ))}
-              </MetaRow>
-            )}
             {constraints.length > 0 && (
               <MetaRow label="constraints">
                 {constraints.map((k) => (
@@ -265,27 +256,6 @@ function MetaRow({
       </span>
       <span className="flex flex-wrap gap-1">{children}</span>
     </div>
-  );
-}
-
-function SourceChip({
-  src,
-  onSelect,
-}: {
-  src: SpecSource;
-  onSelect?: SelectFn;
-}) {
-  return (
-    <button
-      onClick={(e) => {
-        e.stopPropagation();
-        onSelect?.({ kind: "source", name: src.name });
-      }}
-      className="text-[10px] font-mono px-1.5 py-px rounded bg-purple-100 text-purple-800 hover:bg-purple-200"
-      title={`source: ${src.name}`}
-    >
-      {src.name}
-    </button>
   );
 }
 

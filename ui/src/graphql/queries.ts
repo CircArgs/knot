@@ -34,10 +34,21 @@ export const PUBLISHED_SPEC = gql`
       }
       sources {
         name
-        entityClassName
-        identifierSlotName
         description
-        trustScore
+      }
+      sourceBindings {
+        sourceName
+        className
+        identifierSlotName
+        mappings {
+          slotName
+          sourceField
+          nullSemantics
+          hasPrior
+        }
+        trustPrior
+        requiredSlotNames
+        description
       }
       constraints {
         name

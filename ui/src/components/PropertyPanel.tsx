@@ -46,7 +46,7 @@ export default function PropertyPanel({ selection, spec, onClose }: Props) {
             {entity.kind}
           </div>
           <div className="font-semibold text-slate-900 font-mono break-all">
-            {entity.value.name}
+            {entityDisplayName(entity)}
           </div>
         </div>
         {onClose && (
@@ -83,11 +83,25 @@ export function resolveSelection(
       const v = spec.sources.find((src) => src.name === sel.name);
       return v ? { kind: "source", value: v } : null;
     }
+    case "sourceBinding": {
+      // sel.name for a binding is "{sourceName}__{className}"
+      const v = (spec.sourceBindings ?? []).find(
+        (b) => `${b.sourceName}__${b.className}` === sel.name,
+      );
+      return v ? { kind: "sourceBinding", value: v } : null;
+    }
     case "constraint": {
       const v = spec.constraints.find((k) => k.name === sel.name);
       return v ? { kind: "constraint", value: v } : null;
     }
   }
+}
+
+function entityDisplayName(entity: SpecEntity): string {
+  if (entity.kind === "sourceBinding") {
+    return `${entity.value.sourceName}__${entity.value.className}`;
+  }
+  return (entity.value as { name: string }).name;
 }
 
 function PropertyTable({ entity }: { entity: SpecEntity }) {

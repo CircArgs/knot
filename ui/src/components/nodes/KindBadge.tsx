@@ -9,6 +9,7 @@ const TONE: Record<SpecEntityKind, string> = {
   class: "bg-blue-100 text-blue-800 border-blue-300",
   slot: "bg-green-100 text-green-800 border-green-300",
   source: "bg-purple-100 text-purple-800 border-purple-300",
+  sourceBinding: "bg-violet-100 text-violet-800 border-violet-300",
   constraint: "bg-rose-100 text-rose-800 border-rose-300",
 };
 
