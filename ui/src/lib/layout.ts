@@ -26,10 +26,26 @@ export async function layoutGraph<N extends Node>(
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": "RIGHT",
-      "elk.layered.spacing.nodeNodeBetweenLayers": "80",
-      "elk.spacing.nodeNode": "40",
-      "elk.layered.nodePlacement.strategy": "NETWORK_SIMPLEX",
+      // Plenty of room between layers so long FK edges have space to bend
+      // around the rectangular class cards without crossing them.
+      "elk.layered.spacing.nodeNodeBetweenLayers": "160",
+      "elk.spacing.nodeNode": "80",
+      // Keep edges away from node boundaries — prevents the "edge clips into
+      // a class card" effect that happens with tight spacing.
+      "elk.spacing.edgeNode": "40",
+      "elk.spacing.edgeEdge": "20",
+      "elk.layered.spacing.edgeNodeBetweenLayers": "40",
+      "elk.layered.spacing.edgeEdgeBetweenLayers": "20",
+      // ORTHOGONAL routing gives right-angle Manhattan edges that dodge
+      // intermediate nodes cleanly. The default POLYLINE routing tends to
+      // cut diagonally through other cards.
+      "elk.edgeRouting": "ORTHOGONAL",
+      // LINEAR_SEGMENTS aligns nodes within a layer (cleaner verticals)
+      // and tends to produce fewer crossings than NETWORK_SIMPLEX on
+      // graphs with many parallel edges.
+      "elk.layered.nodePlacement.strategy": "LINEAR_SEGMENTS",
       "elk.layered.crossingMinimization.strategy": "LAYER_SWEEP",
+      "elk.layered.crossingMinimization.semiInteractive": "true",
     },
     children: nodes.map((n) => ({
       id: n.id,

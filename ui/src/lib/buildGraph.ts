@@ -167,6 +167,7 @@ export function buildGraph(
     // the binding's source side regardless of arrow direction.
     edges.push({
       id: `edge:sb-src:${binding.sourceName}__${binding.className}`,
+      type: "smoothstep",
       source: nodeId("source", binding.sourceName),
       target: bNodeId,
       label: "feeds",
@@ -181,6 +182,7 @@ export function buildGraph(
     if (classNames.has(binding.className)) {
       edges.push({
         id: `edge:sb-cls:${binding.sourceName}__${binding.className}`,
+        type: "smoothstep",
         source: bNodeId,
         target: nodeId("class", binding.className),
         label: "binds",
@@ -207,6 +209,7 @@ export function buildGraph(
       if (!classNames.has(slot.typeName)) continue;
       edges.push({
         id: `edge:fk:${cls.name}.${slot.name}->${slot.typeName}`,
+        type: "smoothstep",
         source: nodeId("class", cls.name),
         sourceHandle: slotHandleId(slot.name),
         target: nodeId("class", slot.typeName),
@@ -232,6 +235,7 @@ export function buildGraph(
     if (cls.isAName && classNames.has(cls.isAName)) {
       edges.push({
         id: `edge:isa:${cls.isAName}->${cls.name}`,
+        type: "smoothstep",
         source: nodeId("class", cls.isAName),
         sourceHandle: "class-source",
         target: nodeId("class", cls.name),
@@ -247,6 +251,7 @@ export function buildGraph(
       if (!classNames.has(mx)) continue;
       edges.push({
         id: `edge:mixin:${mx}->${cls.name}`,
+        type: "smoothstep",
         source: nodeId("class", mx),
         sourceHandle: "class-source",
         target: nodeId("class", cls.name),
