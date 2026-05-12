@@ -336,6 +336,27 @@ export const updateClass = (id: number, name: string, body: ClassUpdate) =>
     body: JSON.stringify(body),
   });
 
+/** Non-destructive class rename. The draft records a rename hint; publish
+ *  emits `ALTER TABLE … RENAME TO` + bindings/indexes/CHECK-constraint renames. */
+export const renameClass = (id: number, oldName: string, newName: string) =>
+  request<MutationResponse>(
+    `/spec/drafts/${id}/classes/${oldName}/rename`,
+    { method: "POST", body: JSON.stringify({ new_name: newName }) },
+  );
+
+/** Non-destructive slot rename, scoped to a single class. Publish emits
+ *  `ALTER TABLE knot_data.<cls> RENAME COLUMN <old> TO <new>`. */
+export const renameSlot = (
+  id: number,
+  className: string,
+  oldName: string,
+  newName: string,
+) =>
+  request<MutationResponse>(
+    `/spec/drafts/${id}/classes/${className}/slots/${oldName}/rename`,
+    { method: "POST", body: JSON.stringify({ new_name: newName }) },
+  );
+
 export const addSource = (id: number, body: SourceCreate) =>
   request<MutationResponse>(`/spec/drafts/${id}/sources`, {
     method: "POST",

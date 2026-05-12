@@ -28,6 +28,9 @@ export interface InlineSlotRow {
   typeName: string;
   identifier: boolean;
   required: boolean;
+  /** Pre-edit slot name; set when loading from an existing class. If set
+   *  and differs from `name` at submit time, the row represents a rename. */
+  originalName?: string;
 }
 
 function emptySlotRow(): InlineSlotRow {
@@ -107,6 +110,7 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
         typeName: s.typeName ?? "",
         identifier: s.identifier,
         required: s.required,
+        originalName: s.name,
       }));
     }
     return [];
@@ -140,9 +144,9 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
         <Label required>name</Label>
         <input
           {...register("name")}
-          disabled={lockName}
           className={inputClass}
           placeholder="e.g. Movie"
+          title={lockName ? "Editing the name triggers a non-destructive RENAME." : undefined}
         />
         <ErrText error={errors.name} />
       </FieldRow>

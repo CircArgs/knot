@@ -422,7 +422,22 @@ export default function SpecGraph() {
         } else if (kind === "class") {
           const classVals = vals as ClassFormValues;
           const editingName = (editing.value as { name: string }).name;
-          await api.updateClass(draftId, editingName, {
+          // 1. If the class name changed, register a non-destructive rename
+          //    first so subsequent PATCH/slot-rename calls address the new name.
+          let currentClassName = editingName;
+          if (classVals.name && classVals.name !== editingName) {
+            await api.renameClass(draftId, editingName, classVals.name);
+            currentClassName = classVals.name;
+          }
+          // 2. Apply any per-slot renames (originalName set + differs from name).
+          //    Address each via the class's current (post-rename) name.
+          for (const row of classVals.slots) {
+            if (row.originalName && row.originalName !== row.name) {
+              await api.renameSlot(draftId, currentClassName, row.originalName, row.name);
+            }
+          }
+          // 3. PATCH the class with the final slot list.
+          await api.updateClass(draftId, currentClassName, {
             slots: classVals.slots.map((r) => ({
               name: r.name,
               type_kind: r.typeKind || null,
