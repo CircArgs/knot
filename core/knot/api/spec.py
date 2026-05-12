@@ -32,6 +32,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from knot import db
 from knot.api.auth.security import require_user
 from knot.graph import spec as graph_spec
+from knot.graph.spec import IdentifierSlotRemovalError
 from knot.spec import (
     OntologyClass,
     ResolutionPolicy,
@@ -584,6 +585,8 @@ async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationR
             )
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
+        except IdentifierSlotRemovalError as exc:
+            raise HTTPException(409, str(exc)) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)

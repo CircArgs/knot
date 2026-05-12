@@ -62,6 +62,7 @@ __all__ = (
     "CollisionError",
     "EntityNotOnDraftError",
     "ExprTranslationError",
+    "IdentifierSlotRemovalError",
     "InvalidTypeExprError",
     "InvalidIdentifierSlotError",
     "ReferencedEntityError",
@@ -398,6 +399,20 @@ async def add_class(
     return spec
 
 
+class IdentifierSlotRemovalError(Exception):
+    """Raised when a PATCH would remove a slot that is an identifier_slot on a SourceBinding."""
+
+    def __init__(self, class_name: str, slot_name: str, binding_ids: list[str]) -> None:
+        self.class_name = class_name
+        self.slot_name = slot_name
+        self.binding_ids = binding_ids
+        ids_str = ", ".join(binding_ids)
+        super().__init__(
+            f"Cannot remove slot {slot_name!r} from class {class_name!r}: "
+            f"it is the identifier_slot for SourceBinding(s): {ids_str}."
+        )
+
+
 async def update_class(
     conn: psycopg.AsyncConnection,
     draft_id: int,
@@ -414,11 +429,30 @@ async def update_class(
     ``slots`` is a full replacement list of slot-creation dicts. If provided,
     the class's slots are completely replaced with the new inline definitions.
     If omitted, the existing slots are unchanged.
+
+    Pre-flight: if any SourceBinding whose class_ is this class has its
+    ``identifier_slot`` removed by the patch, raises ``IdentifierSlotRemovalError``
+    with a 409. This prevents silent publish failures later.
     """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         cls = _find_class(spec, name)
 
         if slots is not None:
+            new_slot_names = {slot_def.get("name", "").lower() for slot_def in slots}
+
+            # Pre-flight: check if any binding's identifier_slot is being removed.
+            affected_bindings: list[str] = []
+            missing_slot_name: str = ""
+            for b in spec.source_bindings:
+                if b.class_ is not cls:
+                    continue
+                if b.identifier_slot.name.lower() not in new_slot_names:
+                    affected_bindings.append(b.binding_id)
+                    if not missing_slot_name:
+                        missing_slot_name = b.identifier_slot.name
+            if affected_bindings:
+                raise IdentifierSlotRemovalError(name, missing_slot_name, affected_bindings)
+
             slot_names_seen: set[str] = set()
             built_slots: list[Slot] = []
             for slot_def in slots:
