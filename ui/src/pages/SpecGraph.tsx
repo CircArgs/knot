@@ -40,7 +40,7 @@ import {
 import * as api from "../lib/draftApi";
 import { ApiError, normalizeDraftSpec } from "../lib/draftApi";
 import { autoDetach, editEntityViaDeleteAdd } from "../lib/draftHelpers";
-import { layoutGraph } from "../lib/layout";
+import { layoutSpecGraph } from "../lib/layout";
 import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
 
 const NODE_TYPES = {
@@ -120,8 +120,7 @@ export default function SpecGraph() {
       const saved = positionsRef.current[n.id];
       return saved ? { ...n, position: saved } : n;
     });
-    const sizing = { width: 300, height: 220 };
-    layoutGraph(preserved, es, sizing).then((laid) => {
+    layoutSpecGraph(preserved, es).then((laid) => {
       if (cancelled) return;
       const merged = laid.map((n) => {
         const saved = positionsRef.current[n.id];
