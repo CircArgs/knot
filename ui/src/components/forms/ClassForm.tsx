@@ -22,7 +22,7 @@ const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 
 export type TypeKindValue = "" | "primitive" | "array_of_primitive" | "class" | "array_of_class";
 
-export interface InlineSlotRow {
+export interface InlinePropertyRow {
   name: string;
   typeKind: TypeKindValue;
   typeName: string;
@@ -33,7 +33,7 @@ export interface InlineSlotRow {
   originalName?: string;
 }
 
-function emptySlotRow(): InlineSlotRow {
+function emptySlotRow(): InlinePropertyRow {
   return {
     name: "",
     typeKind: "primitive",
@@ -56,7 +56,7 @@ const Schema = z.object({
 
 export type ClassFormValues = z.infer<typeof Schema> & {
   /** Inline slot definitions for this class. */
-  slots: InlineSlotRow[];
+  properties: InlinePropertyRow[];
 };
 
 interface Props {
@@ -64,7 +64,7 @@ interface Props {
   initial?: Partial<SpecClass>;
   lockName?: boolean;
   /** initialSlotRows is pre-populated when editing an existing class. */
-  initialSlotRows?: InlineSlotRow[];
+  initialSlotRows?: InlinePropertyRow[];
   onSubmit: (vals: ClassFormValues) => Promise<void>;
 }
 
@@ -101,10 +101,10 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   // ── Inline slot rows state ────────────────────────────────────────────────
-  const [slotRows, setSlotRows] = useState<InlineSlotRow[]>(() => {
+  const [slotRows, setSlotRows] = useState<InlinePropertyRow[]>(() => {
     if (initialSlotRows && initialSlotRows.length > 0) return initialSlotRows;
-    if (initial?.slots && initial.slots.length > 0) {
-      return initial.slots.map((s) => ({
+    if (initial?.properties && initial.properties.length > 0) {
+      return initial.properties.map((s) => ({
         name: s.name,
         typeKind: (s.typeKind ?? "primitive") as TypeKindValue,
         typeName: s.typeName ?? "",
@@ -119,7 +119,7 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
   const addSlotRow = () => setSlotRows((rs) => [...rs, emptySlotRow()]);
   const removeSlotRow = (idx: number) =>
     setSlotRows((rs) => rs.filter((_, i) => i !== idx));
-  const updateSlotRow = (idx: number, patch: Partial<InlineSlotRow>) =>
+  const updateSlotRow = (idx: number, patch: Partial<InlinePropertyRow>) =>
     setSlotRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
 
   const otherClasses = spec.classes.filter((c) => c.name !== initial?.name);
@@ -134,7 +134,7 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
   };
 
   const submit = handleSubmit(async (base) => {
-    const slots = slotRows.filter((r) => r.name.trim() !== "");
+    const properties = slotRows.filter((r) => r.name.trim() !== "");
     await onSubmit({ ...base, slots });
   });
 
@@ -266,10 +266,10 @@ function InlineSlotEditor({
   onChange,
   onRemove,
 }: {
-  row: InlineSlotRow;
+  row: InlinePropertyRow;
   idx: number;
   classOptions: { value: string; label: string }[];
-  onChange: (patch: Partial<InlineSlotRow>) => void;
+  onChange: (patch: Partial<InlinePropertyRow>) => void;
   onRemove: () => void;
 }) {
   const isClassRange = row.typeKind === "class" || row.typeKind === "array_of_class";
@@ -306,7 +306,7 @@ function InlineSlotEditor({
             value={row.name}
             onChange={(e) => onChange({ name: e.target.value })}
             className={inputClass}
-            placeholder="slot_name"
+            placeholder="property_name"
           />
         </div>
 

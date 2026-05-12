@@ -24,10 +24,10 @@ from typing import Any
 import psycopg
 from pydantic import ValidationError
 
-from knot.api.row_models import build_row_model_for_class, build_value_model_for_slot
+from knot.api.row_models import build_row_model_for_class, build_value_model_for_property
 from knot.db import corrections as db_corrections
 from knot.db import dq, graph_store, trust_posteriors
-from knot.spec import OntologyClass, Slot, Spec
+from knot.spec import OntologyClass, Property, Spec
 from knot.spec.compile.postgres._naming import user_corrections_source
 
 # ---------------------------------------------------------------------------
@@ -61,10 +61,10 @@ class CanonicalAlreadyExistsError(Exception):
 class SlotNotOnClassError(Exception):
     """A slot name isn't on the target class."""
 
-    def __init__(self, class_name: str, slot_name: str) -> None:
+    def __init__(self, class_name: str, property_name: str) -> None:
         self.class_name = class_name
-        self.slot_name = slot_name
-        super().__init__(f"Slot {slot_name!r} not on class {class_name!r}")
+        self.property_name = property_name
+        super().__init__(f"Slot {property_name!r} not on class {class_name!r}")
 
 
 class InvalidPartitionsError(Exception):
@@ -87,23 +87,23 @@ class CorrectionValueError(Exception):
 # ---------------------------------------------------------------------------
 
 
-def _resolve_slot(cls: OntologyClass, slot_name: str) -> Slot:
-    slot = next((s for s in cls.slots if s.name == slot_name), None)
+def _resolve_slot(cls: OntologyClass, property_name: str) -> Slot:
+    slot = next((s for s in cls.properties if s.name == property_name), None)
     if slot is None:
-        raise SlotNotOnClassError(cls.name, slot_name)
+        raise SlotNotOnClassError(cls.name, property_name)
     return slot
 
 
-def _validate_property_value(slot: Slot, value: Any) -> Any:
+def _validate_property_value(prop: Slot, value: Any) -> Any:
     """Validate the corrected value against the slot's full constraint set
     (type, pattern, min/max, Literal-from-permissible-values, multivalued
     list-shape). Raises ``CorrectionValueError`` on mismatch.
 
     Same constraint-application logic as ingest's per-source row model.
     """
-    one_field = build_value_model_for_slot(slot)
+    one_field = build_value_model_for_property(property)
     try:
-        return one_field.model_validate({slot.name: value}).model_dump()[slot.name]
+        return one_field.model_validate({property.name: value}).model_dump()[property.name]
     except ValidationError as exc:
         errors = [{**e, "loc": ("body", "value", *e["loc"])} for e in exc.errors()]
         raise CorrectionValueError(errors) from exc
@@ -142,7 +142,7 @@ async def apply_property_correction(
     *,
     cls: OntologyClass,
     canonical_id: str,
-    slot_name: str,
+    property_name: str,
     value: Any,
     spec_revision: int,
     applied_by: str | None = None,
@@ -154,14 +154,14 @@ async def apply_property_correction(
     Does NOT pre-check canonical_id existence — corrections may be the first
     write under an Add-style flow (the upsert path handles it).
     """
-    slot = _resolve_slot(cls, slot_name)
-    validated_value = _validate_property_value(slot, value)
+    slot = _resolve_slot(cls, property_name)
+    validated_value = _validate_property_value(property, value)
 
     log_payload = payload_for_log or {
         "type": "property",
         "class_name": cls.name,
         "canonical_id": canonical_id,
-        "slot": slot_name,
+        "slot": property_name,
         "value": value,
     }
     async with conn.transaction():
@@ -176,7 +176,7 @@ async def apply_property_correction(
             conn,
             cls=cls,
             canonical_id=canonical_id,
-            slot_name=slot_name,
+            property_name=property_name,
             value=validated_value,
             spec_revision=spec_revision,
         )
@@ -185,17 +185,17 @@ async def apply_property_correction(
             source_name=user_corrections_source(),
             cls=cls,
             batch_id=str(correction_id),
-            rows=[{slot_name: validated_value}],
-            only_slots=[slot_name],
+            rows=[{property_name: validated_value}],
+            only_slots=[property_name],
         )
         for source, contributed in await graph_store.get_disagreeing_contributions(
             conn,
             cls=cls,
             canonical_id=canonical_id,
-            slot_name=slot_name,
+            property_name=property_name,
         ):
             success = _values_match(contributed, validated_value)
-            await trust_posteriors.record_feedback(conn, source, slot_name, success)
+            await trust_posteriors.record_feedback(conn, source, property_name, success)
         return correction_id
 
 

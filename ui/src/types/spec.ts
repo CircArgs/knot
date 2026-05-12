@@ -15,7 +15,7 @@ export type SlotTypeKind =
 
 export type ResolutionPolicy = "argmax_trust" | "posterior_mean" | "lcb";
 
-export interface SpecSlot {
+export interface SpecProperty {
   name: string;
   identifier: boolean;
   required: boolean;
@@ -36,8 +36,8 @@ export interface SpecClass {
   definition: string | null;
   isAName: string | null;
   mixinNames: string[];
-  slots: SpecSlot[];
-  effectiveSlots: SpecSlot[];
+  properties: SpecProperty[];
+  effectiveProperties: SpecProperty[];
 }
 
 export interface SpecSource {
@@ -47,7 +47,7 @@ export interface SpecSource {
 
 export type SpecNullSemantics = "no_claim" | "asserted_absent";
 
-export interface SpecSlotMapping {
+export interface SpecPropertyMapping {
   slotName: string;
   sourceField: string;
   default: unknown | null;
@@ -59,7 +59,7 @@ export interface SpecSourceBinding {
   sourceName: string;
   className: string;
   identifierSlotName: string;
-  mappings: SpecSlotMapping[];
+  mappings: SpecPropertyMapping[];
   trustPrior: [number, number];
   requiredSlotNames: string[];
   description: string | null;
@@ -91,7 +91,7 @@ export interface PublishedSpec {
  * Carried as React Flow `node.data.entity` so panels/forms can switch on `kind`.
  */
 export type SpecEntity =
-  | { kind: "slot"; value: SpecSlot }
+  | { kind: "property"; value: SpecProperty }
   | { kind: "class"; value: SpecClass }
   | { kind: "source"; value: SpecSource }
   | { kind: "sourceBinding"; value: SpecSourceBinding }

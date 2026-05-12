@@ -36,7 +36,7 @@ from knot.graph.spec import IdentifierSlotRemovalError
 from knot.spec import (
     OntologyClass,
     ResolutionPolicy,
-    Slot,
+    Property,
     Source,
     SourceBinding,
     Spec,
@@ -63,7 +63,7 @@ class _StrictBase(BaseModel):
 # ─── Read summaries ─────────────────────────────────────────────────────────
 
 
-class SlotSummary(_StrictBase):
+class PropertySummary(_StrictBase):
     name: str
     type_kind: str | None  # "primitive"|"class"|"array_of_primitive"|"array_of_class"|None
     type_name: str | None  # primitive name or class name
@@ -74,7 +74,7 @@ class SlotSummary(_StrictBase):
 
 class ClassSummary(_StrictBase):
     name: str
-    slots: list[SlotSummary]
+    properties: list[PropertySummary]
     is_a: str | None
     mixins: list[str]
     abstract: bool
@@ -86,7 +86,7 @@ class SourceSummary(_StrictBase):
 
 
 class SlotMappingSummary(_StrictBase):
-    slot_name: str
+    property_name: str
     source_field: str
     null_semantics: str
     has_prior: bool
@@ -96,9 +96,9 @@ class SourceBindingSummary(_StrictBase):
     binding_id: str
     source_name: str
     class_name: str
-    identifier_slot: str
+    identifier_property: str
     trust_prior: list[float]  # [alpha, beta]
-    required_slots: list[str]
+    required_properties: list[str]
     mappings: list[SlotMappingSummary]
     description: str | None
 
@@ -124,7 +124,7 @@ class SlotConstraintsCreate(_StrictBase):
     permissible_values: list[str] | None = None
 
 
-class SlotCreate(_StrictBase):
+class PropertyCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
     type_kind: str | None = None  # "primitive"|"class"|"array_of_primitive"|"array_of_class"|null
     type_name: str | None = None
@@ -138,7 +138,7 @@ class SlotCreate(_StrictBase):
 
 class ClassCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
-    slots: list[SlotCreate] = Field(default_factory=list)
+    properties: list[PropertyCreate] = Field(default_factory=list)
     is_a_name: str | None = None
     mixin_names: list[str] = Field(default_factory=list)
     abstract: bool = False
@@ -147,7 +147,7 @@ class ClassCreate(_StrictBase):
 
 
 class ClassUpdate(_StrictBase):
-    slots: list[SlotCreate] | None = None
+    properties: list[PropertyCreate] | None = None
     is_a_name: str | None = None
     mixin_names: list[str] | None = None
     abstract: bool | None = None
@@ -168,8 +168,8 @@ class SourceCreate(_StrictBase):
 
 
 class SlotMappingCreate(_StrictBase):
-    slot_name: str
-    source_field: str | None = None  # defaults to slot_name
+    property_name: str
+    source_field: str | None = None  # defaults to property_name
     default: object | None = None
     null_semantics: str = NullSemantics.NO_CLAIM.value
     prior: list[float] | None = None  # [alpha, beta] or None
@@ -250,9 +250,9 @@ def _response(draft_id: int, spec: Spec) -> MutationResponse:
     )
 
 
-def _type_kind_name(slot: Slot) -> tuple[str | None, str | None]:
+def _type_kind_name(prop: Slot) -> tuple[str | None, str | None]:
     """Return (type_kind, type_name) for the API summary."""
-    t = slot.type
+    t = prop.type
     if t is None:
         return None, None
     if isinstance(t, Primitive):
@@ -268,10 +268,10 @@ def _type_kind_name(slot: Slot) -> tuple[str | None, str | None]:
     return None, None
 
 
-def _summarize_slot(s: Slot) -> SlotSummary:
+def _summarize_property(s: Slot) -> PropertySummary:
     type_kind, type_name = _type_kind_name(s)
     rp = s.resolution_policy
-    return SlotSummary(
+    return PropertySummary(
         name=s.name,
         type_kind=type_kind,
         type_name=type_name,
@@ -284,7 +284,7 @@ def _summarize_slot(s: Slot) -> SlotSummary:
 def _summarize_class(c: OntologyClass) -> ClassSummary:
     return ClassSummary(
         name=c.name,
-        slots=[_summarize_slot(s) for s in c.slots],
+        properties=[_summarize_property(s) for s in c.properties],
         is_a=c.is_a.name if c.is_a else None,
         mixins=[m.name for m in c.mixins],
         abstract=c.abstract,
@@ -300,12 +300,12 @@ def _summarize_source_binding(b: SourceBinding) -> SourceBindingSummary:
         binding_id=b.binding_id,
         source_name=b.source.name,
         class_name=b.class_.name,
-        identifier_slot=b.identifier_slot.name,
+        identifier_property=b.identifier_property.name,
         trust_prior=list(b.trust_prior),
-        required_slots=[s.name for s in b.required_slots],
+        required_properties=[s.name for s in b.required_properties],
         mappings=[
             SlotMappingSummary(
-                slot_name=m.slot.name,
+                property_name=m.prop.name,
                 source_field=m.source_field,
                 null_semantics=m.null_semantics.value
                 if hasattr(m.null_semantics, "value")
@@ -324,8 +324,8 @@ def _parse_trust_prior(raw: list[float]) -> tuple[float, float]:
     return (raw[0], raw[1])
 
 
-def _slot_create_to_dict(s: SlotCreate) -> dict:
-    """Convert a SlotCreate request model to the dict format graph_spec.add_class expects."""
+def _property_create_to_dict(s: PropertyCreate) -> dict:
+    """Convert a PropertyCreate request model to the dict format graph_spec.add_class expects."""
     result: dict = {
         "name": s.name,
         "type_kind": s.type_kind,
@@ -517,10 +517,10 @@ async def discard_draft_endpoint(draft_id: int) -> dict[str, str]:
     dependencies=[Depends(require_user)],
 )
 async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
-    slots_dicts = [_slot_create_to_dict(s) for s in body.slots]
+    slots_dicts = [_property_create_to_dict(s) for s in body.properties]
     # Validate no duplicate slot names in the request payload
     seen: set[str] = set()
-    for s in body.slots:
+    for s in body.properties:
         if s.name.lower() in seen:
             raise HTTPException(400, f"Duplicate slot name {s.name!r} in class definition.")
         seen.add(s.name.lower())
@@ -538,7 +538,7 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
                 conn,
                 draft_id,
                 name=body.name,
-                slots=slots_dicts,
+                properties=slots_dicts,
                 is_a_name=body.is_a_name,
                 mixin_names=body.mixin_names,
                 abstract=body.abstract,
@@ -563,21 +563,21 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
 )
 async def update_class(draft_id: int, name: str, body: ClassUpdate) -> MutationResponse:
     slots_dicts: list[dict] | None = None
-    if body.slots is not None:
+    if body.properties is not None:
         # Validate no duplicate slot names in the request payload
         seen: set[str] = set()
-        for s in body.slots:
+        for s in body.properties:
             if s.name.lower() in seen:
                 raise HTTPException(400, f"Duplicate slot name {s.name!r} in class update.")
             seen.add(s.name.lower())
-        slots_dicts = [_slot_create_to_dict(s) for s in body.slots]
+        slots_dicts = [_property_create_to_dict(s) for s in body.properties]
     async with db.connect() as conn:
         try:
             spec = await graph_spec.update_class(
                 conn,
                 draft_id,
                 name,
-                slots=slots_dicts,
+                properties=slots_dicts,
                 is_a_name=body.is_a_name,
                 mixin_names=body.mixin_names,
                 abstract=body.abstract,
@@ -712,13 +712,13 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
 
 
 @router.post(
-    "/drafts/{draft_id}/classes/{class_name}/slots/{slot_name}/rename",
+    "/drafts/{draft_id}/classes/{class_name}/slots/{property_name}/rename",
     response_model=MutationResponse,
     dependencies=[Depends(require_user)],
     summary="Rename a slot on a class (non-destructive RENAME COLUMN at publish)",
 )
-async def rename_slot(
-    draft_id: int, class_name: str, slot_name: str, body: SlotRename
+async def rename_property(
+    draft_id: int, class_name: str, property_name: str, body: SlotRename
 ) -> MutationResponse:
     """Rename a slot on a specific class in a draft.
 
@@ -728,8 +728,8 @@ async def rename_slot(
     """
     async with db.connect() as conn:
         try:
-            spec = await graph_spec.rename_slot(
-                conn, draft_id, class_name, slot_name, body.new_name
+            spec = await graph_spec.rename_property(
+                conn, draft_id, class_name, property_name, body.new_name
             )
         except graph_spec.CollisionError as exc:
             raise _map_collision(exc) from exc
@@ -934,8 +934,8 @@ async def publish(
     allow_destructive: bool = Query(
         False,
         description=(
-            "Required to confirm destructive migrations (DropClass / DropSlot / "
-            "ChangeSlotTypeExpression). Publish fails with 400 otherwise."
+            "Required to confirm destructive migrations (DropClass / DropProperty / "
+            "ChangePropertyTypeExpression). Publish fails with 400 otherwise."
         ),
     ),
 ) -> PublishResponse:

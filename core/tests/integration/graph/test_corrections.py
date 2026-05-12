@@ -19,7 +19,7 @@ from knot.spec import (
     OntologyClass,
     Primitive,
     ResolutionPolicy,
-    Slot,
+    Property,
     Source,
     Spec,
 )
@@ -43,18 +43,18 @@ async def corrections_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(
         name="title",
         type=Primitive(name="string"),
         resolution_policy=ResolutionPolicy.POSTERIOR_MEAN,
     )
-    tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
-    movie = OntologyClass(name="Movie", slots=[id_slot, title, tags])
+    tags = Property(name="tags", type=Array(of=Primitive(name="string")))
+    movie = OntologyClass(name="Movie", properties=[id_slot, title, tags])
     src_a = Source(name="source_a")
     src_b = Source(name="source_b")
-    binding_a = SourceBinding(source=src_a, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
-    binding_b = SourceBinding(source=src_b, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding_a = SourceBinding(source=src_a, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
+    binding_b = SourceBinding(source=src_b, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="corrections_test",
         version="1.0.0",
@@ -96,7 +96,7 @@ async def test_apply_property_correction_writes_audit_row(corrections_db):
         conn,
         cls=movie,
         canonical_id="tt_canonical",
-        slot_name="title",
+        property_name="title",
         value="Corrected Title",
         spec_revision=rev,
         applied_by="tester",
@@ -114,7 +114,7 @@ async def test_apply_property_correction_upserts_correction_row(corrections_db):
         conn,
         cls=movie,
         canonical_id="tt_canonical",
-        slot_name="title",
+        property_name="title",
         value="Corrected Title",
         spec_revision=rev,
     )
@@ -132,7 +132,7 @@ async def test_apply_property_correction_returns_int_id(corrections_db):
         conn,
         cls=movie,
         canonical_id="tt_canonical",
-        slot_name="title",
+        property_name="title",
         value="X",
         spec_revision=rev,
     )
@@ -153,7 +153,7 @@ async def test_correction_agreement_increments_alpha(corrections_db):
         conn,
         cls=movie,
         canonical_id="tt_canonical",
-        slot_name="title",
+        property_name="title",
         value="From A",
         spec_revision=rev,
     )
@@ -169,7 +169,7 @@ async def test_correction_disagreement_increments_beta(corrections_db):
         conn,
         cls=movie,
         canonical_id="tt_canonical",
-        slot_name="title",
+        property_name="title",
         value="From A",
         spec_revision=rev,
     )
@@ -274,21 +274,21 @@ async def test_apply_merge_rewrites_cross_class_fk_references(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    person_id = Slot(
+    person_id = Property(
         name="person_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    person_name = Slot(name="name", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id, person_name])
+    person_name = Property(name="name", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id, person_name])
 
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))  # cross-class FK
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title, directed_by])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    directed_by = Property(name="directed_by", type=ClassRef(target_class=person))  # cross-class FK
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title, directed_by])
 
     src_movies = Source(name="src_movies")
     src_people = Source(name="src_people")
-    binding_movies = SourceBinding(source=src_movies, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
-    binding_people = SourceBinding(source=src_people, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
+    binding_movies = SourceBinding(source=src_movies, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding_people = SourceBinding(source=src_people, class_=person, identifier_property=person_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="merge_fk_test",

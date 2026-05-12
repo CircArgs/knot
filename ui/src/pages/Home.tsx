@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-interface Cls { name: string; abstract: boolean; slots: string[]; }
+interface Cls { name: string; abstract: boolean; properties: string[]; }
 
 export default function Home() {
   const [classes, setClasses] = useState<Cls[] | null>(null);
@@ -20,7 +20,7 @@ export default function Home() {
         {classes.map(c => (
           <li key={c.name} className="border rounded p-3">
             <div className="font-medium">{c.name} {c.abstract && <span className="text-xs">abstract</span>}</div>
-            <div className="text-sm text-gray-600">{c.slots.join(", ") || "(no slots)"}</div>
+            <div className="text-sm text-gray-600">{c.properties.join(", ") || "(no slots)"}</div>
           </li>
         ))}
       </ul>

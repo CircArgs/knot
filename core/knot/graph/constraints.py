@@ -2,7 +2,7 @@
 
 Composes the predicate compiler at ``knot.spec.compile.postgres`` with the
 data plane via ``conn.execute``. Returns rows in the uniform violation
-shape ``(rule_id, class_name, slot_name, offending_pk, detail)``.
+shape ``(rule_id, class_name, property_name, offending_pk, detail)``.
 
 Note: this module DOES execute SQL — but only SQL produced by the
 compiler, never hand-written strings. The compiler lives outside ``db/``
@@ -23,7 +23,7 @@ from knot.spec import Spec
 class ViolationRow:
     rule_id: str
     class_name: str
-    slot_name: str | None
+    property_name: str | None
     offending_pk: str
     detail: str
 
@@ -60,7 +60,7 @@ async def check_all_constraints(conn: psycopg.AsyncConnection, spec: Spec) -> li
                     ViolationRow(
                         rule_id=constraint.name,
                         class_name=cls.name,
-                        slot_name=None,
+                        property_name=None,
                         offending_pk="*",
                         detail=f"compile failure: {exc}",
                     )
@@ -73,7 +73,7 @@ async def check_all_constraints(conn: psycopg.AsyncConnection, spec: Spec) -> li
                     ViolationRow(
                         rule_id=constraint.name,
                         class_name=cls.name,
-                        slot_name=None,
+                        property_name=None,
                         offending_pk="*",
                         detail=f"execute failure: {exc}",
                     )
@@ -84,7 +84,7 @@ async def check_all_constraints(conn: psycopg.AsyncConnection, spec: Spec) -> li
                     ViolationRow(
                         rule_id=row[0],
                         class_name=row[1],
-                        slot_name=row[2],
+                        property_name=row[2],
                         offending_pk=str(row[3]),
                         detail=row[4] or "",
                     )

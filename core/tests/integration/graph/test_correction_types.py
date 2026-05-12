@@ -23,7 +23,7 @@ from knot.graph.corrections import (
     apply_split,
     apply_tombstone,
 )
-from knot.spec import OntologyClass, Primitive, ResolutionPolicy, Slot, Source, Spec
+from knot.spec import OntologyClass, Primitive, ResolutionPolicy, Property, Source, Spec
 from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
@@ -44,18 +44,18 @@ async def ct_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(
         name="title",
         type=Primitive(name="string"),
         resolution_policy=ResolutionPolicy.POSTERIOR_MEAN,
     )
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title, year])
     src_a = Source(name="source_a")
     src_b = Source(name="source_b")
-    binding_a = SourceBinding(source=src_a, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
-    binding_b = SourceBinding(source=src_b, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding_a = SourceBinding(source=src_a, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding_b = SourceBinding(source=src_b, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="ct_test",
         version="1.0.0",

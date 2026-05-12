@@ -25,7 +25,7 @@ from knot.db.spec_store import (
 )
 from knot.spec import (
     OntologyClass,
-    Slot,
+    Property,
     Source,
     SourceBinding,
     Spec,
@@ -50,21 +50,21 @@ async def _reset(conn):
 
 def _build_movie_credit_spec() -> tuple[Spec, OntologyClass, OntologyClass, Source, Source]:
     """Build a spec with Movie + Credit (FK→Movie)."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title])
 
-    credit_id = Slot(
+    credit_id = Property(
         name="credit_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    movie_fk = Slot(name="movie", type=ClassRef(target_class=movie))
-    role = Slot(name="role", type=Primitive(name="string"))
-    credit = OntologyClass(name="Credit", slots=[credit_id, movie_fk, role])
+    movie_fk = Property(name="movie", type=ClassRef(target_class=movie))
+    role = Property(name="role", type=Primitive(name="string"))
+    credit = OntologyClass(name="Credit", properties=[credit_id, movie_fk, role])
 
     movie_src = Source(name="imdb")
     credit_src = Source(name="credits")
-    movie_binding = SourceBinding(source=movie_src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
-    credit_binding = SourceBinding(source=credit_src, class_=credit, identifier_slot=credit_id)  # type: ignore[call-arg]
+    movie_binding = SourceBinding(source=movie_src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit, identifier_property=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="fk_test",
@@ -176,10 +176,10 @@ async def test_fk_slot_in_graphql_schema(fk_db):
 async def test_source_on_normal_class_publishes(pg_conn):
     """A Source targeting a normal class goes through the gate."""
     await _reset(pg_conn)
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="normal_src_test",
         version="1.0.0",
@@ -215,12 +215,12 @@ async def test_multi_source_spec_publishes(pg_conn):
 async def test_regression_no_fk_slots(pg_conn):
     """A plain spec with no FK columns publishes and queries normally."""
     await _reset(pg_conn)
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title, year])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="regression_test",
         version="1.0.0",

@@ -188,7 +188,7 @@ def _(mo):
             {
                 "name": "Auditable",
                 "abstract": True,
-                "slots": [
+                "properties": [
                     {"name": "created_at", "type_kind": "primitive", "type_name": "datetime"},
                     {"name": "updated_at", "type_kind": "primitive", "type_name": "datetime"},
                 ],
@@ -197,7 +197,7 @@ def _(mo):
             {
                 "name": "Localizable",
                 "abstract": True,
-                "slots": [
+                "properties": [
                     {"name": "default_locale",    "type_kind": "primitive",       "type_name": "string"},
                     {"name": "available_locales", "type_kind": "array_of_primitive", "type_name": "string"},
                 ],
@@ -219,7 +219,7 @@ def _(mo):
                 "name": "MediaItem",
                 "abstract": True,
                 "mixin_names": ["Auditable", "Localizable"],
-                "slots": [],
+                "properties": [],
                 "description": (
                     "Abstract parent for Movie / TVSeries / Episode. "
                     "Carries only mixin application (Auditable, Localizable); "
@@ -236,7 +236,7 @@ def _(mo):
             {
                 "name": "Movie",
                 "is_a_name": "MediaItem",
-                "slots": [
+                "properties": [
                     # Source-identifier slots: one per source, all plain (no identifier=True
                     # / required=True). Each binding's identifier_slot points to its own slot;
                     # required_slot_names on the binding enforces presence at ingest time
@@ -255,7 +255,7 @@ def _(mo):
             {
                 "name": "TVSeries",
                 "is_a_name": "MediaItem",
-                "slots": [
+                "properties": [
                     {"name": "season_count", "type_kind": "primitive", "type_name": "integer"},
                 ],
                 "description": "A multi-season serialised show.",
@@ -263,7 +263,7 @@ def _(mo):
             {
                 "name": "Episode",
                 "is_a_name": "MediaItem",
-                "slots": [
+                "properties": [
                     {"name": "episode_number", "type_kind": "primitive", "type_name": "integer"},
                 ],
                 "description": "A single episode of a TVSeries.",
@@ -274,7 +274,7 @@ def _(mo):
             {
                 "name": "Person",
                 "mixin_names": ["Auditable", "Localizable"],
-                "slots": [
+                "properties": [
                     # Source-id slots: one per source, plain (no identifier=True).
                     # required_slot_names on each binding enforces the right id
                     # per source. name is required across all sources.
@@ -319,7 +319,7 @@ def _(mo):
         "junction_classes": [
             {
                 "name": "Credit",
-                "slots": [
+                "properties": [
                     {"name": "credit_id",     "type_kind": "primitive", "type_name": "string", "required": True, "identifier": True},
                     {"name": "movie",         "type_kind": "class",     "type_name": "Movie"},
                     {"name": "person",        "type_kind": "class",     "type_name": "Person"},
@@ -345,13 +345,13 @@ def _(mo):
                 "class_name": "Movie",
                 "identifier_slot_name": "imdb_id",
                 "trust_prior": [9.0, 1.0],
-                "required_slot_names": ["imdb_id", "title"],
+                "required_property_names": ["imdb_id", "title"],
                 "description": "IMDB → Movie: strong prior, IMDB native field names.",
                 "mappings": [
-                    {"slot_name": "imdb_id",  "source_field": "tconst"},
-                    {"slot_name": "title",    "source_field": "primaryTitle", "prior": [50.0, 1.0]},
-                    {"slot_name": "year",     "source_field": "startYear"},
-                    {"slot_name": "runtime",  "source_field": "runtimeMinutes"},
+                    {"property_name": "imdb_id",  "source_field": "tconst"},
+                    {"property_name": "title",    "source_field": "primaryTitle", "prior": [50.0, 1.0]},
+                    {"property_name": "year",     "source_field": "startYear"},
+                    {"property_name": "runtime",  "source_field": "runtimeMinutes"},
                 ],
             },
             # ── IMDB → Person ─────────────────────────────────────────────────
@@ -360,12 +360,12 @@ def _(mo):
                 "class_name": "Person",
                 "identifier_slot_name": "imdb_person_id",
                 "trust_prior": [7.0, 1.0],
-                "required_slot_names": ["imdb_person_id", "name"],
+                "required_property_names": ["imdb_person_id", "name"],
                 "description": "IMDB → Person: nconst/primaryName field mapping.",
                 "mappings": [
-                    {"slot_name": "imdb_person_id", "source_field": "nconst"},
-                    {"slot_name": "name",           "source_field": "primaryName"},
-                    {"slot_name": "born",           "source_field": "birthYear"},
+                    {"property_name": "imdb_person_id", "source_field": "nconst"},
+                    {"property_name": "name",           "source_field": "primaryName"},
+                    {"property_name": "born",           "source_field": "birthYear"},
                 ],
             },
             # ── IMDB → Credit ─────────────────────────────────────────────────
@@ -374,14 +374,14 @@ def _(mo):
                 "class_name": "Credit",
                 "identifier_slot_name": "credit_id",
                 "trust_prior": [8.0, 2.0],
-                "required_slot_names": ["credit_id"],
+                "required_property_names": ["credit_id"],
                 "description": "IMDB → Credit: tconst_nconst composite identifier.",
                 "mappings": [
-                    {"slot_name": "credit_id",    "source_field": "tconst_nconst"},
-                    {"slot_name": "movie",        "source_field": "tconst"},
-                    {"slot_name": "person",       "source_field": "nconst"},
-                    {"slot_name": "role",         "source_field": "category"},
-                    {"slot_name": "billing_order","source_field": "ordering"},
+                    {"property_name": "credit_id",    "source_field": "tconst_nconst"},
+                    {"property_name": "movie",        "source_field": "tconst"},
+                    {"property_name": "person",       "source_field": "nconst"},
+                    {"property_name": "role",         "source_field": "category"},
+                    {"property_name": "billing_order","source_field": "ordering"},
                 ],
             },
             # ── TMDB → Movie ──────────────────────────────────────────────────
@@ -392,10 +392,10 @@ def _(mo):
                 "trust_prior": [7.0, 2.0],
                 "description": "TMDB → Movie: renames id→tmdb_id, original_title→title, etc.",
                 "mappings": [
-                    {"slot_name": "tmdb_id",  "source_field": "id"},
-                    {"slot_name": "title",    "source_field": "original_title"},
-                    {"slot_name": "year",     "source_field": "release_year"},
-                    {"slot_name": "runtime",  "source_field": "runtime_minutes"},
+                    {"property_name": "tmdb_id",  "source_field": "id"},
+                    {"property_name": "title",    "source_field": "original_title"},
+                    {"property_name": "year",     "source_field": "release_year"},
+                    {"property_name": "runtime",  "source_field": "runtime_minutes"},
                 ],
             },
             # ── Wiki → Movie ──────────────────────────────────────────────────
@@ -406,9 +406,9 @@ def _(mo):
                 "trust_prior": [3.0, 2.0],
                 "description": "Wikipedia → Movie: weaker prior, contributes synopsis.",
                 "mappings": [
-                    {"slot_name": "wiki_slug", "source_field": "slug"},
-                    {"slot_name": "title",     "source_field": "display_title"},
-                    {"slot_name": "synopsis",  "source_field": "lead_paragraph"},
+                    {"property_name": "wiki_slug", "source_field": "slug"},
+                    {"property_name": "title",     "source_field": "display_title"},
+                    {"property_name": "synopsis",  "source_field": "lead_paragraph"},
                 ],
             },
             # ── Wiki → Person ─────────────────────────────────────────────────
@@ -419,9 +419,9 @@ def _(mo):
                 "trust_prior": [4.0, 2.0],
                 "description": "Wikipedia → Person: contributes birth year and slug.",
                 "mappings": [
-                    {"slot_name": "wiki_person_slug", "source_field": "person_slug"},
-                    {"slot_name": "name",             "source_field": "display_name"},
-                    {"slot_name": "born",             "source_field": "birth_year"},
+                    {"property_name": "wiki_person_slug", "source_field": "person_slug"},
+                    {"property_name": "name",             "source_field": "display_name"},
+                    {"property_name": "born",             "source_field": "birth_year"},
                 ],
             },
         ],
@@ -571,7 +571,7 @@ def _(spec_bindings, spec_classes, spec_sources):
 
     for _c in spec_classes:
         # Summarise inline slots for the property panel.
-        _slot_summary = [s["name"] for s in _c.get("slots", [])]
+        _slot_summary = [s["name"] for s in _c.get("properties", [])]
         _add_node("class", _c["name"], {**_c, "own_slots": _slot_summary})
     for _src in spec_sources:
         _add_node("source", _src["name"], _src)
@@ -599,7 +599,7 @@ def _(spec_bindings, spec_classes, spec_sources):
 
     # class-ref slots: class --fk--> class
     for _c in spec_classes:
-        for _s in _c.get("slots", []):
+        for _s in _c.get("properties", []):
             if _s.get("type_kind") in ("class", "array_of_class") and _s.get("type_name") in _class_names:
                 spec_edges.append({
                     "id": f"fk:{_c['name']}.{_s['name']}",
@@ -623,10 +623,10 @@ def _(spec_bindings, spec_classes, spec_sources):
             "id": f"binding-cls:{_b['source_name']}:{_b['class_name']}",
             "from": f"binding:{_b['source_name']}/{_b['class_name']}",
             "to": f"class:{_b['class_name']}",
-            "label": f"binds ({_b.get('identifier_slot', _b.get('identifier_slot_name', ''))})",
+            "label": f"binds ({_b.get('identifier_property', _b.get('identifier_slot_name', ''))})",
             "props": {
                 "trust_prior": _b.get("trust_prior"),
-                "required_slots": _b.get("required_slots", _b.get("required_slot_names", [])),
+                "required_slots": _b.get("required_slots", _b.get("required_property_names", [])),
                 "mappings": len(_b.get("mappings", [])),
             },
         })

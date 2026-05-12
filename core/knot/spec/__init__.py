@@ -7,7 +7,7 @@ and the canonical-form hasher (``canonical``) live here. Expression-tree
 
 from knot.spec.canonical import canonical_dump, compute_content_hash
 from knot.spec.effective_constraints import effective_constraints
-from knot.spec.effective_slots import effective_slots, is_stored, stored_slot_names
+from knot.spec.effective_properties import effective_properties, is_stored, stored_property_names
 from knot.spec.errors import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
@@ -24,11 +24,15 @@ from knot.spec.metaschema import (
     CompareOp,
     Constraint,
     DefinedClass,
-    DerivedSlot,
+    DerivedProperty,
     Literal_,
     NullSemantics,
     OntologyClass,
     Primitive,
+    Property,
+    PropertyConstraints,
+    PropertyMapping,
+    PropertyPath,
     RelationAggregate,
     RelationAll,
     RelationAny,
@@ -38,10 +42,6 @@ from knot.spec.metaschema import (
     RelationRef,
     ResolutionPolicy,
     Severity,
-    Slot,
-    SlotConstraints,
-    SlotMapping,
-    SlotPath,
     Source,
     SourceBinding,
     Spec,
@@ -56,12 +56,12 @@ __all__ = [
     "OntologyClass",
     "DefinedClass",
     "AnyClass",
-    "Slot",
+    "Property",
     "Source",
-    "SlotMapping",
+    "PropertyMapping",
     "SourceBinding",
     "Constraint",
-    "DerivedSlot",
+    "DerivedProperty",
     "SpecBase",
     # type expression hierarchy
     "TypeExpression",
@@ -69,8 +69,8 @@ __all__ = [
     "Array",
     "ClassRef",
     "STANDARD_PRIMITIVE_NAMES",
-    # slot constraints
-    "SlotConstraints",
+    # property constraints
+    "PropertyConstraints",
     # enums
     "ResolutionPolicy",
     "Severity",
@@ -79,7 +79,7 @@ __all__ = [
     "NullSemantics",
     # expression tree
     "Literal_",
-    "SlotPath",
+    "PropertyPath",
     "Compare",
     "BoolExpr",
     "RelationRef",
@@ -95,10 +95,10 @@ __all__ = [
     # serialization (full-fidelity round-trip)
     "spec_from_dict",
     "spec_to_dict",
-    # effective-slot helpers
-    "effective_slots",
+    # effective-property helpers
+    "effective_properties",
     "is_stored",
-    "stored_slot_names",
+    "stored_property_names",
     # effective-constraint helpers (walks is_a + mixin chain)
     "effective_constraints",
     # errors

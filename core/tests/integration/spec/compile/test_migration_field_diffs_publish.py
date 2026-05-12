@@ -6,7 +6,7 @@ exercises the full draft → publish flow against postgres for the two
 representative cases that are load-bearing at the gate:
 
   - bucket B (slot pattern) must publish without ``allow_destructive``
-  - bucket A (source identifier_slot) must be rejected without the flag
+  - bucket A (source identifier_property) must be rejected without the flag
 """
 
 from __future__ import annotations
@@ -20,13 +20,13 @@ from knot.db.spec_store import (
 )
 from knot.spec import (
     OntologyClass,
-    Slot,
+    Property,
     Source,
     SourceBinding,
     Spec,
 )
 from knot.spec.errors import PublishGateError
-from knot.spec.metaschema import Primitive, SlotConstraints
+from knot.spec.metaschema import Primitive, PropertyConstraints
 
 
 @pytest.fixture
@@ -46,10 +46,10 @@ async def clean_db(pg_conn):
 
 
 def _build_spec() -> Spec:
-    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
+    id_slot = Property(name="id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     return Spec(
         id="t",
         version="1.0.0",
@@ -64,7 +64,7 @@ async def test_publish_allows_slot_pattern_change_without_destructive_flag(clean
     publish should succeed without ``allow_destructive=true``."""
     v1 = _build_spec()
     v2 = _build_spec()
-    v2.classes[0].slots[0].constraints = SlotConstraints(pattern=r"^tt[0-9]+$")
+    v2.classes[0].properties[0].constraints = PropertyConstraints(pattern=r"^tt[0-9]+$")
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, v1)
@@ -76,16 +76,16 @@ async def test_publish_allows_slot_pattern_change_without_destructive_flag(clean
 
 
 async def test_publish_blocks_source_identifier_slot_change_without_flag(clean_db):
-    """Bucket A — Source.identifier_slot changes how rows are keyed. Publish
+    """Bucket A — Source.identifier_property changes how rows are keyed. Publish
     must reject without ``allow_destructive=true``."""
 
     def _build_with_identifier(identifier_name: str) -> Spec:
-        id_a = Slot(name="id_a", type=Primitive(name="string"), identifier=True, required=True)
-        id_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True, required=True)
-        movie = OntologyClass(name="Movie", slots=[id_a, id_b])
+        id_a = Property(name="id_a", type=Primitive(name="string"), identifier=True, required=True)
+        id_b = Property(name="id_b", type=Primitive(name="string"), identifier=True, required=True)
+        movie = OntologyClass(name="Movie", properties=[id_a, id_b])
         identifier = {"id_a": id_a, "id_b": id_b}[identifier_name]
         src = Source(name="imdb")
-        binding = SourceBinding(source=src, class_=movie, identifier_slot=identifier)  # type: ignore[call-arg]
+        binding = SourceBinding(source=src, class_=movie, identifier_property=identifier)  # type: ignore[call-arg]
         return Spec(
             id="t",
             version="1.0.0",

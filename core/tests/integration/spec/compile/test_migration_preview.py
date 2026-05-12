@@ -15,7 +15,7 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.graph.spec import preview_publish
-from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
+from knot.spec import OntologyClass, Property, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.metaschema import Primitive
 
@@ -43,10 +43,10 @@ async def clean_db(pg_conn):
 
 
 def _minimal_spec() -> Spec:
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[imdb_id])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[imdb_id])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="t",
         version="1.0.0",
@@ -86,14 +86,14 @@ async def test_preview_no_changes_is_publishable(clean_db):
 
 async def test_preview_drop_class_not_publishable(clean_db):
     """Dropping a class is Bucket A; preview shows it as a blocker."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    extra_id = Slot(name="extra_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[imdb_id])
-    series = OntologyClass(name="Series", slots=[extra_id])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    extra_id = Property(name="extra_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[imdb_id])
+    series = OntologyClass(name="Series", properties=[extra_id])
     src_m = Source(name="imdb")
     src_s = Source(name="wiki")
-    binding_m = SourceBinding(source=src_m, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
-    binding_s = SourceBinding(source=src_s, class_=series, identifier_slot=extra_id)  # type: ignore[call-arg]
+    binding_m = SourceBinding(source=src_m, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding_s = SourceBinding(source=src_s, class_=series, identifier_property=extra_id)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -107,10 +107,10 @@ async def test_preview_drop_class_not_publishable(clean_db):
     await publish_draft(clean_db, rev1)
 
     # v2 drops Series.
-    imdb_id2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie2 = OntologyClass(name="Movie", slots=[imdb_id2])
+    imdb_id2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie2 = OntologyClass(name="Movie", properties=[imdb_id2])
     src_m2 = Source(name="imdb")
-    binding_m2 = SourceBinding(source=src_m2, class_=movie2, identifier_slot=imdb_id2)  # type: ignore[call-arg]
+    binding_m2 = SourceBinding(source=src_m2, class_=movie2, identifier_property=imdb_id2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
@@ -140,11 +140,11 @@ async def test_preview_drop_class_not_publishable(clean_db):
 
 async def test_preview_bad_cast_shows_blocker(clean_db):
     """A TEXT→INTEGER cast on non-numeric data surfaces as a preflight blocker."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year_str = Slot(name="year", type=Primitive(name="string"))
-    movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_str = Property(name="year", type=Primitive(name="string"))
+    movie = OntologyClass(name="Movie", properties=[id_slot, year_str])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -165,11 +165,11 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
         (rev1,),
     )
 
-    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year_int = Slot(name="year", type=Primitive(name="integer"))
-    movie2 = OntologyClass(name="Movie", slots=[id_slot2, year_int])
+    id_slot2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_int = Property(name="year", type=Primitive(name="integer"))
+    movie2 = OntologyClass(name="Movie", properties=[id_slot2, year_int])
     src2 = Source(name="imdb")
-    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_property=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
@@ -186,8 +186,8 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     assert result.publishable is False
     kinds = {b["kind"] for b in result.blockers}
     assert "type_cast_failure" in kinds
-    # ChangeSlotTypeExpression is Bucket A.
-    assert "ChangeSlotTypeExpression" in result.buckets["A"]
+    # ChangePropertyTypeExpression is Bucket A.
+    assert "ChangePropertyTypeExpression" in result.buckets["A"]
 
 
 # ---------------------------------------------------------------------------
@@ -199,11 +199,11 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     """A new ERROR-severity constraint that existing data violates surfaces as a blocker."""
     from knot.spec.metaschema import Constraint, Severity
 
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year_slot = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[id_slot, year_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[id_slot, year_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -237,11 +237,11 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     )
 
     # v2 adds a constraint: year >= 1900.
-    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year_slot2 = Slot(name="year", type=Primitive(name="integer"))
-    movie2 = OntologyClass(name="Movie", slots=[id_slot2, year_slot2])
+    id_slot2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot2 = Property(name="year", type=Primitive(name="integer"))
+    movie2 = OntologyClass(name="Movie", properties=[id_slot2, year_slot2])
     src2 = Source(name="imdb")
-    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_property=id_slot2)  # type: ignore[call-arg]
 
     con = Constraint(
         name="year_gte_1900",

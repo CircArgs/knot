@@ -32,7 +32,7 @@ export interface RowKeys {
  */
 export type ContributionRow = RowKeys & Record<string, unknown>;
 
-/** The trust-resolved view is just `{slot: value}` (no housekeeping cols). */
+/** The trust-resolved view is just `{property: value}` (no housekeeping cols). */
 export type ResolvedRecord = Record<string, unknown>;
 
 // ─── Read endpoints ─────────────────────────────────────────────────────────
@@ -147,7 +147,7 @@ export interface PropertyCorrectionBody {
   type: "property";
   class_name: string;
   canonical_id: string;
-  slot: string;
+  property: string;
   value: unknown;
 }
 

@@ -65,18 +65,18 @@ def _resolve_relation_ref(
 
 
 def _target_class(ref: RelationRef) -> OntologyClass:
-    """Extract the target OntologyClass from a RelationRef's slot.
+    """Extract the target OntologyClass from a RelationRef's property.
 
     The slot's ``type`` must be a ``ClassRef`` — direct typed FK reference.
     Raises ``CompilerError`` for any other type expression.
     """
-    slot = ref.slot
-    if isinstance(slot.type, ClassRef):
-        return slot.type.target_class
+    prop = ref.property
+    if isinstance(prop.type, ClassRef):
+        return prop.type.target_class
     raise CompilerError(
-        f"RelationRef slot {slot.name!r} cannot be traversed: its type is "
-        f"{type(slot.type).__name__!r}. Declare type as ClassRef(target_class=...) "
-        f"to make this slot traversable."
+        f"RelationRef property {prop.name!r} cannot be traversed: its type is "
+        f"{type(prop.type).__name__!r}. Declare type as ClassRef(target_class=...) "
+        f"to make this property traversable."
     )
 
 
@@ -100,7 +100,7 @@ def _build_subquery_body(
           [AND <filter_predicate>]
     """
     target_cls = _target_class(ref)
-    fk_col = ref.slot.name
+    fk_col = ref.property.name
 
     parts = sql.SQL(
         "SELECT 1"
@@ -135,7 +135,7 @@ def _build_reverse_subquery_body(
 ) -> sql.Composable:
     """Emit the FROM/JOIN/WHERE core for EXISTS subqueries over a ReverseRelation.
 
-    Pattern: all rows of ``rev.target_class`` whose ``rev.fk_slot`` value
+    Pattern: all rows of ``rev.target_class`` whose ``rev.fk_property`` value
     matches the outer row's canonical_id (from its bindings table).
 
         SELECT 1
@@ -146,10 +146,10 @@ def _build_reverse_subquery_body(
         JOIN knot_data.<primary>_bindings <outer_bind_alias>
           ON <outer_bind_alias>.knot_row_id = <outer_alias>._knot_row_id
          AND <outer_bind_alias>.valid_to IS NULL
-        WHERE <row_alias>.<fk_slot> = <outer_bind_alias>.canonical_id
+        WHERE <row_alias>.<fk_property> = <outer_bind_alias>.canonical_id
     """
     target_cls = rev.target_class
-    fk_col = rev.fk_slot.name
+    fk_col = rev.fk_property.name
     primary_cls = outer_ctx.primary_class
 
     return sql.SQL(
@@ -284,7 +284,7 @@ def _compile_relation_first(node: RelationFirst, ctx: CompileContext) -> sql.Com
         tbl=table_id(target_cls),
         btbl=bindings_table_id(target_cls),
         outer_alias=sql.Identifier(ctx.alias),
-        fk_col=sql.Identifier(ref.slot.name),
+        fk_col=sql.Identifier(ref.property.name),
     )
 
     # Compile the project predicate against alias "f".
@@ -338,7 +338,7 @@ def _build_forward_value_body(
           [AND <filter_predicate>]
     """
     target_cls = _target_class(ref)
-    fk_col = ref.slot.name
+    fk_col = ref.property.name
 
     body = sql.SQL(
         "SELECT {expr}"
@@ -376,7 +376,7 @@ def _build_reverse_value_body(
 ) -> sql.Composable:
     """Emit a complete scalar/array subquery for a ReverseRelation.
 
-    Pattern: rows of rev.target_class whose rev.fk_slot matches outer canonical_id.
+    Pattern: rows of rev.target_class whose rev.fk_property matches outer canonical_id.
 
         SELECT <select_expr>
         FROM knot_data.<target> <row_alias>
@@ -386,11 +386,11 @@ def _build_reverse_value_body(
         JOIN knot_data.<primary>_bindings <outer_bind_alias>
           ON <outer_bind_alias>.knot_row_id = <outer_alias>._knot_row_id
          AND <outer_bind_alias>.valid_to IS NULL
-        WHERE <row_alias>.<fk_slot> = <outer_bind_alias>.canonical_id
+        WHERE <row_alias>.<fk_property> = <outer_bind_alias>.canonical_id
           [AND <filter_predicate>]
     """
     target_cls = rev.target_class
-    fk_col = rev.fk_slot.name
+    fk_col = rev.fk_property.name
     primary_cls = outer_ctx.primary_class
 
     body = sql.SQL(
@@ -433,18 +433,18 @@ def _compile_relation_project(
 ) -> sql.Composable:
     """Emit a subquery expression that returns an array of projected slot values.
 
-    The ``project`` SlotPath must be a single slot on the target class.
+    The ``project`` PropertyPath must be a single slot on the target class.
     Returns a correlated subquery:
-        (SELECT array_agg(t.<slot_name>) FROM ... WHERE ...)
+        (SELECT array_agg(t.<property_name>) FROM ... WHERE ...)
     """
     core, filter_node = _resolve_relation_and_filter(node.relation)
 
-    if len(node.project.slots) != 1:
+    if len(node.project.properties) != 1:
         raise CompilerError(
-            "RelationProject.project must be a single-slot SlotPath; "
+            "RelationProject.project must be a single-slot PropertyPath; "
             "multi-hop projection is not supported in this slice."
         )
-    proj_slot = node.project.slots[0]
+    proj_slot = node.project.properties[0]
     select_expr = sql.SQL("array_agg({ra}.{col})").format(
         ra=sql.Identifier("t"),
         col=sql.Identifier(proj_slot.name),
@@ -542,14 +542,14 @@ def _compile_relation_aggregate(
     core, filter_node = _resolve_relation_and_filter(node.relation)
 
     if node.func == AggFunc.FIRST:
-        # FIRST: ORDER BY tb.canonical_id LIMIT 1 with optional operand slot.
-        if node.operand is None or len(node.operand.slots) != 1:
-            raise CompilerError("RelationAggregate(FIRST) requires a single-slot operand SlotPath.")
-        proj_slot = node.operand.slots[0]
+        # FIRST: ORDER BY tb.canonical_id LIMIT 1 with optional operand property.
+        if node.operand is None or len(node.operand.properties) != 1:
+            raise CompilerError("RelationAggregate(FIRST) requires a single-slot operand PropertyPath.")
+        proj_slot = node.operand.properties[0]
 
         if isinstance(core, ReverseRelation):
             target_cls = core.target_class
-            fk_col = core.fk_slot.name
+            fk_col = core.fk_property.name
             primary_cls = ctx.primary_class
 
             filter_clause = sql.SQL("")
@@ -578,7 +578,7 @@ def _compile_relation_aggregate(
             )
         else:
             target_cls = _target_class(core)
-            fk_col = core.slot.name
+            fk_col = core.property.name
 
             filter_clause = sql.SQL("")
             if filter_node is not None:
@@ -616,11 +616,11 @@ def _compile_relation_aggregate(
         else:
             select_expr = sql.SQL("count(*)")
     else:
-        if node.operand is None or len(node.operand.slots) != 1:
+        if node.operand is None or len(node.operand.properties) != 1:
             raise CompilerError(
-                f"RelationAggregate(func={node.func!r}) requires a single-slot operand SlotPath."
+                f"RelationAggregate(func={node.func!r}) requires a single-slot operand PropertyPath."
             )
-        proj_slot = node.operand.slots[0]
+        proj_slot = node.operand.properties[0]
         if node.distinct:
             select_expr = sql.SQL("{agg}(DISTINCT {ra}.{col})").format(
                 agg=sql.SQL(agg_name),

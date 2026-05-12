@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.spec import ClassRef, OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import ClassRef, OntologyClass, Primitive, Property, Source, Spec
 from knot.spec.metaschema import SourceBinding
 
 # ---------------------------------------------------------------------------
@@ -42,12 +42,12 @@ from knot.spec.metaschema import SourceBinding
 
 
 def _build_spec() -> tuple[Spec, OntologyClass, Source]:
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title, year])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="gql_test",
         version="1.0.0",
@@ -541,13 +541,13 @@ def test_resolved_as_of_current_returns_record(gql_db, gql_client):
 async def test_count_rows_with_predicate(gql_db):
     """count_rows should honour the predicate and return filtered count."""
     from knot.spec.compile.postgres import CompileContext, compile_predicate
-    from knot.spec.metaschema import Compare, CompareOp, Literal_, SlotPath
+    from knot.spec.metaschema import Compare, CompareOp, Literal_, PropertyPath
 
     conn, spec, src, rev = gql_db
     movie_cls = next(c for c in spec.classes if c.name == "Movie")
-    year_slot = next(s for s in movie_cls.slots if s.name == "year")
+    year_slot = next(s for s in movie_cls.properties if s.name == "year")
 
-    path = SlotPath(from_class=movie_cls, slots=[year_slot])
+    path = PropertyPath(from_class=movie_cls, properties=[year_slot])
     node = Compare(op=CompareOp.GTE, left=path, right=Literal_(value=1990))
     ctx = CompileContext(primary_class=movie_cls, alias="s")
     pred_sql = compile_predicate(node, ctx)
@@ -582,30 +582,30 @@ def _build_derived_spec():
         ReverseRelation,
     )
 
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie_cls = OntologyClass(name="Movie", properties=[imdb_id, title, year])
 
-    credit_id = Slot(
+    credit_id = Property(
         name="credit_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    credit_movie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
-    credit_role = Slot(name="role", type=Primitive(name="string"))
-    credit_cls = OntologyClass(name="Credit", slots=[credit_id, credit_movie, credit_role])
+    credit_movie = Property(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_role = Property(name="role", type=Primitive(name="string"))
+    credit_cls = OntologyClass(name="Credit", properties=[credit_id, credit_movie, credit_role])
 
     credit_count_deriv = RelationCount(
-        relation=ReverseRelation(target_class=credit_cls, fk_slot=credit_movie),
+        relation=ReverseRelation(target_class=credit_cls, fk_property=credit_movie),
     )
-    credit_count_slot = Slot(
+    credit_count_slot = Property(
         name="credit_count", type=Primitive(name="integer"), derivation=credit_count_deriv
     )
-    movie_cls.slots = [imdb_id, title, year, credit_count_slot]
+    movie_cls.properties = [imdb_id, title, year, credit_count_slot]
 
     movie_src = Source(name="imdb")
     credit_src = Source(name="credits")
-    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_slot=imdb_id)  # type: ignore[call-arg]
-    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_slot=credit_id)  # type: ignore[call-arg]
+    movie_binding = SourceBinding(source=movie_src, class_=movie_cls, identifier_property=imdb_id)  # type: ignore[call-arg]
+    credit_binding = SourceBinding(source=credit_src, class_=credit_cls, identifier_property=credit_id)  # type: ignore[call-arg]
 
     spec = Spec(
         id="derived_gql_test",

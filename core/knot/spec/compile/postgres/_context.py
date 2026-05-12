@@ -18,7 +18,7 @@ class CompileContext:
     ``alias`` is the SQL table alias for the source-row table (default "s").
     ``params`` accumulates positional parameters in left-to-right emit order;
     callers read it after ``compile_predicate`` returns.
-    ``joins`` accumulates JOIN clauses needed by multi-slot SlotPath traversal;
+    ``joins`` accumulates JOIN clauses needed by multi-slot PropertyPath traversal;
     callers prepend them to the FROM clause after compilation.
     """
 

@@ -5,8 +5,8 @@ import type { SpecNodeData } from "../../lib/buildGraph";
 import { isArrayKind } from "../../types/spec";
 import KindBadge from "./KindBadge";
 
-export default function SlotNode({ data, selected }: NodeProps & { data: SpecNodeData }) {
-  if (data.entity.kind !== "slot") return null;
+export default function PropertyNode({ data, selected }: NodeProps & { data: SpecNodeData }) {
+  if (data.entity.kind !== "property") return null;
   const s = data.entity.value;
   const ring = selected ? "ring-2 ring-green-500" : "";
   const chips: { label: string; tone: string }[] = [];
@@ -19,7 +19,7 @@ export default function SlotNode({ data, selected }: NodeProps & { data: SpecNod
     >
       <Handle type="target" position={Position.Left} className="!bg-green-500" />
       <div className="px-3 py-2 border-b border-green-200 flex items-center gap-1.5">
-        <KindBadge kind="slot" />
+        <KindBadge kind="property" />
         <span className="font-medium text-green-900 truncate block" title={s.name}>
           {s.name}
         </span>

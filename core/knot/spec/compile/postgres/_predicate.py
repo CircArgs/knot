@@ -25,7 +25,7 @@ from knot.spec.metaschema import (
     Literal_,
     Matches,
     OntologyClass,
-    SlotPath,
+    PropertyPath,
     Within,
 )
 
@@ -64,28 +64,28 @@ def _compile_literal(node: Literal_, ctx: CompileContext) -> sql.Composable:
 
 
 # ---------------------------------------------------------------------------
-# SlotPath  (single-slot, within-primary-class only)
+# PropertyPath  (single-property, within-primary-class only)
 # ---------------------------------------------------------------------------
 
 
 @compile_predicate.register
-def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
-    if len(node.slots) == 0:
-        raise CompilerError("SlotPath must have at least one slot.")
+def _compile_slot_path(node: PropertyPath, ctx: CompileContext) -> sql.Composable:
+    if len(node.properties) == 0:
+        raise CompilerError("PropertyPath must have at least one property.")
 
-    if len(node.slots) == 1:
-        slot = node.slots[0]
+    if len(node.properties) == 1:
+        prop = node.properties[0]
         # Validate slot is on the primary class (by identity walk).
-        primary_slot_ids = {id(s) for s in ctx.primary_class.slots}
-        if id(slot) not in primary_slot_ids:
+        primary_prop_ids = {id(s) for s in ctx.primary_class.properties}
+        if id(prop) not in primary_prop_ids:
             raise CompilerError(
-                f"SlotPath references slot {slot.name!r} which is not on the "
+                f"PropertyPath references slot {prop.name!r} which is not on the "
                 f"primary class {ctx.primary_class.name!r}.  Cross-class slot "
                 "paths require relation traversal (not implemented in this slice)."
             )
         return sql.SQL("{alias}.{col}").format(
             alias=sql.Identifier(ctx.alias),
-            col=sql.Identifier(slot.name),
+            col=sql.Identifier(prop.name),
         )
 
     # Multi-slot: traverse class-ranged FK slots via accumulated JOINs.
@@ -104,14 +104,14 @@ def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
     # JOIN fragments are appended to ctx.joins; the caller wraps them.
 
     current_alias = ctx.alias
-    for step_idx, slot in enumerate(node.slots[:-1]):
-        if not isinstance(slot.type, ClassRef):
+    for step_idx, prop in enumerate(node.properties[:-1]):
+        if not isinstance(property.type, ClassRef):
             raise CompilerError(
-                f"SlotPath non-terminal slot {slot.name!r} at position {step_idx} "
+                f"PropertyPath non-terminal slot {prop.name!r} at position {step_idx} "
                 f"must have a ClassRef type for FK traversal; "
-                f"got {type(slot.type).__name__!r}."
+                f"got {type(property.type).__name__!r}."
             )
-        target_cls: OntologyClass = slot.type.target_class
+        target_cls: OntologyClass = property.type.target_class
         row_alias = f"_sp{step_idx + 1}"
         bind_alias = f"_sb{step_idx + 1}"
 
@@ -126,12 +126,12 @@ def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
             ra=sql.Identifier(row_alias),
             ba=sql.Identifier(bind_alias),
             outer=sql.Identifier(current_alias),
-            fk=sql.Identifier(slot.name),
+            fk=sql.Identifier(prop.name),
         )
         ctx.joins.append(join_frag)
         current_alias = row_alias
 
-    terminal_slot = node.slots[-1]
+    terminal_slot = node.properties[-1]
     return sql.SQL("{alias}.{col}").format(
         alias=sql.Identifier(current_alias),
         col=sql.Identifier(terminal_slot.name),
@@ -168,7 +168,7 @@ def _compile_compare(node: Compare, ctx: CompileContext) -> sql.Composable:
                 + sql.Placeholder()
                 + sql.SQL(")")
             )
-        # SlotPath on the right of IN/NOT_IN: compile it (unusual but supported).
+        # PropertyPath on the right of IN/NOT_IN: compile it (unusual but supported).
         right_sql = compile_predicate(node.right, ctx)
         return sql.SQL("({left}) {op}{right})").format(
             left=left_sql,
@@ -235,7 +235,7 @@ def _compile_within(node: Within, ctx: CompileContext) -> sql.Composable:
 
 @compile_predicate.register
 def _compile_between(node: Between, ctx: CompileContext) -> sql.Composable:
-    # Compile left first (typically a SlotPath — no params pushed).
+    # Compile left first (typically a PropertyPath — no params pushed).
     # low/high are typically Literal_ nodes that push params.
     col_sql = compile_predicate(node.left, ctx)
     low_sql = compile_predicate(node.lower, ctx)

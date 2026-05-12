@@ -3,7 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useState } from "react";
 
-import type { PublishedSpec, SpecSlot } from "../../types/spec";
+import type { PublishedSpec, SpecProperty } from "../../types/spec";
 import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../types/spec";
 import {
   ErrText,
@@ -35,15 +35,15 @@ type FormValues = z.infer<typeof Schema>;
 /**
  * Add form — create a synthetic entity attributed to user-corrections.
  *
- * Renders one input per stored slot, typed by slot range; the operator can
+ * Renders one input per stored property, typed by slot range; the operator can
  * leave any optional slot blank. We submit only the non-empty slot values
  * (so the server's row-model validator can run with whatever subset is
  * provided).
  */
 export default function AddForm({ spec, className, onSubmit }: Props) {
   const cls = spec.classes.find((c) => c.name === className);
-  const storedSlots: SpecSlot[] = (cls?.slots ?? []).filter(
-    (s): s is SpecSlot => s.typeKind !== null,
+  const storedSlots: SpecProperty[] = (cls?.properties ?? []).filter(
+    (s): s is SpecProperty => s.typeKind !== null,
   );
 
   const {
@@ -125,7 +125,7 @@ export default function AddForm({ spec, className, onSubmit }: Props) {
 }
 
 function SlotInput({
-  slot,
+  property,
   text,
   bool,
   classRef,
@@ -133,7 +133,7 @@ function SlotInput({
   setBool,
   setClassRef,
 }: {
-  slot: SpecSlot;
+  property: SpecProperty;
   text: string;
   bool: boolean;
   classRef: string;
@@ -207,7 +207,7 @@ function SlotInput({
  * Walk typeName to find the base primitive. Since types are now language-level
  * (no spec.types lookup), we just check if typeName is directly a builtin.
  */
-function baseTypeFor(slot: SpecSlot): string {
+function baseTypeFor(property: SpecProperty): string {
   if (!isPrimitiveKind(slot.typeKind) || !slot.typeName) return "string";
   const name = slot.typeName.toLowerCase();
   if (BUILTIN_TYPES.has(name)) return name;
@@ -215,7 +215,7 @@ function baseTypeFor(slot: SpecSlot): string {
 }
 
 function buildValues(
-  slots: SpecSlot[],
+  properties: SpecProperty[],
   text: Record<string, string>,
   bool: Record<string, boolean>,
   classRefs: Record<string, string>,

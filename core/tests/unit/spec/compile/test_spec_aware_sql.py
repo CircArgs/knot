@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 
-from knot.spec.metaschema import OntologyClass, Primitive, Slot
+from knot.spec.metaschema import OntologyClass, Primitive, Property
 from knot.spec.sql_validate import (
     SqlPredicateError,
     _rewrite_spec_references,
@@ -34,14 +34,14 @@ _SCHEMA = "knot_data"
 
 
 def _credit_class() -> OntologyClass:
-    role = Slot(name="role", type=Primitive(name="string"))
-    person = Slot(name="person", type=Primitive(name="string"))
-    return OntologyClass(name="Credit", slots=[role, person])
+    role = Property(name="role", type=Primitive(name="string"))
+    person = Property(name="person", type=Primitive(name="string"))
+    return OntologyClass(name="Credit", properties=[role, person])
 
 
 def _person_class() -> OntologyClass:
-    name = Slot(name="name", type=Primitive(name="string"))
-    return OntologyClass(name="Person", slots=[name])
+    name = Property(name="name", type=Primitive(name="string"))
+    return OntologyClass(name="Person", properties=[name])
 
 
 def _rewrite(body: str, classes_by_name: dict, outer_alias: str = "b") -> str:

@@ -17,7 +17,7 @@ import {
 // ── Zod schema ───────────────────────────────────────────────────────────────
 
 const SlotMappingSchema = z.object({
-  slot_name: z.string(),
+  property_name: z.string(),
   source_field: z.string(),
   null_semantics: z.enum(["no_claim", "asserted_absent"]),
   prior_alpha: z.string(),
@@ -27,10 +27,10 @@ const SlotMappingSchema = z.object({
 const Schema = z.object({
   source_name: z.string().min(1, "required"),
   class_name: z.string().min(1, "required"),
-  identifier_slot_name: z.string(),
+  identifier_property_name: z.string(),
   trust_prior_alpha: z.string(),
   trust_prior_beta: z.string(),
-  required_slot_names: z.string(),
+  required_property_names: z.string(),
   description: z.string(),
   mappings: z.array(SlotMappingSchema),
 });
@@ -56,13 +56,13 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
     defaultValues: {
       source_name: initial?.sourceName ?? "",
       class_name: initial?.className ?? "",
-      identifier_slot_name: initial?.identifierSlotName ?? "",
+      identifier_property_name: initial?.identifierSlotName ?? "",
       trust_prior_alpha: initial?.trustPrior ? String(initial.trustPrior[0]) : "1",
       trust_prior_beta:  initial?.trustPrior ? String(initial.trustPrior[1]) : "1",
-      required_slot_names: initial?.requiredSlotNames?.join(", ") ?? "",
+      required_property_names: initial?.requiredSlotNames?.join(", ") ?? "",
       description: initial?.description ?? "",
       mappings: initial?.mappings?.map((m) => ({
-        slot_name: m.slotName,
+        property_name: m.slotName,
         source_field: m.sourceField,
         null_semantics: m.nullSemantics,
         prior_alpha: "",
@@ -75,11 +75,11 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
 
   const className = watch("class_name");
 
-  // Slots available on the selected class (effectiveSlots = own + inherited via is_a + mixins).
+  // Slots available on the selected class (effectiveProperties = own + inherited via is_a + mixins).
   const classSlots = useMemo(() => {
     if (!className) return [];
     const cls = spec.classes.find((c) => c.name === className);
-    return cls?.effectiveSlots ?? [];
+    return cls?.effectiveProperties ?? [];
   }, [className, spec]);
 
   // Identifier slots (subset of class slots marked identifier=true).
@@ -106,7 +106,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
   // we auto-populate one row per effectiveSlot. We only fire when mappings
   // are empty so we never overwrite rows the user has already edited.
   //
-  // Rows that are prepopulated have their slot_name locked (readonly label).
+  // Rows that are prepopulated have their property_name locked (readonly label).
   // Manually-added rows (via "+ row") keep an editable slot select.
   //
   // We track which field IDs are locked in a Set stored in a ref so the
@@ -127,11 +127,11 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
 
     if (!className) return;
     const cls = spec.classes.find((c) => c.name === className);
-    const slots = cls?.effectiveSlots ?? [];
-    if (slots.length === 0) return;
+    const properties = cls?.effectiveProperties ?? [];
+    if (properties.length === 0) return;
 
-    const newRows = slots.map((s) => ({
-      slot_name: s.name,
+    const newRows = properties.map((s) => ({
+      property_name: s.name,
       source_field: "",
       null_semantics: "no_claim" as const,
       prior_alpha: "",
@@ -143,7 +143,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
     replace(newRows);
     // We don't yet have the new field IDs here — they're assigned by
     // react-hook-form after the next render. We mark them in the render phase
-    // below by comparing slot_name against classSlots names.
+    // below by comparing property_name against classSlots names.
     // We use a sentinel to flag "all current rows are locked" on next render.
     pendingLockAll.current = true;
   }, [className, fields.length, spec, replace]);
@@ -185,7 +185,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
       {/* Identifier slot */}
       <FieldRow>
         <Label required>identifier slot</Label>
-        <select {...register("identifier_slot_name")} className={selectClass}>
+        <select {...register("identifier_property_name")} className={selectClass}>
           <option value="">
             {className ? "(pick an identifier slot)" : "(pick a class first)"}
           </option>
@@ -198,7 +198,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
             class has no identifier slots; mark a slot as identifier first.
           </p>
         )}
-        <ErrText error={errors.identifier_slot_name} />
+        <ErrText error={errors.identifier_property_name} />
       </FieldRow>
 
       {/* Trust prior */}
@@ -232,7 +232,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
       <FieldRow>
         <Label>required slots</Label>
         <input
-          {...register("required_slot_names")}
+          {...register("required_property_names")}
           className={inputClass}
           placeholder="comma-separated slot names"
         />
@@ -253,7 +253,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
           <Label>field mappings</Label>
           <button
             type="button"
-            onClick={() => append({ slot_name: "", source_field: "", null_semantics: "no_claim", prior_alpha: "", prior_beta: "" })}
+            onClick={() => append({ property_name: "", source_field: "", null_semantics: "no_claim", prior_alpha: "", prior_beta: "" })}
             className="text-xs px-2 py-0.5 rounded border border-slate-300 bg-white hover:bg-slate-100"
           >
             + row
@@ -262,7 +262,7 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
         {fields.length === 0 && (
           <p className="text-xs text-slate-400 mb-2">
             {className
-              ? "No mappings — pick a class to auto-populate slots, or add rows manually."
+              ? "No mappings — pick a class to auto-populate properties, or add rows manually."
               : "No mappings — slots will be matched by name from the source payload."}
           </p>
         )}
@@ -274,18 +274,18 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
               <div>
                 {isLocked ? (
                   <div className={`${inputClass} bg-slate-50 text-slate-600 flex items-center`}>
-                    <span className="font-mono text-xs">{field.slot_name}</span>
+                    <span className="font-mono text-xs">{field.property_name}</span>
                     {/* Register as a read-only text input so RHF reads the value correctly */}
                     <input
                       type="text"
                       className="sr-only"
                       readOnly
-                      {...register(`mappings.${idx}.slot_name`)}
-                      value={field.slot_name}
+                      {...register(`mappings.${idx}.property_name`)}
+                      value={field.property_name}
                     />
                   </div>
                 ) : (
-                  <select {...register(`mappings.${idx}.slot_name`)} className={selectClass}>
+                  <select {...register(`mappings.${idx}.property_name`)} className={selectClass}>
                     <option value="">(slot)</option>
                     {classSlots.map((s) => (
                       <option key={s.name} value={s.name}>{s.name}</option>

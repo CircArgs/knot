@@ -1,14 +1,14 @@
-"""RenameSlot integration tests.
+"""RenameProperty integration tests.
 
 Verifies that the rename-slot flow:
   - Emits RENAME COLUMN (not DROP + ADD) at publish time.
   - Preserves existing row data in the renamed column.
-  - Emits RenameSlot (Bucket C) — no allow_destructive needed.
+  - Emits RenameProperty (Bucket C) — no allow_destructive needed.
   - Handles required-slot CHECK constraint rename.
-  - Rejects rename when new_name collides with an existing slot (effective_slots).
+  - Rejects rename when new_name collides with an existing slot (effective_properties).
   - Rejects rename when old_name doesn't exist as an own slot on the class.
 
-Slots are inline on OntologyClass (by-copy); there is no top-level Spec.slots.
+Slots are inline on OntologyClass (by-copy); there is no top-level Spec.properties.
 """
 
 from __future__ import annotations
@@ -21,8 +21,8 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.graph.spec import CollisionError, EntityNotOnDraftError, rename_slot
-from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
+from knot.graph.spec import CollisionError, EntityNotOnDraftError, rename_property
+from knot.spec import OntologyClass, Property, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.metaschema import Primitive
 
@@ -49,12 +49,12 @@ async def clean_db(pg_conn):
 # ---------------------------------------------------------------------------
 
 
-def _make_spec(slot_name: str = "title") -> Spec:
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    col_slot = Slot(name=slot_name, type=Primitive(name="string"))
-    movie = OntologyClass(name="Movie", slots=[id_slot, col_slot])
+def _make_spec(property_name: str = "title") -> Spec:
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    col_slot = Property(name=property_name, type=Primitive(name="string"))
+    movie = OntologyClass(name="Movie", properties=[id_slot, col_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     return Spec(
         id="t",
         version="1.0.0",
@@ -87,7 +87,7 @@ async def test_rename_slot_preserves_data(clean_db):
 
     # Draft: rename title → name.
     rev2 = await create_draft(clean_db, parent_revision=rev1)
-    await rename_slot(clean_db, rev2, "Movie", "title", "name")
+    await rename_property(clean_db, rev2, "Movie", "title", "name")
 
     # Publish should succeed without allow_destructive.
     await publish_draft(clean_db, rev2)
@@ -113,7 +113,7 @@ async def test_rename_slot_preserves_data(clean_db):
 
 
 async def test_rename_slot_is_not_destructive(clean_db):
-    """RenameSlot is Bucket C — publish does not require allow_destructive."""
+    """RenameProperty is Bucket C — publish does not require allow_destructive."""
     spec_v1 = _make_spec("title")
 
     rev1 = await create_draft(clean_db)
@@ -121,7 +121,7 @@ async def test_rename_slot_is_not_destructive(clean_db):
     await publish_draft(clean_db, rev1)
 
     rev2 = await create_draft(clean_db, parent_revision=rev1)
-    await rename_slot(clean_db, rev2, "Movie", "title", "display_title")
+    await rename_property(clean_db, rev2, "Movie", "title", "display_title")
 
     # Must succeed with allow_destructive=False (default).
     result = await publish_draft(clean_db, rev2)
@@ -135,11 +135,11 @@ async def test_rename_slot_is_not_destructive(clean_db):
 
 async def test_rename_required_slot_renames_check_constraint(clean_db):
     """Required slot renamed: old CHECK constraint dropped, new one added."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    req_slot = Slot(name="title", type=Primitive(name="string"), required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot, req_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    req_slot = Property(name="title", type=Primitive(name="string"), required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot, req_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -153,7 +153,7 @@ async def test_rename_required_slot_renames_check_constraint(clean_db):
     await publish_draft(clean_db, rev1)
 
     rev2 = await create_draft(clean_db, parent_revision=rev1)
-    await rename_slot(clean_db, rev2, "Movie", "title", "name")
+    await rename_property(clean_db, rev2, "Movie", "title", "name")
     await publish_draft(clean_db, rev2)
 
     # Old constraint name should be gone, new one should exist.
@@ -181,12 +181,12 @@ async def test_rename_required_slot_renames_check_constraint(clean_db):
 
 async def test_rename_slot_collision(clean_db):
     """Renaming to an existing slot name raises CollisionError."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title_slot = Slot(name="title", type=Primitive(name="string"))
-    year_slot = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[id_slot, title_slot, year_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title_slot = Property(name="title", type=Primitive(name="string"))
+    year_slot = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[id_slot, title_slot, year_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -199,7 +199,7 @@ async def test_rename_slot_collision(clean_db):
     await update_draft(clean_db, rev1, spec_v1)
 
     with pytest.raises(CollisionError):
-        await rename_slot(clean_db, rev1, "Movie", "title", "year")
+        await rename_property(clean_db, rev1, "Movie", "title", "year")
 
 
 # ---------------------------------------------------------------------------
@@ -214,4 +214,4 @@ async def test_rename_slot_not_found(clean_db):
     await update_draft(clean_db, rev1, spec_v1)
 
     with pytest.raises(EntityNotOnDraftError):
-        await rename_slot(clean_db, rev1, "Movie", "nonexistent", "something")
+        await rename_property(clean_db, rev1, "Movie", "nonexistent", "something")

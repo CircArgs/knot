@@ -69,7 +69,7 @@ def _detect_mixin_cycle(start: OntologyClass) -> list[str] | None:
 def _detect_mixin_slot_collision(
     start: OntologyClass,
 ) -> tuple[str, str, str] | None:
-    """Walk the effective slot set; return ``(slot_name, source_a, source_b)``
+    """Walk the effective slot set; return ``(property_name, source_a, source_b)``
     if two distinct mixins contribute the same slot name. Own slots shadow
     mixin slots silently and are not a collision.
 
@@ -85,7 +85,7 @@ def _detect_mixin_slot_collision(
         if any(current is v for v in visited):
             continue
         visited.append(current)
-        for s in current.slots:
+        for p in current.properties:
             if s.name in own_names:
                 continue
             prev = contributors.get(s.name)
@@ -102,10 +102,10 @@ def publish_gate(candidate: Spec) -> None:
     Step 1: Pydantic shape (already enforced by Spec instantiation; re-runs
             model_validate over the canonical dump as a defensive recheck).
     Step 2: Reference resolution — every Slot ClassRef target, every
-            SourceBinding.class_, every SourceBinding.identifier_slot, every
+            SourceBinding.class_, every SourceBinding.identifier_property, every
             Constraint.primary must point at an entity present on the spec.
             Slots are now inline on each OntologyClass; there is no top-level
-            slots list. identifier_slot must be reachable via effective_slots().
+            slots list. identifier_property must be reachable via effective_properties().
 
     Steps 3+4 (DataContext cross-checks + impact preview) are bindings-side
     and land with the modeling router.  This function is the natural place
@@ -114,7 +114,7 @@ def publish_gate(candidate: Spec) -> None:
     # Step 1: shape was enforced at construction (extra='forbid' on every
     # SpecBase subclass; bad fields raise immediately).  Pydantic's
     # model_dump-and-revalidate trick doesn't work on the cyclic spec graph
-    # (slot.type → ClassRef → OntologyClass → slots → Slot → type → ...),
+    # (property.type → ClassRef → OntologyClass → slots → Slot → type → ...),
     # so we trust that the in-memory Pydantic models are well-formed.
     if not isinstance(candidate, Spec):
         raise PublishGateError(
@@ -122,7 +122,7 @@ def publish_gate(candidate: Spec) -> None:
         )
 
     # Step 2: reference resolution.
-    from knot.spec.effective_slots import effective_slots as _effective_slots
+    from knot.spec.effective_properties import effective_properties as _effective_slots
 
     classes_by_id = {id(c): c for c in candidate.classes}
 
@@ -145,19 +145,19 @@ def publish_gate(candidate: Spec) -> None:
     for c in candidate.classes:
         if not hasattr(c, "slots"):
             continue
-        for slot in c.slots:
-            if slot.type is None:
+        for prop in c.properties:
+            if property.type is None:
                 # Derived slots with deferred type are valid; structural slots
                 # without type are an error.
-                if slot.derivation is None:
+                if property.derivation is None:
                     errors.append(
-                        f"Class {c.name!r} slot {slot.name!r} has no type and no derivation."
+                        f"Class {c.name!r} slot {property.name!r} has no type and no derivation."
                     )
                 continue
-            for ref in _collect_classrefs(slot.type):
+            for ref in _collect_classrefs(property.type):
                 if id(ref.target_class) not in classes_by_id:
                     errors.append(
-                        f"Class {c.name!r} slot {slot.name!r}.type references OntologyClass "
+                        f"Class {c.name!r} slot {property.name!r}.type references OntologyClass "
                         f"{ref.target_class.name!r} not on spec.classes."
                     )
 
@@ -169,14 +169,14 @@ def publish_gate(candidate: Spec) -> None:
                 f"{b.class_.name!r} not on spec.classes."
             )
             continue
-        # identifier_slot must be reachable via effective_slots() (own + mixin).
+        # identifier_property must be reachable via effective_properties() (own + mixin).
         effective = {s.name: s for s in _effective_slots(b.class_)}
-        if b.identifier_slot.name not in effective or (
-            effective[b.identifier_slot.name] is not b.identifier_slot
+        if b.identifier_property.name not in effective or (
+            effective[b.identifier_property.name] is not b.identifier_property
         ):
             errors.append(
-                f"SourceBinding {bid!r}.identifier_slot ({b.identifier_slot.name!r}) "
-                f"is not reachable via effective_slots() from class {b.class_.name!r}."
+                f"SourceBinding {bid!r}.identifier_property ({b.identifier_property.name!r}) "
+                f"is not reachable via effective_properties() from class {b.class_.name!r}."
             )
 
     for con in candidate.constraints:
@@ -202,9 +202,9 @@ def publish_gate(candidate: Spec) -> None:
             continue
         collision = _detect_mixin_slot_collision(c)
         if collision is not None:
-            slot_name, source_a, source_b = collision
+            property_name, source_a, source_b = collision
             errors.append(
-                f"Class {c.name!r} has a slot name collision on {slot_name!r} "
+                f"Class {c.name!r} has a slot name collision on {property_name!r} "
                 f"between mixins {source_a!r} and {source_b!r}."
             )
 
@@ -485,7 +485,7 @@ async def run_preflight_checks(
     Runs inside the caller's transaction (uses savepoints for cast probes).
 
     Checks:
-      - For each ChangeSlotTypeExpression: attempt the cast in a savepoint;
+      - For each ChangePropertyTypeExpression: attempt the cast in a savepoint;
         capture failure as ``kind="type_cast_failure"``.
       - For each ChangeSourceBindingIdentifierSlot: verify the new slot has no NULLs
         and no duplicate values for that source's rows.
@@ -494,15 +494,15 @@ async def run_preflight_checks(
 
     from knot.spec.compile.postgres._naming import schema, user_corrections_source
     from knot.spec.compile.postgres.migration import (
-        ChangeSlotRequired,
-        ChangeSlotTypeExpression,
+        ChangePropertyRequired,
+        ChangePropertyTypeExpression,
         ChangeSourceBindingIdentifierSlot,
     )
 
     blockers: list[dict] = []
 
     for change in changes:
-        if isinstance(change, ChangeSlotTypeExpression):
+        if isinstance(change, ChangePropertyTypeExpression):
             # Refuse array → scalar at the preflight stage (mirrors the
             # CompilerError emit_ddl would raise) so the publish gate can
             # report it as a structured blocker rather than a raw cast error.
@@ -513,7 +513,7 @@ async def run_preflight_checks(
                     {
                         "kind": "type_cast_failure",
                         "class": change.cls.name,
-                        "slot": change.slot.name,
+                        "slot": change.property.name,
                         "from": change.prev_pg_type,
                         "to": change.new_pg_type,
                         "detail": ("lossy: array → scalar would silently collapse multiple values"),
@@ -525,13 +525,13 @@ async def run_preflight_checks(
             # the probe, not the enclosing publish transaction. Use the same
             # USING expression as emit_ddl so scalar→array preflight matches
             # what would actually run.
-            col_ident = sql.Identifier(change.slot.name)
+            col_ident = sql.Identifier(change.property.name)
             newt = sql.SQL(change.new_pg_type)
             if not prev_is_array and new_is_array:
                 cast_expr = sql.SQL("ARRAY[{col}]::{newt}").format(col=col_ident, newt=newt)
             else:
                 cast_expr = sql.SQL("{col}::{newt}").format(col=col_ident, newt=newt)
-            sp_name = f"preflight_cast_{change.cls.name.lower()}_{change.slot.name}"
+            sp_name = f"preflight_cast_{change.cls.name.lower()}_{change.property.name}"
             try:
                 await conn.execute(f"SAVEPOINT {sp_name}")
                 await (
@@ -551,7 +551,7 @@ async def run_preflight_checks(
                     {
                         "kind": "type_cast_failure",
                         "class": change.cls.name,
-                        "slot": change.slot.name,
+                        "slot": change.property.name,
                         "from": change.prev_pg_type,
                         "to": change.new_pg_type,
                         "detail": str(exc),
@@ -602,11 +602,11 @@ async def run_preflight_checks(
                     }
                 )
 
-        elif isinstance(change, ChangeSlotRequired) and change.new_required:
+        elif isinstance(change, ChangePropertyRequired) and change.new_required:
             # false → true: check for NULLs in real-source rows (user-correction
             # rows are exempted by the CHECK constraint body, so skip them).
             tbl = sql.Identifier(schema(), change.cls.name.lower())
-            col = sql.Identifier(change.slot_name)
+            col = sql.Identifier(change.property_name)
             null_row = await (
                 await conn.execute(
                     sql.SQL(
@@ -620,7 +620,7 @@ async def run_preflight_checks(
                     {
                         "kind": "required_violation",
                         "class": change.cls.name,
-                        "slot": change.slot_name,
+                        "slot": change.property_name,
                         "null_count": null_count,
                     }
                 )
@@ -864,7 +864,7 @@ async def publish_draft(
     """Run the publish gate; on pass, atomically flip this draft to published
     and bring the data-plane schema in line with the new spec.
 
-    The destructive-change check (DropClass / DropSlot / ChangeSlotTypeExpression)
+    The destructive-change check (DropClass / DropProperty / ChangePropertyTypeExpression)
     runs against the diff before the flag flip; if any destructive change
     is present and ``allow_destructive`` is False, raises
     ``PublishGateError`` and the draft stays a draft.

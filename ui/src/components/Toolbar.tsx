@@ -13,7 +13,7 @@ interface Props {
   publishing?: boolean;
 }
 
-// "slot" is intentionally absent — slots are created inline inside ClassForm.
+// "property" is intentionally absent — slots are created inline inside ClassForm.
 const KIND_LABELS: Partial<Record<AddKind, string>> = {
   class: "Class",
   source: "Source",

@@ -1,14 +1,14 @@
-"""Data-quality observations — per-(source, class, slot) stats.
+"""Data-quality observations — per-(source, class, property) stats.
 
 Two write paths feed the same ``public.dq_observations`` table:
 
   - **incremental** — every ``/graph/ingest/{source}`` batch and every
     row-creating / row-mutating correction emits one observation row per
-    affected stored slot. Cheap; runs in the request thread; tagged with
+    affected stored property. Cheap; runs in the request thread; tagged with
     the originating batch/correction id.
   - **full_scan** — ``POST /dq/scan`` runs an aggregate query against
     every per-class table for the currently-published spec and emits one
-    observation row per (source, class, slot, current state). Heavier;
+    observation row per (source, class, property, current state). Heavier;
     intended for periodic snapshots.
 
 Reads are plain SQL — see ``query_observations`` and ``summarize`` for
@@ -28,7 +28,7 @@ import psycopg
 from psycopg import sql
 
 from knot.spec import OntologyClass, Spec
-from knot.spec import effective_slots as _effective_slots
+from knot.spec import effective_properties as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._naming import (
     schema,
@@ -122,22 +122,22 @@ async def record_incremental(
     only = set(only_slots) if only_slots is not None else None
 
     inserted = 0
-    for slot in _effective_slots(cls):
-        if not _is_stored(slot):
+    for prop in _effective_slots(cls):
+        if not _is_stored(property):
             continue
-        if only is not None and slot.name not in only:
+        if only is not None and property.name not in only:
             continue
-        values = [r.get(slot.name) for r in rows]
+        values = [r.get(property.name) for r in rows]
         stats = _slot_stats(values)
         await conn.execute(
             "INSERT INTO dq_observations "
-            "(source_name, class_name, slot_name, kind, batch_id, "
+            "(source_name, class_name, property_name, kind, batch_id, "
             " row_count, null_count, distinct_count, min_value, max_value) "
             "VALUES (%s, %s, %s, 'incremental', %s, %s, %s, %s, %s, %s)",
             (
                 source_name,
                 cls.name,
-                slot.name,
+                property.name,
                 batch_id,
                 stats["row_count"],
                 stats["null_count"],
@@ -162,7 +162,7 @@ async def full_scan(
     source_filter: str | None = None,
     class_filter: str | None = None,
 ) -> int:
-    """Snapshot per-(source, class, slot) stats from the current data plane.
+    """Snapshot per-(source, class, property) stats from the current data plane.
 
     For each Source on ``spec``, runs one aggregate query per stored slot
     against the source's per-class table (filtered to rows where
@@ -217,16 +217,16 @@ async def _full_scan_for(
     source_name: str,
     cls: OntologyClass,
 ) -> int:
-    """Aggregate stats for one (source, class) pair across every stored slot."""
+    """Aggregate stats for one (source, class) pair across every stored property."""
     inserted = 0
     table = sql.Identifier(schema(), cls.name.lower())
 
-    for slot in _effective_slots(cls):
-        if not _is_stored(slot):
+    for prop in _effective_slots(cls):
+        if not _is_stored(property):
             continue
-        col = sql.Identifier(slot.name)
+        col = sql.Identifier(property.name)
         # COUNT(*), COUNT(*) FILTER (WHERE col IS NULL), COUNT(DISTINCT col),
-        # MIN(col)::text, MAX(col)::text — single round-trip per slot.
+        # MIN(col)::text, MAX(col)::text — single round-trip per property.
         stmt = sql.SQL(
             "SELECT count(*) AS row_count, "
             "       count(*) FILTER (WHERE {col} IS NULL) AS null_count, "
@@ -248,13 +248,13 @@ async def _full_scan_for(
             continue  # nothing of this source/class in the table
         await conn.execute(
             "INSERT INTO dq_observations "
-            "(source_name, class_name, slot_name, kind, batch_id, "
+            "(source_name, class_name, property_name, kind, batch_id, "
             " row_count, null_count, distinct_count, min_value, max_value) "
             "VALUES (%s, %s, %s, 'full_scan', NULL, %s, %s, %s, %s, %s)",
             (
                 source_name,
                 cls.name,
-                slot.name,
+                property.name,
                 row_count,
                 null_count,
                 distinct_count,
@@ -276,7 +276,7 @@ async def query_observations(
     *,
     source: str | None = None,
     class_name: str | None = None,
-    slot: str | None = None,
+    property: str | None = None,
     since: datetime | None = None,
     until: datetime | None = None,
     kind: str | None = None,
@@ -292,8 +292,8 @@ async def query_observations(
         clauses.append(sql.SQL("class_name = %s"))
         params.append(class_name)
     if slot is not None:
-        clauses.append(sql.SQL("slot_name = %s"))
-        params.append(slot)
+        clauses.append(sql.SQL("property_name = %s"))
+        params.append(property)
     if since is not None:
         clauses.append(sql.SQL("observed_at >= %s"))
         params.append(since)
@@ -306,7 +306,7 @@ async def query_observations(
 
     where = sql.SQL(" AND ").join(clauses) if clauses else sql.SQL("TRUE")
     stmt = sql.SQL(
-        "SELECT observed_at, source_name, class_name, slot_name, kind, "
+        "SELECT observed_at, source_name, class_name, property_name, kind, "
         "       batch_id, row_count, null_count, distinct_count, "
         "       min_value, max_value, extra "
         "FROM dq_observations WHERE {where} "
@@ -340,7 +340,7 @@ async def summarize(
     since: datetime | None = None,
     until: datetime | None = None,
 ) -> list[dict[str, Any]]:
-    """Per-(source, class, slot) roll-up over a time window: total rows,
+    """Per-(source, class, property) roll-up over a time window: total rows,
     total nulls, null_rate (= null_count / row_count when row_count > 0).
     """
     clauses: list[sql.Composable] = []
@@ -354,12 +354,12 @@ async def summarize(
     where = sql.SQL(" AND ").join(clauses) if clauses else sql.SQL("TRUE")
 
     stmt = sql.SQL(
-        "SELECT source_name, class_name, slot_name, "
+        "SELECT source_name, class_name, property_name, "
         "       sum(row_count) AS total_rows, "
         "       sum(null_count) AS total_nulls, "
         "       max(observed_at) AS last_seen "
         "FROM dq_observations WHERE {where} "
-        "GROUP BY source_name, class_name, slot_name "
+        "GROUP BY source_name, class_name, property_name "
         "ORDER BY total_nulls DESC NULLS LAST"
     ).format(where=where)
 

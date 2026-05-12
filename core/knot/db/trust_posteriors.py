@@ -1,6 +1,6 @@
-"""Per-(source, slot) Beta posteriors for bandit-style trust resolution.
+"""Per-(source, property) Beta posteriors for bandit-style trust resolution.
 
-Each ``(source, slot)`` pair has a Beta(α, β) posterior over the
+Each ``(source, property)`` pair has a Beta(α, β) posterior over the
 "this source got this slot right" probability. Default prior is
 Beta(1, 1) — uniform. Each Bernoulli observation increments α on
 success or β on failure.
@@ -23,7 +23,7 @@ PRIOR_BETA = 1.0
 @dataclass(frozen=True)
 class Posterior:
     source: str
-    slot: str
+    property: str
     alpha: float
     beta: float
 
@@ -47,36 +47,36 @@ class Posterior:
         return max(self.alpha + self.beta - (PRIOR_ALPHA + PRIOR_BETA), 0.0)
 
 
-async def get_posterior(conn: psycopg.AsyncConnection, source: str, slot: str) -> Posterior:
-    """Posterior for ``(source, slot)``. Falls back to the uniform prior
+async def get_posterior(conn: psycopg.AsyncConnection, source: str, prop: str) -> Posterior:
+    """Posterior for ``(source, property)``. Falls back to the uniform prior
     if no observations recorded yet."""
     row = await (
         await conn.execute(
-            "SELECT alpha, beta FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
-            (source, slot),
+            "SELECT alpha, beta FROM trust_posteriors WHERE source_name = %s AND property_name = %s",
+            (source, property),
         )
     ).fetchone()
     if row:
-        return Posterior(source=source, slot=slot, alpha=row[0], beta=row[1])
-    return Posterior(source=source, slot=slot, alpha=PRIOR_ALPHA, beta=PRIOR_BETA)
+        return Posterior(source=source, slot=property, alpha=row[0], beta=row[1])
+    return Posterior(source=source, slot=property, alpha=PRIOR_ALPHA, beta=PRIOR_BETA)
 
 
 async def list_posteriors(conn: psycopg.AsyncConnection) -> list[Posterior]:
     rows = await (
         await conn.execute(
-            "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
-            "ORDER BY source_name, slot_name"
+            "SELECT source_name, property_name, alpha, beta FROM trust_posteriors "
+            "ORDER BY source_name, property_name"
         )
     ).fetchall()
     return [Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows]
 
 
-async def list_for_slot(conn: psycopg.AsyncConnection, slot: str) -> list[Posterior]:
+async def list_for_slot(conn: psycopg.AsyncConnection, prop: str) -> list[Posterior]:
     rows = await (
         await conn.execute(
-            "SELECT source_name, slot_name, alpha, beta FROM trust_posteriors "
-            "WHERE slot_name = %s ORDER BY source_name",
-            (slot,),
+            "SELECT source_name, property_name, alpha, beta FROM trust_posteriors "
+            "WHERE property_name = %s ORDER BY source_name",
+            (property,),
         )
     ).fetchall()
     return [Posterior(source=r[0], slot=r[1], alpha=r[2], beta=r[3]) for r in rows]
@@ -85,28 +85,28 @@ async def list_for_slot(conn: psycopg.AsyncConnection, slot: str) -> list[Poster
 async def record_feedback(
     conn: psycopg.AsyncConnection,
     source: str,
-    slot: str,
+    property: str,
     success: bool,
 ) -> Posterior:
-    """Update the ``(source, slot)`` posterior with one Bernoulli observation.
+    """Update the ``(source, property)`` posterior with one Bernoulli observation.
 
     Atomic at the DB layer — a single UPSERT with delta math, so concurrent
-    feedback on the same (source, slot) doesn't lose increments.
+    feedback on the same (source, property) doesn't lose increments.
     """
     delta_alpha = 1.0 if success else 0.0
     delta_beta = 0.0 if success else 1.0
     row = await (
         await conn.execute(
-            "INSERT INTO trust_posteriors (source_name, slot_name, alpha, beta) "
+            "INSERT INTO trust_posteriors (source_name, property_name, alpha, beta) "
             "VALUES (%s, %s, %s, %s) "
-            "ON CONFLICT (source_name, slot_name) DO UPDATE "
+            "ON CONFLICT (source_name, property_name) DO UPDATE "
             "SET alpha = trust_posteriors.alpha + %s, "
             "    beta  = trust_posteriors.beta  + %s, "
             "    updated_at = now() "
             "RETURNING alpha, beta",
             (
                 source,
-                slot,
+                property,
                 PRIOR_ALPHA + delta_alpha,
                 PRIOR_BETA + delta_beta,
                 delta_alpha,
@@ -114,17 +114,17 @@ async def record_feedback(
             ),
         )
     ).fetchone()
-    return Posterior(source=source, slot=slot, alpha=row[0], beta=row[1])
+    return Posterior(source=source, slot=property, alpha=row[0], beta=row[1])
 
 
 async def reset_posterior(
     conn: psycopg.AsyncConnection,
     source: str,
-    slot: str,
+    property: str,
 ) -> bool:
     """Drop the posterior row, reverting the pair to the uniform prior."""
     cur = await conn.execute(
-        "DELETE FROM trust_posteriors WHERE source_name = %s AND slot_name = %s",
-        (source, slot),
+        "DELETE FROM trust_posteriors WHERE source_name = %s AND property_name = %s",
+        (source, property),
     )
     return cur.rowcount > 0

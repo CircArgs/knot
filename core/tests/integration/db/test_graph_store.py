@@ -14,7 +14,7 @@ import pytest
 
 from knot import db
 from knot.db import graph_store
-from knot.spec import Array, OntologyClass, Primitive, Slot, Source, SourceBinding, Spec
+from knot.spec import Array, OntologyClass, Primitive, Property, Source, SourceBinding, Spec
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -26,13 +26,13 @@ def _build_spec() -> tuple[Spec, OntologyClass, Source, int]:
     """Returns (spec, movie_class, imdb_source, revision_placeholder).
     revision_placeholder is 0 — caller fills in the real revision after publish.
     """
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    year = Slot(name="year", type=Primitive(name="integer"))
-    tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title, year, tags])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    year = Property(name="year", type=Primitive(name="integer"))
+    tags = Property(name="tags", type=Array(of=Primitive(name="string")))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title, year, tags])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="test",
         version="1.0.0",

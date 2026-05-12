@@ -26,8 +26,8 @@ compile_to_sql(sql: str, primary_class, ctx, *, classes_by_name=None,
         ``INNER JOIN knot_data.credit_bindings credit__b0
                ON credit__b0.knot_row_id = credit__c0._knot_row_id
               AND credit__b0.valid_to IS NULL``
-      - ``ClassName.slot`` column refs in the predicate rewrite to the
-        deterministic alias (``credit__c0.slot``).
+      - ``ClassName.property`` column refs in the predicate rewrite to the
+        deterministic alias (``credit__c0.property``).
       - Schema-qualified references like ``knot_data.credit`` are left
         unchanged (escape hatch — author wrote DDL on purpose).
       - ``self`` (bare column) → ``<outer_bindings_alias>.canonical_id``
@@ -146,20 +146,20 @@ def referenced_columns(sql_str: str) -> list[str]:
 
 
 def _effective_slot_map(primary_class: OntologyClass) -> dict[str, Any]:
-    """Return {slot_name: Slot} for all effective stored + derived slots."""
-    from knot.spec.effective_slots import effective_slots
+    """Return {property_name: Slot} for all effective stored + derived slots."""
+    from knot.spec.effective_properties import effective_properties
 
-    return {s.name: s for s in effective_slots(primary_class)}
+    return {s.name: s for s in effective_properties(primary_class)}
 
 
 def _classref_slots(primary_class: OntologyClass) -> dict[str, Any]:
-    """Return {slot_name: Slot} for slots whose type is a ClassRef."""
+    """Return {property_name: Slot} for slots whose type is a ClassRef."""
     from knot.spec.metaschema import ClassRef
 
     result = {}
-    for slot in _effective_slot_map(primary_class).values():
-        if isinstance(slot.type, ClassRef):
-            result[slot.name] = slot
+    for prop in _effective_slot_map(primary_class).values():
+        if isinstance(property.type, ClassRef):
+            result[property.name] = slot
     return result
 
 
@@ -200,25 +200,25 @@ def _rewrite_spec_references(
     # Map from original table alias in author SQL → (class, src_alias, bind_alias).
     # Keyed by author alias (lower-case) or class_name if no explicit alias.
     alias_map: dict[str, tuple[Any, str, str]] = {}
-    # Also track class_name → src_alias for ClassName.slot rewriting (when
+    # Also track class_name → src_alias for ClassName.property rewriting (when
     # author used the class name directly as the "table" qualifier).
     class_name_to_src_alias: dict[str, str] = {}
 
-    # Validate ClassName.slot references.
-    def _validate_class_slot(class_name: str, slot_name: str) -> None:
+    # Validate ClassName.property references.
+    def _validate_class_slot(class_name: str, property_name: str) -> None:
         cls = classes_by_name[class_name]
-        from knot.spec.effective_slots import effective_slots
+        from knot.spec.effective_properties import effective_properties
         from knot.spec.metaschema import DefinedClass
 
         if isinstance(cls, DefinedClass):
             # DefinedClass inherits parent's slots.
-            slots = {s.name for s in effective_slots(cls.is_a)}
+            slots = {s.name for s in effective_properties(cls.is_a)}
         else:
-            slots = {s.name for s in effective_slots(cls)}
-        if slot_name not in slots:
+            slots = {s.name for s in effective_properties(cls)}
+        if property_name not in properties:
             raise SqlPredicateError(
-                f"Unknown slot '{slot_name}' on class '{class_name}'. "
-                f"Known slots: {sorted(slots)}"
+                f"Unknown slot '{property_name}' on class '{class_name}'. "
+                f"Known properties: {sorted(properties)}"
             )
 
     # Pass 1: Find all Table nodes (in FROM and JOIN clauses) whose name is a
@@ -275,7 +275,7 @@ def _rewrite_spec_references(
     expr = expr.transform(_collect_tables)
 
     # Pass 2: Rewrite Column nodes.
-    #   a) ClassName.slot or alias.slot → src_alias.slot
+    #   a) ClassName.property or alias.slot → src_alias.slot
     #   b) bare "self" → outer_bindings_alias.canonical_id
     def _rewrite_columns(node: sqlglot.Expression) -> sqlglot.Expression:
         if not isinstance(node, exp.Column):
@@ -292,7 +292,7 @@ def _rewrite_spec_references(
             )
 
         if table_part:
-            # Check if table_part is a class name used directly (ClassName.slot).
+            # Check if table_part is a class name used directly (ClassName.property).
             if table_part in classes_by_name:
                 # Validate the slot exists.
                 _validate_class_slot(table_part, col_part)
@@ -383,9 +383,9 @@ def _rewrite_for_postgres(
             # If table_part is a ClassRef slot name, rewrite to EXISTS subquery.
             if table_part in classref_slots:
                 slot = classref_slots[table_part]
-                if not isinstance(slot.type, ClassRef):
+                if not isinstance(property.type, ClassRef):
                     return node  # shouldn't happen
-                target_cls = slot.type.target_class
+                target_cls = property.type.target_class
                 target_tbl = target_cls.name.lower()
                 # Emit as a correlated EXISTS — we inline a SQL string here
                 # because sqlglot can parse it back cleanly.
@@ -400,13 +400,13 @@ def _rewrite_for_postgres(
                 )
                 # Return a raw SQL node so sqlglot passes it through verbatim.
                 return exp.Anonymous(this=exists_sql, expressions=[])
-            # Otherwise qualify with the outer alias if it matches a slot.
+            # Otherwise qualify with the outer alias if it matches a property.
             if table_part == outer_alias or table_part in slot_map:
                 # Already qualified; leave as-is but use outer_alias.
                 return exp.column(col_part, table=outer_alias)
             return node
 
-        # Bare column: qualify with outer_alias if it's a known slot.
+        # Bare column: qualify with outer_alias if it's a known property.
         if col_part in slot_map:
             return exp.column(col_part, table=outer_alias)
 
@@ -443,7 +443,7 @@ def compile_to_sql(
     When ``classes_by_name`` is provided, a spec-aware first pass runs before
     the slot rewrite:
       - Bare class names in FROM/JOIN → schema-qualified with bindings JOINs.
-      - ``ClassName.slot`` column refs → deterministic alias.
+      - ``ClassName.property`` column refs → deterministic alias.
       - Bare ``self`` → ``<outer_bindings_alias>.canonical_id``.
 
     Raises ``SqlPredicateError`` on parse failure or unresolvable reference.
@@ -482,7 +482,7 @@ def compile_constraint_sql(
         SELECT
             '<rule_id>' AS rule_id,
             '<class_name>' AS class_name,
-            NULL::text AS slot_name,
+            NULL::text AS property_name,
             b.canonical_id AS offending_pk,
             row_to_json(s)::text AS detail
         FROM knot_data.<class> s
@@ -513,7 +513,7 @@ def compile_constraint_sql(
         "SELECT"
         " {rule_id} AS rule_id,"
         " {class_name} AS class_name,"
-        " NULL::text AS slot_name,"
+        " NULL::text AS property_name,"
         " b.canonical_id AS offending_pk,"
         " row_to_json(s)::text AS detail"
         " FROM {src_table} s"

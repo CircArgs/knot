@@ -16,7 +16,7 @@ import type {
   SlotTypeKind,
   SpecClass,
   SpecConstraint,
-  SpecSlot,
+  SpecProperty,
   SpecSource,
   SpecSourceBinding,
 } from "../types/spec";
@@ -116,8 +116,8 @@ export async function getDraftSpec(id: number): Promise<PublishedSpec> {
   return normalizeDraftSpec(raw, { revision: id });
 }
 
-/** Normalize a slot dict from the spec_to_dict payload into a SpecSlot. */
-function normalizeSlot(s: Record<string, any>): SpecSlot {
+/** Normalize a slot dict from the spec_to_dict payload into a SpecProperty. */
+function normalizeSlot(s: Record<string, any>): SpecProperty {
   const typeKind: SlotTypeKind = s.type_kind ?? null;
   const typeName: string | null = s.type_name ?? null;
   const permVals = (s.permissible_values ?? []).map((pv: any) =>
@@ -174,7 +174,7 @@ export function normalizeDraftSpec(
   };
 
   // Build uid -> slot object map for resolving $ref'd slots inside classes.
-  const uidSlots = new Map<number, SpecSlot>();
+  const uidSlots = new Map<number, SpecProperty>();
   const walkForSlots = (node: unknown) => {
     if (!node) return;
     if (Array.isArray(node)) { node.forEach(walkForSlots); return; }
@@ -187,7 +187,7 @@ export function normalizeDraftSpec(
   };
   walkForSlots(raw);
 
-  const resolveSlot = (node: unknown): SpecSlot | null => {
+  const resolveSlot = (node: unknown): SpecProperty | null => {
     if (!node || typeof node !== "object") return null;
     const obj = node as Record<string, any>;
     if (typeof obj.$ref === "number") return uidSlots.get(obj.$ref) ?? null;
@@ -197,9 +197,9 @@ export function normalizeDraftSpec(
 
   const classes: SpecClass[] = (raw.classes ?? []).map(
     (c: Record<string, any>): SpecClass => {
-      const ownSlots: SpecSlot[] = (c.slots ?? [])
+      const ownSlots: SpecProperty[] = (c.properties ?? [])
         .map((s: unknown) => resolveSlot(s))
-        .filter((s: SpecSlot | null): s is SpecSlot => s !== null);
+        .filter((s: SpecProperty | null): s is SpecProperty => s !== null);
       return {
         name: c.name,
         abstract: !!c.abstract,
@@ -207,9 +207,9 @@ export function normalizeDraftSpec(
         definition: c.definition ?? null,
         isAName: resolveName(c.is_a),
         mixinNames: (c.mixins ?? []).map((m: any) => resolveName(m) ?? "").filter(Boolean),
-        slots: ownSlots,
-        // effectiveSlots not available in REST payload — use own slots as fallback
-        effectiveSlots: ownSlots,
+        properties: ownSlots,
+        // effectiveProperties not available in REST payload — use own slots as fallback
+        effectiveProperties: ownSlots,
       };
     },
   );
@@ -225,9 +225,9 @@ export function normalizeDraftSpec(
     (b: Record<string, any>): SpecSourceBinding => ({
       sourceName: resolveName(b.source) ?? b.source_name ?? "",
       className: resolveName(b.class_) ?? b.class_name ?? "",
-      identifierSlotName: resolveName(b.identifier_slot) ?? b.identifier_slot_name ?? "",
+      identifierSlotName: resolveName(b.identifier_slot) ?? b.identifier_property_name ?? "",
       mappings: (b.mappings ?? []).map((m: Record<string, any>) => ({
-        slotName: resolveName(m.slot) ?? m.slot_name ?? "",
+        slotName: resolveName(m.slot) ?? m.property_name ?? "",
         sourceField: m.source_field ?? "",
         default: m.default ?? null,
         nullSemantics: m.null_semantics ?? "no_claim",
@@ -303,7 +303,7 @@ export interface SourceCreate {
 }
 
 export interface SlotMappingCreate {
-  slot_name: string;
+  property_name: string;
   source_field: string;
   null_semantics?: string;
   prior?: [number, number] | null;
@@ -312,10 +312,10 @@ export interface SlotMappingCreate {
 export interface SourceBindingCreate {
   source_name: string;
   class_name: string;
-  identifier_slot_name: string;
+  identifier_property_name: string;
   mappings?: SlotMappingCreate[];
   trust_prior?: [number, number];
-  required_slot_names?: string[];
+  required_property_names?: string[];
   description?: string | null;
 }
 export interface ConstraintCreate {

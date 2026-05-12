@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import type { PublishedSpec, SpecSlot } from "../../types/spec";
+import type { PublishedSpec, SpecProperty } from "../../types/spec";
 import { BUILTIN_TYPES } from "../../types/spec";
 import {
   CheckboxField,
@@ -56,7 +56,7 @@ export type SlotFormValues = z.infer<typeof Schema>;
 
 interface Props {
   spec: PublishedSpec;
-  initial?: Partial<SpecSlot>;
+  initial?: Partial<SpecProperty>;
   lockName?: boolean;
   onSubmit: (vals: SlotFormValues) => Promise<void>;
 }
@@ -69,8 +69,8 @@ function normalizePolicy(p: string | undefined): (typeof POLICIES)[number] | nul
     : null;
 }
 
-/** Map an existing SpecSlot's typeKind (null means derived) to the form's string enum. */
-function toFormTypeKind(typeKind: SpecSlot["typeKind"]): TypeKindValue {
+/** Map an existing SpecProperty's typeKind (null means derived) to the form's string enum. */
+function toFormTypeKind(typeKind: SpecProperty["typeKind"]): TypeKindValue {
   return typeKind ?? "";
 }
 

@@ -7,11 +7,11 @@ Single source of truth for:
 
 Imported by ``knot.db.graph_store`` (DML) and by the postgres compile
 dialect (``knot.spec.compile.postgres``) so naming stays in
-lockstep. Postgres-specific compilation (``slot.type`` → postgres column
+lockstep. Postgres-specific compilation (``property.type`` → postgres column
 type) lives in the compile dialect, not here.
 
-Pure spec-graph helpers (``is_stored``, ``effective_slots``,
-``stored_slot_names``) live under ``knot.spec`` — they walk the typed
+Pure spec-graph helpers (``is_stored``, ``effective_properties``,
+``stored_property_names``) live under ``knot.spec`` — they walk the typed
 entity tree and don't touch SQL.
 """
 

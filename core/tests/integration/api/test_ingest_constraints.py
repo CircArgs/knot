@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.db import graph_store
-from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import OntologyClass, Primitive, Property, Source, Spec
 from knot.spec.metaschema import (
     Constraint,
     Severity,
@@ -39,11 +39,11 @@ def _dev_principal() -> Principal:
 def _build_spec_with_constraints(
     constraints: list[Constraint],
 ) -> tuple[Spec, OntologyClass, Source]:
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, year])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     spec = Spec(
         id="ingest_constraint_test",
         version="1.0.0",
@@ -212,11 +212,11 @@ async def test_batch_scope_preexisting_violations_dont_block_valid_batch(clean_d
     conn = clean_db
 
     # Build and publish spec WITH the constraint.
-    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year_slot = Slot(name="year", type=Primitive(name="integer"))
-    movie_cls = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
+    imdb_id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Property(name="year", type=Primitive(name="integer"))
+    movie_cls = OntologyClass(name="Movie", properties=[imdb_id_slot, year_slot])
     src_obj = Source(name="imdb")
-    binding_obj = SourceBinding(source=src_obj, class_=movie_cls, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
+    binding_obj = SourceBinding(source=src_obj, class_=movie_cls, identifier_property=imdb_id_slot)  # type: ignore[call-arg]
     c = Constraint(name="year_gte_1888", primary=movie_cls, body="year >= 1888", severity=Severity.ERROR)
     spec2 = Spec(
         id="batch_scope_test",
@@ -348,22 +348,22 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     conn = clean_db
 
     # Build spec with Movie (source) + a second class with a constraint.
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, year])
     src = Source(name="imdb")
-    movie_binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    movie_binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
 
     # Second class: Person (no source in this test, just a class with a constraint)
-    pid = Slot(name="pid", type=Primitive(name="string"), identifier=True, required=True)
-    age = Slot(name="age", type=Primitive(name="integer"))
-    person = OntologyClass(name="Person", slots=[pid, age])
+    pid = Property(name="pid", type=Primitive(name="string"), identifier=True, required=True)
+    age = Property(name="age", type=Primitive(name="integer"))
+    person = OntologyClass(name="Person", properties=[pid, age])
 
     person_constraint = Constraint(
         name="age_non_negative", primary=person, body="age >= 0", severity=Severity.ERROR
     )
     psrc = Source(name="people")
-    person_binding = SourceBinding(source=psrc, class_=person, identifier_slot=pid)  # type: ignore[call-arg]
+    person_binding = SourceBinding(source=psrc, class_=person, identifier_property=pid)  # type: ignore[call-arg]
 
     spec = Spec(
         id="multi_class_test",

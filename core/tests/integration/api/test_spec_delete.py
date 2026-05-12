@@ -27,7 +27,7 @@ from knot.db.spec_store import (
 from knot.spec import (
     Constraint,
     OntologyClass,
-    Slot,
+    Property,
     Source,
     Spec,
 )
@@ -45,11 +45,11 @@ def _dev_principal() -> Principal:
 def _spec_with_unreferenced_extras() -> Spec:
     """Movie with imdb_id + year, plus a Source and Constraint that
     can be deleted freely."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, year])
     src = Source(name="imdb_movies")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     year_check = Constraint(
         name="year_positive",
         primary=movie,
@@ -67,19 +67,19 @@ def _spec_with_unreferenced_extras() -> Spec:
 
 def _spec_with_class_ref() -> Spec:
     """Movie + Person where Movie.directed_by has ClassRef→Person."""
-    person_id = Slot(
+    person_id = Property(
         name="person_id", type=Primitive(name="string"), identifier=True, required=True
     )
-    person = OntologyClass(name="Person", slots=[person_id])
+    person = OntologyClass(name="Person", properties=[person_id])
 
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, directed_by])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    directed_by = Property(name="directed_by", type=ClassRef(target_class=person))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, directed_by])
 
     src_movie = Source(name="imdb_movies")
     src_person = Source(name="wiki_people")
-    binding_movie = SourceBinding(source=src_movie, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
-    binding_person = SourceBinding(source=src_person, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
+    binding_movie = SourceBinding(source=src_movie, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
+    binding_person = SourceBinding(source=src_person, class_=person, identifier_property=person_id)  # type: ignore[call-arg]
     return Spec(
         id="test",
         version="1.0.0",
@@ -91,11 +91,11 @@ def _spec_with_class_ref() -> Spec:
 
 def _spec_with_is_a_chain() -> Spec:
     """Movie is_a Title (parent class), so deleting Title should fail."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = OntologyClass(name="Title", slots=[imdb_id])
-    movie = OntologyClass(name="Movie", slots=[imdb_id], is_a=title)
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = OntologyClass(name="Title", properties=[imdb_id])
+    movie = OntologyClass(name="Movie", properties=[imdb_id], is_a=title)
     src = Source(name="imdb_movies")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="test",
         version="1.0.0",
@@ -108,11 +108,11 @@ def _spec_with_is_a_chain() -> Spec:
 def _spec_with_constraint_and_class() -> Spec:
     """Movie with a year constraint; deleting Movie must fail because
     the constraint references it."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    year = Slot(name="year", type=Primitive(name="integer"))
-    movie = OntologyClass(name="Movie", slots=[imdb_id, year])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Property(name="year", type=Primitive(name="integer"))
+    movie = OntologyClass(name="Movie", properties=[imdb_id, year])
     src = Source(name="imdb_movies")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     nonneg = Constraint(
         name="year_positive",
         primary=movie,

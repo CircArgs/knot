@@ -19,7 +19,7 @@ import type { PublishedSpec } from "../../types/spec";
 import { buildGraph } from "../../lib/buildGraph";
 import { layoutGraph } from "../../lib/layout";
 import ClassNode from "../nodes/ClassNode";
-import SlotNode from "../nodes/SlotNode";
+import PropertyNode from "../nodes/PropertyNode";
 import SourceNode from "../nodes/SourceNode";
 import ConstraintNode from "../nodes/ConstraintNode";
 
@@ -29,7 +29,7 @@ interface Props {
 
 const nodeTypes = {
   specClass: ClassNode,
-  specSlot: SlotNode,
+  specSlot: PropertyNode,
   specSource: SourceNode,
   specConstraint: ConstraintNode,
 } as const;
@@ -158,8 +158,8 @@ function fillMissing(p: Partial<PublishedSpec>): PublishedSpec {
       definition: c.definition ?? null,
       isAName: c.isAName ?? null,
       mixinNames: c.mixinNames ?? [],
-      slots: c.slots ?? [],
-      effectiveSlots: c.effectiveSlots ?? [],
+      properties: c.properties ?? [],
+      effectiveProperties: c.effectiveProperties ?? [],
     })),
     sources: p.sources ?? [],
     sourceBindings: p.sourceBindings ?? [],

@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
-from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import OntologyClass, Primitive, Property, Source, Spec
 from knot.spec.metaschema import SourceBinding
 from tests._helpers import publish_spec
 
@@ -32,23 +32,23 @@ def _dev_principal() -> Principal:
 
 def _spec_with_concrete_and_abstract() -> Spec:
     """One concrete Movie source class + one abstract Auditable class."""
-    audited_at = Slot(name="audited_at", type=Primitive(name="string"))
+    audited_at = Property(name="audited_at", type=Primitive(name="string"))
     auditable = OntologyClass(
         name="Auditable",
-        slots=[audited_at],
+        properties=[audited_at],
         abstract=True,
     )
 
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"))
-    year = Slot(name="year", type=Primitive(name="integer"))
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"))
+    year = Property(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(
         name="Movie",
-        slots=[imdb_id, title, year],
+        properties=[imdb_id, title, year],
         mixins=[auditable],
     )
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id="lake_test",
         version="1.0.0",

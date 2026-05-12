@@ -77,7 +77,7 @@ def _resolve_classref_values(
     """For each ClassRef slot in the binding's class, if the row carries a
     raw source-native ID (no ':' prefix), expand it to a canonical_id using
     the same ``{source_name}:{value}`` pattern applied to the row's own
-    identifier slot.
+    identifier property.
 
     Array[ClassRef] slots are handled element-wise.  Values that already
     contain ':' are assumed to be canonical_ids and are passed through
@@ -86,22 +86,22 @@ def _resolve_classref_values(
     Limitation: this assumes the referenced entity comes from the SAME source.
     Cross-source FK references are not supported here.
     """
-    from knot.spec.effective_slots import effective_slots
+    from knot.spec.effective_properties import effective_properties
 
     out = dict(row)
-    for slot in effective_slots(binding.class_):
-        slot_type = slot.type
+    for prop in effective_properties(binding.class_):
+        slot_type = property.type
         if slot_type is None:
             continue
-        val = out.get(slot.name)
+        val = out.get(property.name)
         if val is None:
             continue
         if isinstance(slot_type, ClassRef):
             if isinstance(val, str) and ":" not in val:
-                out[slot.name] = f"{source_name}:{val}"
+                out[property.name] = f"{source_name}:{val}"
         elif isinstance(slot_type, Array) and isinstance(slot_type.of, ClassRef):
             if isinstance(val, list):
-                out[slot.name] = [
+                out[property.name] = [
                     f"{source_name}:{v}" if isinstance(v, str) and ":" not in v else v
                     for v in val
                 ]
@@ -128,9 +128,9 @@ def _apply_mappings(
     binding: SourceBinding,
     row: dict[str, Any],
 ) -> dict[str, Any]:
-    """Translate a raw source row through the binding's SlotMapping rules.
+    """Translate a raw source row through the binding's PropertyMapping rules.
 
-    For each SlotMapping:
+    For each PropertyMapping:
       - Read ``source_field`` from the raw row (fall back to slot name).
       - If value is None: apply ``null_semantics`` — NO_CLAIM leaves None;
         ASSERTED_ABSENT sets to a sentinel that downstream can act on
@@ -152,10 +152,10 @@ def _apply_mappings(
             elif m.null_semantics == NullSemantics.ASSERTED_ABSENT:
                 value = None  # explicit NULL — stays None for SQL storage
             # NO_CLAIM: leave None as-is
-        slot_name = m.slot.name
-        if source_field != slot_name:
+        property_name = m.property.name
+        if source_field != property_name:
             out.pop(source_field, None)
-        out[slot_name] = value
+        out[property_name] = value
     return out
 
 
@@ -186,7 +186,7 @@ async def ingest_rows(
     source = binding.source
     cls = binding.class_
 
-    # 0. Apply field mappings (rename source_field → slot_name, apply defaults).
+    # 0. Apply field mappings (rename source_field → property_name, apply defaults).
     mapped_rows = [_apply_mappings(binding, r) for r in rows]
 
     # 0b. Resolve raw source-native IDs in ClassRef slots to canonical_ids.
@@ -220,7 +220,7 @@ async def ingest_rows(
 
     # 3. Built-in default canonical_id: {source_name}:{identifier_slot_value}
     if pre.canonical_ids is None:
-        id_name = binding.identifier_slot.name
+        id_name = binding.identifier_property.name
         pre.canonical_ids = [f"{source.name}:{getattr(r, id_name)}" for r in pre.rows]
 
     wire_rows = [r.model_dump(exclude_none=False) for r in pre.rows]
@@ -263,7 +263,7 @@ async def ingest_rows(
                             {
                                 "rule_id": constraint.name,
                                 "class_name": constraint.primary.name,
-                                "slot_name": None,
+                                "property_name": None,
                                 "offending_pk": "*",
                                 "detail": f"compile failure: {exc}",
                             }
@@ -275,7 +275,7 @@ async def ingest_rows(
                     "SELECT"
                     " {rule_id} AS rule_id,"
                     " {class_name} AS class_name,"
-                    " NULL::text AS slot_name,"
+                    " NULL::text AS property_name,"
                     " b.canonical_id AS offending_pk,"
                     " row_to_json(s)::text AS detail"
                     " FROM {src_table} s"
@@ -301,7 +301,7 @@ async def ingest_rows(
                             {
                                 "rule_id": constraint.name,
                                 "class_name": constraint.primary.name,
-                                "slot_name": None,
+                                "property_name": None,
                                 "offending_pk": "*",
                                 "detail": f"execute failure: {exc}",
                             }
@@ -312,7 +312,7 @@ async def ingest_rows(
                     entry = {
                         "rule_id": r[0],
                         "class_name": r[1],
-                        "slot_name": r[2],
+                        "property_name": r[2],
                         "offending_pk": str(r[3]),
                         "detail": r[4] or "",
                     }

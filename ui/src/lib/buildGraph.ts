@@ -7,7 +7,7 @@ import type {
   SpecConstraint,
   SpecEntity,
   SpecEntityKind,
-  SpecSlot,
+  SpecProperty,
 } from "../types/spec";
 import { isClassKind } from "../types/spec";
 
@@ -31,7 +31,7 @@ export interface SpecNodeData extends Record<string, unknown> {
 export interface ClassCard {
   cls: SpecClass;
   /** The class's own slots (inline on the class). */
-  slots: SpecSlot[];
+  properties: SpecProperty[];
   /** Constraints that reference this class as `primaryClassName`. */
   constraints: SpecConstraint[];
   /** True when this class has ≥2 ClassRef slots whose targets exist on the
@@ -46,7 +46,7 @@ export type SpecEdge = Edge;
 
 /** Map a class entity to its custom React Flow node-type key. */
 export const NODE_TYPE_BY_KIND: Record<SpecEntityKind, string> = {
-  slot: "specSlot",              // not currently rendered as a standalone node
+  property: "specSlot",              // not currently rendered as a standalone node
   class: "specClass",
   source: "specSource",
   sourceBinding: "specSourceBinding",
@@ -55,7 +55,7 @@ export const NODE_TYPE_BY_KIND: Record<SpecEntityKind, string> = {
 
 /** Per-entity-kind ID prefix; entity name space is per-kind, names collide across kinds. */
 const ID_PREFIX: Record<SpecEntityKind, string> = {
-  slot: "s",
+  property: "s",
   class: "c",
   source: "src",
   sourceBinding: "sb",
@@ -72,7 +72,7 @@ export function bindingNodeId(sourceName: string, className: string): string {
 }
 
 /** Stable handle id for the per-slot-row source handle in a class card. */
-export function slotHandleId(slotName: string): string {
+export function propertyHandleId(slotName: string): string {
   return `slot-${slotName}`;
 }
 
@@ -84,7 +84,7 @@ export function slotHandleId(slotName: string): string {
  * Identifier / Primitive slots are ignored — only cross-class FKs count.
  */
 export function isJunctionClass(
-  slots: SpecSlot[],
+  properties: SpecProperty[],
   classNames: Set<string>,
 ): boolean {
   let classRefs = 0;
@@ -115,7 +115,7 @@ export function buildGraph(
 
   // — CLASS CARDS —
   for (const cls of spec.classes) {
-    const slots = cls.slots;
+    const slots = cls.properties;
     const card: ClassCard = {
       cls,
       slots,
@@ -204,14 +204,14 @@ export function buildGraph(
 
   // — Cross-class ClassRef edges (FKs, anchored at slot rows) —
   for (const cls of spec.classes) {
-    for (const slot of cls.slots) {
+    for (const slot of cls.properties) {
       if (!isClassKind(slot.typeKind) || !slot.typeName) continue;
       if (!classNames.has(slot.typeName)) continue;
       edges.push({
         id: `edge:fk:${cls.name}.${slot.name}->${slot.typeName}`,
         type: "smoothstep",
         source: nodeId("class", cls.name),
-        sourceHandle: slotHandleId(slot.name),
+        sourceHandle: propertyHandleId(slot.name),
         target: nodeId("class", slot.typeName),
         label: slot.name,
         markerEnd: { type: MarkerType.ArrowClosed, color: "#2563eb" },

@@ -27,7 +27,7 @@ class TrustUpdate(StrictBase):
 
 class PosteriorView(StrictBase):
     source: str
-    slot: str
+    property: str
     alpha: float
     beta: float
     mean: float
@@ -36,14 +36,14 @@ class PosteriorView(StrictBase):
 
 class FeedbackBody(StrictBase):
     source: str
-    slot: str
+    property: str
     success: bool
 
 
 def _posterior_view(p: trust_posteriors.Posterior) -> PosteriorView:
     return PosteriorView(
         source=p.source,
-        slot=p.slot,
+        slot=p.property,
         alpha=p.alpha,
         beta=p.beta,
         mean=p.mean,
@@ -79,15 +79,15 @@ async def list_posteriors() -> list[PosteriorView]:
 
 
 @router.get(
-    "/trust/posteriors/{source_name}/{slot_name}",
+    "/trust/posteriors/{source_name}/{property_name}",
     response_model=PosteriorView,
 )
-async def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
+async def get_posterior(source_name: str, property_name: str) -> PosteriorView:
     async with db.connect() as conn:
         spec = await published_or_409(conn)
         try:
             post = await graph_trust.get_posterior(
-                conn, spec=spec, source=source_name, slot=slot_name
+                conn, spec=spec, source=source_name, slot=property_name
             )
         except (graph_trust.SourceNotOnSpecError, graph_trust.SlotNotOnSpecError) as exc:
             raise _map_validation(exc) from exc
@@ -95,14 +95,14 @@ async def get_posterior(source_name: str, slot_name: str) -> PosteriorView:
 
 
 @router.delete(
-    "/trust/posteriors/{source_name}/{slot_name}",
+    "/trust/posteriors/{source_name}/{property_name}",
     dependencies=[Depends(require_user)],
 )
-async def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
-    """Drop the per-(source, slot) posterior, reverting it to the uniform prior."""
+async def reset_posterior(source_name: str, property_name: str) -> dict[str, Any]:
+    """Drop the per-(source, property) posterior, reverting it to the uniform prior."""
     async with db.connect() as conn:
-        existed = await graph_trust.reset_posterior(conn, source=source_name, slot=slot_name)
-    return {"reset": existed, "source": source_name, "slot": slot_name}
+        existed = await graph_trust.reset_posterior(conn, source=source_name, slot=property_name)
+    return {"reset": existed, "source": source_name, "slot": property_name}
 
 
 @router.post(
@@ -111,7 +111,7 @@ async def reset_posterior(source_name: str, slot_name: str) -> dict[str, Any]:
     dependencies=[Depends(require_user)],
 )
 async def submit_feedback(body: FeedbackBody) -> PosteriorView:
-    """Record one Bernoulli observation (source, slot, success) — increments
+    """Record one Bernoulli observation (source, property, success) — increments
     α on success, β on failure. Source and slot must be on the published spec."""
     async with db.connect() as conn:
         spec = await published_or_409(conn)
@@ -120,7 +120,7 @@ async def submit_feedback(body: FeedbackBody) -> PosteriorView:
                 conn,
                 spec=spec,
                 source=body.source,
-                slot=body.slot,
+                slot=body.property,
                 success=body.success,
             )
         except (graph_trust.SourceNotOnSpecError, graph_trust.SlotNotOnSpecError) as exc:

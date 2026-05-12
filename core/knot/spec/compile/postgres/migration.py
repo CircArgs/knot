@@ -21,7 +21,7 @@ Mapping (locked):
   - bindings table:   same name + ``_bindings`` suffix
   - system columns:   underscore-prefixed
   - slot → column:    TypeExpression-based postgres type (whitelist)
-  - derived slots:    skipped (query-time projections)
+  - derived properties:    skipped (query-time projections)
 
 Identifiers go through ``psycopg.sql.Identifier``. Postgres types come
 from a fixed whitelist; type names from the spec are never spliced raw.
@@ -45,18 +45,18 @@ B. **Data-revalidation.** Constraint tightens; previously-valid rows
    may now violate. The publish gate already runs the constraint check
    over current data on every NEW or CHANGED constraint, so a separate
    ``requires_data_revalidation`` set is not maintained — the constraint
-   gate is the canonical revalidation pass. ``ChangeSlotPattern``,
-   ``ChangeSlotPermissibleValues``, ``ChangeSlotMinimum``,
-   ``ChangeSlotMaximum``, ``ChangeConstraintBody``
+   gate is the canonical revalidation pass. ``ChangePropertyPattern``,
+   ``ChangePropertyPermissibleValues``, ``ChangePropertyMinimum``,
+   ``ChangePropertyMaximum``, ``ChangeConstraintBody``
    live in this bucket. They produce no DDL.
 
 C. **Spec-only / runtime-behavior.** No DDL, or DDL that doesn't lose
-   data. ``ChangeSlotResolutionPolicy``, ``ChangeConstraintSeverity``,
-   ``ChangeSlotDerivation`` (body change), ``ChangeClassDefinition``
+   data. ``ChangePropertyResolutionPolicy``, ``ChangeConstraintSeverity``,
+   ``ChangePropertyDerivation`` (body change), ``ChangeClassDefinition``
    (body change for an already-defined class — ``CREATE OR REPLACE
    VIEW`` is idempotent), ``ChangeClassMixins`` (audit-only — the
-   actual column adds/drops ride on ``AddSlot``/``DropSlot`` records),
-   ``ChangeSlotIdentifier`` (the storage PK is ``(_source,
+   actual column adds/drops ride on ``AddProperty``/``DropProperty`` records),
+   ``ChangePropertyIdentifier`` (the storage PK is ``(_source,
    _source_row_id)``; the ``identifier`` flag is ER/SCD2 advisory and
    doesn't drive DDL), ``AddSource`` (new pathway, doesn't lose data),
    ``ChangeSourceBindingTrust`` (runtime trust, no DDL),
@@ -86,11 +86,11 @@ from typing import Any
 import psycopg
 from psycopg import sql
 
-from knot.spec import OntologyClass, Slot, SourceBinding, Spec
-from knot.spec import effective_slots as _effective_slots
+from knot.spec import OntologyClass, Property, SourceBinding, Spec
+from knot.spec import effective_properties as _effective_slots
 from knot.spec import is_stored as _is_stored
 from knot.spec.compile.postgres._dispatch import CompilerError
-from knot.spec.compile.postgres._types import slot_pg_type as _slot_pg_type
+from knot.spec.compile.postgres._types import property_pg_type as _slot_pg_type
 from knot.spec.metaschema import DefinedClass
 
 from ._naming import (
@@ -161,18 +161,18 @@ def _bindings_unique_current_sql(cls: OntologyClass) -> sql.Composable:
     ).format(idx=_bindings_unique_current_id(cls), table=_bindings_table_id(cls))
 
 
-def _required_check_name(cls: OntologyClass, slot: Slot) -> str:
+def _required_check_name(cls: OntologyClass, prop: Slot) -> str:
     """Constraint name for the required-slot CHECK.
 
     ``<class>_<slot>_required_chk`` — lowercase, safe within postgres's
     63-byte identifier limit (class names are capped at 62 chars by the API,
     slot names likewise).
     """
-    return f"{cls.name.lower()}_{slot.name}_required_chk"
+    return f"{cls.name.lower()}_{property.name}_required_chk"
 
 
-def _required_check_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
-    """Idempotent ``ADD CONSTRAINT … CHECK`` for a required slot.
+def _required_check_sql(cls: OntologyClass, prop: Slot) -> sql.Composable:
+    """Idempotent ``ADD CONSTRAINT … CHECK`` for a required property.
 
     The user-corrections source is exempted so partial correction rows
     (which only supply changed fields) can always be written.
@@ -182,10 +182,10 @@ def _required_check_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
     """
     from knot.spec.compile.postgres._naming import user_corrections_source
 
-    chk_name = _required_check_name(cls, slot)
+    chk_name = _required_check_name(cls, property)
     tbl_schema = schema()
     tbl_name = cls.name.lower()
-    col_name = slot.name
+    col_name = property.name
     uc_src = user_corrections_source()
 
     # Build the raw SQL string for the DO block (identifiers already safe:
@@ -208,23 +208,23 @@ def _required_check_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
     return sql.SQL("DO $$ {body} $$").format(body=sql.SQL(do_body))
 
 
-def _required_check_drop_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
+def _required_check_drop_sql(cls: OntologyClass, prop: Slot) -> sql.Composable:
     """``DROP CONSTRAINT IF EXISTS`` for a required-slot CHECK."""
     return sql.SQL("ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {chk}").format(
         tbl=_table_id(cls),
-        chk=sql.Identifier(_required_check_name(cls, slot)),
+        chk=sql.Identifier(_required_check_name(cls, property)),
     )
 
 
 def _create_source_table_sql(cls: OntologyClass) -> sql.Composable:
     user_cols: list[sql.Composable] = []
-    for slot in _effective_slots(cls):
-        if not _is_stored(slot):
+    for prop in _effective_slots(cls):
+        if not _is_stored(property):
             continue
         user_cols.append(
             sql.SQL("{name} {pgtype} NULL").format(
-                name=sql.Identifier(slot.name),
-                pgtype=sql.SQL(_slot_pg_type(slot)),
+                name=sql.Identifier(property.name),
+                pgtype=sql.SQL(_slot_pg_type(property)),
             )
         )
     body = sql.SQL(", ").join([_SYSTEM_COLUMNS_SQL, *user_cols])
@@ -273,19 +273,19 @@ class DropDefinedClass(Change):
 
 
 @dataclass
-class AddSlot(Change):
+class AddProperty(Change):
     cls: OntologyClass
-    slot: Slot
+    property: Property
 
 
 @dataclass
-class DropSlot(Change):
+class DropProperty(Change):
     cls: OntologyClass
-    slot_name: str
+    property_name: str
 
 
 @dataclass
-class RenameSlot(Change):
+class RenameProperty(Change):
     """Bucket C — rename a stored column without touching data.
 
     Emits ``ALTER TABLE … RENAME COLUMN old_name TO new_name``.
@@ -295,12 +295,12 @@ class RenameSlot(Change):
 
     This change is produced by ``diff_specs`` only when the caller passes
     a ``renames`` hint mapping ``{class_name: {old_slot_name: new_slot_name}}``.
-    Without that hint, a slot name change appears as ``DropSlot + AddSlot``
+    Without that hint, a slot name change appears as ``DropProperty + AddProperty``
     (destructive).
     """
 
     cls: OntologyClass
-    slot: Slot  # candidate-side slot object (carries new name + required flag)
+    property: Slot  # candidate-side slot object (carries new name + required flag)
     old_name: str
     new_name: str
 
@@ -325,18 +325,18 @@ class RenameClass(Change):
 
 
 @dataclass
-class ChangeSlotTypeExpression(Change):
+class ChangePropertyTypeExpression(Change):
     """Bucket A — the slot's TypeExpression changed, which means the postgres
     column type changed. Carries prev and new pg types for the ALTER COLUMN."""
 
     cls: OntologyClass
-    slot: Slot
+    property: Property
     prev_pg_type: str
     new_pg_type: str
 
 
 @dataclass
-class ChangeSlotRequired(Change):
+class ChangePropertyRequired(Change):
     """Bucket B (false→true) / Bucket C (true→false).
 
     false → true: adds a CHECK constraint exempting ``_user_corrections`` rows.
@@ -349,8 +349,8 @@ class ChangeSlotRequired(Change):
     """
 
     cls: OntologyClass
-    slot: Slot
-    slot_name: str
+    property: Property
+    property_name: str
     new_required: bool
 
 
@@ -358,75 +358,75 @@ class ChangeSlotRequired(Change):
 
 
 @dataclass
-class ChangeSlotPattern(Change):
+class ChangePropertyPattern(Change):
     """Bucket B — pattern tightening can invalidate existing rows."""
 
-    slot_name: str
+    property_name: str
     old_pattern: str | None
     new_pattern: str | None
 
 
 @dataclass
-class ChangeSlotPermissibleValues(Change):
+class ChangePropertyPermissibleValues(Change):
     """Bucket B — narrowing the enum can invalidate existing rows; widening is fine."""
 
-    slot_name: str
+    property_name: str
     old_values: list[str] | None
     new_values: list[str] | None
 
 
 @dataclass
-class ChangeSlotMinimum(Change):
+class ChangePropertyMinimum(Change):
     """Bucket B — tightening minimum_value can invalidate existing rows."""
 
-    slot_name: str
+    property_name: str
     old_value: float | None
     new_value: float | None
 
 
 @dataclass
-class ChangeSlotMaximum(Change):
+class ChangePropertyMaximum(Change):
     """Bucket B — tightening maximum_value can invalidate existing rows."""
 
-    slot_name: str
+    property_name: str
     old_value: float | None
     new_value: float | None
 
 
 @dataclass
-class ChangeSlotIdentifier(Change):
+class ChangePropertyIdentifier(Change):
     """Bucket C — the actual PK on ``knot_data.<class>`` is
     ``(_source, _source_row_id)``, NOT the slot marked ``identifier=True``.
     The ``identifier`` flag is advisory at the storage layer — it drives ER
     bindings and SCD2 semantics but emits no DDL. Audit-only record."""
 
-    slot_name: str
+    property_name: str
     old_value: bool
     new_value: bool
 
 
 @dataclass
-class ChangeSlotResolutionPolicy(Change):
+class ChangePropertyResolutionPolicy(Change):
     """Bucket C — runtime resolution policy; no DDL, no revalidation."""
 
-    slot_name: str
+    property_name: str
     old_value: str
     new_value: str
 
 
 @dataclass
-class ChangeSlotDerivation(Change):
+class ChangePropertyDerivation(Change):
     """Derivation body change.
 
     ``had_derivation_before`` / ``has_derivation_now`` capture transitions
-    between stored and derived (those produce ``AddSlot``/``DropSlot`` via
+    between stored and derived (those produce ``AddProperty``/``DropProperty`` via
     the stored-slot diff); ``derivation_changed`` captures a body-only
     change between two derivation expressions. The body itself is opaque
     (an ExprNode by object id), so we surface only the booleans.
 
     Bucket C — derivation projection runs at query time. No DDL."""
 
-    slot_name: str
+    property_name: str
     had_derivation_before: bool
     has_derivation_now: bool
     derivation_changed: bool
@@ -440,7 +440,7 @@ class ChangeClassAbstract(Change):
     """Bucket A — flipping abstract toggles whether the class has a table.
 
     ``cls`` is the candidate-side class object so the emitter can rebuild
-    the source table when going abstract → concrete (it needs slots, not
+    the source table when going abstract → concrete (it needs properties, not
     just the name)."""
 
     cls: OntologyClass  # Only OntologyClass can flip abstract; DefinedClass never does
@@ -454,7 +454,7 @@ class ChangeClassIsA(Change):
     """Mostly bucket C.
 
     For a **concrete** class, ``is_a`` is structural-inheritance metadata
-    consumed by the GraphQL surface; ``effective_slots`` walks ``mixins``
+    consumed by the GraphQL surface; ``effective_properties`` walks ``mixins``
     but NOT ``is_a``, so the child's table is unaffected — no DDL.
 
     For a **defined** class with a body change, ``is_a`` drives the
@@ -476,11 +476,11 @@ class ChangeClassIsA(Change):
 
 @dataclass
 class ChangeClassMixins(Change):
-    """Bucket C — mixin set changes ``effective_slots``. The actual column
-    add/drop rides on ``AddSlot`` / ``DropSlot`` records emitted alongside
+    """Bucket C — mixin set changes ``effective_properties``. The actual column
+    add/drop rides on ``AddProperty`` / ``DropProperty`` records emitted alongside
     this; this record carries the mixin-list metadata so the migration
     log is auditable but emits no DDL of its own. The slot-level
-    ``DropSlot`` records gate ``allow_destructive`` for a mixin removal."""
+    ``DropProperty`` records gate ``allow_destructive`` for a mixin removal."""
 
     class_name: str
     old_mixins: list[str]
@@ -539,7 +539,7 @@ class AddSourceBinding(Change):
 
     source_name: str
     class_name: str
-    identifier_slot: str
+    identifier_property: str
 
 
 @dataclass
@@ -585,12 +585,12 @@ class ChangeSourceBindingMapping(Change):
 
     source_name: str
     class_name: str
-    slot_name: str
+    property_name: str
 
 
 @dataclass
 class ChangeSourceBindingRequired(Change):
-    """Bucket C — required_slots list changed. No DDL (enforced at ingest time)."""
+    """Bucket C — required_properties list changed. No DDL (enforced at ingest time)."""
 
     source_name: str
     class_name: str
@@ -638,10 +638,10 @@ class ChangeConstraintSeverity(Change):
 # ─── Diff visitor ───────────────────────────────────────────────────────────
 
 
-def _stored_slots_by_name(cls: OntologyClass | DefinedClass) -> dict[str, Slot]:
+def _stored_slots_by_name(cls: OntologyClass | DefinedClass) -> dict[str, Property]:
     # Walks own + mixin slots so adding/removing a mixin shows up as
-    # AddSlot/DropSlot in the diff.
-    # DefinedClass has no own columns — returns {} (effective_slots walks parent).
+    # AddProperty/DropProperty in the diff.
+    # DefinedClass has no own columns — returns {} (effective_properties walks parent).
     return {s.name: s for s in _effective_slots(cls) if _is_stored(s)}
 
 
@@ -656,27 +656,27 @@ def _enum_value(v: Any) -> str:
     return getattr(v, "value", str(v))
 
 
-def _slot_constraints_pattern(slot: Slot) -> str | None:
-    if slot.constraints is not None:
-        return slot.constraints.pattern
+def _slot_constraints_pattern(prop: Slot) -> str | None:
+    if property.constraints is not None:
+        return property.constraints.pattern
     return None
 
 
-def _slot_constraints_min(slot: Slot) -> float | None:
-    if slot.constraints is not None:
-        return slot.constraints.min_value
+def _slot_constraints_min(prop: Slot) -> float | None:
+    if property.constraints is not None:
+        return property.constraints.min_value
     return None
 
 
-def _slot_constraints_max(slot: Slot) -> float | None:
-    if slot.constraints is not None:
-        return slot.constraints.max_value
+def _slot_constraints_max(prop: Slot) -> float | None:
+    if property.constraints is not None:
+        return property.constraints.max_value
     return None
 
 
-def _slot_constraints_pv(slot: Slot) -> list[str] | None:
-    if slot.constraints is not None and slot.constraints.permissible_values is not None:
-        return list(slot.constraints.permissible_values)
+def _slot_constraints_pv(prop: Slot) -> list[str] | None:
+    if property.constraints is not None and property.constraints.permissible_values is not None:
+        return list(property.constraints.permissible_values)
     return None
 
 
@@ -690,8 +690,8 @@ def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> l
     cand_pattern = _slot_constraints_pattern(cand_slot)
     if prev_pattern != cand_pattern:
         out.append(
-            ChangeSlotPattern(
-                slot_name=name,
+            ChangePropertyPattern(
+                property_name=name,
                 old_pattern=prev_pattern,
                 new_pattern=cand_pattern,
             )
@@ -701,15 +701,15 @@ def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> l
     cand_pv = _slot_constraints_pv(cand_slot)
     if prev_pv != cand_pv:
         out.append(
-            ChangeSlotPermissibleValues(slot_name=name, old_values=prev_pv, new_values=cand_pv)
+            ChangePropertyPermissibleValues(property_name=name, old_values=prev_pv, new_values=cand_pv)
         )
 
     prev_min = _slot_constraints_min(prev_slot)
     cand_min = _slot_constraints_min(cand_slot)
     if prev_min != cand_min:
         out.append(
-            ChangeSlotMinimum(
-                slot_name=name,
+            ChangePropertyMinimum(
+                property_name=name,
                 old_value=prev_min,
                 new_value=cand_min,
             )
@@ -719,8 +719,8 @@ def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> l
     cand_max = _slot_constraints_max(cand_slot)
     if prev_max != cand_max:
         out.append(
-            ChangeSlotMaximum(
-                slot_name=name,
+            ChangePropertyMaximum(
+                property_name=name,
                 old_value=prev_max,
                 new_value=cand_max,
             )
@@ -728,16 +728,16 @@ def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> l
 
     if prev_slot.identifier != cand_slot.identifier:
         out.append(
-            ChangeSlotIdentifier(
-                slot_name=name,
+            ChangePropertyIdentifier(
+                property_name=name,
                 old_value=prev_slot.identifier,
                 new_value=cand_slot.identifier,
             )
         )
     if prev_slot.resolution_policy != cand_slot.resolution_policy:
         out.append(
-            ChangeSlotResolutionPolicy(
-                slot_name=name,
+            ChangePropertyResolutionPolicy(
+                property_name=name,
                 old_value=_enum_value(prev_slot.resolution_policy),
                 new_value=_enum_value(cand_slot.resolution_policy),
             )
@@ -748,8 +748,8 @@ def _diff_slot_fields(cls: OntologyClass, prev_slot: Slot, cand_slot: Slot) -> l
         derivation_changed = prev_slot.derivation is not cand_slot.derivation and had and has
         if had != has or derivation_changed:
             out.append(
-                ChangeSlotDerivation(
-                    slot_name=name,
+                ChangePropertyDerivation(
+                    property_name=name,
                     had_derivation_before=had,
                     has_derivation_now=has,
                     derivation_changed=derivation_changed,
@@ -824,7 +824,7 @@ def _diff_source_bindings(
             AddSourceBinding(
                 source_name=key[0],
                 class_name=key[1],
-                identifier_slot=b.identifier_slot.name,
+                identifier_property=b.identifier_property.name,
             )
         )
 
@@ -835,14 +835,14 @@ def _diff_source_bindings(
         pb, cb = prev_bindings[key], cand_bindings[key]
         source_name, class_name = key
 
-        if pb.identifier_slot.name != cb.identifier_slot.name:
+        if pb.identifier_property.name != cb.identifier_property.name:
             changes.append(
                 ChangeSourceBindingIdentifierSlot(
                     cls=cb.class_,
                     source_name=source_name,
                     class_name=class_name,
-                    old_slot=pb.identifier_slot.name,
-                    new_slot=cb.identifier_slot.name,
+                    old_slot=pb.identifier_property.name,
+                    new_slot=cb.identifier_property.name,
                 )
             )
 
@@ -859,11 +859,11 @@ def _diff_source_bindings(
             )
 
         # Mapping diffs — compare by slot name.
-        prev_map = {m.slot.name: m for m in pb.mappings}
-        cand_map = {m.slot.name: m for m in cb.mappings}
-        for slot_name in prev_map.keys() | cand_map.keys():
-            pm = prev_map.get(slot_name)
-            cm = cand_map.get(slot_name)
+        prev_map = {m.property.name: m for m in pb.mappings}
+        cand_map = {m.property.name: m for m in cb.mappings}
+        for property_name in prev_map.keys() | cand_map.keys():
+            pm = prev_map.get(property_name)
+            cm = cand_map.get(property_name)
             if pm is None or cm is None:
                 changed = True
             else:
@@ -877,13 +877,13 @@ def _diff_source_bindings(
                     ChangeSourceBindingMapping(
                         source_name=source_name,
                         class_name=class_name,
-                        slot_name=slot_name,
+                        property_name=property_name,
                     )
                 )
 
-        # required_slots diff
-        prev_req = {s.name for s in pb.required_slots}
-        cand_req = {s.name for s in cb.required_slots}
+        # required_properties diff
+        prev_req = {s.name for s in pb.required_properties}
+        cand_req = {s.name for s in cb.required_properties}
         if prev_req != cand_req:
             changes.append(
                 ChangeSourceBindingRequired(source_name=source_name, class_name=class_name)
@@ -941,7 +941,7 @@ def diff_specs(
     ``renames`` is an optional slot-rename hint map:
     ``{class_name: {old_slot_name: new_slot_name}}``.
     When provided, a slot whose name changed according to the hint emits a
-    ``RenameSlot`` instead of the default ``DropSlot + AddSlot`` pair (which
+    ``RenameProperty`` instead of the default ``DropProperty + AddProperty`` pair (which
     would require ``allow_destructive``).
 
     ``class_renames`` is an optional list of ``{old_name, new_name}`` dicts.
@@ -982,7 +982,7 @@ def diff_specs(
             if isinstance(cand_cls, OntologyClass) and not cand_cls.abstract:
                 changes.append(RenameClass(old_name=old_n, new_name=new_n, cls=cand_cls))
                 # Diff slots between the old and new class — the table is the
-                # same table (just renamed), so we emit AddSlot/DropSlot/RenameSlot
+                # same table (just renamed), so we emit AddProperty/DropProperty/RenameProperty
                 # relative to the CANDIDATE class object (new name).
                 # Slot rename hints for renamed classes may be keyed by new class name.
                 slot_hint: dict[str, str] = {}
@@ -998,7 +998,7 @@ def diff_specs(
                 for new_sn, old_sn in new_to_old_slot.items():
                     if old_sn in dropped_sn and new_sn in added_sn:
                         changes.append(
-                            RenameSlot(
+                            RenameProperty(
                                 cls=cand_cls,
                                 slot=cand_stored[new_sn],
                                 old_name=old_sn,
@@ -1008,23 +1008,23 @@ def diff_specs(
                         added_sn = added_sn - {new_sn}
                         dropped_sn = dropped_sn - {old_sn}
                 for s_name in added_sn:
-                    changes.append(AddSlot(cls=cand_cls, slot=cand_stored[s_name]))
+                    changes.append(AddProperty(cls=cand_cls, slot=cand_stored[s_name]))
                 for s_name in dropped_sn:
-                    changes.append(DropSlot(cls=cand_cls, slot_name=s_name))
+                    changes.append(DropProperty(cls=cand_cls, property_name=s_name))
                 for s_name in cand_stored.keys() & prev_stored.keys():
                     ps, cs = prev_stored[s_name], cand_stored[s_name]
                     prev_t = _slot_pg_type(ps)
                     new_t = _slot_pg_type(cs)
                     if prev_t != new_t:
                         changes.append(
-                            ChangeSlotTypeExpression(
+                            ChangePropertyTypeExpression(
                                 cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t
                             )
                         )
                     if ps.required != cs.required:
                         changes.append(
-                            ChangeSlotRequired(
-                                cls=cand_cls, slot=cs, slot_name=s_name, new_required=cs.required
+                            ChangePropertyRequired(
+                                cls=cand_cls, slot=cs, property_name=s_name, new_required=cs.required
                             )
                         )
                 for s_name in cand_all.keys() & prev_all.keys():
@@ -1134,7 +1134,7 @@ def diff_specs(
             continue
 
         # Both concrete — diff slots.
-        # ``stored_slots`` drives AddSlot / DropSlot / ChangeSlotTypeExpression (the
+        # ``stored_slots`` drives AddProperty / DropProperty / ChangePropertyTypeExpression (the
         # DDL-relevant subset). ``all_slots`` (incl. derived) drives the
         # per-field diff so a derivation-body or runtime-policy edit on a
         # derived slot still produces a Change record.
@@ -1159,13 +1159,13 @@ def diff_specs(
         # those that are the old name of a rename).
         dropped_slot_names = prev_stored.keys() - cand_stored.keys()
 
-        # Emit RenameSlot for confirmed renames, remove them from add/drop sets.
-        emitted_renames: set[str] = set()  # old names consumed by a RenameSlot
+        # Emit RenameProperty for confirmed renames, remove them from add/drop sets.
+        emitted_renames: set[str] = set()  # old names consumed by a RenameProperty
         for new_name_r, old_name_r in new_to_old.items():
             if old_name_r in dropped_slot_names and new_name_r in added_slot_names:
                 cand_slot = cand_stored[new_name_r]
                 changes.append(
-                    RenameSlot(
+                    RenameProperty(
                         cls=cand_cls,
                         slot=cand_slot,
                         old_name=old_name_r,
@@ -1177,23 +1177,23 @@ def diff_specs(
                 dropped_slot_names = dropped_slot_names - {old_name_r}
 
         for s_name in added_slot_names:
-            changes.append(AddSlot(cls=cand_cls, slot=cand_stored[s_name]))
+            changes.append(AddProperty(cls=cand_cls, slot=cand_stored[s_name]))
         for s_name in dropped_slot_names:
-            changes.append(DropSlot(cls=cand_cls, slot_name=s_name))
+            changes.append(DropProperty(cls=cand_cls, property_name=s_name))
         for s_name in cand_stored.keys() & prev_stored.keys():
             ps, cs = prev_stored[s_name], cand_stored[s_name]
             prev_t = _slot_pg_type(ps)
             new_t = _slot_pg_type(cs)
             if prev_t != new_t:
                 changes.append(
-                    ChangeSlotTypeExpression(
+                    ChangePropertyTypeExpression(
                         cls=cand_cls, slot=cs, prev_pg_type=prev_t, new_pg_type=new_t
                     )
                 )
             if ps.required != cs.required:
                 changes.append(
-                    ChangeSlotRequired(
-                        cls=cand_cls, slot=cs, slot_name=s_name, new_required=cs.required
+                    ChangePropertyRequired(
+                        cls=cand_cls, slot=cs, property_name=s_name, new_required=cs.required
                     )
                 )
 
@@ -1220,10 +1220,10 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         await conn.execute(_bindings_create_sql(change.cls))
         await conn.execute(_bindings_index_sql(change.cls))
         await conn.execute(_bindings_unique_current_sql(change.cls))
-        # Emit CHECK constraints for every required stored slot.
-        for slot in _effective_slots(change.cls):
-            if _is_stored(slot) and slot.required:
-                await conn.execute(_required_check_sql(change.cls, slot))
+        # Emit CHECK constraints for every required stored property.
+        for prop in _effective_slots(change.cls):
+            if _is_stored(property) and property.required:
+                await conn.execute(_required_check_sql(change.cls, property))
 
     elif isinstance(change, DropClass):
         cls_lower = change.class_name.lower()
@@ -1287,24 +1287,24 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             )
         )
 
-    elif isinstance(change, AddSlot):
+    elif isinstance(change, AddProperty):
         stmt = sql.SQL("ALTER TABLE {table} ADD COLUMN {col} {pgtype} NULL").format(
             table=_table_id(change.cls),
-            col=sql.Identifier(change.slot.name),
-            pgtype=sql.SQL(_slot_pg_type(change.slot)),
+            col=sql.Identifier(change.property.name),
+            pgtype=sql.SQL(_slot_pg_type(change.property)),
         )
         await conn.execute(stmt)
-        if change.slot.required:
-            await conn.execute(_required_check_sql(change.cls, change.slot))
+        if change.property.required:
+            await conn.execute(_required_check_sql(change.cls, change.property))
 
-    elif isinstance(change, DropSlot):
+    elif isinstance(change, DropProperty):
         stmt = sql.SQL("ALTER TABLE {table} DROP COLUMN {col}").format(
             table=_table_id(change.cls),
-            col=sql.Identifier(change.slot_name),
+            col=sql.Identifier(change.property_name),
         )
         await conn.execute(stmt)
 
-    elif isinstance(change, ChangeSlotTypeExpression):
+    elif isinstance(change, ChangePropertyTypeExpression):
         # USING <col>::<newtype> handles cast-compatible base changes
         # (e.g. TEXT→INTEGER for digit-only strings). If the cast fails on
         # a row, postgres raises and the whole migration aborts (atomic).
@@ -1317,12 +1317,12 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         if prev_is_array and not new_is_array:
             raise CompilerError(
                 f"lossy: cannot demote array column "
-                f"{change.cls.name}.{change.slot.name} "
+                f"{change.cls.name}.{change.property.name} "
                 f"from {change.prev_pg_type} to {change.new_pg_type} — "
-                "multiple values would be lost. Drop and re-add the slot, or "
+                "multiple values would be lost. Drop and re-add the property, or "
                 "introduce a new slot and migrate manually."
             )
-        col_ident = sql.Identifier(change.slot.name)
+        col_ident = sql.Identifier(change.property.name)
         pgtype_sql = sql.SQL(change.new_pg_type)
         if not prev_is_array and new_is_array:
             using = sql.SQL("ARRAY[{col}]::{pgtype}").format(col=col_ident, pgtype=pgtype_sql)
@@ -1336,17 +1336,17 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         )
         await conn.execute(stmt)
 
-    elif isinstance(change, ChangeSlotRequired):
+    elif isinstance(change, ChangePropertyRequired):
         if change.new_required:
             # false → true: add CHECK constraint.
             # The preflight gate already verified no NULLs exist for real
             # sources, so this ALTER is safe to run.
-            await conn.execute(_required_check_sql(change.cls, change.slot))
+            await conn.execute(_required_check_sql(change.cls, change.property))
         else:
             # true → false: drop CHECK constraint (no data loss).
-            await conn.execute(_required_check_drop_sql(change.cls, change.slot))
+            await conn.execute(_required_check_drop_sql(change.cls, change.property))
 
-    elif isinstance(change, RenameSlot):
+    elif isinstance(change, RenameProperty):
         # Step 1: rename the column.
         await conn.execute(
             sql.SQL("ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}").format(
@@ -1359,10 +1359,10 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         # Postgres has no RENAME CONSTRAINT DDL. Drop the old name and
         # re-add under the new name via the idempotent DO $$ helper.
         # We create a synthetic "old slot" just to compute the old check name.
-        old_slot_for_name = Slot(name=change.old_name, type=change.slot.type)
+        old_slot_for_name = Slot(name=change.old_name, type=change.property.type)
         old_chk = _required_check_name(change.cls, old_slot_for_name)
-        new_chk = _required_check_name(change.cls, change.slot)
-        if old_chk != new_chk and change.slot.required:
+        new_chk = _required_check_name(change.cls, change.property)
+        if old_chk != new_chk and change.property.required:
             # Drop old name (may not exist if required was false before rename).
             await conn.execute(
                 sql.SQL("ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {chk}").format(
@@ -1371,7 +1371,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
                 )
             )
             # Re-add under new name.
-            await conn.execute(_required_check_sql(change.cls, change.slot))
+            await conn.execute(_required_check_sql(change.cls, change.property))
 
     elif isinstance(change, RenameClass):
         old_lower = change.old_name.lower()
@@ -1410,11 +1410,11 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         # Step 4: rename every required-slot CHECK constraint whose name embeds
         # the old class name. Postgres has no RENAME CONSTRAINT; we drop + re-add.
         # The cls object now has the new name, so _required_check_name gives new names.
-        for slot in _effective_slots(change.cls):
-            if not _is_stored(slot) or not slot.required:
+        for prop in _effective_slots(change.cls):
+            if not _is_stored(property) or not property.required:
                 continue
-            old_chk = f"{old_lower}_{slot.name}_required_chk"
-            new_chk = _required_check_name(change.cls, slot)
+            old_chk = f"{old_lower}_{property.name}_required_chk"
+            new_chk = _required_check_name(change.cls, property)
             if old_chk != new_chk:
                 await conn.execute(
                     sql.SQL("ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {old_chk}").format(
@@ -1422,7 +1422,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
                         old_chk=sql.Identifier(old_chk),
                     )
                 )
-                await conn.execute(_required_check_sql(change.cls, slot))
+                await conn.execute(_required_check_sql(change.cls, property))
 
     elif isinstance(change, ChangeClassAbstract):
         # abstract toggles whether the class has a table.
@@ -1469,7 +1469,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 
     elif isinstance(change, ChangeClassIsA):
         # Concrete classes: is_a is structural-only at the DDL layer (own
-        # table, own slots; effective_slots doesn't walk is_a). No-op.
+        # table, own slots; effective_properties doesn't walk is_a). No-op.
         # Defined classes: re-emit the VIEW with the new parent as FROM.
         if isinstance(change.cls, DefinedClass):
             await emit_ddl(AddDefinedClass(cls=change.cls), conn)
@@ -1491,13 +1491,13 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
     elif isinstance(
         change,
         (
-            ChangeSlotPattern,
-            ChangeSlotPermissibleValues,
-            ChangeSlotMinimum,
-            ChangeSlotMaximum,
-            ChangeSlotIdentifier,
-            ChangeSlotResolutionPolicy,
-            ChangeSlotDerivation,
+            ChangePropertyPattern,
+            ChangePropertyPermissibleValues,
+            ChangePropertyMinimum,
+            ChangePropertyMaximum,
+            ChangePropertyIdentifier,
+            ChangePropertyResolutionPolicy,
+            ChangePropertyDerivation,
             AddSource,
             DropSource,
             AddSourceBinding,
@@ -1528,22 +1528,22 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 # The publish gate refuses these unless allow_destructive is explicitly
 # set. Three families:
 #
-#   - **Drops**: removing a class, slot, defined class, or source forfeits
+#   - **Drops**: removing a class, property, defined class, or source forfeits
 #     the rows / column / view that hold the data.
-#   - **Storage-shape rewrites**: ChangeSlotTypeExpression (column type),
+#   - **Storage-shape rewrites**: ChangePropertyTypeExpression (column type),
 #     ChangeClassAbstract (table appears/disappears).
 #   - **Source rekey**: ChangeSourceBindingIdentifierSlot (rows are now
 #     keyed by a different slot — UPDATE rekeys ``_source_row_id``).
 #
 # NOT enumerated here:
 #
-#   - Bucket B (data-revalidation: ChangeSlotPattern, ChangeSlotPermissible-
+#   - Bucket B (data-revalidation: ChangePropertyPattern, ChangePropertyPermissible-
 #     Values, min/max, ChangeConstraintBody). The publish gate already runs
 #     every NEW or CHANGED constraint over current data; tightenings on those
 #     fields surface as violations through that pass.
-#   - ChangeClassMixins — slot-level ``DropSlot`` / ``AddSlot`` records do
+#   - ChangeClassMixins — slot-level ``DropProperty`` / ``AddProperty`` records do
 #     the destructive gating; this record is audit-only.
-#   - ChangeSlotIdentifier — the storage PK is ``(_source, _source_row_id)``;
+#   - ChangePropertyIdentifier — the storage PK is ``(_source, _source_row_id)``;
 #     the ``identifier`` flag is ER/SCD2 advisory and emits no DDL.
 #   - ChangeClassIsA — concrete-class is_a doesn't drive DDL (own table,
 #     own slots); defined-class is_a body changes are CREATE OR REPLACE
@@ -1553,9 +1553,9 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 #   - ChangeSourceBindingTrust / ChangeSourceBindingMapping — runtime config, no DDL.
 _DESTRUCTIVE_CHANGE_TYPES: tuple[type[Change], ...] = (
     DropClass,
-    DropSlot,
+    DropProperty,
     DropDefinedClass,
-    ChangeSlotTypeExpression,
+    ChangePropertyTypeExpression,
     ChangeClassAbstract,
     ChangeClassIsA,
     DropSource,
@@ -1572,19 +1572,19 @@ async def apply_changes(conn: psycopg.AsyncConnection, changes: list[Change]) ->
     """Apply a precomputed list of changes (used after diff + safety check).
 
     Order:
-      1. Drops (DropClass, DropSlot, DropDefinedClass) — before adds so that a
+      1. Drops (DropClass, DropProperty, DropDefinedClass) — before adds so that a
          class renamed via drop+add with the same lowercase name doesn't try to
          CREATE TABLE before the DROP runs.
-      2. Concrete class adds (AddClass, AddSlot, etc.) — tables must exist before
+      2. Concrete class adds (AddClass, AddProperty, etc.) — tables must exist before
          the VIEW DDL for defined classes references them.
       3. Defined class adds (AddDefinedClass) — CREATE OR REPLACE VIEW runs after
          all parent tables are in place.
     """
-    drops = [c for c in changes if isinstance(c, (DropClass, DropSlot, DropDefinedClass))]
+    drops = [c for c in changes if isinstance(c, (DropClass, DropProperty, DropDefinedClass))]
     concrete_adds = [
         c
         for c in changes
-        if not isinstance(c, (DropClass, DropSlot, DropDefinedClass, AddDefinedClass))
+        if not isinstance(c, (DropClass, DropProperty, DropDefinedClass, AddDefinedClass))
     ]
     defined_adds = [c for c in changes if isinstance(c, AddDefinedClass)]
     for change in drops + concrete_adds + defined_adds:

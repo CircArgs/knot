@@ -13,7 +13,7 @@ from knot.spec.metaschema import (
     Constraint,
     OntologyClass,
     Severity,
-    Slot,
+    Property,
     Spec,
 )
 
@@ -31,7 +31,7 @@ def _cls(
         is_a=is_a,
         mixins=mixins or [],
         abstract=abstract,
-        slots=slots or [],
+        properties=slots or [],
     )
 
 

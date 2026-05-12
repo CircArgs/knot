@@ -20,7 +20,7 @@ from __future__ import annotations
 from knot.spec import (
     OntologyClass,
     Primitive,
-    Slot,
+    Property,
     Source,
     SourceBinding,
     Spec,
@@ -33,11 +33,11 @@ PINNED_VERSION = 5
 
 
 def _fixture_spec() -> Spec:
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), required=True)
-    movie = OntologyClass(name="Movie", slots=[imdb_id, title])
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"), required=True)
+    movie = OntologyClass(name="Movie", properties=[imdb_id, title])
     imdb_movies = Source(name="imdb_movies")
-    binding = SourceBinding(source=imdb_movies, class_=movie, identifier_slot=imdb_id)
+    binding = SourceBinding(source=imdb_movies, class_=movie, identifier_property=imdb_id)
     return Spec(
         id="canonical-fixture",
         version="1.0.0",

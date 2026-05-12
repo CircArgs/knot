@@ -20,7 +20,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
+from knot.spec import OntologyClass, Primitive, Property, Source, Spec
 from knot.spec.errors import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
@@ -34,11 +34,11 @@ from knot.spec.metaschema import SourceBinding
 
 
 def _minimal_spec(name: str = "test") -> Spec:
-    """A valid spec with one class, one slot, one source."""
-    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[imdb_id])
+    """A valid spec with one class, one prop, one source."""
+    imdb_id = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[imdb_id])
     src = Source(name="imdb_movies")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=imdb_id)  # type: ignore[call-arg]
     return Spec(
         id=name,
         version="1.0.0",
@@ -166,12 +166,12 @@ async def test_publish_gate_rejects_dangling_classref(clean_spec):
     """A slot whose ClassRef target is not on spec.classes fails gate."""
     from knot.spec import ClassRef
 
-    orphan_class = OntologyClass(name="Orphan", slots=[])
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    bad_slot = Slot(name="bad", type=ClassRef(target_class=orphan_class))
-    movie = OntologyClass(name="Movie", slots=[id_slot, bad_slot])
+    orphan_class = OntologyClass(name="Orphan", properties=[])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    bad_slot = Property(name="bad", type=ClassRef(target_class=orphan_class))
+    movie = OntologyClass(name="Movie", properties=[id_slot, bad_slot])
     src = Source(name="src")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="bad",
         version="1.0.0",
@@ -186,11 +186,11 @@ async def test_publish_gate_rejects_dangling_classref(clean_spec):
 
 
 async def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
-    ghost = OntologyClass(name="Ghost", slots=[id_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot])
+    ghost = OntologyClass(name="Ghost", properties=[id_slot])
     src = Source(name="src")
-    binding = SourceBinding(source=src, class_=ghost, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=ghost, identifier_property=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="bad",
         version="1.0.0",
@@ -251,12 +251,12 @@ def test_entity_name_pattern_rejects_bad_names():
 
     for bad in ("bad name", "1bad", "foo;DROP TABLE", "", " leading"):
         with pytest.raises(ValidationError):
-            OntologyClass(name=bad, slots=[])
+            OntologyClass(name=bad, properties=[])
 
 
 def test_entity_name_pattern_allows_good_names():
     for good in ("Movie", "imdb_id", "_internal", "A1B2C3"):
-        cls = OntologyClass(name=good, slots=[])
+        cls = OntologyClass(name=good, properties=[])
         assert cls.name == good
 
 
@@ -269,8 +269,8 @@ def test_case_twin_classes_can_be_constructed():
     """The metaschema doesn't prevent case-twins; publish gate relies on
     DDL (lowercasing to the same table name) being caught at migration time.
     This test confirms both objects can be built, not that they're valid together."""
-    cls_a = OntologyClass(name="Movie", slots=[])
-    cls_b = OntologyClass(name="movie", slots=[])
+    cls_a = OntologyClass(name="Movie", properties=[])
+    cls_b = OntologyClass(name="movie", properties=[])
     assert cls_a.name == "Movie"
     assert cls_b.name == "movie"
 

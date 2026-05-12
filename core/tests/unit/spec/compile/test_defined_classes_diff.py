@@ -1,6 +1,6 @@
-"""Pure-Python compile tests for ReverseRelation and FK-chain SlotPath.
+"""Pure-Python compile tests for ReverseRelation and FK-chain PropertyPath.
 
-Covers ReverseRelation compile correctness and multi-slot SlotPath
+Covers ReverseRelation compile correctness and multi-slot PropertyPath
 compilation through a ClassRef FK chain.
 
 DB-bound end-to-end tests live in
@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import pytest
 
-from knot.spec import OntologyClass, Primitive, Slot, Spec
+from knot.spec import OntologyClass, Primitive, Property, Spec
 from knot.spec.compile.postgres import CompileContext, compile_predicate, migration
 from knot.spec.metaschema import (
     ClassRef,
@@ -21,7 +21,7 @@ from knot.spec.metaschema import (
     RelationAll,
     RelationAny,
     ReverseRelation,
-    SlotPath,
+    PropertyPath,
 )
 
 # ---------------------------------------------------------------------------
@@ -30,15 +30,15 @@ from knot.spec.metaschema import (
 
 
 def test_reverse_relation_compiles():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person_id = Property(name="person_id", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id])
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"))
-    person_fk = Slot(name="person", type=ClassRef(target_class=person))
-    role = Slot(name="role", type=Primitive(name="string"))
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
+    credit_id = Property(name="credit_id", type=Primitive(name="string"))
+    person_fk = Property(name="person", type=ClassRef(target_class=person))
+    role = Property(name="role", type=Primitive(name="string"))
+    credit = OntologyClass(name="Credit", properties=[credit_id, person_fk, role])
 
-    rev = ReverseRelation(target_class=credit, fk_slot=person_fk)
+    rev = ReverseRelation(target_class=credit, fk_property=person_fk)
     node = RelationAny(relation=rev)
 
     ctx = CompileContext(primary_class=person, alias="s")
@@ -51,16 +51,16 @@ def test_reverse_relation_compiles():
 
 
 def test_reverse_relation_in_relation_all_compiles():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person_id = Property(name="person_id", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id])
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"))
-    person_fk = Slot(name="person", type=ClassRef(target_class=person))
-    role = Slot(name="role", type=Primitive(name="string"))
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
+    credit_id = Property(name="credit_id", type=Primitive(name="string"))
+    person_fk = Property(name="person", type=ClassRef(target_class=person))
+    role = Property(name="role", type=Primitive(name="string"))
+    credit = OntologyClass(name="Credit", properties=[credit_id, person_fk, role])
 
-    rev = ReverseRelation(target_class=credit, fk_slot=person_fk)
-    role_path = SlotPath(from_class=credit, slots=[role])
+    rev = ReverseRelation(target_class=credit, fk_property=person_fk)
+    role_path = PropertyPath(from_class=credit, properties=[role])
     body = Compare(op=CompareOp.EQ, left=role_path, right=Literal_(value="director"))
     node = RelationAll(relation=rev, body=body)
 
@@ -72,14 +72,14 @@ def test_reverse_relation_in_relation_all_compiles():
 
 
 def test_reverse_relation_direct_raises_compiler_error():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person_id = Property(name="person_id", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id])
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"))
-    person_fk = Slot(name="person", type=ClassRef(target_class=person))
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk])
+    credit_id = Property(name="credit_id", type=Primitive(name="string"))
+    person_fk = Property(name="person", type=ClassRef(target_class=person))
+    credit = OntologyClass(name="Credit", properties=[credit_id, person_fk])
 
-    rev = ReverseRelation(target_class=credit, fk_slot=person_fk)
+    rev = ReverseRelation(target_class=credit, fk_property=person_fk)
 
     ctx = CompileContext(primary_class=person, alias="s")
     with pytest.raises(NotImplementedError):
@@ -92,17 +92,17 @@ def test_reverse_relation_direct_raises_compiler_error():
 
 
 def test_multi_slot_path_compile():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person_name = Slot(name="name", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id, person_name])
+    person_id = Property(name="person_id", type=Primitive(name="string"))
+    person_name = Property(name="name", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id, person_name])
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"))
-    person_fk = Slot(name="person", type=ClassRef(target_class=person))
-    role = Slot(name="role", type=Primitive(name="string"))
-    credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
+    credit_id = Property(name="credit_id", type=Primitive(name="string"))
+    person_fk = Property(name="person", type=ClassRef(target_class=person))
+    role = Property(name="role", type=Primitive(name="string"))
+    credit = OntologyClass(name="Credit", properties=[credit_id, person_fk, role])
 
-    # SlotPath: Credit.person.name (person_fk → person_name)
-    path = SlotPath(from_class=credit, slots=[person_fk, person_name])
+    # PropertyPath: Credit.person.name (person_fk → person_name)
+    path = PropertyPath(from_class=credit, properties=[person_fk, person_name])
     node = Compare(op=CompareOp.EQ, left=path, right=Literal_(value="Alice"))
 
     ctx = CompileContext(primary_class=credit, alias="s")
@@ -121,11 +121,11 @@ def test_multi_slot_path_compile():
 
 
 def test_diff_specs_add_class():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
+    person_id = Property(name="person_id", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id])
 
     prev_spec = Spec(id="t", version="1", classes=[person], sources=[])
-    director = OntologyClass(name="Director", is_a=person, slots=[])
+    director = OntologyClass(name="Director", is_a=person, properties=[])
     cand_spec = Spec(
         id="t",
         version="1",
@@ -141,9 +141,9 @@ def test_diff_specs_add_class():
 
 
 def test_diff_specs_drop_class():
-    person_id = Slot(name="person_id", type=Primitive(name="string"))
-    person = OntologyClass(name="Person", slots=[person_id])
-    director = OntologyClass(name="Director", is_a=person, slots=[])
+    person_id = Property(name="person_id", type=Primitive(name="string"))
+    person = OntologyClass(name="Person", properties=[person_id])
+    director = OntologyClass(name="Director", is_a=person, properties=[])
 
     prev_spec = Spec(
         id="t",

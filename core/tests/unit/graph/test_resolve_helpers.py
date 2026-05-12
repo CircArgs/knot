@@ -21,7 +21,7 @@ from knot.spec import (
     Array,
     Primitive,
     ResolutionPolicy,
-    Slot,
+    Property,
 )
 
 
@@ -29,11 +29,11 @@ def _slot(
     name: str, policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST, multivalued: bool = False
 ) -> Slot:
     slot_type = Array(of=Primitive(name="string")) if multivalued else Primitive(name="string")
-    return Slot(name=name, type=slot_type, resolution_policy=policy)
+    return Property(name=name, type=slot_type, resolution_policy=policy)
 
 
-def _post(source: str, slot: str, alpha: float, beta: float) -> Posterior:
-    return Posterior(source=source, slot=slot, alpha=alpha, beta=beta)
+def _post(source: str, property_name: str, alpha: float, beta: float) -> Posterior:
+    return Posterior(source=source, property=property_name, alpha=alpha, beta=beta)
 
 
 # ---------------------------------------------------------------------------
@@ -79,33 +79,33 @@ def test_argmax_trust_returns_none_if_no_contributions():
 
 
 def test_posterior_mean_deterministic_same_state():
-    slot = _slot("title", ResolutionPolicy.POSTERIOR_MEAN)
+    prop = _slot("title", ResolutionPolicy.POSTERIOR_MEAN)
     non_null = [("src_a", "val_a"), ("src_b", "val_b")]
     posts = {
-        ("src_a", "title"): _post("src_a", "title", 5.0, 2.0),  # mean ≈ 0.71
-        ("src_b", "title"): _post("src_b", "title", 2.0, 5.0),  # mean ≈ 0.29
+        ("src_a", "property"): _post("src_a", "title", 5.0, 2.0),  # mean ≈ 0.71
+        ("src_b", "property"): _post("src_b", "title", 2.0, 5.0),  # mean ≈ 0.29
     }
-    r1 = _posterior_mean(slot, non_null, posts)
-    r2 = _posterior_mean(slot, non_null, posts)
+    r1 = _posterior_mean(prop, non_null, posts)
+    r2 = _posterior_mean(prop, non_null, posts)
     assert r1 == r2 == "val_a"
 
 
 def test_posterior_mean_argmax_over_mean():
-    slot = _slot("f", ResolutionPolicy.POSTERIOR_MEAN)
+    prop = _slot("f", ResolutionPolicy.POSTERIOR_MEAN)
     non_null = [("s1", "v1"), ("s2", "v2")]
     # s2 has higher mean
     posts = {
         ("s1", "f"): _post("s1", "f", 1.0, 9.0),  # mean 0.1
         ("s2", "f"): _post("s2", "f", 9.0, 1.0),  # mean 0.9
     }
-    assert _posterior_mean(slot, non_null, posts) == "v2"
+    assert _posterior_mean(prop, non_null, posts) == "v2"
 
 
 def test_posterior_mean_tiebreak_alphabetical():
-    slot = _slot("f", ResolutionPolicy.POSTERIOR_MEAN)
+    prop = _slot("f", ResolutionPolicy.POSTERIOR_MEAN)
     non_null = [("src_b", "val_b"), ("src_a", "val_a")]
     posts = {}  # both get prior → equal means → alphabetical
-    result = _posterior_mean(slot, non_null, posts)
+    result = _posterior_mean(prop, non_null, posts)
     assert result == "val_a"
 
 
@@ -116,7 +116,7 @@ def test_posterior_mean_tiebreak_alphabetical():
 
 def test_lcb_penalises_low_observation_count():
     """Source with 1 observation has high uncertainty → LCB penalises it."""
-    slot = _slot("f", ResolutionPolicy.LCB)
+    prop = _slot("f", ResolutionPolicy.LCB)
     # s1: high mean but only 1 obs → large stddev → LCB penalty
     # s2: slightly lower mean but many obs → low stddev → better LCB
     non_null = [("s1", "uncertain"), ("s2", "certain")]
@@ -126,21 +126,21 @@ def test_lcb_penalises_low_observation_count():
         ("s1", "f"): _post("s1", "f", 2.0, 1.0),
         ("s2", "f"): _post("s2", "f", 10.0, 2.0),
     }
-    result = _lcb(slot, non_null, posts)
+    result = _lcb(prop, non_null, posts)
     # s2 has higher LCB despite lower raw mean — or at least consistent
     # The key property: result is one of the two values (no crash)
     assert result in ("uncertain", "certain")
 
 
 def test_lcb_deterministic():
-    slot = _slot("f", ResolutionPolicy.LCB)
+    prop = _slot("f", ResolutionPolicy.LCB)
     non_null = [("s1", "v1"), ("s2", "v2")]
     posts = {
         ("s1", "f"): _post("s1", "f", 3.0, 2.0),
         ("s2", "f"): _post("s2", "f", 2.0, 3.0),
     }
-    r1 = _lcb(slot, non_null, posts)
-    r2 = _lcb(slot, non_null, posts)
+    r1 = _lcb(prop, non_null, posts)
+    r2 = _lcb(prop, non_null, posts)
     assert r1 == r2
 
 
@@ -150,24 +150,24 @@ def test_lcb_deterministic():
 
 
 def test_union_multivalued_deduplicates():
-    slot = _slot("tags", multivalued=True)
+    prop = _slot("tags", multivalued=True)
     contribs = [
         {"tags": ["action", "drama"]},
         {"tags": ["drama", "thriller"]},
     ]
-    result = _union_multivalued(slot, contribs)
+    result = _union_multivalued(prop, contribs)
     assert result is not None
     assert sorted(result) == ["action", "drama", "thriller"]
 
 
 def test_union_multivalued_returns_none_when_all_null():
-    slot = _slot("tags", multivalued=True)
+    prop = _slot("tags", multivalued=True)
     contribs = [{"tags": None}, {"tags": None}]
-    result = _union_multivalued(slot, contribs)
+    result = _union_multivalued(prop, contribs)
     assert result is None
 
 
 def test_union_multivalued_handles_empty_contributions():
-    slot = _slot("tags", multivalued=True)
-    result = _union_multivalued(slot, [])
+    prop = _slot("tags", multivalued=True)
+    result = _union_multivalued(prop, [])
     assert result is None

@@ -34,7 +34,7 @@ if _ER_URL:
                 json={
                     "source": ev.source.name,
                     "class_name": ev.binding.class_.name,
-                    "identifier_slot": ev.binding.identifier_slot.name,
+                    "identifier_property": ev.binding.identifier_property.name,
                     "rows": [row.model_dump(exclude_none=False) for row in ev.rows],
                 },
                 timeout=30.0,

@@ -26,9 +26,9 @@ from knot.graph.spec import (
     CollisionError,
     EntityNotOnDraftError,
     rename_class,
-    rename_slot,
+    rename_property,
 )
-from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
+from knot.spec import OntologyClass, Property, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.metaschema import Primitive
 
@@ -56,11 +56,11 @@ async def clean_db(pg_conn):
 
 
 def _make_movie_spec(*, required_title: bool = False) -> Spec:
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title_slot = Slot(name="title", type=Primitive(name="string"), required=required_title)
-    movie = OntologyClass(name="Movie", slots=[id_slot, title_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title_slot = Property(name="title", type=Primitive(name="string"), required=required_title)
+    movie = OntologyClass(name="Movie", properties=[id_slot, title_slot])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     return Spec(
         id="t",
         version="1.0.0",
@@ -245,7 +245,7 @@ async def test_rename_class_and_slot_together(clean_db):
     # Rename class first (slot_renames hint uses new class name).
     await rename_class(clean_db, rev2, "Movie", "Film")
     # Rename slot on the renamed class.
-    await rename_slot(clean_db, rev2, "Film", "title", "name")
+    await rename_property(clean_db, rev2, "Film", "title", "name")
 
     # Both are Bucket C — no allow_destructive needed.
     await publish_draft(clean_db, rev2)
@@ -286,13 +286,13 @@ async def test_rename_class_source_binding_follows_rename(clean_db):
 
 async def test_rename_class_collision(clean_db):
     """Renaming to an existing class name raises CollisionError."""
-    id_slot1 = Slot(name="id1", type=Primitive(name="string"), identifier=True, required=True)
-    id_slot2 = Slot(name="id2", type=Primitive(name="string"), identifier=True, required=True)
-    cls_a = OntologyClass(name="Alpha", slots=[id_slot1])
-    cls_b = OntologyClass(name="Beta", slots=[id_slot2])
+    id_slot1 = Property(name="id1", type=Primitive(name="string"), identifier=True, required=True)
+    id_slot2 = Property(name="id2", type=Primitive(name="string"), identifier=True, required=True)
+    cls_a = OntologyClass(name="Alpha", properties=[id_slot1])
+    cls_b = OntologyClass(name="Beta", properties=[id_slot2])
     src = Source(name="src")
-    b1 = SourceBinding(source=src, class_=cls_a, identifier_slot=id_slot1)  # type: ignore[call-arg]
-    b2 = SourceBinding(source=src, class_=cls_b, identifier_slot=id_slot2)  # type: ignore[call-arg]
+    b1 = SourceBinding(source=src, class_=cls_a, identifier_property=id_slot1)  # type: ignore[call-arg]
+    b2 = SourceBinding(source=src, class_=cls_b, identifier_property=id_slot2)  # type: ignore[call-arg]
     spec = Spec(
         id="t",
         version="1.0.0",

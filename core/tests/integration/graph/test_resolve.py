@@ -20,7 +20,7 @@ from knot.spec import (
     OntologyClass,
     Primitive,
     ResolutionPolicy,
-    Slot,
+    Property,
     Source,
     Spec,
 )
@@ -43,24 +43,24 @@ async def resolve_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(
         name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.ARGMAX_TRUST
     )
-    pm_slot = Slot(
+    pm_slot = Property(
         name="pm_field",
         type=Primitive(name="string"),
         resolution_policy=ResolutionPolicy.POSTERIOR_MEAN,
     )
-    lcb_slot = Slot(
+    lcb_slot = Property(
         name="lcb_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.LCB
     )
-    tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
-    movie = OntologyClass(name="Movie", slots=[id_slot, title, pm_slot, lcb_slot, tags])
+    tags = Property(name="tags", type=Array(of=Primitive(name="string")))
+    movie = OntologyClass(name="Movie", properties=[id_slot, title, pm_slot, lcb_slot, tags])
     src_a = Source(name="source_a")
     src_b = Source(name="source_b")
-    binding_a = SourceBinding(source=src_a, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
-    binding_b = SourceBinding(source=src_b, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding_a = SourceBinding(source=src_a, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
+    binding_b = SourceBinding(source=src_b, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec = Spec(
         id="resolve_test",
         version="1.0.0",

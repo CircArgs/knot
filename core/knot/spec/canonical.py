@@ -12,8 +12,8 @@ Per `spec-versioning.md`:
 Cycle handling (CANONICAL_DUMP_VERSION = 4): named SpecBase nodes (those
 with a `name: str` field) are tracked by object id.  First visit emits the
 full canonical form; subsequent visits emit `{"$ref": "<name>"}`.  This
-breaks cycles from cross-class `slot.type` references without losing
-identity.  Version 4: Spec.slots removed; slots are now inline on each
+breaks cycles from cross-class `property.type` references without losing
+identity.  Version 4: Spec.properties removed; slots are now inline on each
 OntologyClass.
 """
 
@@ -47,7 +47,7 @@ _RUNTIME_FIELDS: frozenset[tuple[str, str]] = frozenset(
         # Trust/prior fields are RUNTIME — they can be tuned without republishing
         # the structural spec. Mirrors the old trust_score / slot_priors treatment.
         ("SourceBinding", "trust_prior"),
-        ("SlotMapping", "prior"),
+        ("PropertyMapping", "prior"),
         # Spec envelope authoring metadata
         ("Spec", "created_at"),
         ("Spec", "last_modified"),

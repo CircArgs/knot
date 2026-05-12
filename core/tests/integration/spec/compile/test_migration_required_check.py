@@ -3,10 +3,10 @@
 Covers:
 - AddClass with required slot emits CHECK; inserting NULL for real source fails;
   inserting NULL for _user_corrections succeeds.
-- AddSlot with required=True emits CHECK.
-- ChangeSlotRequired false→true with NULLs → required_violation blocker.
-- ChangeSlotRequired false→true with all rows populated → succeeds, CHECK added.
-- ChangeSlotRequired true→false → CHECK dropped.
+- AddProperty with required=True emits CHECK.
+- ChangePropertyRequired false→true with NULLs → required_violation blocker.
+- ChangePropertyRequired false→true with all rows populated → succeeds, CHECK added.
+- ChangePropertyRequired true→false → CHECK dropped.
 """
 
 from __future__ import annotations
@@ -19,7 +19,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
+from knot.spec import OntologyClass, Property, Source, SourceBinding, Spec
 from knot.spec.compile.postgres._naming import schema, user_corrections_source
 from knot.spec.compile.postgres.migration import apply_changes, diff_specs
 from knot.spec.errors import PublishGateError
@@ -77,7 +77,7 @@ async def _check_exists(conn, table_name: str, check_name: str) -> bool:
 
 def _simple_spec(id_slot, movie) -> Spec:
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     return Spec(
         id="t",
         version="1.0.0",
@@ -93,9 +93,9 @@ def _simple_spec(id_slot, movie) -> Spec:
 
 
 async def test_add_class_with_required_slot_emits_check(clean_db):
-    """AddClass: table creation emits CHECK constraint for required slot."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
+    """AddClass: table creation emits CHECK constraint for required prop."""
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot])
     spec = _simple_spec(id_slot, movie)
 
     await apply_changes(clean_db, diff_specs(None, spec))
@@ -105,8 +105,8 @@ async def test_add_class_with_required_slot_emits_check(clean_db):
 
 async def test_add_class_required_slot_blocks_null_for_real_source(clean_db):
     """Inserting NULL for a required slot from a real source violates the CHECK."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot])
     spec = _simple_spec(id_slot, movie)
     await apply_changes(clean_db, diff_specs(None, spec))
     rev = await _ensure_revision(clean_db)
@@ -125,8 +125,8 @@ async def test_add_class_required_slot_blocks_null_for_real_source(clean_db):
 async def test_add_class_required_slot_allows_null_for_user_corrections(clean_db):
     """Inserting NULL for a required slot from _user_corrections is allowed
     (user-corrections rows are partial by design — exempted by the CHECK)."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot])
     spec = _simple_spec(id_slot, movie)
     await apply_changes(clean_db, diff_specs(None, spec))
     rev = await _ensure_revision(clean_db)
@@ -142,22 +142,22 @@ async def test_add_class_required_slot_allows_null_for_user_corrections(clean_db
 
 
 # ---------------------------------------------------------------------------
-# AddSlot required=True — emits CHECK
+# AddProperty required=True — emits CHECK
 # ---------------------------------------------------------------------------
 
 
 async def test_add_slot_required_emits_check(clean_db):
-    """AddSlot with required=True: ADD COLUMN followed by CHECK constraint."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    movie_v1 = OntologyClass(name="Movie", slots=[id_slot])
+    """AddProperty with required=True: ADD COLUMN followed by CHECK constraint."""
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    movie_v1 = OntologyClass(name="Movie", properties=[id_slot])
     spec_v1 = _simple_spec(id_slot, movie_v1)
     await apply_changes(clean_db, diff_specs(None, spec_v1))
 
-    # v2 adds a required slot.
-    title = Slot(name="title", type=Primitive(name="string"), required=True)
-    movie_v2 = OntologyClass(name="Movie", slots=[id_slot, title])
+    # v2 adds a required prop.
+    title = Property(name="title", type=Primitive(name="string"), required=True)
+    movie_v2 = OntologyClass(name="Movie", properties=[id_slot, title])
     src_v2 = Source(name="imdb")
-    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
@@ -171,18 +171,18 @@ async def test_add_slot_required_emits_check(clean_db):
 
 
 # ---------------------------------------------------------------------------
-# ChangeSlotRequired false→true — preflight blocks when NULLs exist
+# ChangePropertyRequired false→true — preflight blocks when NULLs exist
 # ---------------------------------------------------------------------------
 
 
 async def test_change_slot_required_false_to_true_with_nulls_blocked(clean_db):
-    """ChangeSlotRequired false→true: preflight raises PublishGateError when
-    existing non-correction rows have NULLs in the slot."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), required=False)
-    movie = OntologyClass(name="Movie", slots=[id_slot, title])
+    """ChangePropertyRequired false→true: preflight raises PublishGateError when
+    existing non-correction rows have NULLs in the prop."""
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"), required=False)
+    movie = OntologyClass(name="Movie", properties=[id_slot, title])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -204,11 +204,11 @@ async def test_change_slot_required_false_to_true_with_nulls_blocked(clean_db):
     )
 
     # v2 flips title to required=True.
-    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title2 = Slot(name="title", type=Primitive(name="string"), required=True)
-    movie2 = OntologyClass(name="Movie", slots=[id_slot2, title2])
+    id_slot2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title2 = Property(name="title", type=Primitive(name="string"), required=True)
+    movie2 = OntologyClass(name="Movie", properties=[id_slot2, title2])
     src2 = Source(name="imdb")
-    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_property=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
@@ -225,18 +225,18 @@ async def test_change_slot_required_false_to_true_with_nulls_blocked(clean_db):
 
 
 # ---------------------------------------------------------------------------
-# ChangeSlotRequired false→true — succeeds when all rows populated
+# ChangePropertyRequired false→true — succeeds when all rows populated
 # ---------------------------------------------------------------------------
 
 
 async def test_change_slot_required_false_to_true_with_all_rows_ok(clean_db):
-    """ChangeSlotRequired false→true: succeeds when no NULL rows exist for
+    """ChangePropertyRequired false→true: succeeds when no NULL rows exist for
     real sources; CHECK constraint is added to the table."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), required=False)
-    movie = OntologyClass(name="Movie", slots=[id_slot, title])
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"), required=False)
+    movie = OntologyClass(name="Movie", properties=[id_slot, title])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -257,11 +257,11 @@ async def test_change_slot_required_false_to_true_with_all_rows_ok(clean_db):
         (rev1,),
     )
 
-    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title2 = Slot(name="title", type=Primitive(name="string"), required=True)
-    movie2 = OntologyClass(name="Movie", slots=[id_slot2, title2])
+    id_slot2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title2 = Property(name="title", type=Primitive(name="string"), required=True)
+    movie2 = OntologyClass(name="Movie", properties=[id_slot2, title2])
     src2 = Source(name="imdb")
-    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_property=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
@@ -279,17 +279,17 @@ async def test_change_slot_required_false_to_true_with_all_rows_ok(clean_db):
 
 
 # ---------------------------------------------------------------------------
-# ChangeSlotRequired true→false — CHECK dropped
+# ChangePropertyRequired true→false — CHECK dropped
 # ---------------------------------------------------------------------------
 
 
 async def test_change_slot_required_true_to_false_drops_check(clean_db):
-    """ChangeSlotRequired true→false: CHECK constraint is dropped."""
-    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), required=True)
-    movie = OntologyClass(name="Movie", slots=[id_slot, title])
+    """ChangePropertyRequired true→false: CHECK constraint is dropped."""
+    id_slot = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Property(name="title", type=Primitive(name="string"), required=True)
+    movie = OntologyClass(name="Movie", properties=[id_slot, title])
     src = Source(name="imdb")
-    binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
+    binding = SourceBinding(source=src, class_=movie, identifier_property=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
@@ -305,11 +305,11 @@ async def test_change_slot_required_true_to_false_drops_check(clean_db):
     # CHECK should exist after publishing v1 (title is required=True).
     assert await _check_exists(clean_db, "movie", "movie_title_required_chk")
 
-    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title2 = Slot(name="title", type=Primitive(name="string"), required=False)
-    movie2 = OntologyClass(name="Movie", slots=[id_slot2, title2])
+    id_slot2 = Property(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title2 = Property(name="title", type=Primitive(name="string"), required=False)
+    movie2 = OntologyClass(name="Movie", properties=[id_slot2, title2])
     src2 = Source(name="imdb")
-    binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
+    binding2 = SourceBinding(source=src2, class_=movie2, identifier_property=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
