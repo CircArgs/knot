@@ -112,7 +112,9 @@ def _all_slots(oc: OntologyClass) -> list[Slot]:
         if any(current is v for v in visited):
             continue
         visited.append(current)
-        for slot in current.slots:
+        # DefinedClass has no own slots (the VIEW inherits parent columns);
+        # the walk continues into is_a / mixins below.
+        for slot in getattr(current, "slots", []):
             if slot.name not in seen_names:
                 seen_names.add(slot.name)
                 result.append(slot)
@@ -690,7 +692,9 @@ def _build_schema(spec: Spec) -> Schema:
     from knot.db import graph_store
     from knot.graph import resolve as _resolve_mod
 
-    concrete_classes = [c for c in spec.classes if not c.abstract]
+    # Queryable classes: concrete OntologyClass + every DefinedClass (VIEW-backed).
+    # Abstract OntologyClass instances have no table → not queryable, excluded.
+    concrete_classes = [c for c in spec.classes if not getattr(c, "abstract", False)]
 
     # Build per-class types.
     where_types: dict[str, type] = {}
