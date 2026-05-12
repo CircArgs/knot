@@ -204,6 +204,7 @@ export function normalizeDraftSpec(
         name: c.name,
         abstract: !!c.abstract,
         description: c.description ?? null,
+        definition: c.definition ?? null,
         isAName: resolveName(c.is_a),
         mixinNames: (c.mixins ?? []).map((m: any) => resolveName(m) ?? "").filter(Boolean),
         slots: ownSlots,

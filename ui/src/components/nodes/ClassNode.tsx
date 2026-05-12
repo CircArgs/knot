@@ -73,9 +73,15 @@ export default function ClassNode({
         className="!bg-slate-400"
       />
 
-      {/* Header */}
+      {/* Header — clicking the header selects the class as a whole (not a slot). */}
       <div
-        className={`px-3 py-1.5 border-b border-slate-200 bg-slate-50 ${isJunction ? "" : "rounded-t-lg"} flex items-center justify-between gap-2`}
+        role="button"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect?.({ kind: "class", name: cls.name });
+        }}
+        className={`px-3 py-1.5 border-b border-slate-200 bg-slate-50 ${isJunction ? "" : "rounded-t-lg"} flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-100`}
       >
         <div className="flex items-center gap-1.5 min-w-0">
           <KindBadge kind="class" />
@@ -93,6 +99,14 @@ export default function ClassNode({
               title="Reified relation — ≥2 class-reference slots"
             >
               junction
+            </span>
+          )}
+          {cls.definition !== null && (
+            <span
+              className="text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide bg-sky-100 text-sky-800"
+              title={`Defined class — SQL predicate: ${cls.definition}`}
+            >
+              defined
             </span>
           )}
           <span

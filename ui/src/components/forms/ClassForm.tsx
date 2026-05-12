@@ -235,15 +235,15 @@ export default function ClassForm({ spec, initial, lockName, initialSlotRows, on
           className="text-xs text-slate-500 hover:text-slate-700 flex items-center gap-1"
         >
           <span>{advancedOpen ? "▾" : "▸"}</span>
-          Advanced (JSON)
+          Advanced (defined class — SQL predicate)
         </button>
         {advancedOpen && (
           <div className="mt-2">
-            <Label>definition (JSON)</Label>
+            <Label>definition (SQL predicate, advanced)</Label>
             <textarea
               {...register("definition")}
               className={textareaClass}
-              placeholder='{"$kind": "BoolExpr", ...}'
+              placeholder="e.g. EXISTS (SELECT 1 FROM knot_data.credit c WHERE c.person = b.canonical_id AND c.role = 'director')"
               rows={4}
             />
           </div>

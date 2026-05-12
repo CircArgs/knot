@@ -155,6 +155,7 @@ function fillMissing(p: Partial<PublishedSpec>): PublishedSpec {
       name: c.name,
       abstract: c.abstract ?? false,
       description: c.description ?? null,
+      definition: c.definition ?? null,
       isAName: c.isAName ?? null,
       mixinNames: c.mixinNames ?? [],
       slots: c.slots ?? [],

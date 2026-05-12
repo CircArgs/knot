@@ -33,6 +33,7 @@ export interface SpecClass {
   name: string;
   abstract: boolean;
   description: string | null;
+  definition: string | null;
   isAName: string | null;
   mixinNames: string[];
   slots: SpecSlot[];

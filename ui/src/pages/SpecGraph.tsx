@@ -376,7 +376,7 @@ export default function SpecGraph() {
               mixin_names: classVals.mixinNames,
               abstract: classVals.abstract,
               description: classVals.description || null,
-              definition: classVals.definition ? JSON.parse(classVals.definition) : null,
+              definition: classVals.definition || null,
             });
           }
           case "source":
@@ -588,6 +588,7 @@ function renderForm(
         typeName: s.typeName ?? "",
         identifier: s.identifier,
         required: s.required,
+        originalName: s.name,
       })) ?? [];
       return (
         <ClassForm

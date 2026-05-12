@@ -17,8 +17,8 @@ import {
 // ── Zod schema ───────────────────────────────────────────────────────────────
 
 const SlotMappingSchema = z.object({
-  slot_name: z.string().min(1, "required"),
-  source_field: z.string().min(1, "required"),
+  slot_name: z.string(),
+  source_field: z.string(),
   null_semantics: z.enum(["no_claim", "asserted_absent"]),
   prior_alpha: z.string(),
   prior_beta: z.string(),
@@ -27,7 +27,7 @@ const SlotMappingSchema = z.object({
 const Schema = z.object({
   source_name: z.string().min(1, "required"),
   class_name: z.string().min(1, "required"),
-  identifier_slot_name: z.string().min(1, "required"),
+  identifier_slot_name: z.string(),
   trust_prior_alpha: z.string(),
   trust_prior_beta: z.string(),
   required_slot_names: z.string(),
@@ -275,8 +275,14 @@ export default function SourceBindingForm({ spec, initial, lockName, onSubmit }:
                 {isLocked ? (
                   <div className={`${inputClass} bg-slate-50 text-slate-600 flex items-center`}>
                     <span className="font-mono text-xs">{field.slot_name}</span>
-                    {/* keep the value registered so RHF validation sees it */}
-                    <input type="hidden" {...register(`mappings.${idx}.slot_name`)} />
+                    {/* Register as a read-only text input so RHF reads the value correctly */}
+                    <input
+                      type="text"
+                      className="sr-only"
+                      readOnly
+                      {...register(`mappings.${idx}.slot_name`)}
+                      value={field.slot_name}
+                    />
                   </div>
                 ) : (
                   <select {...register(`mappings.${idx}.slot_name`)} className={selectClass}>

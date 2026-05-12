@@ -32,6 +32,7 @@ export const PUBLISHED_SPEC = gql`
         name
         abstract
         description
+        definition
         isAName
         mixinNames
         slots {
