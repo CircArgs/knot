@@ -20,6 +20,7 @@ from knot.spec.metaschema import (
     Between,
     BoolExpr,
     BoolOpKind,
+    ClassRef,
     Compare,
     CompareOp,
     Literal_,
@@ -103,13 +104,13 @@ def _compile_slot_path(node: SlotPath, ctx: CompileContext) -> sql.Composable:
 
     current_alias = ctx.alias
     for step_idx, slot in enumerate(node.slots[:-1]):
-        if not isinstance(slot.range, OntologyClass):
+        if not isinstance(slot.type, ClassRef):
             raise CompilerError(
                 f"SlotPath non-terminal slot {slot.name!r} at position {step_idx} "
-                f"must have an OntologyClass range for FK traversal; "
-                f"got {type(slot.range).__name__!r}."
+                f"must have a ClassRef type for FK traversal; "
+                f"got {type(slot.type).__name__!r}."
             )
-        target_cls: OntologyClass = slot.range
+        target_cls: OntologyClass = slot.type.target_class
         row_alias = f"_sp{step_idx + 1}"
         bind_alias = f"_sb{step_idx + 1}"
 

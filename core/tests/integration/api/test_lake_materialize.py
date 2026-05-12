@@ -21,7 +21,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.api.main import app
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from tests._helpers import publish_spec
 
 
@@ -31,19 +31,16 @@ def _dev_principal() -> Principal:
 
 def _spec_with_concrete_and_abstract() -> Spec:
     """One concrete Movie source class + one abstract Auditable class."""
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-
-    audited_at = Slot(name="audited_at", range=st)
+    audited_at = Slot(name="audited_at", type=Primitive(name="string"))
     auditable = OntologyClass(
         name="Auditable",
         slots=[audited_at],
         abstract=True,
     )
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(
         name="Movie",
         slots=[imdb_id, title, year],
@@ -53,7 +50,6 @@ def _spec_with_concrete_and_abstract() -> Spec:
     return Spec(
         id="lake_test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, title, year, audited_at],
         classes=[movie, auditable],
         sources=[src],
@@ -163,7 +159,10 @@ async def test_current_body_runs_against_real_data(published, client):
     cur = await conn.execute(movie["current"])
     rows = await cur.fetchall()
     canonical_ids = {row[0] for row in rows}
-    assert canonical_ids == {"tt1", "tt2"}
+    # canonical_ids follow {source}:{source_row_id} format
+    assert any("tt1" in cid for cid in canonical_ids)
+    assert any("tt2" in cid for cid in canonical_ids)
+    assert len(canonical_ids) == 2
 
 
 # ---------------------------------------------------------------------------

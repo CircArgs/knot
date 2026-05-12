@@ -25,7 +25,7 @@ from knot.api.row_models import build_row_model
 from knot.db import graph_store
 from knot.extensions import RequestContext, Session, _Dispatcher
 from knot.extensions.events import RowsIngested, RowsIngesting
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -38,15 +38,13 @@ def _dev_principal() -> Principal:
 
 
 def _build_movie_spec() -> tuple[Spec, OntologyClass, Source]:
-    st = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="ext_test",
         version="1.0.0",
-        types=[st],
         slots=[imdb_id, title],
         classes=[movie],
         sources=[src],
@@ -228,14 +226,12 @@ async def test_er_handler_http_delegates_when_url_set(pg_conn, monkeypatch):
     monkeypatch.setattr(httpx, "AsyncClient", _FakeClient)
 
     try:
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True, required=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
         cls = OntologyClass(name="X", slots=[id_slot])
         src = Source(name="_http_delegate_test", entity_class=cls, identifier_slot=id_slot)
         spec = Spec(
             id="http_delegate_test",
             version="1.0.0",
-            types=[st],
             slots=[id_slot],
             classes=[cls],
             sources=[src],
@@ -317,6 +313,7 @@ async def test_ingest_route_canonical_id_from_builtin_fallback(ingest_db, ingest
     assert data["accepted"] == 1
 
     rows = await graph_store.list_rows(conn, cls=movie)
-    matching = [r for r in rows if r.get("_canonical_id") == "tt9999999"]
-    assert matching, f"Row with _canonical_id='tt9999999' not found; got {rows}"
+    # canonical_id follows {source}:{source_row_id} format
+    matching = [r for r in rows if "tt9999999" in r.get("_canonical_id", "")]
+    assert matching, f"Row with canonical_id containing 'tt9999999' not found; got {rows}"
     assert matching[0]["title"] == "Test Film"

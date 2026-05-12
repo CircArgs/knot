@@ -16,11 +16,9 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import OntologyClass, Slot, Source, Spec
-from knot.spec.metaschema import Array, Primitive
 from knot.spec.compile.postgres._naming import schema
-from knot.spec.compile.postgres.migration import apply_changes, diff_specs
 from knot.spec.errors import PublishGateError
-
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Fixture

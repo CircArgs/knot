@@ -99,11 +99,13 @@ async def ingest_rows(
     pre = RowsIngesting(source=source, spec=spec, rows=typed_rows)
     await dispatch.dispatch(pre, ctx)
 
-    # 3. Built-in default canonical_id: identifier-slot passthrough
+    # 3. Built-in default canonical_id: {source_name}:{source_row_id}
     #    (only if no handler set them).
     if pre.canonical_ids is None:
         id_name = source.identifier_slot.name
-        pre.canonical_ids = [str(getattr(r, id_name)) for r in pre.rows]
+        pre.canonical_ids = [
+            f"{source.name}:{getattr(r, id_name)}" for r in pre.rows
+        ]
 
     wire_rows = [r.model_dump(exclude_none=False) for r in pre.rows]
 

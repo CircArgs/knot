@@ -24,20 +24,20 @@ from knot.spec import (
     Constraint,
     Literal_,
     OntologyClass,
-    PermissibleValue,
+    Primitive,
     ResolutionPolicy,
     Severity,
     Slot,
+    SlotConstraints,
     SlotPath,
     Source,
     Spec,
-    TypeDefinition,
 )
+
 from knot.spec.compile.postgres.migration import (
     AddConstraint,
     AddSource,
     ChangeClassAbstract,
-    ChangeClassDefinition,
     ChangeClassIsA,
     ChangeClassMixins,
     ChangeConstraintBody,
@@ -47,14 +47,14 @@ from knot.spec.compile.postgres.migration import (
     ChangeSlotIdentifier,
     ChangeSlotMaximum,
     ChangeSlotMinimum,
-    ChangeSlotMultivalued,
     ChangeSlotPattern,
     ChangeSlotPermissibleValues,
     ChangeSlotResolutionPolicy,
+    ChangeSlotTypeExpression,
     ChangeSourceEntityClass,
     ChangeSourceIdentifierSlot,
-    ChangeTypeBase,
-    ChangeTypePattern,
+    ChangeSourceSlotPrior,
+    ChangeSourceTrustScore,
     DropConstraint,
     DropSource,
     diff_specs,
@@ -72,21 +72,18 @@ def _make_spec_pair(*, mutator):
     matches what serialize/rehydrate would produce."""
 
     def _build():
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True, required=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
         movie = OntologyClass(name="Movie", slots=[id_slot])
         src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
         spec = Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot],
             classes=[movie],
             sources=[src],
         )
         return {
             "spec": spec,
-            "type": st,
             "id_slot": id_slot,
             "movie": movie,
             "source": src,
@@ -99,54 +96,13 @@ def _make_spec_pair(*, mutator):
 
 
 # ---------------------------------------------------------------------------
-# 1. TypeDefinition field diffs
-# ---------------------------------------------------------------------------
-
-
-def test_diff_change_type_base_emits_record():
-    def mutate(s):
-        s["type"].base = "int"
-
-    prev, cand = _make_spec_pair(mutator=mutate)
-    changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangeTypeBase)), None)
-    assert rec is not None, f"no ChangeTypeBase in {changes!r}"
-    assert rec.type_name == "string"
-    assert rec.old_base == "str"
-    assert rec.new_base == "int"
-
-
-def test_change_type_base_is_destructive():
-    rec = ChangeTypeBase(type_name="string", old_base="str", new_base="int")
-    assert is_destructive(rec)
-
-
-def test_diff_change_type_pattern_emits_record():
-    def mutate(s):
-        s["type"].pattern = r"^[a-z]+$"
-
-    prev, cand = _make_spec_pair(mutator=mutate)
-    changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangeTypePattern)), None)
-    assert rec is not None
-    assert rec.type_name == "string"
-    assert rec.old_pattern is None
-    assert rec.new_pattern == r"^[a-z]+$"
-
-
-def test_change_type_pattern_is_not_destructive():
-    rec = ChangeTypePattern(type_name="string", old_pattern=None, new_pattern="^a$")
-    assert not is_destructive(rec)
-
-
-# ---------------------------------------------------------------------------
-# 2. Slot field diffs
+# 1. Slot field diffs
 # ---------------------------------------------------------------------------
 
 
 def test_diff_change_slot_pattern_emits_record():
     def mutate(s):
-        s["id_slot"].pattern = r"^tt[0-9]+$"
+        s["id_slot"].constraints = SlotConstraints(pattern=r"^tt[0-9]+$")
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
@@ -164,10 +120,7 @@ def test_change_slot_pattern_is_not_destructive():
 
 def test_diff_change_slot_permissible_values_emits_record():
     def mutate(s):
-        s["id_slot"].permissible_values = [
-            PermissibleValue(text="a"),
-            PermissibleValue(text="b"),
-        ]
+        s["id_slot"].constraints = SlotConstraints(permissible_values=["a", "b"])
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
@@ -185,7 +138,7 @@ def test_change_slot_permissible_values_is_not_destructive():
 
 def test_diff_change_slot_minimum_emits_record():
     def mutate(s):
-        s["id_slot"].minimum_value = 0.0
+        s["id_slot"].constraints = SlotConstraints(min_value=0.0)
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
@@ -203,7 +156,7 @@ def test_change_slot_minimum_is_not_destructive():
 
 def test_diff_change_slot_maximum_emits_record():
     def mutate(s):
-        s["id_slot"].maximum_value = 100.0
+        s["id_slot"].constraints = SlotConstraints(max_value=100.0)
 
     prev, cand = _make_spec_pair(mutator=mutate)
     changes = diff_specs(prev, cand)
@@ -219,26 +172,28 @@ def test_change_slot_maximum_is_not_destructive():
     assert not is_destructive(rec)
 
 
-def test_diff_change_slot_multivalued_emits_record():
-    def mutate(s):
-        s["id_slot"].multivalued = True
-
-    prev, cand = _make_spec_pair(mutator=mutate)
+def test_diff_change_slot_type_expression_emits_record():
+    """Changing slot type from string→integer emits ChangeSlotTypeExpression."""
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+    year_str = Slot(name="year", type=Primitive(name="string"))
+    year_int = Slot(name="year", type=Primitive(name="integer"))
+    prev_movie = OntologyClass(name="Movie", slots=[id_slot, year_str])
+    cand_movie = OntologyClass(name="Movie", slots=[id_slot, year_int])
+    prev = Spec(id="t", version="1.0.0", slots=[id_slot, year_str], classes=[prev_movie])
+    cand = Spec(id="t", version="1.0.0", slots=[id_slot, year_int], classes=[cand_movie])
     changes = diff_specs(prev, cand)
-    rec = next((c for c in changes if isinstance(c, ChangeSlotMultivalued)), None)
+    rec = next((c for c in changes if isinstance(c, ChangeSlotTypeExpression)), None)
     assert rec is not None
-    assert rec.slot_name == "id"
-    assert rec.old_value is False
-    assert rec.new_value is True
+    assert rec.slot.name == "year"
+    assert rec.prev_pg_type == "TEXT"
+    assert rec.new_pg_type == "INTEGER"
 
 
-def test_change_slot_multivalued_is_destructive():
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True)
+def test_change_slot_type_expression_is_destructive():
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
     cls = OntologyClass(name="Movie", slots=[id_slot])
-    rec = ChangeSlotMultivalued(
-        cls=cls, slot=id_slot, slot_name="id", old_value=False, new_value=True
-    )
+    slot = Slot(name="year", type=Primitive(name="integer"))
+    rec = ChangeSlotTypeExpression(cls=cls, slot=slot, prev_pg_type="TEXT", new_pg_type="INTEGER")
     assert is_destructive(rec)
 
 
@@ -286,19 +241,17 @@ def test_diff_change_slot_derivation_body_change_emits_record():
     from knot.spec.metaschema import ScalarDerivation
 
     def build():
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
-        title = Slot(name="title", range=st)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        title = Slot(name="title", type=Primitive(name="string"))
         derived = Slot(
             name="upper_title",
-            range=st,
+            type=Primitive(name="string"),
             derivation=ScalarDerivation(expression=Literal_(value="X")),
         )
         movie = OntologyClass(name="Movie", slots=[id_slot, title, derived])
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot, title, derived],
             classes=[movie],
         ), derived
@@ -327,16 +280,15 @@ def test_change_slot_derivation_is_not_destructive():
 
 
 # ---------------------------------------------------------------------------
-# 3. OntologyClass field diffs
+# 2. OntologyClass field diffs
 # ---------------------------------------------------------------------------
 
 
 def test_diff_change_class_abstract_emits_record():
     def build(*, abstract):
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Title", slots=[id_slot], abstract=abstract)
-        return Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=[cls])
+        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[cls])
 
     changes = diff_specs(build(abstract=False), build(abstract=True))
     rec = next((c for c in changes if isinstance(c, ChangeClassAbstract)), None)
@@ -354,15 +306,14 @@ def test_change_class_abstract_is_destructive():
 
 def test_diff_change_class_is_a_emits_record():
     def build(*, parent_name):
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         a = OntologyClass(name="A", slots=[id_slot])
         b = OntologyClass(name="B", slots=[id_slot])
         child = OntologyClass(
             name="Child", slots=[id_slot], is_a={"A": a, "B": b, None: None}[parent_name]
         )
         classes = [a, b, child]
-        return Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=classes)
+        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=classes)
 
     changes = diff_specs(build(parent_name="A"), build(parent_name="B"))
     rec = next((c for c in changes if isinstance(c, ChangeClassIsA)), None)
@@ -380,15 +331,14 @@ def test_change_class_is_a_is_destructive():
 
 def test_diff_change_class_mixins_emits_record():
     def build(*, mixin_names):
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         a = OntologyClass(name="A", slots=[])
         b = OntologyClass(name="B", slots=[])
         mx_lookup = {"A": a, "B": b}
         cls = OntologyClass(
             name="Child", slots=[id_slot], mixins=[mx_lookup[m] for m in mixin_names]
         )
-        return Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=[a, b, cls])
+        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[a, b, cls])
 
     changes = diff_specs(build(mixin_names=["A"]), build(mixin_names=["A", "B"]))
     rec = next((c for c in changes if isinstance(c, ChangeClassMixins)), None)
@@ -405,55 +355,16 @@ def test_change_class_mixins_is_not_destructive():
     assert not is_destructive(rec)
 
 
-def test_diff_change_class_definition_body_change_emits_record():
-    """Both prev and cand define the same class as a defined class with
-    different definition bodies."""
-
-    def build(*, body_value):
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
-        parent = OntologyClass(name="Person", slots=[id_slot])
-        path = SlotPath(from_class=parent, slots=[id_slot])
-        body = Compare(op=CompareOp.EQ, left=path, right=Literal_(value=body_value))
-        defined = OntologyClass(name="Director", is_a=parent, slots=[], definition=body)
-        return Spec(
-            id="t",
-            version="1.0.0",
-            types=[st],
-            slots=[id_slot],
-            classes=[parent, defined],
-        )
-
-    changes = diff_specs(build(body_value="A"), build(body_value="B"))
-    rec = next((c for c in changes if isinstance(c, ChangeClassDefinition)), None)
-    assert rec is not None
-    assert rec.class_name == "Director"
-    assert rec.had_definition_before is True
-    assert rec.has_definition_now is True
-    assert rec.definition_changed is True
-
-
-def test_change_class_definition_is_not_destructive():
-    cls = OntologyClass(name="Director", slots=[])
-    rec = ChangeClassDefinition(
-        cls=cls,
-        class_name="Director",
-        had_definition_before=True,
-        has_definition_now=True,
-        definition_changed=True,
-    )
-    assert not is_destructive(rec)
 
 
 # ---------------------------------------------------------------------------
-# 4. Source field diffs
+# 3. Source field diffs
 # ---------------------------------------------------------------------------
 
 
 def test_diff_add_source_emits_record():
     def build(*, with_source):
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[id_slot])
         sources = (
             [Source(name="imdb", entity_class=cls, identifier_slot=id_slot)] if with_source else []
@@ -461,7 +372,6 @@ def test_diff_add_source_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot],
             classes=[cls],
             sources=sources,
@@ -477,8 +387,7 @@ def test_diff_add_source_emits_record():
 
 def test_diff_drop_source_emits_record():
     def build(*, with_source):
-        st = TypeDefinition(name="string", base="str")
-        id_slot = Slot(name="id", range=st, identifier=True)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[id_slot])
         sources = (
             [Source(name="imdb", entity_class=cls, identifier_slot=id_slot)] if with_source else []
@@ -486,7 +395,6 @@ def test_diff_drop_source_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot],
             classes=[cls],
             sources=sources,
@@ -504,9 +412,8 @@ def test_drop_source_is_destructive():
 
 def test_diff_change_source_entity_class_emits_record():
     def build(*, target_class_name):
-        st = TypeDefinition(name="string", base="str")
-        id_slot_a = Slot(name="id_a", range=st, identifier=True)
-        id_slot_b = Slot(name="id_b", range=st, identifier=True)
+        id_slot_a = Slot(name="id_a", type=Primitive(name="string"), identifier=True)
+        id_slot_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True)
         movie = OntologyClass(name="Movie", slots=[id_slot_a])
         series = OntologyClass(name="Series", slots=[id_slot_b])
         target = {"Movie": (movie, id_slot_a), "Series": (series, id_slot_b)}[target_class_name]
@@ -514,7 +421,6 @@ def test_diff_change_source_entity_class_emits_record():
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot_a, id_slot_b],
             classes=[movie, series],
             sources=[src],
@@ -535,16 +441,14 @@ def test_change_source_entity_class_is_destructive():
 
 def test_diff_change_source_identifier_slot_emits_record():
     def build(*, identifier_name):
-        st = TypeDefinition(name="string", base="str")
-        slot_a = Slot(name="id_a", range=st, identifier=True)
-        slot_b = Slot(name="id_b", range=st, identifier=True)
+        slot_a = Slot(name="id_a", type=Primitive(name="string"), identifier=True)
+        slot_b = Slot(name="id_b", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[slot_a, slot_b])
         identifier = {"id_a": slot_a, "id_b": slot_b}[identifier_name]
         src = Source(name="imdb", entity_class=cls, identifier_slot=identifier)
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[slot_a, slot_b],
             classes=[cls],
             sources=[src],
@@ -564,16 +468,63 @@ def test_change_source_identifier_slot_is_destructive():
     assert is_destructive(rec)
 
 
+def test_diff_change_source_trust_score_emits_record():
+    def build(*, trust_score):
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
+        src = Source(name="imdb", entity_class=cls, identifier_slot=id_slot, trust_score=trust_score)
+        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[cls], sources=[src])
+
+    changes = diff_specs(build(trust_score=1.0), build(trust_score=0.8))
+    rec = next((c for c in changes if isinstance(c, ChangeSourceTrustScore)), None)
+    assert rec is not None
+    assert rec.source_name == "imdb"
+    assert rec.old_value == 1.0
+    assert rec.new_value == 0.8
+
+
+def test_change_source_trust_score_is_not_destructive():
+    rec = ChangeSourceTrustScore(source_name="imdb", old_value=1.0, new_value=0.8)
+    assert not is_destructive(rec)
+
+
+def test_diff_change_source_slot_prior_emits_record():
+    def build(*, alpha, beta):
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        cls = OntologyClass(name="Movie", slots=[id_slot])
+        src = Source(
+            name="imdb",
+            entity_class=cls,
+            identifier_slot=id_slot,
+            slot_priors={"id": (alpha, beta)},
+        )
+        return Spec(id="t", version="1.0.0", slots=[id_slot], classes=[cls], sources=[src])
+
+    changes = diff_specs(build(alpha=1.0, beta=1.0), build(alpha=5.0, beta=2.0))
+    rec = next((c for c in changes if isinstance(c, ChangeSourceSlotPrior)), None)
+    assert rec is not None
+    assert rec.source_name == "imdb"
+    assert rec.slot_name == "id"
+
+
+def test_change_source_slot_prior_is_not_destructive():
+    rec = ChangeSourceSlotPrior(
+        source_name="imdb",
+        slot_name="title",
+        prev_prior=(1.0, 1.0),
+        new_prior=(5.0, 2.0),
+    )
+    assert not is_destructive(rec)
+
+
 # ---------------------------------------------------------------------------
-# 5. Constraint field diffs
+# 4. Constraint field diffs
 # ---------------------------------------------------------------------------
 
 
 def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_name="Movie"):
-    st = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    id_slot = Slot(name="id", range=st, identifier=True)
-    year = Slot(name="year", range=int_t)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year])
     series = OntologyClass(name="Series", slots=[id_slot, year])
     primary_cls = {"Movie": movie, "Series": series}[primary_name]
@@ -587,7 +538,6 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
     return Spec(
         id="t",
         version="1.0.0",
-        types=[st, int_t],
         slots=[id_slot, year],
         classes=[movie, series],
         sources=[src],
@@ -596,16 +546,13 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
 
 
 def _build_constraintless_spec():
-    st = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    id_slot = Slot(name="id", range=st, identifier=True)
-    year = Slot(name="year", range=int_t)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[id_slot, year])
     src = Source(name="imdb", entity_class=movie, identifier_slot=id_slot)
     return Spec(
         id="t",
         version="1.0.0",
-        types=[st, int_t],
         slots=[id_slot, year],
         classes=[movie],
         sources=[src],
@@ -687,7 +634,7 @@ def test_change_constraint_severity_is_not_destructive():
 
 
 # ---------------------------------------------------------------------------
-# 6. Sanity: BoolExpr usage doesn't disturb the diff
+# 5. Sanity: BoolExpr usage doesn't disturb the diff
 # ---------------------------------------------------------------------------
 
 
@@ -696,10 +643,8 @@ def test_diff_bool_expr_constraint_body_emits_change_constraint_body():
     produce a ChangeConstraintBody record."""
 
     def build(*, value):
-        st = TypeDefinition(name="string", base="str")
-        int_t = TypeDefinition(name="integer", base="int")
-        id_slot = Slot(name="id", range=st, identifier=True)
-        year = Slot(name="year", range=int_t)
+        id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
+        year = Slot(name="year", type=Primitive(name="integer"))
         movie = OntologyClass(name="Movie", slots=[id_slot, year])
         cmp_left = Compare(
             op=CompareOp.GT,
@@ -711,7 +656,6 @@ def test_diff_bool_expr_constraint_body_emits_change_constraint_body():
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st, int_t],
             slots=[id_slot, year],
             classes=[movie],
             constraints=[con],

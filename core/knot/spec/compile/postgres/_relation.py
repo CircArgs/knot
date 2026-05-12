@@ -28,6 +28,7 @@ from knot.spec.compile.postgres._context import CompileContext
 from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
 from knot.spec.metaschema import (
     AggFunc,
+    ClassRef,
     FilteredRelation,
     FormatDerivation,
     OntologyClass,
@@ -65,29 +66,16 @@ def _resolve_relation_ref(
 def _target_class(ref: RelationRef) -> OntologyClass:
     """Extract the target OntologyClass from a RelationRef's slot.
 
-    Three cases, in resolution order:
-      1. ``slot.range`` is an OntologyClass — direct ranged ref.
-      2. ``slot.reference`` is a ``DirectRef`` or ``DiscriminatedRef`` with a
-         statically-known ``target_class`` — use it.
-      3. Neither — raise CompilerError. (DiscriminatedRef without target_class
-         is true row-level polymorphism and isn't supported in this slice.)
-
-    The slot still holds the FK value as a column (``range=string`` typically);
-    the JOIN goes through the target's bindings table, the same shape used
-    for class-ranged refs.
+    The slot's ``type`` must be a ``ClassRef`` — direct typed FK reference.
+    Raises ``CompilerError`` for any other type expression.
     """
     slot = ref.slot
-    if isinstance(slot.range, OntologyClass):
-        return slot.range
-    reference = getattr(slot, "reference", None)
-    target = getattr(reference, "target_class", None)
-    if isinstance(target, OntologyClass):
-        return target
+    if isinstance(slot.type, ClassRef):
+        return slot.type.target_class
     raise CompilerError(
-        f"RelationRef slot {slot.name!r} cannot be traversed: its range is "
-        f"{type(slot.range).__name__!r} and it has no static "
-        f"reference.target_class. Either declare range as an OntologyClass "
-        f"or set slot.reference.target_class."
+        f"RelationRef slot {slot.name!r} cannot be traversed: its type is "
+        f"{type(slot.type).__name__!r}. Declare type as ClassRef(target_class=...) "
+        f"to make this slot traversable."
     )
 
 

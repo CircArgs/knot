@@ -18,17 +18,18 @@ from knot.graph.resolve import (
     _union_multivalued,
 )
 from knot.spec import (
+    Array,
+    Primitive,
     ResolutionPolicy,
     Slot,
-    TypeDefinition,
 )
 
 
 def _slot(
     name: str, policy: ResolutionPolicy = ResolutionPolicy.ARGMAX_TRUST, multivalued: bool = False
 ) -> Slot:
-    st = TypeDefinition(name="string", base="str")
-    return Slot(name=name, range=st, resolution_policy=policy, multivalued=multivalued)
+    slot_type = Array(of=Primitive(name="string")) if multivalued else Primitive(name="string")
+    return Slot(name=name, type=slot_type, resolution_policy=policy)
 
 
 def _post(source: str, slot: str, alpha: float, beta: float) -> Posterior:

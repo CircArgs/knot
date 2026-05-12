@@ -28,12 +28,12 @@ from knot.spec.metaschema import (
     Constraint,
     Literal_,
     OntologyClass,
+    Primitive,
     Severity,
     Slot,
     SlotPath,
     Source,
     Spec,
-    TypeDefinition,
 )
 
 
@@ -64,10 +64,8 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     conn = clean_db
 
     # Build spec with constraint: year must be >= 1888 AND <= 2100
-    str_t = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    imdb_id_slot = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    year_slot = Slot(name="year", range=int_t)
+    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
 
@@ -95,7 +93,6 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     spec = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
@@ -118,13 +115,7 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
             {"imdb_id": "tt0000001", "year": 1972},  # valid
             {"imdb_id": "tt0000002", "year": 1800},  # violates year >= 1888
         ],
-        canonical_ids=[
-            str(r["imdb_id"])
-            for r in [
-                {"imdb_id": "tt0000001", "year": 1972},  # valid
-                {"imdb_id": "tt0000002", "year": 1800},  # violates year >= 1888
-            ]
-        ],
+        canonical_ids=["tt0000001", "tt0000002"],
     )
 
     # Compile the constraint and execute it.
@@ -144,10 +135,8 @@ async def test_compile_constraint_no_violations(clean_db):
     """All rows valid → constraint returns zero offending rows."""
     conn = clean_db
 
-    str_t = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    imdb_id_slot = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    year_slot = Slot(name="year", range=int_t)
+    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
 
@@ -165,7 +154,6 @@ async def test_compile_constraint_no_violations(clean_db):
     spec = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
@@ -183,7 +171,7 @@ async def test_compile_constraint_no_violations(clean_db):
         source=src,
         spec_revision=rev,
         rows=[{"imdb_id": "tt0000001", "year": 2000}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 2000}]],
+        canonical_ids=["tt0000001"],
     )
 
     stmt, params = compile_constraint(constraint, movie)
@@ -203,10 +191,8 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     """
     conn = clean_db
 
-    str_t = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    imdb_id_slot = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    year_slot = Slot(name="year", range=int_t)
+    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
 
@@ -214,7 +200,6 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     spec_v1 = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
@@ -231,9 +216,7 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
         source=src,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "year": 1800}],
-        canonical_ids=[
-            str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]
-        ],  # violates >= 1888
+        canonical_ids=["tt0000001"],
     )
 
     # v2: add ERROR constraint that the ingested row violates.
@@ -251,7 +234,6 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     spec_v2 = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
@@ -268,17 +250,14 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     """Same setup but constraint is WARNING → publish succeeds."""
     conn = clean_db
 
-    str_t = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    imdb_id_slot = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    year_slot = Slot(name="year", range=int_t)
+    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id_slot)
 
     spec_v1 = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],
@@ -294,9 +273,7 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
         source=src,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "year": 1800}],
-        canonical_ids=[
-            str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "year": 1800}]
-        ],  # would violate >= 1888
+        canonical_ids=["tt0000001"],
     )
 
     body = Compare(
@@ -313,7 +290,6 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     spec_v2 = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[imdb_id_slot, year_slot],
         classes=[movie],
         sources=[src],

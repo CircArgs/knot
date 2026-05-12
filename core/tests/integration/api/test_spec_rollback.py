@@ -29,27 +29,22 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec.metaschema import Primitive
 
 
 def _dev_principal() -> Principal:
     return Principal(username="dev:default", is_admin=False)
 
 
-def _string_type() -> TypeDefinition:
-    return TypeDefinition(name="string", base="str")
-
-
 def _spec_v1() -> Spec:
     """Movie with imdb_id only."""
-    st = _string_type()
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
         id="rollback_test",
         version="1.0.0",
-        types=[st],
         slots=[imdb_id],
         classes=[movie],
         sources=[src],
@@ -58,20 +53,18 @@ def _spec_v1() -> Spec:
 
 def _spec_v2() -> Spec:
     """Movie with imdb_id + title (extra slot, plus a new Person class)."""
-    st = _string_type()
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
     src_movie = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
 
-    nm = Slot(name="nm_id", range=st, identifier=True, required=True)
+    nm = Slot(name="nm_id", type=Primitive(name="string"), identifier=True, required=True)
     person = OntologyClass(name="Person", slots=[nm])
     src_person = Source(name="imdb_people", entity_class=person, identifier_slot=nm)
 
     return Spec(
         id="rollback_test",
         version="2.0.0",
-        types=[st],
         slots=[imdb_id, title, nm],
         classes=[movie, person],
         sources=[src_movie, src_person],
@@ -111,7 +104,7 @@ async def test_rollback_via_publish_draft(clean):
     await update_draft(clean, rev1, _spec_v1())
     await publish_draft(clean, rev1)
     assert await get_published_revision(clean) == rev1
-    # After v1, knot_data.movie has only imdb_id.
+    # After v1, knot_data.person does not exist.
     assert (
         await (
             await clean.execute(

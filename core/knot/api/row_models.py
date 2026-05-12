@@ -8,7 +8,7 @@ request time.
 
 This module is pure (no SQL, no postgres). Given a Source, returns a
 ``BaseModel`` subclass whose fields mirror the source class's *stored*
-slots, with types and constraints derived from each Slot's metadata.
+slots, with types and constraints derived from each Slot's TypeExpression.
 """
 
 from __future__ import annotations
@@ -18,30 +18,43 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, create_model
 
-from knot.spec import OntologyClass, Slot, Source, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source
+from knot.spec.metaschema import Array, ClassRef, Primitive
 
-_PY_TYPE_FOR_BASE: dict[str, type] = {
-    "str": str,
+_PY_TYPE_FOR_PRIMITIVE: dict[str, type] = {
     "string": str,
-    "int": int,
     "integer": int,
     "float": float,
-    "bool": bool,
     "boolean": bool,
     "datetime": datetime,
     "date": date,
 }
 
 
-def _slot_python_type(slot: Slot) -> Any:
-    if slot.permissible_values:
-        # Literal[v1, v2, ...] from the permissible value texts.
-        return Literal.__class_getitem__(tuple(pv.text for pv in slot.permissible_values))
-    if isinstance(slot.range, OntologyClass):
+def _type_expr_python(type_expr: Any) -> type:
+    """Recursively map a TypeExpression to a Python type."""
+    if isinstance(type_expr, Primitive):
+        return _PY_TYPE_FOR_PRIMITIVE.get(type_expr.name, str)
+    if isinstance(type_expr, ClassRef):
         return str  # canonical_id reference, stored as text
-    if isinstance(slot.range, TypeDefinition):
-        return _PY_TYPE_FOR_BASE.get((slot.range.base or "str").lower(), str)
+    if isinstance(type_expr, Array):
+        inner = _type_expr_python(type_expr.of)
+        return list[inner]  # type: ignore[return-value]
     return str
+
+
+def _slot_python_type(slot: Slot) -> Any:
+    """Return the Python type for a slot, accounting for permissible_values."""
+    # permissible_values constraint → Literal enum
+    if (
+        slot.constraints is not None
+        and slot.constraints.permissible_values is not None
+        and len(slot.constraints.permissible_values) > 0
+    ):
+        return Literal.__class_getitem__(tuple(slot.constraints.permissible_values))
+    if slot.type is None:
+        return str
+    return _type_expr_python(slot.type)
 
 
 def _is_stored(slot: Slot) -> bool:
@@ -55,16 +68,17 @@ def _field_spec(slot: Slot, *, force_optional: bool = False) -> tuple[Any, Any]:
     ``build_value_model_for_slot`` (single value at correction time).
     """
     py_type = _slot_python_type(slot)
-    if slot.multivalued:
-        py_type = list[py_type]
+    # Array wrapping is already encoded in the TypeExpression; _type_expr_python
+    # handles it. No secondary list[] wrapping needed.
 
     kwargs: dict[str, Any] = {}
-    if slot.pattern:
-        kwargs["pattern"] = slot.pattern
-    if slot.minimum_value is not None:
-        kwargs["ge"] = slot.minimum_value
-    if slot.maximum_value is not None:
-        kwargs["le"] = slot.maximum_value
+    if slot.constraints is not None:
+        if slot.constraints.pattern is not None:
+            kwargs["pattern"] = slot.constraints.pattern
+        if slot.constraints.min_value is not None:
+            kwargs["ge"] = slot.constraints.min_value
+        if slot.constraints.max_value is not None:
+            kwargs["le"] = slot.constraints.max_value
 
     if not force_optional and (slot.required or slot.identifier):
         default: Any = ...
@@ -78,11 +92,11 @@ def _field_spec(slot: Slot, *, force_optional: bool = False) -> tuple[Any, Any]:
 def build_row_model(source: Source) -> type[BaseModel]:
     """Strict Pydantic model whose fields mirror the source's class slots.
 
-    - Field type comes from ``slot.range`` (or ``permissible_values`` if set).
-    - Multivalued slots become ``list[T]``.
+    - Field type comes from ``slot.type`` (TypeExpression).
+    - Array slots have list[T] type (encoded in TypeExpression).
     - Required (or identifier) slots have no default; others default to None.
-    - ``pattern``, ``minimum_value``, ``maximum_value`` map to Pydantic
-      ``Field(pattern=, ge=, le=)`` constraints.
+    - ``pattern``, ``min_value``, ``max_value`` from SlotConstraints map to
+      Pydantic ``Field(pattern=, ge=, le=)`` constraints.
     - ``extra="forbid"`` so unknown keys raise.
 
     Uses ``effective_slots`` so mixin-contributed slots are accepted
@@ -131,7 +145,7 @@ def build_value_model_for_slot(slot: Slot) -> type[BaseModel]:
     """Single-field Pydantic model for one slot, used to validate a
     PropertyCorrection's ``value`` against the same constraints ingest
     enforces (type, pattern, min/max, Literal-from-permissible-values,
-    multivalued list-shape). The lone field is required; the constraint
+    array-shape). The lone field is required; the constraint
     set is reused via ``_field_spec``."""
     py_type, field_info = _field_spec(slot, force_optional=False)
     return create_model(

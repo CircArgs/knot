@@ -39,7 +39,7 @@ import psycopg
 
 from knot.db import graph_store, trust_config, trust_posteriors
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA, Posterior
-from knot.spec import OntologyClass, ResolutionPolicy, Slot
+from knot.spec import Array, OntologyClass, ResolutionPolicy, Slot
 
 LCB_K = 1.0  # stddev multiplier for the Lower Confidence Bound penalty
 
@@ -83,7 +83,7 @@ async def resolve_entity(
     for slot in all_slots:
         if getattr(slot, "derivation", None) is not None:
             continue
-        if slot.multivalued:
+        if isinstance(slot.type, Array):
             resolved[slot.name] = _union_multivalued(slot, contribs)
         else:
             resolved[slot.name] = _resolve_scalar(

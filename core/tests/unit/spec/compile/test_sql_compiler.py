@@ -23,19 +23,18 @@ from knot.spec.metaschema import (
     Between,
     BoolExpr,
     BoolOpKind,
+    ClassRef,
     Compare,
     CompareOp,
-    DirectRef,
-    DiscriminatedRef,
     Literal_,
     Matches,
     OntologyClass,
+    Primitive,
     RelationAll,
     RelationAny,
     RelationRef,
     Slot,
     SlotPath,
-    TypeDefinition,
     Within,
 )
 
@@ -50,8 +49,7 @@ def _make_ctx(cls: OntologyClass) -> CompileContext:
 
 
 def test_literal_emits_placeholder_and_pushes_param():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="imdb_id", range=str_t, identifier=True)
+    slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     cls = OntologyClass(name="Movie", slots=[slot])
     ctx = _make_ctx(cls)
 
@@ -70,8 +68,7 @@ def test_literal_emits_placeholder_and_pushes_param():
 
 
 def test_slot_path_emits_alias_dot_col():
-    str_t = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     cls = OntologyClass(name="Movie", slots=[imdb_id])
     ctx = _make_ctx(cls)
 
@@ -91,9 +88,8 @@ def test_slot_path_emits_alias_dot_col():
 
 
 def test_slot_path_rejects_foreign_slot():
-    str_t = TypeDefinition(name="string", base="str")
-    slot_a = Slot(name="col_a", range=str_t)
-    slot_b = Slot(name="col_b", range=str_t)
+    slot_a = Slot(name="col_a", type=Primitive(name="string"))
+    slot_b = Slot(name="col_b", type=Primitive(name="string"))
     cls_a = OntologyClass(name="A", slots=[slot_a])
     cls_b = OntologyClass(name="B", slots=[slot_b])
     ctx = _make_ctx(cls_a)
@@ -110,8 +106,7 @@ def test_slot_path_rejects_foreign_slot():
 
 
 def test_compare_eq_emits_equals():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="title", range=str_t)
+    slot = Slot(name="title", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[slot])
     ctx = _make_ctx(cls)
 
@@ -127,8 +122,7 @@ def test_compare_eq_emits_equals():
 
 
 def test_compare_gte_emits_gte():
-    int_t = TypeDefinition(name="integer", base="int")
-    year = Slot(name="year", range=int_t)
+    year = Slot(name="year", type=Primitive(name="integer"))
     cls = OntologyClass(name="Movie", slots=[year])
     ctx = _make_ctx(cls)
 
@@ -149,8 +143,7 @@ def test_compare_gte_emits_gte():
 
 
 def test_compare_is_null_emits_is_null():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="title", range=str_t)
+    slot = Slot(name="title", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[slot])
     ctx = _make_ctx(cls)
 
@@ -162,8 +155,7 @@ def test_compare_is_null_emits_is_null():
 
 
 def test_compare_is_not_null_emits_is_not_null():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="title", range=str_t)
+    slot = Slot(name="title", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[slot])
     ctx = _make_ctx(cls)
 
@@ -180,8 +172,7 @@ def test_compare_is_not_null_emits_is_not_null():
 
 
 def test_compare_in_emits_any():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="status", range=str_t)
+    slot = Slot(name="status", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[slot])
     ctx = _make_ctx(cls)
 
@@ -202,8 +193,7 @@ def test_compare_in_emits_any():
 
 
 def test_bool_expr_and():
-    int_t = TypeDefinition(name="integer", base="int")
-    year = Slot(name="year", range=int_t)
+    year = Slot(name="year", type=Primitive(name="integer"))
     cls = OntologyClass(name="Movie", slots=[year])
     ctx = _make_ctx(cls)
 
@@ -229,8 +219,7 @@ def test_bool_expr_and():
 
 
 def test_bool_expr_not():
-    int_t = TypeDefinition(name="integer", base="int")
-    year = Slot(name="year", range=int_t)
+    year = Slot(name="year", type=Primitive(name="integer"))
     cls = OntologyClass(name="Movie", slots=[year])
     ctx = _make_ctx(cls)
 
@@ -255,8 +244,7 @@ def test_bool_expr_not():
 
 
 def test_within_emits_any_with_list():
-    str_t = TypeDefinition(name="string", base="str")
-    genre = Slot(name="genre", range=str_t)
+    genre = Slot(name="genre", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[genre])
     ctx = _make_ctx(cls)
 
@@ -276,8 +264,7 @@ def test_within_emits_any_with_list():
 
 
 def test_between_inclusive_emits_between():
-    int_t = TypeDefinition(name="integer", base="int")
-    year = Slot(name="year", range=int_t)
+    year = Slot(name="year", type=Primitive(name="integer"))
     cls = OntologyClass(name="Movie", slots=[year])
     ctx = _make_ctx(cls)
 
@@ -299,8 +286,7 @@ def test_between_inclusive_emits_between():
 
 
 def test_matches_emits_like():
-    str_t = TypeDefinition(name="string", base="str")
-    title = Slot(name="title", range=str_t)
+    title = Slot(name="title", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[title])
     ctx = _make_ctx(cls)
 
@@ -321,8 +307,9 @@ def test_matches_emits_like():
 
 def test_relation_all_no_body_raises_compiler_error():
     """RelationAll with body=None should raise CompilerError."""
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     credit_cls = OntologyClass(name="Credit", slots=[])
-    fk_slot = Slot(name="credits", range=credit_cls)
+    fk_slot = Slot(name="credits", type=ClassRef(target_class=credit_cls))
     movie = OntologyClass(name="Movie", slots=[fk_slot])
     ctx = _make_ctx(movie)
 
@@ -333,9 +320,8 @@ def test_relation_all_no_body_raises_compiler_error():
 
 
 def test_relation_all_non_class_ranged_slot_raises():
-    """RelationAll whose slot range is a TypeDefinition (not OntologyClass) raises."""
-    str_t = TypeDefinition(name="string", base="str")
-    bad_slot = Slot(name="title", range=str_t)
+    """RelationAll whose slot type is Primitive (not ClassRef) raises."""
+    bad_slot = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[bad_slot])
     ctx = _make_ctx(movie)
 
@@ -351,10 +337,9 @@ def test_relation_all_non_class_ranged_slot_raises():
 
 def test_relation_all_emits_not_exists():
     """RelationAll emits NOT EXISTS with NOT predicate fragment."""
-    str_t = TypeDefinition(name="string", base="str")
-    role_slot = Slot(name="role", range=str_t)
+    role_slot = Slot(name="role", type=Primitive(name="string"))
     credit_cls = OntologyClass(name="Credit", slots=[role_slot])
-    fk_slot = Slot(name="credits", range=credit_cls)
+    fk_slot = Slot(name="credits", type=ClassRef(target_class=credit_cls))
     movie = OntologyClass(name="Movie", slots=[fk_slot])
     ctx = _make_ctx(movie)
 
@@ -372,10 +357,8 @@ def test_relation_all_emits_not_exists():
 
 def test_relation_any_emits_exists():
     """RelationAny emits EXISTS."""
-    str_t = TypeDefinition(name="string", base="str")
-    role_slot = Slot(name="role", range=str_t)
-    credit_cls = OntologyClass(name="Credit", slots=[role_slot])
-    fk_slot = Slot(name="credits", range=credit_cls)
+    credit_cls = OntologyClass(name="Credit", slots=[])
+    fk_slot = Slot(name="credits", type=ClassRef(target_class=credit_cls))
     movie = OntologyClass(name="Movie", slots=[fk_slot])
     ctx = _make_ctx(movie)
 
@@ -388,8 +371,7 @@ def test_relation_any_emits_exists():
 
 def test_compile_context_with_subquery_alias_shares_params():
     """with_subquery_alias returns a child context sharing the params list."""
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="title", range=str_t)
+    slot = Slot(name="title", type=Primitive(name="string"))
     cls_a = OntologyClass(name="A", slots=[slot])
     cls_b = OntologyClass(name="B", slots=[slot])
     ctx = CompileContext(primary_class=cls_a, alias="s")
@@ -403,23 +385,16 @@ def test_compile_context_with_subquery_alias_shares_params():
 
 
 # ---------------------------------------------------------------------------
-# Slot.reference traversal — DirectRef and DiscriminatedRef with static target
+# ClassRef traversal
 # ---------------------------------------------------------------------------
 
 
-def test_relation_any_with_direct_ref_target_class():
-    """A slot with range=string + reference=DirectRef(target_class=Movie)
-    is traversable: _target_class falls through to slot.reference.target_class."""
-    str_t = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
+def test_relation_any_with_class_ref_traverses_to_target():
+    """A slot with type=ClassRef(target_class=Movie) is traversable via RelationAny."""
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
 
-    # Outer slot: range=str_t, but reference says target is Movie.
-    fk_slot = Slot(
-        name="movie_imdb_id",
-        range=str_t,
-        reference=DirectRef(target_class=movie, fk_slot=imdb_id),
-    )
+    fk_slot = Slot(name="movie_ref", type=ClassRef(target_class=movie))
     review = OntologyClass(name="Review", slots=[fk_slot])
     ctx = _make_ctx(review)
 
@@ -428,60 +403,17 @@ def test_relation_any_with_direct_ref_target_class():
     rendered = compile_predicate(node, ctx).as_string(None)
 
     assert "EXISTS" in rendered
-    # JOIN should hit Movie's bindings, not Review's.
+    # JOIN should hit Movie's bindings.
     assert 'knot_data."movie_bindings"' in rendered or '"knot_data"."movie_bindings"' in rendered
 
 
-def test_relation_any_with_discriminated_ref_target_class():
-    """A slot with reference=DiscriminatedRef(target_class=Movie) traverses
-    to Movie just like a DirectRef would (statically-known target slice)."""
-    str_t = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    movie = OntologyClass(name="Movie", slots=[imdb_id])
-
-    entity_class = Slot(name="entity_class", range=str_t, required=True)
-    entity_src_key = Slot(name="entity_src_key", range=str_t, required=True)
-
-    fk_slot = Slot(
-        name="ref_key",
-        range=str_t,
-        reference=DiscriminatedRef(
-            target_class=movie,
-            class_slot=entity_class,
-            key_slot=entity_src_key,
-        ),
-    )
-    tag = OntologyClass(name="Tag", slots=[fk_slot])
+def test_relation_any_non_classref_slot_raises():
+    """A slot with type=Primitive cannot be traversed — should raise CompilerError."""
+    bad_slot = Slot(name="ref_key", type=Primitive(name="string"))
+    tag = OntologyClass(name="Tag", slots=[bad_slot])
     ctx = _make_ctx(tag)
 
-    ref = RelationRef(from_class=tag, slot=fk_slot)
-    node = RelationAny(relation=ref)
-    rendered = compile_predicate(node, ctx).as_string(None)
-
-    assert "EXISTS" in rendered
-    assert 'knot_data."movie_bindings"' in rendered or '"knot_data"."movie_bindings"' in rendered
-
-
-def test_relation_any_discriminated_ref_without_target_raises():
-    """DiscriminatedRef with target_class=None is true row-level polymorphism
-    and isn't supported in this slice — should raise CompilerError."""
-    str_t = TypeDefinition(name="string", base="str")
-    entity_class = Slot(name="entity_class", range=str_t, required=True)
-    entity_src_key = Slot(name="entity_src_key", range=str_t, required=True)
-
-    fk_slot = Slot(
-        name="ref_key",
-        range=str_t,
-        reference=DiscriminatedRef(
-            target_class=None,
-            class_slot=entity_class,
-            key_slot=entity_src_key,
-        ),
-    )
-    tag = OntologyClass(name="Tag", slots=[fk_slot])
-    ctx = _make_ctx(tag)
-
-    ref = RelationRef(from_class=tag, slot=fk_slot)
+    ref = RelationRef(from_class=tag, slot=bad_slot)
     node = RelationAny(relation=ref)
     with pytest.raises(CompilerError, match="cannot be traversed"):
         compile_predicate(node, ctx)

@@ -1,7 +1,7 @@
 """Migration apply_changes + publish-gate tests (DB-bound).
 
 Pure-Python diff_specs + is_destructive unit tests for AddClass, AddSlot,
-DropClass, DropSlot, ChangeSlotType live in
+DropClass, DropSlot, ChangeSlotTypeExpression live in
 ``tests/unit/spec/compile/test_migration_diff.py``.
 
 Each test here starts from a clean slate via the ``clean_db`` fixture
@@ -18,7 +18,8 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec
+from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.compile.postgres.migration import (
     apply_changes,
@@ -31,20 +32,14 @@ from knot.spec.errors import PublishGateError
 # ---------------------------------------------------------------------------
 
 
-def _str_type() -> TypeDefinition:
-    return TypeDefinition(name="string", base="str")
-
-
 def _minimal_spec(*extra_classes: OntologyClass) -> Spec:
-    st = _str_type()
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
     src = Source(name="imdb_src", entity_class=movie, identifier_slot=id_slot)
     all_classes = [movie, *extra_classes]
     return Spec(
         id="test",
         version="1.0.0",
-        types=[st],
         slots=[id_slot],
         classes=all_classes,
         sources=[src],
@@ -140,15 +135,14 @@ async def test_apply_changes_is_idempotent(clean_db):
 
 
 async def test_apply_changes_add_slot_creates_column(clean_db):
-    st = _str_type()
-    id_slot = Slot(name="imdb_id", range=st, identifier=True)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
-    v1 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=[movie])
+    v1 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie])
     await apply_changes(clean_db, diff_specs(None, v1))
 
-    title = Slot(name="title", range=st)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot, title])
-    v2 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot, title], classes=[movie_v2])
+    v2 = Spec(id="t", version="1.0.0", slots=[id_slot, title], classes=[movie_v2])
     await apply_changes(clean_db, diff_specs(v1, v2))
     assert await _column_exists(clean_db, "movie", "title")
 
@@ -159,13 +153,12 @@ async def test_apply_changes_add_slot_creates_column(clean_db):
 
 
 async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
-    st = _str_type()
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, title])
     src = Source(name="s", entity_class=movie, identifier_slot=id_slot)
     spec_v1 = Spec(
-        id="t", version="1.0.0", types=[st], slots=[id_slot, title], classes=[movie], sources=[src]
+        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie], sources=[src]
     )
 
     rev1 = await create_draft(clean_db)
@@ -174,11 +167,11 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
 
     # v2 drops "title" → DropSlot (destructive).
     # Source must reference the new class object so the publish gate passes ref checks.
-    id_slot2 = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot2])
     src_v2 = Source(name="s", entity_class=movie_v2, identifier_slot=id_slot2)
     spec_v2 = Spec(
-        id="t", version="1.0.0", types=[st], slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
+        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
     )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
@@ -187,24 +180,23 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
 
 
 async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
-    st = _str_type()
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[id_slot, title])
     src = Source(name="s", entity_class=movie, identifier_slot=id_slot)
     spec_v1 = Spec(
-        id="t", version="1.0.0", types=[st], slots=[id_slot, title], classes=[movie], sources=[src]
+        id="t", version="1.0.0", slots=[id_slot, title], classes=[movie], sources=[src]
     )
 
     rev1 = await create_draft(clean_db)
     await update_draft(clean_db, rev1, spec_v1)
     await publish_draft(clean_db, rev1)
 
-    id_slot2 = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    id_slot2 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot2])
     src_v2 = Source(name="s", entity_class=movie_v2, identifier_slot=id_slot2)
     spec_v2 = Spec(
-        id="t", version="1.0.0", types=[st], slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
+        id="t", version="1.0.0", slots=[id_slot2], classes=[movie_v2], sources=[src_v2]
     )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)

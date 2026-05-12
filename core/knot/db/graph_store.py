@@ -33,7 +33,7 @@ import psycopg
 from psycopg import sql
 from psycopg.rows import dict_row
 
-from knot.spec import OntologyClass, Source, Spec, effective_slots, is_stored
+from knot.spec import Array, ClassRef, OntologyClass, Source, Spec, effective_slots, is_stored
 from knot.spec import stored_slot_names as _stored_slot_names
 from knot.spec.compile.postgres._naming import (
     bindings_table_id as _bindings_id,
@@ -608,13 +608,14 @@ async def update_cross_class_references(
 ) -> int:
     """Rewrite cross-class FK references after a merge.
 
-    For each class on ``spec``, for each stored slot whose range is
-    ``merged_class``, UPDATE the per-class data table to rewrite values
-    in id_remap.keys() to id_remap.values(). Returns total rows updated.
+    For each class on ``spec``, for each stored slot whose type is a
+    ClassRef targeting ``merged_class``, UPDATE the per-class data table
+    to rewrite values in id_remap.keys() to id_remap.values(). Returns
+    total rows updated.
 
-    Multivalued slots use array_replace; single-valued use scalar UPDATE.
-    Skipped: abstract classes (no table), defined classes (VIEWs not
-    base tables), and the merged class itself.
+    Array[ClassRef] slots use array_replace; scalar ClassRef slots use
+    scalar UPDATE. Skipped: abstract classes (no table), defined classes
+    (VIEWs not base tables), and the merged class itself.
     """
     if not id_remap:
         return 0
@@ -630,11 +631,19 @@ async def update_cross_class_references(
         for slot in effective_slots(cls):
             if not is_stored(slot):
                 continue
-            if slot.range is not merged_class:
+            # Check if this slot references merged_class (ClassRef or Array[ClassRef])
+            slot_type = slot.type
+            if isinstance(slot_type, Array):
+                if not (isinstance(slot_type.of, ClassRef) and slot_type.of.target_class is merged_class):
+                    continue
+            elif isinstance(slot_type, ClassRef):
+                if slot_type.target_class is not merged_class:
+                    continue
+            else:
                 continue
             col = sql.Identifier(slot.name)
             for old_id, new_id in id_remap.items():
-                if slot.multivalued:
+                if isinstance(slot_type, Array):
                     stmt = sql.SQL(
                         "UPDATE {table} SET {col} = array_replace({col}, %s, %s) "
                         "WHERE %s = ANY({col})"

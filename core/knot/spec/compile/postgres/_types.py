@@ -1,34 +1,53 @@
-"""Postgres column-type mapping — ``slot.range`` → postgres SQL type.
+"""Postgres column-type mapping — ``TypeExpression`` → postgres SQL type.
 
-Whitelist; user-supplied ``slot.range.base`` is never spliced raw into DDL.
+Single-dispatch on the TypeExpression hierarchy (Primitive / Array / ClassRef).
+Whitelist; type names from the spec are never spliced raw into DDL.
 This is compilation: the spec describes a slot in abstract terms, this
 module decides what postgres column type it becomes.
 """
 
 from __future__ import annotations
 
-from knot.spec.metaschema import OntologyClass, Slot, TypeDefinition
+from knot.spec.metaschema import Array, ClassRef, Primitive, Slot
 
-PG_TYPE_FOR_BASE: dict[str, str] = {
-    "str": "TEXT",
+_PG_TYPE_FOR_PRIMITIVE: dict[str, str] = {
     "string": "TEXT",
-    "int": "BIGINT",
-    "integer": "BIGINT",
+    "integer": "INTEGER",
     "float": "DOUBLE PRECISION",
-    "bool": "BOOLEAN",
     "boolean": "BOOLEAN",
     "datetime": "TIMESTAMPTZ",
     "date": "DATE",
 }
 
 
+def _type_expr_pg(type_expr: Primitive | Array | ClassRef) -> str:  # type: ignore[return]
+    """Recursively map a TypeExpression to its postgres column type string."""
+    if isinstance(type_expr, Primitive):
+        return _PG_TYPE_FOR_PRIMITIVE.get(type_expr.name, "TEXT")
+    if isinstance(type_expr, Array):
+        inner = _type_expr_pg(type_expr.of)
+        return f"{inner}[]"
+    if isinstance(type_expr, ClassRef):
+        return "TEXT"
+    # Unreachable for well-formed specs — fallback to TEXT.
+    return "TEXT"
+
+
 def slot_pg_type(slot: Slot) -> str:
-    """Postgres column type for a stored slot. Multivalued → ``T[]``."""
-    if isinstance(slot.range, OntologyClass):
-        base = "TEXT"
-    elif isinstance(slot.range, TypeDefinition):
-        key = (slot.range.base or "str").lower()
-        base = PG_TYPE_FOR_BASE.get(key, "TEXT")
-    else:
-        base = "TEXT"
-    return f"{base}[]" if slot.multivalued else base
+    """Postgres column type for a stored slot.
+
+    Dispatches on slot.type (TypeExpression):
+      Primitive("string")      → TEXT
+      Primitive("integer")     → INTEGER
+      Primitive("float")       → DOUBLE PRECISION
+      Primitive("boolean")     → BOOLEAN
+      Primitive("datetime")    → TIMESTAMPTZ
+      Primitive("date")        → DATE
+      Array(Primitive(...))    → T[]
+      ClassRef(target_class)   → TEXT (canonical_id FK)
+      Array(ClassRef(...))     → TEXT[]
+      None                     → TEXT (derived / untyped slots)
+    """
+    if slot.type is None:
+        return "TEXT"
+    return _type_expr_pg(slot.type)

@@ -1,11 +1,10 @@
 """Tests for DELETE /spec/drafts/{draft_id}/{kind}/{name}.
 
 Coverage:
-  - Happy paths for each entity kind (type, slot, class, source, constraint).
-  - Reference-protection 409s (cannot remove a type referenced by a slot,
-    a slot referenced by a class or used as a source's identifier, a class
-    referenced by a slot's range / another class's is_a / a source / a
-    constraint).
+  - Happy paths for each entity kind (slot, class, source, constraint).
+  - Reference-protection 409s (cannot remove a slot referenced by a class or
+    used as a source's identifier, a class referenced by a slot's ClassRef /
+    another class's is_a / a source / a constraint).
   - DELETE on a published revision is 409.
   - DELETE of an unknown name is 404.
 
@@ -38,8 +37,8 @@ from knot.spec import (
     SlotPath,
     Source,
     Spec,
-    TypeDefinition,
 )
+from knot.spec.metaschema import ClassRef, Primitive
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal spec factories
@@ -51,14 +50,12 @@ def _dev_principal() -> Principal:
 
 
 def _spec_with_unreferenced_extras() -> Spec:
-    """Movie with imdb_id + year, plus an unreferenced TypeDefinition
-    ('color') that nothing else uses, plus a Source and Constraint that
-    can be deleted freely."""
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    color = TypeDefinition(name="color", base="str")  # unreferenced
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    year = Slot(name="year", range=it)
+    """Movie with imdb_id + year, plus a Source and Constraint that
+    can be deleted freely. Also has an extra slot 'label' that is only
+    on spec.slots (not on any class), so it can be deleted freely."""
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
+    label = Slot(name="label", type=Primitive(name="string"))  # not on any class
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
     year_check = Constraint(
@@ -73,22 +70,20 @@ def _spec_with_unreferenced_extras() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        types=[st, it, color],
-        slots=[imdb_id, year],
+        slots=[imdb_id, year, label],
         classes=[movie],
         sources=[src],
         constraints=[year_check],
     )
 
 
-def _spec_with_class_range() -> Spec:
-    """Movie + Person where Movie.directed_by has range Person."""
-    st = TypeDefinition(name="string", base="str")
-    person_id = Slot(name="person_id", range=st, identifier=True, required=True)
+def _spec_with_class_ref() -> Spec:
+    """Movie + Person where Movie.directed_by has ClassRef→Person."""
+    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
     person = OntologyClass(name="Person", slots=[person_id])
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    directed_by = Slot(name="directed_by", range=person)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))
     movie = OntologyClass(name="Movie", slots=[imdb_id, directed_by])
 
     src_movie = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
@@ -96,7 +91,6 @@ def _spec_with_class_range() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        types=[st],
         slots=[person_id, imdb_id, directed_by],
         classes=[person, movie],
         sources=[src_movie, src_person],
@@ -105,15 +99,13 @@ def _spec_with_class_range() -> Spec:
 
 def _spec_with_is_a_chain() -> Spec:
     """Movie is_a Title (parent class), so deleting Title should fail."""
-    st = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     title = OntologyClass(name="Title", slots=[imdb_id])
     movie = OntologyClass(name="Movie", slots=[imdb_id], is_a=title)
     src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
         id="test",
         version="1.0.0",
-        types=[st],
         slots=[imdb_id],
         classes=[title, movie],
         sources=[src],
@@ -123,10 +115,8 @@ def _spec_with_is_a_chain() -> Spec:
 def _spec_with_constraint_and_class() -> Spec:
     """Movie with a year constraint; deleting Movie must fail because
     the constraint references it."""
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
     nonneg = Constraint(
@@ -146,7 +136,6 @@ def _spec_with_constraint_and_class() -> Spec:
     return Spec(
         id="test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
@@ -185,43 +174,25 @@ def client():
 
 
 # ---------------------------------------------------------------------------
-# Type removal
+# Slot removal — free slot (not on any class)
 # ---------------------------------------------------------------------------
 
 
-async def test_delete_type_removes_from_spec(clean_db, client):
-    """Happy path: an unreferenced type is removed."""
+async def test_delete_free_slot_succeeds(clean_db, client):
+    """A slot that exists only on spec.slots (not on any class) can be removed."""
     from knot.db.spec_store import get_revision
 
     rev = await create_draft(clean_db)
     await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
 
-    r = client.delete(f"/spec/drafts/{rev}/types/color")
+    r = client.delete(f"/spec/drafts/{rev}/slots/label")
     assert r.status_code == 200, r.text
-    assert r.json()["spec_summary"]["types"] == 2  # was 3 (string, integer, color)
+    summary = r.json()["spec_summary"]
+    # Was 3 slots (imdb_id, year, label); now 2
+    assert summary["slots"] == 2
 
-    # Confirm via the rehydrated spec that 'color' is gone.
     spec = await get_revision(clean_db, rev)
-    assert "color" not in {t.name for t in spec.types}
-    assert {t.name for t in spec.types} == {"string", "integer"}
-
-
-async def test_delete_type_referenced_by_slot_returns_409(clean_db, client):
-    """A type referenced by any slot's range cannot be removed."""
-    rev = await create_draft(clean_db)
-    await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
-
-    r = client.delete(f"/spec/drafts/{rev}/types/string")
-    assert r.status_code == 409
-    detail = r.json()["detail"]
-    assert "string" in detail
-    # imdb_id is one of the referencing slots (string-typed identifier)
-    assert "imdb_id" in detail
-
-
-# ---------------------------------------------------------------------------
-# Slot removal
-# ---------------------------------------------------------------------------
+    assert "label" not in {s.name for s in spec.slots}
 
 
 async def test_delete_slot_referenced_by_class_returns_409(clean_db, client):
@@ -258,10 +229,10 @@ async def test_delete_slot_used_as_identifier_returns_409(clean_db, client):
 # ---------------------------------------------------------------------------
 
 
-async def test_delete_class_referenced_by_slot_range_returns_409(clean_db, client):
-    """A class used as the range of any slot cannot be removed."""
+async def test_delete_class_referenced_by_slot_classref_returns_409(clean_db, client):
+    """A class used as the ClassRef target of any slot cannot be removed."""
     rev = await create_draft(clean_db)
-    await update_draft(clean_db, rev, _spec_with_class_range())
+    await update_draft(clean_db, rev, _spec_with_class_ref())
 
     r = client.delete(f"/spec/drafts/{rev}/classes/Person")
     assert r.status_code == 409
@@ -273,7 +244,7 @@ async def test_delete_class_referenced_by_slot_range_returns_409(clean_db, clien
 async def test_delete_class_referenced_by_source_returns_409(clean_db, client):
     """A class used as a source's entity_class cannot be removed."""
     rev = await create_draft(clean_db)
-    await update_draft(clean_db, rev, _spec_with_class_range())
+    await update_draft(clean_db, rev, _spec_with_class_ref())
 
     r = client.delete(f"/spec/drafts/{rev}/classes/Movie")
     assert r.status_code == 409
@@ -303,8 +274,6 @@ async def test_delete_class_referenced_by_constraint_returns_409(clean_db, clien
     assert r.status_code == 409
     detail = r.json()["detail"]
     assert "Movie" in detail
-    # Movie is the constraint's primary AND the source's entity_class — at
-    # least one (likely both) reference should appear.
     assert ("year_positive" in detail) or ("imdb_movies" in detail)
 
 
@@ -347,7 +316,7 @@ async def test_delete_on_published_draft_returns_409(clean_db, client):
     await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
     await publish_draft(clean_db, rev, allow_destructive=False)
 
-    r = client.delete(f"/spec/drafts/{rev}/types/color")
+    r = client.delete(f"/spec/drafts/{rev}/slots/label")
     assert r.status_code == 409
     assert "published" in r.json()["detail"].lower()
 
@@ -357,5 +326,5 @@ async def test_delete_unknown_name_returns_404(clean_db, client):
     rev = await create_draft(clean_db)
     await update_draft(clean_db, rev, _spec_with_unreferenced_extras())
 
-    r = client.delete(f"/spec/drafts/{rev}/types/nonexistent")
+    r = client.delete(f"/spec/drafts/{rev}/slots/nonexistent")
     assert r.status_code == 404

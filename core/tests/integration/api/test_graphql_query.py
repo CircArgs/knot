@@ -33,7 +33,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.db import graph_store, spec_store
 from knot.db.spec_store import create_draft, publish_draft, update_draft
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, Spec
 
 # ---------------------------------------------------------------------------
 # Spec + data builders
@@ -41,17 +41,14 @@ from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 
 def _build_spec() -> tuple[Spec, OntologyClass, Source]:
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="gql_test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src],
@@ -581,22 +578,20 @@ def _build_derived_spec():
         ReverseRelation,
     )
 
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title, year])
 
-    credit_id = Slot(name="credit_id", range=st, identifier=True, required=True)
-    credit_movie = Slot(name="movie", range=movie_cls)
-    credit_role = Slot(name="role", range=st)
+    credit_id = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    credit_movie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_role = Slot(name="role", type=Primitive(name="string"))
     credit_cls = OntologyClass(name="Credit", slots=[credit_id, credit_movie, credit_role])
 
     credit_count_deriv = RelationCount(
         relation=ReverseRelation(target_class=credit_cls, fk_slot=credit_movie),
     )
-    credit_count_slot = Slot(name="credit_count", range=it, derivation=credit_count_deriv)
+    credit_count_slot = Slot(name="credit_count", type=Primitive(name="integer"), derivation=credit_count_deriv)
     movie_cls.slots = [imdb_id, title, year, credit_count_slot]
 
     movie_src = Source(name="imdb", entity_class=movie_cls, identifier_slot=imdb_id)
@@ -605,7 +600,6 @@ def _build_derived_spec():
     spec = Spec(
         id="derived_gql_test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, title, year, credit_count_slot, credit_id, credit_movie, credit_role],
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],

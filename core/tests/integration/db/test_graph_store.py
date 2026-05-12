@@ -14,7 +14,7 @@ import pytest
 
 from knot import db
 from knot.db import graph_store
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import Array, OntologyClass, Primitive, Slot, Source, Spec
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -26,18 +26,15 @@ def _build_spec() -> tuple[Spec, OntologyClass, Source, int]:
     """Returns (spec, movie_class, imdb_source, revision_placeholder).
     revision_placeholder is 0 — caller fills in the real revision after publish.
     """
-    st = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    year = Slot(name="year", range=int_t)
-    tags = Slot(name="tags", range=st, multivalued=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    year = Slot(name="year", type=Primitive(name="integer"))
+    tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year, tags])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="test",
         version="1.0.0",
-        types=[st, int_t],
         slots=[imdb_id, title, year, tags],
         classes=[movie],
         sources=[src],

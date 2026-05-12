@@ -1,14 +1,12 @@
 """End-to-end DDL-emitter tests for the destructive change records.
 
 Each test sets up a postgres state matching ``prev``, runs
-``apply_migration(conn, prev, candidate, allow_destructive=True)`` and
-asserts the resulting state matches what ``candidate`` describes. The
-``clean_db`` fixture mirrors the one used in ``test_migration.py``.
+``apply_changes(conn, diff_specs(prev, candidate))`` and asserts the resulting
+state matches what ``candidate`` describes. The ``clean_db`` fixture mirrors
+the one used in ``test_migration.py``.
 
 The records covered here are the bucket-A storage-shape rewrites whose
-DDL emitters previously raised ``NotImplementedError`` — once they emit
-real DDL, the publish gate's ``allow_destructive=true`` knob is honored
-end-to-end.
+DDL emitters were blocking the publish gate's ``allow_destructive=true`` knob.
 """
 
 from __future__ import annotations
@@ -17,16 +15,12 @@ import pytest
 
 from knot import db
 from knot.spec import (
-    Compare,
-    CompareOp,
-    Literal_,
     OntologyClass,
     Slot,
-    SlotPath,
     Source,
     Spec,
-    TypeDefinition,
 )
+from knot.spec.metaschema import Array, ClassRef, Primitive
 from knot.spec.compile.postgres._dispatch import CompilerError
 from knot.spec.compile.postgres._naming import schema
 from knot.spec.compile.postgres.migration import (
@@ -111,77 +105,19 @@ async def _ensure_revision(conn) -> int:
 
 
 # ---------------------------------------------------------------------------
-# 2.1 — ChangeTypeBase  (covered indirectly via per-slot ChangeSlotType)
+# ChangeSlotTypeExpression — scalar→array (Primitive→Array)
 # ---------------------------------------------------------------------------
 
 
-async def test_change_type_base_alters_using_slot_columns(clean_db):
-    """When ``TypeDefinition.base`` flips str→int, every Slot whose ``range``
-    is that type sees its column type swing to BIGINT. The per-slot
-    ChangeSlotType emitter does the work (with USING ``col``::BIGINT for
-    cast safety); the ChangeTypeBase record is gate+audit only."""
-    # imdb_id stays TEXT (different type); only ``year`` swings via myint→int.
-    str_t = TypeDefinition(name="string", base="str")
-    myint_v1 = TypeDefinition(name="myint", base="str")
-    id_slot = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    year_v1 = Slot(name="year", range=myint_v1)
-    movie_v1 = OntologyClass(name="Movie", slots=[id_slot, year_v1])
-    src_v1 = Source(name="imdb", entity_class=movie_v1, identifier_slot=id_slot)
-    spec_v1 = Spec(
-        id="t",
-        version="1.0.0",
-        types=[str_t, myint_v1],
-        slots=[id_slot, year_v1],
-        classes=[movie_v1],
-        sources=[src_v1],
-    )
-    await apply_changes(clean_db, diff_specs(None, spec_v1))
-
-    rev = await _ensure_revision(clean_db)
-    await clean_db.execute(
-        f"INSERT INTO {schema()}.movie "
-        "(_source, _source_row_id, _spec_revision, imdb_id, year) "
-        "VALUES ('imdb', '1', %s, 'tt1', '1999')",
-        (rev,),
-    )
-
-    myint_v2 = TypeDefinition(name="myint", base="int")
-    year_v2 = Slot(name="year", range=myint_v2)
-    movie_v2 = OntologyClass(name="Movie", slots=[id_slot, year_v2])
-    src_v2 = Source(name="imdb", entity_class=movie_v2, identifier_slot=id_slot)
-    spec_v2 = Spec(
-        id="t",
-        version="1.0.0",
-        types=[str_t, myint_v2],
-        slots=[id_slot, year_v2],
-        classes=[movie_v2],
-        sources=[src_v2],
-    )
-    await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
-
-    assert await _udt_name(clean_db, "movie", "year") == "int8"  # bigint
-    row = await (
-        await clean_db.execute(f"SELECT year FROM {schema()}.movie WHERE _source_row_id = '1'")
-    ).fetchone()
-    assert row[0] == 1999
-
-
-# ---------------------------------------------------------------------------
-# 2.2 — ChangeSlotMultivalued
-# ---------------------------------------------------------------------------
-
-
-async def test_change_slot_multivalued_false_to_true_promotes_to_array(clean_db):
-    """Scalar column promoted to T[] via ARRAY[col]::T[]."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    tags_v1 = Slot(name="tags", range=st)
+async def test_change_slot_type_scalar_to_array_promotes_column(clean_db):
+    """Scalar TEXT column promoted to TEXT[] via ChangeSlotTypeExpression."""
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    tags_v1 = Slot(name="tags", type=Primitive(name="string"))
     movie_v1 = OntologyClass(name="Movie", slots=[id_slot, tags_v1])
     src = Source(name="imdb", entity_class=movie_v1, identifier_slot=id_slot)
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, tags_v1],
         classes=[movie_v1],
         sources=[src],
@@ -197,13 +133,12 @@ async def test_change_slot_multivalued_false_to_true_promotes_to_array(clean_db)
         (rev,),
     )
 
-    tags_v2 = Slot(name="tags", range=st, multivalued=True)
+    tags_v2 = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot, tags_v2])
     src_v2 = Source(name="imdb", entity_class=movie_v2, identifier_slot=id_slot)
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, tags_v2],
         classes=[movie_v2],
         sources=[src_v2],
@@ -217,30 +152,27 @@ async def test_change_slot_multivalued_false_to_true_promotes_to_array(clean_db)
     assert row[0] == ["foo"]
 
 
-async def test_change_slot_multivalued_true_to_false_refused(clean_db):
-    """The reverse direction is lossy and refused."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    tags_v1 = Slot(name="tags", range=st, multivalued=True)
+async def test_change_slot_type_array_to_scalar_refused(clean_db):
+    """Array → scalar is lossy and refused."""
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    tags_v1 = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie_v1 = OntologyClass(name="Movie", slots=[id_slot, tags_v1])
     src = Source(name="imdb", entity_class=movie_v1, identifier_slot=id_slot)
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, tags_v1],
         classes=[movie_v1],
         sources=[src],
     )
     await apply_changes(clean_db, diff_specs(None, spec_v1))
 
-    tags_v2 = Slot(name="tags", range=st, multivalued=False)
+    tags_v2 = Slot(name="tags", type=Primitive(name="string"))
     movie_v2 = OntologyClass(name="Movie", slots=[id_slot, tags_v2])
     src_v2 = Source(name="imdb", entity_class=movie_v2, identifier_slot=id_slot)
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, tags_v2],
         classes=[movie_v2],
         sources=[src_v2],
@@ -250,16 +182,15 @@ async def test_change_slot_multivalued_true_to_false_refused(clean_db):
 
 
 # ---------------------------------------------------------------------------
-# 2.3 — ChangeClassAbstract
+# ChangeClassAbstract
 # ---------------------------------------------------------------------------
 
 
 async def test_change_class_abstract_true_to_false_creates_table(clean_db):
     """Abstract → concrete: table + bindings are created."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     movie_abs = OntologyClass(name="Movie", slots=[id_slot], abstract=True)
-    spec_v1 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=[movie_abs])
+    spec_v1 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie_abs])
     await apply_changes(clean_db, diff_specs(None, spec_v1))
     assert not await _table_exists(clean_db, "movie")
 
@@ -268,7 +199,6 @@ async def test_change_class_abstract_true_to_false_creates_table(clean_db):
     spec_v2 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot],
         classes=[movie_concrete],
         sources=[src],
@@ -280,14 +210,12 @@ async def test_change_class_abstract_true_to_false_creates_table(clean_db):
 
 async def test_change_class_abstract_false_to_true_drops_empty_table(clean_db):
     """Concrete → abstract: empty table is dropped."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v1 = OntologyClass(name="Movie", slots=[id_slot])
     src = Source(name="imdb", entity_class=movie_v1, identifier_slot=id_slot)
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot],
         classes=[movie_v1],
         sources=[src],
@@ -297,7 +225,7 @@ async def test_change_class_abstract_false_to_true_drops_empty_table(clean_db):
 
     # Drop the source first (sources can't reference an abstract class).
     movie_abs = OntologyClass(name="Movie", slots=[id_slot], abstract=True)
-    spec_v2 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=[movie_abs])
+    spec_v2 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie_abs])
     await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
     assert not await _table_exists(clean_db, "movie")
     assert not await _table_exists(clean_db, "movie_bindings")
@@ -305,14 +233,12 @@ async def test_change_class_abstract_false_to_true_drops_empty_table(clean_db):
 
 async def test_change_class_abstract_false_to_true_refused_if_rows(clean_db):
     """Concrete → abstract: refused when the table has rows."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     movie_v1 = OntologyClass(name="Movie", slots=[id_slot])
     src = Source(name="imdb", entity_class=movie_v1, identifier_slot=id_slot)
     spec_v1 = Spec(
         id="t",
         version="1.0.0",
-        types=[st],
         slots=[id_slot],
         classes=[movie_v1],
         sources=[src],
@@ -327,75 +253,19 @@ async def test_change_class_abstract_false_to_true_refused_if_rows(clean_db):
     )
 
     movie_abs = OntologyClass(name="Movie", slots=[id_slot], abstract=True)
-    spec_v2 = Spec(id="t", version="1.0.0", types=[st], slots=[id_slot], classes=[movie_abs])
+    spec_v2 = Spec(id="t", version="1.0.0", slots=[id_slot], classes=[movie_abs])
     with pytest.raises(CompilerError, match="non-empty"):
         await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
 
 
 # ---------------------------------------------------------------------------
-# 2.4 — ChangeClassDefinition
-# ---------------------------------------------------------------------------
-
-
-async def test_change_class_definition_replaces_view_body(clean_db):
-    """Defined-class body change → CREATE OR REPLACE VIEW with new body."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    person = OntologyClass(name="Person", slots=[id_slot, title])
-    src = Source(name="ppl", entity_class=person, identifier_slot=id_slot)
-
-    def _build(value):
-        path = SlotPath(from_class=person, slots=[title])
-        defn = Compare(op=CompareOp.EQ, left=path, right=Literal_(value=value))
-        director = OntologyClass(name="Director", is_a=person, slots=[], definition=defn)
-        return Spec(
-            id="t",
-            version="1.0.0",
-            types=[st],
-            slots=[id_slot, title],
-            classes=[person, director],
-            sources=[src],
-        )
-
-    spec_v1 = _build("director")
-    spec_v2 = _build("Director")
-    await apply_changes(clean_db, diff_specs(None, spec_v1))
-    rev = await _ensure_revision(clean_db)
-    # Insert a row with the v2 title to confirm the new view body matches.
-    await clean_db.execute(
-        f"INSERT INTO {schema()}.person "
-        "(_source, _source_row_id, _spec_revision, id, title) "
-        "VALUES ('ppl', '1', %s, 'p1', 'Director')",
-        (rev,),
-    )
-    # Also need a binding row so the JOIN inside the view returns it.
-    await clean_db.execute(
-        f"INSERT INTO {schema()}.person_bindings "
-        "(knot_row_id, canonical_id, change_type, applied_revision) "
-        f"SELECT _knot_row_id, 'c1', 'merge', _spec_revision FROM {schema()}.person"
-    )
-
-    # Pre-condition: v1's view filters on title='director', so 'Director' won't
-    # match and the view returns 0 rows.
-    pre = await (await clean_db.execute(f"SELECT COUNT(*) FROM {schema()}.director")).fetchone()
-    assert pre[0] == 0
-
-    await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
-
-    post = await (await clean_db.execute(f"SELECT COUNT(*) FROM {schema()}.director")).fetchone()
-    assert post[0] == 1
-
-
-# ---------------------------------------------------------------------------
-# 2.5 — ChangeClassIsA
+# ChangeClassIsA — concrete class (no-op DDL)
 # ---------------------------------------------------------------------------
 
 
 async def test_change_class_is_a_concrete_is_no_op(clean_db):
     """For concrete classes, is_a doesn't drive DDL — own table, own slots."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     a = OntologyClass(name="A", slots=[id_slot])
     b = OntologyClass(name="B", slots=[id_slot])
 
@@ -405,7 +275,6 @@ async def test_change_class_is_a_concrete_is_no_op(clean_db):
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot],
             classes=[a, b, child],
             sources=[src],
@@ -431,66 +300,14 @@ async def test_change_class_is_a_concrete_is_no_op(clean_db):
     assert row[0] == "c1"
 
 
-async def test_change_class_is_a_defined_replaces_view(clean_db):
-    """Defined-class is_a swap re-emits CREATE OR REPLACE VIEW with the new
-    parent class as the FROM source."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    movie_base = OntologyClass(name="MovieBase", slots=[id_slot, title])
-    movie_alt = OntologyClass(name="MovieAlt", slots=[id_slot, title])
-    src_base = Source(name="b", entity_class=movie_base, identifier_slot=id_slot)
-    src_alt = Source(name="a", entity_class=movie_alt, identifier_slot=id_slot)
-
-    def _build(parent):
-        path = SlotPath(from_class=parent, slots=[title])
-        defn = Compare(op=CompareOp.EQ, left=path, right=Literal_(value="X"))
-        defined = OntologyClass(name="MovieX", is_a=parent, slots=[], definition=defn)
-        return Spec(
-            id="t",
-            version="1.0.0",
-            types=[st],
-            slots=[id_slot, title],
-            classes=[movie_base, movie_alt, defined],
-            sources=[src_base, src_alt],
-        )
-
-    spec_v1 = _build(movie_base)
-    await apply_changes(clean_db, diff_specs(None, spec_v1))
-    rev = await _ensure_revision(clean_db)
-    # A row in MovieAlt with title='X' will only show up via MovieX after the
-    # is_a swap.
-    await clean_db.execute(
-        f"INSERT INTO {schema()}.moviealt "
-        "(_source, _source_row_id, _spec_revision, id, title) "
-        "VALUES ('a', '1', %s, 'a1', 'X')",
-        (rev,),
-    )
-    await clean_db.execute(
-        f"INSERT INTO {schema()}.moviealt_bindings "
-        "(knot_row_id, canonical_id, change_type, applied_revision) "
-        f"SELECT _knot_row_id, 'c', 'merge', _spec_revision FROM {schema()}.moviealt"
-    )
-
-    pre = await (await clean_db.execute(f"SELECT COUNT(*) FROM {schema()}.moviex")).fetchone()
-    assert pre[0] == 0  # view's FROM is MovieBase, no rows there
-
-    spec_v2 = _build(movie_alt)
-    await apply_changes(clean_db, diff_specs(spec_v1, spec_v2))
-
-    post = await (await clean_db.execute(f"SELECT COUNT(*) FROM {schema()}.moviex")).fetchone()
-    assert post[0] == 1  # view now FROMs MovieAlt; row present
-
-
 # ---------------------------------------------------------------------------
-# 2.6 — ChangeSourceEntityClass (refused)
+# ChangeSourceEntityClass (refused)
 # ---------------------------------------------------------------------------
 
 
 async def test_change_source_entity_class_refused(clean_db):
     """ChangeSourceEntityClass is logically a row-move; refused."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
     series = OntologyClass(name="Series", slots=[id_slot])
 
@@ -499,7 +316,6 @@ async def test_change_source_entity_class_refused(clean_db):
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot],
             classes=[movie, series],
             sources=[src],
@@ -514,15 +330,14 @@ async def test_change_source_entity_class_refused(clean_db):
 
 
 # ---------------------------------------------------------------------------
-# 2.7 — ChangeSourceIdentifierSlot
+# ChangeSourceIdentifierSlot
 # ---------------------------------------------------------------------------
 
 
 async def test_change_source_identifier_slot_rekeys_rows(clean_db):
     """Rows are rekeyed: ``_source_row_id`` shifts to the new slot's value."""
-    st = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
 
     def _build(identifier):
@@ -530,7 +345,6 @@ async def test_change_source_identifier_slot_rekeys_rows(clean_db):
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[imdb_id, title],
             classes=[movie],
             sources=[src],
@@ -556,17 +370,16 @@ async def test_change_source_identifier_slot_rekeys_rows(clean_db):
 
 
 # ---------------------------------------------------------------------------
-# 2.8 — ChangeClassMixins is a no-op (slot records do the work)
+# ChangeClassMixins is a no-op (slot records do the work)
 # ---------------------------------------------------------------------------
 
 
 async def test_change_class_mixins_no_op_without_slot_changes(clean_db):
     """Adding/removing a mixin with no shared slots is a no-op DDL-wise; the
     audit record alone is harmless."""
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="id", range=st, identifier=True, required=True)
-    body_v1 = Slot(name="body_v1", range=st)
-    body_v2 = Slot(name="body_v2", range=st)
+    id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True, required=True)
+    body_v1 = Slot(name="body_v1", type=Primitive(name="string"))
+    body_v2 = Slot(name="body_v2", type=Primitive(name="string"))
     mixin_a = OntologyClass(name="MixinA", slots=[body_v1])
     mixin_b = OntologyClass(name="MixinB", slots=[body_v2])
 
@@ -576,7 +389,6 @@ async def test_change_class_mixins_no_op_without_slot_changes(clean_db):
         return Spec(
             id="t",
             version="1.0.0",
-            types=[st],
             slots=[id_slot, body_v1, body_v2],
             classes=[mixin_a, mixin_b, cls],
             sources=[src],

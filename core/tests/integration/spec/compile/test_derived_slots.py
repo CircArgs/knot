@@ -50,11 +50,14 @@ from knot.spec.compile.postgres._queries import (
 )
 from knot.spec.metaschema import (
     AggFunc,
+    Array,
+    ClassRef,
     Compare,
     CompareOp,
     FilteredRelation,
     Literal_,
     OntologyClass,
+    Primitive,
     RelationAggregate,
     RelationCount,
     RelationProject,
@@ -64,7 +67,6 @@ from knot.spec.metaschema import (
     SlotPath,
     Source,
     Spec,
-    TypeDefinition,
 )
 
 # ---------------------------------------------------------------------------
@@ -97,26 +99,23 @@ def _build_full_spec() -> tuple[
     Source,  # movie_src
     Source,  # credit_src
 ]:
-    str_t = TypeDefinition(name="string", base="str")
-    int_t = TypeDefinition(name="integer", base="int")
-
     # --- Person ---
-    person_id = Slot(name="person_id", range=str_t, identifier=True, required=True)
-    person_name_slot = Slot(name="name", range=str_t)
+    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_name_slot = Slot(name="name", type=Primitive(name="string"))
     person_cls = OntologyClass(name="Person", slots=[person_id, person_name_slot])
 
     # --- Movie (no derived slots yet — added below after Credit is defined) ---
-    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    title = Slot(name="title", range=str_t)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     # Placeholder movie class (needed as FK target for Credit.movie)
     movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title])
 
     # --- Credit ---
-    credit_id = Slot(name="credit_id", range=str_t, identifier=True, required=True)
+    credit_id = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
     # movie FK: TEXT column holding the movie's canonical_id
-    credit_movie = Slot(name="movie", range=movie_cls)
-    credit_role = Slot(name="role", range=str_t)
-    credit_person_name = Slot(name="person_name", range=str_t)
+    credit_movie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    credit_role = Slot(name="role", type=Primitive(name="string"))
+    credit_person_name = Slot(name="person_name", type=Primitive(name="string"))
     credit_cls = OntologyClass(
         name="Credit",
         slots=[credit_id, credit_movie, credit_role, credit_person_name],
@@ -136,14 +135,20 @@ def _build_full_spec() -> tuple[
         project=SlotPath(from_class=credit_cls, slots=[credit_person_name]),
     )
     directors_slot = Slot(
-        name="directors", range=str_t, multivalued=True, derivation=directors_derivation
+        name="directors",
+        type=Array(of=Primitive(name="string")),
+        derivation=directors_derivation,
     )
 
     # credit_count = count(*) of all Credits for this Movie
     credit_count_derivation = RelationCount(
         relation=ReverseRelation(target_class=credit_cls, fk_slot=credit_movie),
     )
-    credit_count_slot = Slot(name="credit_count", range=int_t, derivation=credit_count_derivation)
+    credit_count_slot = Slot(
+        name="credit_count",
+        type=Primitive(name="integer"),
+        derivation=credit_count_derivation,
+    )
 
     # Patch movie_cls slots to include derived slots
     movie_cls.slots = [imdb_id, title, directors_slot, credit_count_slot]
@@ -155,7 +160,6 @@ def _build_full_spec() -> tuple[
     spec = Spec(
         id="derived_test",
         version="1.0.0",
-        types=[str_t, int_t],
         slots=[
             person_id,
             person_name_slot,
@@ -238,13 +242,7 @@ async def full_spec_db(clean_db):
             {"imdb_id": "tt0000001", "title": "Film A"},
             {"imdb_id": "tt0000002", "title": "Film B"},
         ],
-        canonical_ids=[
-            str(r["imdb_id"])
-            for r in [
-                {"imdb_id": "tt0000001", "title": "Film A"},
-                {"imdb_id": "tt0000002", "title": "Film B"},
-            ]
-        ],
+        canonical_ids=["tt0000001", "tt0000002"],
     )
     # Ingest credits: Film A has two directors; Film B has none
     await graph_store.insert_rows(
@@ -256,29 +254,7 @@ async def full_spec_db(clean_db):
             {"credit_id": "c002", "movie": "tt0000001", "role": "director", "person_name": "Bob"},
             {"credit_id": "c003", "movie": "tt0000001", "role": "actor", "person_name": "Carol"},
         ],
-        canonical_ids=[
-            str(r["credit_id"])
-            for r in [
-                {
-                    "credit_id": "c001",
-                    "movie": "tt0000001",
-                    "role": "director",
-                    "person_name": "Alice",
-                },
-                {
-                    "credit_id": "c002",
-                    "movie": "tt0000001",
-                    "role": "director",
-                    "person_name": "Bob",
-                },
-                {
-                    "credit_id": "c003",
-                    "movie": "tt0000001",
-                    "role": "actor",
-                    "person_name": "Carol",
-                },
-            ]
-        ],
+        canonical_ids=["c001", "c002", "c003"],
     )
     return conn, spec, rev, movie_cls, credit_cls, movie_src, credit_src
 
@@ -313,10 +289,9 @@ def _make_ctx(cls: OntologyClass) -> CompileContext:
 
 # 1. RelationProject forward FK → array_agg subquery
 def test_relation_project_forward_fk_emits_array_agg():
-    str_t = TypeDefinition(name="string", base="str")
-    name_slot = Slot(name="name", range=str_t)
+    name_slot = Slot(name="name", type=Primitive(name="string"))
     person_cls = OntologyClass(name="Person", slots=[name_slot])
-    fk_slot = Slot(name="person", range=person_cls)
+    fk_slot = Slot(name="person", type=ClassRef(target_class=person_cls))
     movie_cls = OntologyClass(name="Movie", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -334,10 +309,9 @@ def test_relation_project_forward_fk_emits_array_agg():
 
 # 2. RelationProject ReverseRelation → array_agg subquery
 def test_relation_project_reverse_relation_emits_array_agg():
-    str_t = TypeDefinition(name="string", base="str")
-    person_name = Slot(name="person_name", range=str_t)
+    person_name = Slot(name="person_name", type=Primitive(name="string"))
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot, person_name])
     movie_cls.slots = []  # movie has no direct slots for the FK direction
     ctx = _make_ctx(movie_cls)
@@ -351,17 +325,15 @@ def test_relation_project_reverse_relation_emits_array_agg():
     rendered = result.as_string(None)
     assert "array_agg" in rendered
     assert '"person_name"' in rendered
-    # Should join movie_bindings for outer canonical_id
     assert "movie_bindings" in rendered.lower() or '"movie"' in rendered
 
 
 # 3. RelationProject with FilteredRelation adds WHERE clause
 def test_relation_project_filtered_adds_where():
-    str_t = TypeDefinition(name="string", base="str")
-    role_slot = Slot(name="role", range=str_t)
-    person_name = Slot(name="person_name", range=str_t)
+    role_slot = Slot(name="role", type=Primitive(name="string"))
+    person_name = Slot(name="person_name", type=Primitive(name="string"))
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot, role_slot, person_name])
     ctx = _make_ctx(movie_cls)
 
@@ -379,15 +351,14 @@ def test_relation_project_filtered_adds_where():
     result = compile_predicate(node, ctx)
     rendered = result.as_string(None)
     assert "array_agg" in rendered
-    # "director" is passed as a positional param, not spliced into SQL
     assert ctx.params == ["director"]
-    assert "AND" in rendered  # the WHERE clause has the filter
+    assert "AND" in rendered
 
 
 # 4. RelationCount emits count(*)
 def test_relation_count_emits_count_star():
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -401,7 +372,7 @@ def test_relation_count_emits_count_star():
 # 5. RelationCount distinct emits DISTINCT
 def test_relation_count_distinct_emits_distinct():
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -423,10 +394,9 @@ def test_relation_count_distinct_emits_distinct():
     ],
 )
 def test_relation_aggregate_standard_funcs(func, expected_sql):
-    int_t = TypeDefinition(name="integer", base="int")
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
-    score_slot = Slot(name="score", range=int_t)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    score_slot = Slot(name="score", type=Primitive(name="integer"))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot, score_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -444,10 +414,9 @@ def test_relation_aggregate_standard_funcs(func, expected_sql):
 
 # 7. RelationAggregate COLLECT emits array_agg
 def test_relation_aggregate_collect_emits_array_agg():
-    str_t = TypeDefinition(name="string", base="str")
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
-    tag_slot = Slot(name="tag", range=str_t)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    tag_slot = Slot(name="tag", type=Primitive(name="string"))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot, tag_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -464,10 +433,9 @@ def test_relation_aggregate_collect_emits_array_agg():
 
 # 8. RelationAggregate FIRST emits LIMIT 1
 def test_relation_aggregate_first_emits_limit_1():
-    str_t = TypeDefinition(name="string", base="str")
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
-    name_slot = Slot(name="person_name", range=str_t)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    name_slot = Slot(name="person_name", type=Primitive(name="string"))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot, name_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -486,7 +454,7 @@ def test_relation_aggregate_first_emits_limit_1():
 # 9. RelationAggregate COUNT emits count(*)
 def test_relation_aggregate_count_emits_count_star():
     movie_cls = OntologyClass(name="Movie", slots=[])
-    fk_slot = Slot(name="movie", range=movie_cls)
+    fk_slot = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_cls = OntologyClass(name="Credit", slots=[fk_slot])
     ctx = _make_ctx(movie_cls)
 
@@ -499,8 +467,7 @@ def test_relation_aggregate_count_emits_count_star():
 
 # 10. FilteredRelation used standalone raises NotImplementedError
 def test_filtered_relation_standalone_raises():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="role", range=str_t)
+    slot = Slot(name="role", type=Primitive(name="string"))
     cls = OntologyClass(name="Credit", slots=[slot])
     ctx = _make_ctx(cls)
 
@@ -513,8 +480,7 @@ def test_filtered_relation_standalone_raises():
 
 # 11. _derived_column_exprs returns empty lists when no derived slots
 def test_derived_column_exprs_empty_for_stored_only_class():
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="title", range=str_t)
+    slot = Slot(name="title", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[slot])
     derived_cols, derived_params = _derived_column_exprs(cls)
     assert derived_cols == []
@@ -525,8 +491,7 @@ def test_derived_column_exprs_empty_for_stored_only_class():
 def test_select_with_derivations_no_derived_slots_same_as_binding():
     from knot.db.graph_store import _select_with_binding
 
-    str_t = TypeDefinition(name="string", base="str")
-    slot = Slot(name="title", range=str_t)
+    slot = Slot(name="title", type=Primitive(name="string"))
     cls = OntologyClass(name="Movie", slots=[slot])
     base = _select_with_binding(cls)
     derived_sql, derived_params = _select_with_derivations(cls)
@@ -558,12 +523,10 @@ def test_graphql_derived_directors_in_rows(gql_client_full):
     film_a = next(r for r in rows if r["imdbId"] == "tt0000001")
     film_b = next(r for r in rows if r["imdbId"] == "tt0000002")
 
-    # Film A has directors Alice and Bob (role='director')
     directors_a = film_a.get("directors")
     assert directors_a is not None, f"directors missing from row: {film_a}"
     assert set(directors_a) == {"Alice", "Bob"}, f"unexpected directors: {directors_a}"
 
-    # Film B has no credits → directors should be null or empty array
     directors_b = film_b.get("directors")
     assert directors_b is None or directors_b == [], (
         f"Film B should have no directors, got: {directors_b}"
@@ -578,9 +541,7 @@ def test_graphql_derived_credit_count(gql_client_full):
     rows = result["data"]["movie"]
     film_a = next(r for r in rows if r["imdbId"] == "tt0000001")
     film_b = next(r for r in rows if r["imdbId"] == "tt0000002")
-    # Film A has 3 credits (2 directors + 1 actor)
     assert film_a.get("creditCount") == 3, f"expected 3, got {film_a.get('creditCount')}"
-    # Film B has 0 credits → count(*) returns 0
     assert film_b.get("creditCount") == 0, f"expected 0, got {film_b.get('creditCount')}"
 
 
@@ -599,18 +560,15 @@ def test_graphql_by_canonical_id_includes_derived(gql_client_full):
 # 17. Re-publishing with a new derived slot does not add a column (no destructive migration)
 async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db):
     """Adding a derived slot to an existing published spec should publish
-    without raising PublishGateError or requiring allow_destructive=True.
-    Derived slots have no column in the table — no DDL change needed.
-    """
+    without raising PublishGateError or requiring allow_destructive=True."""
     conn = clean_db
-    str_t = TypeDefinition(name="string", base="str")
 
     # v1: Movie + Credit (Credit has FK back to Movie)
-    imdb_id_v1 = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    title_v1 = Slot(name="title", range=str_t)
+    imdb_id_v1 = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title_v1 = Slot(name="title", type=Primitive(name="string"))
     movie_v1 = OntologyClass(name="Movie", slots=[imdb_id_v1, title_v1])
-    cid_v1 = Slot(name="credit_id", range=str_t, identifier=True, required=True)
-    cmovie_v1 = Slot(name="movie", range=movie_v1)
+    cid_v1 = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    cmovie_v1 = Slot(name="movie", type=ClassRef(target_class=movie_v1))
     credit_v1 = OntologyClass(name="Credit", slots=[cid_v1, cmovie_v1])
     movie_src_v1 = Source(name="imdb", entity_class=movie_v1, identifier_slot=imdb_id_v1)
     credit_src_v1 = Source(name="credits", entity_class=credit_v1, identifier_slot=cid_v1)
@@ -618,7 +576,6 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     spec_v1 = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t],
         slots=[imdb_id_v1, title_v1, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v1, credit_src_v1],
@@ -632,11 +589,10 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
         source=movie_src_v1,
         spec_revision=rev1,
         rows=[{"imdb_id": "tt0000001", "title": "Film A"}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "tt0000001", "title": "Film A"}]],
+        canonical_ids=["tt0000001"],
     )
 
     # v2: same Movie + Credit objects, Movie gains a derived slot (no new column).
-    # Re-use the SAME movie_v1 object so cmovie_v1.range still resolves correctly.
     count_derivation = RelationCount(
         relation=ReverseRelation(target_class=credit_v1, fk_slot=cmovie_v1),
     )
@@ -650,14 +606,12 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     spec_v2 = Spec(
         id="test",
         version="1.0.0",
-        types=[str_t],
         slots=[imdb_id_v1, title_v1, count_slot, cid_v1, cmovie_v1],
         classes=[movie_v1, credit_v1],
         sources=[movie_src_v2, credit_src_v2],
     )
     rev2 = await create_draft(conn)
     await update_draft(conn, rev2, spec_v2)
-    # Should not raise PublishGateError — derived slot adds no column
     result = await publish_draft(conn, rev2)
     assert result == rev2
 
@@ -667,13 +621,12 @@ async def test_integration_relation_aggregate_collect(clean_db):
     """Use a COLLECT derivation directly via graph_store.query_rows."""
     conn = clean_db
 
-    str_t = TypeDefinition(name="string", base="str")
-    imdb_id = Slot(name="imdb_id", range=str_t, identifier=True, required=True)
-    title = Slot(name="title", range=str_t)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title])
-    cid = Slot(name="credit_id", range=str_t, identifier=True, required=True)
-    cmovie = Slot(name="movie", range=movie_cls)
-    crole = Slot(name="role", range=str_t)
+    cid = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    cmovie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
+    crole = Slot(name="role", type=Primitive(name="string"))
     credit_cls = OntologyClass(name="Credit", slots=[cid, cmovie, crole])
 
     roles_derivation = RelationAggregate(
@@ -681,7 +634,11 @@ async def test_integration_relation_aggregate_collect(clean_db):
         func=AggFunc.COLLECT,
         operand=SlotPath(from_class=credit_cls, slots=[crole]),
     )
-    roles_slot = Slot(name="roles", range=str_t, multivalued=True, derivation=roles_derivation)
+    roles_slot = Slot(
+        name="roles",
+        type=Array(of=Primitive(name="string")),
+        derivation=roles_derivation,
+    )
     movie_cls.slots = [imdb_id, title, roles_slot]
 
     movie_src = Source(name="imdb", entity_class=movie_cls, identifier_slot=imdb_id)
@@ -690,7 +647,6 @@ async def test_integration_relation_aggregate_collect(clean_db):
     spec = Spec(
         id="agg_test",
         version="1.0.0",
-        types=[str_t],
         slots=[imdb_id, title, roles_slot, cid, cmovie, crole],
         classes=[movie_cls, credit_cls],
         sources=[movie_src, credit_src],
@@ -704,7 +660,7 @@ async def test_integration_relation_aggregate_collect(clean_db):
         source=movie_src,
         spec_revision=rev,
         rows=[{"imdb_id": "m1", "title": "Test Film"}],
-        canonical_ids=[str(r["imdb_id"]) for r in [{"imdb_id": "m1", "title": "Test Film"}]],
+        canonical_ids=["m1"],
     )
     await graph_store.insert_rows(
         conn,
@@ -714,13 +670,7 @@ async def test_integration_relation_aggregate_collect(clean_db):
             {"credit_id": "x1", "movie": "m1", "role": "director"},
             {"credit_id": "x2", "movie": "m1", "role": "actor"},
         ],
-        canonical_ids=[
-            str(r["credit_id"])
-            for r in [
-                {"credit_id": "x1", "movie": "m1", "role": "director"},
-                {"credit_id": "x2", "movie": "m1", "role": "actor"},
-            ]
-        ],
+        canonical_ids=["x1", "x2"],
     )
 
     rows = await graph_store.query_rows(
@@ -748,23 +698,19 @@ async def test_integration_filtered_relation_derivation(full_spec_db):
     )
     film_a = next(r for r in rows if r["imdb_id"] == "tt0000001")
     directors = film_a.get("directors")
-    # Carol is an actor, not a director — must not appear
     assert "Carol" not in (directors or []), f"Carol should not be in directors: {directors}"
     assert set(directors) == {"Alice", "Bob"}
 
 
-# 20. Derived slot appears in WhereInput (filtering via subquery subquery)
+# 20. Derived slot appears in WhereInput (filtering via subquery)
 def test_derived_slot_present_in_where_input():
     """The WhereInput type for a class with derived slots should have a field
-    for the derived slot — filtering compiles the derivation as a subquery
-    in the WHERE clause."""
+    for the derived slot — filtering compiles the derivation as a subquery."""
     from knot.spec.compile.graphql import _make_class_where_type
 
     (spec, movie_cls, *_) = _build_full_spec()
     where_type = _make_class_where_type(movie_cls)
-    # directors is derived → must appear in WhereInput (filters via subquery)
     assert hasattr(where_type, "directors"), (
         "Derived slot 'directors' must be in WhereInput (subquery filter)"
     )
-    # imdb_id is stored → must also appear
     assert hasattr(where_type, "imdb_id"), "Stored slot 'imdb_id' must be in WhereInput"

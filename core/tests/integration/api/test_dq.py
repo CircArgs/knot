@@ -23,7 +23,7 @@ from knot.api.main import app
 from knot.db import dq
 from knot.spec.compile.postgres._naming import user_corrections_source
 from knot.graph.corrections import apply_add, apply_property_correction
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from tests._helpers import publish_spec
 
 
@@ -32,17 +32,14 @@ def _dev_principal() -> Principal:
 
 
 def _spec() -> tuple[Spec, OntologyClass, Source]:
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="dq",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src],

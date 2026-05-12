@@ -21,7 +21,7 @@ from knot.db.spec_store import (
     get_revision,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 
 # ---------------------------------------------------------------------------
 # Helpers — minimal valid spec factory
@@ -30,16 +30,13 @@ from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
 
 def _make_spec() -> Spec:
     """Spec with Movie class having year (int) and imdb_id (str identifier)."""
-    st_str = TypeDefinition(name="string", base="str")
-    st_int = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st_str, identifier=True, required=True)
-    year = Slot(name="year", range=st_int, required=False)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Slot(name="year", type=Primitive(name="integer"), required=False)
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
         id="test",
         version="1.0.0",
-        types=[st_str, st_int],
         slots=[imdb_id, year],
         classes=[movie],
         sources=[src],

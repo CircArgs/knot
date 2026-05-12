@@ -27,7 +27,7 @@ from knot import db
 from knot.api.graph._common import StrictBase
 from knot.db import spec_store
 from knot.graph import spec as graph_spec
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import Array, ClassRef, OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.metaschema import Constraint
 
 router = APIRouter()
@@ -52,18 +52,11 @@ def _graphiql_html() -> str:
 # ---------------------------------------------------------------------------
 # Strawberry types — mirror the static spec metaschema
 #
-# ``Slot.range`` is flattened to (range_kind, range_name) — same shape as the
-# REST ``/spec/published/slots`` endpoint, so consumers don't need to learn a
-# second discriminator.  This keeps queries simple and reusable.
+# ``Slot.type`` is encoded as (type_kind, type_name) — same shape as the
+# REST ``/spec/published/slots`` endpoint, so consumers don't need a
+# second discriminator.  type_kind is one of:
+#   "primitive" | "class" | "array_of_primitive" | "array_of_class"
 # ---------------------------------------------------------------------------
-
-
-@strawberry.type
-class TypeDefinitionGQL:
-    name: str
-    base: str | None
-    pattern: str | None
-    description: str | None
 
 
 @strawberry.type
@@ -71,15 +64,14 @@ class SlotGQL:
     name: str
     identifier: bool
     required: bool
-    multivalued: bool
     description: str | None
     pattern: str | None
     minimum_value: float | None
     maximum_value: float | None
     permissible_values: list[str]
     resolution_policy: str
-    range_kind: str | None  # "type" | "class" | None
-    range_name: str | None
+    type_kind: str | None
+    type_name: str | None
 
 
 @strawberry.type
@@ -98,6 +90,7 @@ class SourceGQL:
     entity_class_name: str
     identifier_slot_name: str
     description: str | None
+    trust_score: float
 
 
 @strawberry.type
@@ -114,7 +107,6 @@ class PublishedSpec:
     version: str
     revision: int
     content_hash: str
-    types: list[TypeDefinitionGQL]
     slots: list[SlotGQL]
     classes: list[OntologyClassGQL]
     sources: list[SourceGQL]
@@ -126,36 +118,40 @@ class PublishedSpec:
 # ---------------------------------------------------------------------------
 
 
-def _to_type(t: TypeDefinition) -> TypeDefinitionGQL:
-    return TypeDefinitionGQL(
-        name=t.name,
-        base=t.base,
-        pattern=t.pattern,
-        description=t.description,
-    )
+def _type_kind_name(s: Slot) -> tuple[str | None, str | None]:
+    """Return (type_kind, type_name) for a slot's TypeExpression."""
+    t = s.type
+    if t is None:
+        return None, None
+    if isinstance(t, Primitive):
+        return "primitive", t.name
+    if isinstance(t, ClassRef):
+        return "class", t.target_class.name
+    if isinstance(t, Array):
+        inner = t.of
+        if isinstance(inner, Primitive):
+            return "array_of_primitive", inner.name
+        if isinstance(inner, ClassRef):
+            return "array_of_class", inner.target_class.name
+    return None, None
 
 
 def _to_slot(s: Slot) -> SlotGQL:
-    range_kind: str | None = None
-    range_name: str | None = None
-    if isinstance(s.range, OntologyClass):
-        range_kind, range_name = "class", s.range.name
-    elif isinstance(s.range, TypeDefinition):
-        range_kind, range_name = "type", s.range.name
+    type_kind, type_name = _type_kind_name(s)
     rp = s.resolution_policy
+    c = s.constraints
     return SlotGQL(
         name=s.name,
         identifier=s.identifier,
         required=s.required,
-        multivalued=s.multivalued,
         description=s.description,
-        pattern=s.pattern,
-        minimum_value=s.minimum_value,
-        maximum_value=s.maximum_value,
-        permissible_values=[pv.text for pv in (s.permissible_values or [])],
+        pattern=c.pattern if c else None,
+        minimum_value=c.min_value if c else None,
+        maximum_value=c.max_value if c else None,
+        permissible_values=c.permissible_values if (c and c.permissible_values) else [],
         resolution_policy=rp.value if hasattr(rp, "value") else str(rp),
-        range_kind=range_kind,
-        range_name=range_name,
+        type_kind=type_kind,
+        type_name=type_name,
     )
 
 
@@ -176,6 +172,7 @@ def _to_source(s: Source) -> SourceGQL:
         entity_class_name=s.entity_class.name,
         identifier_slot_name=s.identifier_slot.name,
         description=s.description,
+        trust_score=s.trust_score,
     )
 
 
@@ -195,7 +192,6 @@ def _to_published_spec(spec: Spec, *, revision: int, content_hash: str) -> Publi
         version=spec.version,
         revision=revision,
         content_hash=content_hash,
-        types=[_to_type(t) for t in spec.types],
         slots=[_to_slot(s) for s in spec.slots],
         classes=[_to_class(c) for c in spec.classes],
         sources=[_to_source(s) for s in spec.sources],

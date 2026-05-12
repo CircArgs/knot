@@ -6,7 +6,7 @@ so the spec GraphQL schema is also static, defined once in
 
   - GET serves Strawberry's bundled GraphiQL HTML.
   - POST with no published spec returns ``{"data": {"publishedSpec": null}}``.
-  - POST returns the full spec shape (types/slots/classes/sources/constraints).
+  - POST returns the full spec shape (slots/classes/sources/constraints).
   - Selective field projection works (only ``classes { name }``).
 """
 
@@ -16,15 +16,18 @@ import pytest_asyncio
 from fastapi.testclient import TestClient
 
 from knot import db
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Slot, Source, Spec
 from knot.spec.metaschema import (
     BoolExpr,
     BoolOpKind,
+    ClassRef,
     Compare,
     CompareOp,
     Constraint,
     Literal_,
+    Primitive,
     Severity,
+    SlotConstraints,
     SlotPath,
 )
 from tests._helpers import publish_spec
@@ -45,26 +48,22 @@ def _build_spec() -> Spec:
     """Movie + Person spec with two sources and a trivial constraint —
     exercises every entity kind the GraphQL schema surfaces.
     """
-    string_t = TypeDefinition(name="string", base="str", description="UTF-8 text")
-    integer_t = TypeDefinition(name="integer", base="int")
-
-    imdb_id = Slot(name="imdb_id", range=string_t, identifier=True, required=True)
-    title = Slot(name="title", range=string_t, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), required=True)
     year = Slot(
         name="year",
-        range=integer_t,
-        minimum_value=1888.0,
-        maximum_value=2100.0,
+        type=Primitive(name="integer"),
+        constraints=SlotConstraints(min_value=1888.0, max_value=2100.0),
     )
-    person_id = Slot(name="person_id", range=string_t, identifier=True, required=True)
-    name = Slot(name="name", range=string_t, required=True)
+    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    name = Slot(name="name", type=Primitive(name="string"), required=True)
 
     person = OntologyClass(
         name="Person",
         slots=[person_id, name],
         description="A human associated with a Movie.",
     )
-    directed_by = Slot(name="directed_by", range=person)
+    directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))
     movie = OntologyClass(
         name="Movie",
         slots=[imdb_id, title, year, directed_by],
@@ -93,7 +92,6 @@ def _build_spec() -> Spec:
     return Spec(
         id="spec_graphql_test",
         version="1.2.3",
-        types=[string_t, integer_t],
         slots=[imdb_id, title, year, person_id, name, directed_by],
         classes=[person, movie],
         sources=[imdb_src, wiki_src],
@@ -177,16 +175,15 @@ def test_published_spec_returns_full_shape(published):
         version
         revision
         contentHash
-        types { name base pattern description }
         slots {
-          name identifier required multivalued resolutionPolicy
-          rangeKind rangeName minimumValue maximumValue
+          name identifier required resolutionPolicy
+          typeKind typeName minimumValue maximumValue
           permissibleValues
         }
         classes {
           name abstract description isAName mixinNames slotNames
         }
-        sources { name entityClassName identifierSlotName description }
+        sources { name entityClassName identifierSlotName description trustScore }
         constraints { name primaryClassName severity message }
       }
     }
@@ -202,13 +199,6 @@ def test_published_spec_returns_full_shape(published):
     assert ps["revision"] == rev
     assert ps["contentHash"]  # non-empty
 
-    # Types
-    type_names = {t["name"] for t in ps["types"]}
-    assert type_names == {"string", "integer"}
-    string_t = next(t for t in ps["types"] if t["name"] == "string")
-    assert string_t["base"] == "str"
-    assert string_t["description"] == "UTF-8 text"
-
     # Slots
     slots_by_name = {s["name"]: s for s in ps["slots"]}
     assert set(slots_by_name) == {
@@ -220,13 +210,13 @@ def test_published_spec_returns_full_shape(published):
         "directed_by",
     }
     year_slot = slots_by_name["year"]
-    assert year_slot["rangeKind"] == "type"
-    assert year_slot["rangeName"] == "integer"
+    assert year_slot["typeKind"] == "primitive"
+    assert year_slot["typeName"] == "integer"
     assert year_slot["minimumValue"] == 1888.0
     assert year_slot["maximumValue"] == 2100.0
     directed_by = slots_by_name["directed_by"]
-    assert directed_by["rangeKind"] == "class"
-    assert directed_by["rangeName"] == "Person"
+    assert directed_by["typeKind"] == "class"
+    assert directed_by["typeName"] == "Person"
     imdb_id_slot = slots_by_name["imdb_id"]
     assert imdb_id_slot["identifier"] is True
     assert imdb_id_slot["required"] is True
@@ -247,6 +237,7 @@ def test_published_spec_returns_full_shape(published):
     assert imdb["entityClassName"] == "Movie"
     assert imdb["identifierSlotName"] == "imdb_id"
     assert imdb["description"] == "IMDb data feed."
+    assert imdb["trustScore"] == 1.0
 
     # Constraints
     assert len(ps["constraints"]) == 1

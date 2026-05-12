@@ -20,7 +20,7 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.errors import (
     DraftAlreadyPublishedError,
     DraftNotFoundError,
@@ -32,20 +32,14 @@ from knot.spec.errors import (
 # ---------------------------------------------------------------------------
 
 
-def _string_type() -> TypeDefinition:
-    return TypeDefinition(name="string", base="str")
-
-
 def _minimal_spec(name: str = "test") -> Spec:
     """A valid spec with one class, one slot, one source."""
-    st = _string_type()
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id])
     src = Source(name="imdb_movies", entity_class=movie, identifier_slot=imdb_id)
     return Spec(
         id=name,
         version="1.0.0",
-        types=[st],
         slots=[imdb_id],
         classes=[movie],
         sources=[src],
@@ -166,20 +160,17 @@ async def test_update_published_draft_raises(clean_spec):
 # ---------------------------------------------------------------------------
 
 
-async def test_publish_gate_rejects_dangling_slot_range(clean_spec):
-    """A slot whose range OntologyClass is not on spec.classes fails gate."""
-    st = _string_type()
+async def test_publish_gate_rejects_dangling_classref(clean_spec):
+    """A slot whose ClassRef target is not on spec.classes fails gate."""
+    from knot.spec import ClassRef
     orphan_class = OntologyClass(name="Orphan", slots=[])
-    bad_slot = Slot(name="bad", range=orphan_class)
-    movie = OntologyClass(name="Movie", slots=[bad_slot])
-    # identifier must exist on spec.slots as a real slot
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    movie.slots.insert(0, id_slot)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    bad_slot = Slot(name="bad", type=ClassRef(target_class=orphan_class))
+    movie = OntologyClass(name="Movie", slots=[id_slot, bad_slot])
     src = Source(name="src", entity_class=movie, identifier_slot=id_slot)
     spec = Spec(
         id="bad",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, bad_slot],
         classes=[movie],  # Orphan intentionally missing
         sources=[src],
@@ -191,15 +182,13 @@ async def test_publish_gate_rejects_dangling_slot_range(clean_spec):
 
 
 async def test_publish_gate_rejects_source_with_unknown_class(clean_spec):
-    st = _string_type()
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[id_slot])
     ghost = OntologyClass(name="Ghost", slots=[id_slot])
     src = Source(name="src", entity_class=ghost, identifier_slot=id_slot)
     spec = Spec(
         id="bad",
         version="1.0.0",
-        types=[st],
         slots=[id_slot],
         classes=[movie],  # ghost not here
         sources=[src],

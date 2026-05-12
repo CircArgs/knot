@@ -23,7 +23,7 @@ from knot.graph.corrections import (
     apply_split,
     apply_tombstone,
 )
-from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, ResolutionPolicy, Slot, Source, Spec
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -43,18 +43,15 @@ async def ct_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st, resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
     src_a = Source(name="source_a", entity_class=movie, identifier_slot=imdb_id)
     src_b = Source(name="source_b", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="ct_test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, title, year],
         classes=[movie],
         sources=[src_a, src_b],

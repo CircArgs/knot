@@ -16,12 +16,13 @@ from knot.db import graph_store, trust_config, trust_posteriors
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
 from knot.graph.resolve import resolve_entity
 from knot.spec import (
+    Array,
     OntologyClass,
+    Primitive,
     ResolutionPolicy,
     Slot,
     Source,
     Spec,
-    TypeDefinition,
 )
 from tests._helpers import publish_spec
 
@@ -41,19 +42,17 @@ async def resolve_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st, resolution_policy=ResolutionPolicy.ARGMAX_TRUST)
-    pm_slot = Slot(name="pm_field", range=st, resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
-    lcb_slot = Slot(name="lcb_field", range=st, resolution_policy=ResolutionPolicy.LCB)
-    tags = Slot(name="tags", range=st, multivalued=True)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.ARGMAX_TRUST)
+    pm_slot = Slot(name="pm_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
+    lcb_slot = Slot(name="lcb_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.LCB)
+    tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[id_slot, title, pm_slot, lcb_slot, tags])
     src_a = Source(name="source_a", entity_class=movie, identifier_slot=id_slot)
     src_b = Source(name="source_b", entity_class=movie, identifier_slot=id_slot)
     spec = Spec(
         id="resolve_test",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, title, pm_slot, lcb_slot, tags],
         classes=[movie],
         sources=[src_a, src_b],

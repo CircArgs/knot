@@ -19,7 +19,8 @@ from knot.db.spec_store import (
     create_draft,
     edit_draft,
 )
-from knot.spec import Spec, TypeDefinition
+from knot.spec import Spec
+from knot.spec.metaschema import Primitive, Slot
 from knot.spec.errors import DraftAlreadyPublishedError, DraftNotFoundError
 
 
@@ -60,12 +61,12 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
 
     errors: list[BaseException] = []
 
-    async def worker(type_name: str) -> None:
+    async def worker(slot_name: str) -> None:
         try:
             conn = await _new_conn()
             try:
                 async with edit_draft(conn, rev) as spec:
-                    spec.types.append(TypeDefinition(name=type_name, base="str"))
+                    spec.slots.append(Slot(name=slot_name, type=Primitive(name="string")))
                     # Small yield to allow the other coroutine to attempt the lock.
                     await asyncio.sleep(0.1)
             finally:
@@ -73,15 +74,15 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
         except BaseException as exc:  # noqa: BLE001
             errors.append(exc)
 
-    await asyncio.gather(worker("Type_A"), worker("Type_B"))
+    await asyncio.gather(worker("slot_a"), worker("slot_b"))
 
     assert errors == [], errors
 
     # Both writes must survive — this is the property a non-locking
     # implementation would violate.
     final = await spec_store.get_revision(pg_conn, rev)
-    names = {t.name for t in final.types}
-    assert names == {"Type_A", "Type_B"}, names
+    names = {s.name for s in final.slots}
+    assert names == {"slot_a", "slot_b"}, names
 
 
 # ---------------------------------------------------------------------------
@@ -96,19 +97,19 @@ async def test_edit_draft_rolls_back_on_exception(pg_conn):
     await spec_store.update_draft(pg_conn, rev, _empty_spec())
 
     pre = await spec_store.get_revision(pg_conn, rev)
-    pre_count = len(pre.types)
+    pre_count = len(pre.slots)
 
     class Boom(Exception):
         pass
 
     with pytest.raises(Boom):
         async with edit_draft(pg_conn, rev) as spec:
-            spec.types.append(TypeDefinition(name="should_not_persist", base="str"))
+            spec.slots.append(Slot(name="should_not_persist", type=Primitive(name="string")))
             raise Boom()
 
     after = await spec_store.get_revision(pg_conn, rev)
-    assert len(after.types) == pre_count
-    assert all(t.name != "should_not_persist" for t in after.types)
+    assert len(after.slots) == pre_count
+    assert all(s.name != "should_not_persist" for s in after.slots)
 
 
 # ---------------------------------------------------------------------------

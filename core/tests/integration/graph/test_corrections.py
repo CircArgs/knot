@@ -13,7 +13,7 @@ from knot.db import corrections as db_corrections
 from knot.db import graph_store, trust_posteriors
 from knot.db.trust_posteriors import PRIOR_ALPHA, PRIOR_BETA
 from knot.graph.corrections import apply_merge, apply_property_correction
-from knot.spec import OntologyClass, ResolutionPolicy, Slot, Source, Spec, TypeDefinition
+from knot.spec import Array, ClassRef, OntologyClass, Primitive, ResolutionPolicy, Slot, Source, Spec
 from tests._helpers import publish_spec
 
 # ---------------------------------------------------------------------------
@@ -33,17 +33,15 @@ async def corrections_db(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    st = TypeDefinition(name="string", base="str")
-    id_slot = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st, resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
-    tags = Slot(name="tags", range=st, multivalued=True)
+    id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
+    tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[id_slot, title, tags])
     src_a = Source(name="source_a", entity_class=movie, identifier_slot=id_slot)
     src_b = Source(name="source_b", entity_class=movie, identifier_slot=id_slot)
     spec = Spec(
         id="corrections_test",
         version="1.0.0",
-        types=[st],
         slots=[id_slot, title, tags],
         classes=[movie],
         sources=[src_a, src_b],
@@ -255,14 +253,13 @@ async def test_apply_merge_rewrites_cross_class_fk_references(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    st = TypeDefinition(name="string", base="str")
-    person_id = Slot(name="person_id", range=st, identifier=True, required=True)
-    person_name = Slot(name="name", range=st)
+    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_name = Slot(name="name", type=Primitive(name="string"))
     person = OntologyClass(name="Person", slots=[person_id, person_name])
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
-    directed_by = Slot(name="directed_by", range=person)  # cross-class FK
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
+    directed_by = Slot(name="directed_by", type=ClassRef(target_class=person))  # cross-class FK
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, directed_by])
 
     src_movies = Source(name="src_movies", entity_class=movie, identifier_slot=imdb_id)
@@ -271,7 +268,6 @@ async def test_apply_merge_rewrites_cross_class_fk_references(pg_conn):
     spec = Spec(
         id="merge_fk_test",
         version="1.0.0",
-        types=[st],
         slots=[person_id, person_name, imdb_id, title, directed_by],
         classes=[person, movie],
         sources=[src_people, src_movies],

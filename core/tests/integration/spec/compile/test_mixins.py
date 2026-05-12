@@ -29,21 +29,13 @@ from knot.spec import (
     Slot,
     Source,
     Spec,
-    TypeDefinition,
 )
+from knot.spec.metaschema import Primitive
 from knot.spec.errors import PublishGateError
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
-
-
-def _string_type() -> TypeDefinition:
-    return TypeDefinition(name="string", base="str")
-
-
-def _ts_type() -> TypeDefinition:
-    return TypeDefinition(name="datetime", base="datetime")
 
 
 async def _reset(conn):
@@ -59,18 +51,16 @@ async def _reset(conn):
 
 def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]:
     """Movie includes a Timestamped mixin contributing created_at/updated_at."""
-    st, dt = _string_type(), _ts_type()
-
-    created_at = Slot(name="created_at", range=dt)
-    updated_at = Slot(name="updated_at", range=dt)
+    created_at = Slot(name="created_at", type=Primitive(name="datetime"))
+    updated_at = Slot(name="updated_at", type=Primitive(name="datetime"))
     timestamped = OntologyClass(
         name="Timestamped",
         slots=[created_at, updated_at],
         abstract=True,
     )
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    title = Slot(name="title", range=st)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(
         name="Movie",
         slots=[imdb_id, title],
@@ -81,7 +71,6 @@ def _build_timestamped_movie_spec() -> tuple[Spec, OntologyClass, OntologyClass]
     spec = Spec(
         id="mixin_test",
         version="1.0.0",
-        types=[st, dt],
         slots=[imdb_id, title, created_at, updated_at],
         classes=[movie, timestamped],
         sources=[src],
@@ -159,12 +148,11 @@ async def test_mixin_slot_is_queryable_via_graphql(pg_conn):
 
 async def test_transitive_mixin_chain(pg_conn):
     await _reset(pg_conn)
-    st, dt = _string_type(), _ts_type()
 
-    audited_at = Slot(name="audited_at", range=dt)
+    audited_at = Slot(name="audited_at", type=Primitive(name="datetime"))
     audited = OntologyClass(name="Audited", slots=[audited_at], abstract=True)
 
-    created_at = Slot(name="created_at", range=dt)
+    created_at = Slot(name="created_at", type=Primitive(name="datetime"))
     timestamped = OntologyClass(
         name="Timestamped",
         slots=[created_at],
@@ -172,14 +160,13 @@ async def test_transitive_mixin_chain(pg_conn):
         abstract=True,
     )
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[timestamped])
 
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="mixin_chain",
         version="1.0.0",
-        types=[st, dt],
         slots=[imdb_id, created_at, audited_at],
         classes=[movie, timestamped, audited],
         sources=[src],
@@ -206,15 +193,14 @@ async def test_transitive_mixin_chain(pg_conn):
 
 async def test_own_slot_shadows_mixin_slot(pg_conn):
     await _reset(pg_conn)
-    st, dt = _string_type(), _ts_type()
 
     # Mixin contributes a `name` slot of type datetime
-    mixin_name = Slot(name="name", range=dt)
+    mixin_name = Slot(name="name", type=Primitive(name="datetime"))
     bad_mixin = OntologyClass(name="BadMixin", slots=[mixin_name], abstract=True)
 
     # Own `name` slot of type str — should win.
-    own_name = Slot(name="name", range=st)
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    own_name = Slot(name="name", type=Primitive(name="string"))
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(
         name="Movie",
         slots=[imdb_id, own_name],
@@ -224,7 +210,6 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
     spec = Spec(
         id="own_shadows_mixin",
         version="1.0.0",
-        types=[st, dt],
         slots=[imdb_id, own_name, mixin_name],
         classes=[movie, bad_mixin],
         sources=[src],
@@ -252,22 +237,20 @@ async def test_own_slot_shadows_mixin_slot(pg_conn):
 
 async def test_mixin_slot_collision_rejected(pg_conn):
     await _reset(pg_conn)
-    st = _string_type()
 
-    a_label = Slot(name="label", range=st)
+    a_label = Slot(name="label", type=Primitive(name="string"))
     a = OntologyClass(name="A", slots=[a_label], abstract=True)
 
-    b_label = Slot(name="label", range=st)
+    b_label = Slot(name="label", type=Primitive(name="string"))
     b = OntologyClass(name="B", slots=[b_label], abstract=True)
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[a, b])
 
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="mixin_collision",
         version="1.0.0",
-        types=[st],
         slots=[imdb_id, a_label, b_label],
         classes=[movie, a, b],
         sources=[src],
@@ -286,20 +269,18 @@ async def test_mixin_slot_collision_rejected(pg_conn):
 
 async def test_mixin_cycle_rejected(pg_conn):
     await _reset(pg_conn)
-    st = _string_type()
 
     a = OntologyClass(name="A", slots=[], abstract=True)
     b = OntologyClass(name="B", slots=[], abstract=True, mixins=[a])
     a.mixins = [b]  # close the cycle: A → B → A
 
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     movie = OntologyClass(name="Movie", slots=[imdb_id], mixins=[a])
 
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="mixin_cycle",
         version="1.0.0",
-        types=[st],
         slots=[imdb_id],
         classes=[movie, a, b],
         sources=[src],

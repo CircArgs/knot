@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.api.auth.security import Principal, require_user
 from knot.db import graph_store
-from knot.spec import OntologyClass, Slot, Source, Spec, TypeDefinition
+from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from tests._helpers import publish_spec
 from knot.spec.metaschema import (
     Compare,
@@ -42,16 +42,13 @@ def _dev_principal() -> Principal:
 def _build_spec_with_constraints(
     constraints: list[Constraint],
 ) -> tuple[Spec, OntologyClass, Source]:
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
     spec = Spec(
         id="ingest_constraint_test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, year],
         classes=[movie],
         sources=[src],
@@ -315,8 +312,8 @@ async def test_multiple_violating_rows_reported(clean_db, client_no_exc):
     assert resp.status_code == 422, resp.text
     violations = resp.json()["detail"]["violations"]
     offending_pks = {v["offending_pk"] for v in violations}
-    assert "tt_bad1" in offending_pks
-    assert "tt_bad2" in offending_pks
+    assert any("tt_bad1" in pk for pk in offending_pks)
+    assert any("tt_bad2" in pk for pk in offending_pks)
 
     # No rows landed.
     async with db.connect() as conn2:
@@ -336,16 +333,14 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     conn = clean_db
 
     # Build spec with Movie (source) + a second class with a constraint.
-    st = TypeDefinition(name="string", base="str")
-    it = TypeDefinition(name="integer", base="int")
-    imdb_id = Slot(name="imdb_id", range=st, identifier=True, required=True)
-    year = Slot(name="year", range=it)
+    imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, year])
     src = Source(name="imdb", entity_class=movie, identifier_slot=imdb_id)
 
     # Second class: Person (no source in this test, just a class with a constraint)
-    pid = Slot(name="pid", range=st, identifier=True, required=True)
-    age = Slot(name="age", range=it)
+    pid = Slot(name="pid", type=Primitive(name="string"), identifier=True, required=True)
+    age = Slot(name="age", type=Primitive(name="integer"))
     person = OntologyClass(name="Person", slots=[pid, age])
 
     path = SlotPath(from_class=person, slots=[age])
@@ -358,7 +353,6 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     spec = Spec(
         id="multi_class_test",
         version="1.0.0",
-        types=[st, it],
         slots=[imdb_id, year, pid, age],
         classes=[movie, person],
         sources=[src, psrc],
