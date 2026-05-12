@@ -63,6 +63,7 @@ export const PUBLISHED_SPEC = gql`
       constraints {
         name
         primaryClassName
+        body
         severity
         message
       }
