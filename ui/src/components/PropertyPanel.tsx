@@ -8,6 +8,9 @@ import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
 export interface SpecSelection {
   kind: SpecEntityKind;
   name: string;
+  /** For slot selections, the owning class — slot names are no longer
+   *  globally unique under by-copy. Ignored for other kinds. */
+  className?: string;
 }
 
 interface Props {
@@ -75,6 +78,17 @@ export function resolveSelection(
       const v = spec.classes.find((c) => c.name === sel.name);
       return v ? { kind: "class", value: v } : null;
     }
+    case "slot": {
+      // Slots are owned by their class (by-copy model). Resolve via the
+      // owning class's effectiveSlots so mixin/is_a-inherited slots also
+      // surface in the panel.
+      if (!sel.className) return null;
+      const cls = spec.classes.find((c) => c.name === sel.className);
+      if (!cls) return null;
+      const pool = cls.effectiveSlots?.length ? cls.effectiveSlots : cls.slots;
+      const v = pool.find((s) => s.name === sel.name);
+      return v ? { kind: "slot", value: v } : null;
+    }
     case "source": {
       const v = spec.sources.find((src) => src.name === sel.name);
       return v ? { kind: "source", value: v } : null;
@@ -103,7 +117,9 @@ function entityDisplayName(entity: SpecEntity): string {
 }
 
 function PropertyTable({ entity }: { entity: SpecEntity }) {
-  const rows: [string, unknown][] = Object.entries(entity.value);
+  const rows: [string, unknown][] = Object.entries(entity.value).filter(
+    ([k]) => !k.startsWith("__"),  // hide GraphQL internals like __typename
+  );
   return (
     <dl className="grid grid-cols-[100px_1fr] gap-x-3 gap-y-1.5">
       {rows.map(([k, v]) => (
@@ -131,8 +147,35 @@ function renderValue(v: unknown): React.ReactNode {
   if (typeof v === "boolean") return v ? "true" : "false";
   if (Array.isArray(v)) {
     if (v.length === 0) return <span className="italic text-slate-400">[]</span>;
+    // Array of objects (e.g. SourceBinding.mappings) — render each item on
+    // its own line as pretty JSON, dropping GraphQL internals.
+    const hasObjects = v.some((x) => x !== null && typeof x === "object" && !Array.isArray(x));
+    if (hasObjects) {
+      return (
+        <div className="space-y-1">
+          {v.map((item, i) => (
+            <pre
+              key={i}
+              className="bg-slate-50 border border-slate-200 rounded px-1.5 py-1 text-[10px] overflow-x-auto"
+            >
+              {JSON.stringify(stripInternals(item), null, 2)}
+            </pre>
+          ))}
+        </div>
+      );
+    }
     return v.join(", ");
   }
-  if (typeof v === "object") return JSON.stringify(v, null, 2);
+  if (typeof v === "object") return JSON.stringify(stripInternals(v), null, 2);
   return String(v);
+}
+
+function stripInternals(v: unknown): unknown {
+  if (v === null || typeof v !== "object") return v;
+  if (Array.isArray(v)) return v.map(stripInternals);
+  return Object.fromEntries(
+    Object.entries(v as Record<string, unknown>)
+      .filter(([k]) => !k.startsWith("__"))
+      .map(([k, val]) => [k, stripInternals(val)]),
+  );
 }

@@ -63,6 +63,15 @@ export default function ClassNode({
         position={Position.Left}
         className="!bg-slate-400"
       />
+      {/* Class-level outgoing edges (is_a, mixin) anchor on the bottom — keeps
+          them visually distinct from the per-slot-row FK source handles on the
+          right side. */}
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="class-source"
+        className="!bg-slate-400"
+      />
 
       {/* Header */}
       <div
@@ -104,7 +113,7 @@ export default function ClassNode({
       ) : (
         <div className="py-1">
           {slots.map((s) => (
-            <SlotRow key={s.name} slot={s} onSelect={onSelect} />
+            <SlotRow key={s.name} slot={s} className={cls.name} onSelect={onSelect} />
           ))}
         </div>
       )}
@@ -134,9 +143,11 @@ export default function ClassNode({
 
 function SlotRow({
   slot,
+  className,
   onSelect,
 }: {
   slot: SpecSlot;
+  className: string;
   onSelect?: SelectFn;
 }) {
   const icon = slotIcon(slot);
@@ -148,7 +159,7 @@ function SlotRow({
       tabIndex={0}
       onClick={(e) => {
         e.stopPropagation();
-        onSelect?.({ kind: "slot", name: slot.name });
+        onSelect?.({ kind: "slot", name: slot.name, className });
       }}
       className="relative px-3 py-1 hover:bg-slate-50 cursor-pointer flex items-center gap-2"
     >
@@ -293,4 +304,5 @@ function ConstraintChip({
 type SelectFn = (sel: {
   kind: "class" | "slot" | "source" | "constraint";
   name: string;
+  className?: string;
 }) => void;

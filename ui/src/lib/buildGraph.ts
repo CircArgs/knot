@@ -188,21 +188,12 @@ export function buildGraph(
       });
     }
 
-    // Edge: SourceBinding → identifier slot row on the target class card
-    if (binding.identifierSlotName && classNames.has(binding.className)) {
-      edges.push({
-        id: `edge:sb-id:${binding.sourceName}__${binding.className}`,
-        source: bNodeId,
-        target: nodeId("class", binding.className),
-        targetHandle: slotHandleId(binding.identifierSlotName),
-        label: "id slot",
-        markerEnd: { type: MarkerType.ArrowClosed, color: "#a855f7" },
-        style: { stroke: "#a855f7", strokeWidth: 1, strokeDasharray: "3 2" },
-        labelStyle: { fontSize: 9, fill: "#a855f7" },
-        labelBgPadding: [2, 2],
-        labelBgStyle: { fill: "#ffffff", fillOpacity: 0.9 },
-      });
-    }
+    // Note: a third edge (SourceBinding → identifier slot row) is intentionally
+    // not drawn. The slot row's handle is type="source" (used for outgoing FK
+    // edges) and React Flow won't terminate an incoming edge on a source-only
+    // handle. The identifier slot name is already shown inside the binding
+    // card's body, and the sb-cls edge above conveys the class connection, so
+    // this third edge would be visual noise + a render error in the console.
   }
 
   // — Cross-class ClassRef edges (FKs, anchored at slot rows) —
@@ -226,11 +217,16 @@ export function buildGraph(
   }
 
   // — is_a / mixin edges (class → class) —
+  // Class-level outgoing edges anchor on the "class-source" handle declared
+  // on ClassNode (at Position.Bottom). Without an explicit sourceHandle,
+  // React Flow can't find a handle (the per-slot-row handles all have
+  // slot-specific ids) and silently drops the edge.
   for (const cls of spec.classes) {
     if (cls.isAName && classNames.has(cls.isAName)) {
       edges.push({
         id: `edge:isa:${cls.name}->${cls.isAName}`,
         source: nodeId("class", cls.name),
+        sourceHandle: "class-source",
         target: nodeId("class", cls.isAName),
         label: "is_a",
         markerEnd: { type: MarkerType.ArrowClosed, color: "#475569" },
@@ -245,6 +241,7 @@ export function buildGraph(
       edges.push({
         id: `edge:mixin:${cls.name}->${mx}`,
         source: nodeId("class", cls.name),
+        sourceHandle: "class-source",
         target: nodeId("class", mx),
         label: "mixin",
         markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
