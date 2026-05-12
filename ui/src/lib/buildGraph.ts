@@ -220,18 +220,21 @@ export function buildGraph(
     }
   }
 
-  // — is_a / mixin edges (class → class) —
-  // Class-level outgoing edges anchor on the "class-source" handle declared
-  // on ClassNode (at Position.Bottom). Without an explicit sourceHandle,
-  // React Flow can't find a handle (the per-slot-row handles all have
-  // slot-specific ids) and silently drops the edge.
+  // — is_a / mixin edges (parent / mixin → child) —
+  // Direction is reversed from the natural "child IS-A parent" reading so
+  // the layered layout places abstract parents + mixin contributors in
+  // earlier layers (to the LEFT) than the concrete classes that consume
+  // them. The arrow + label still reads correctly because we flip the
+  // marker: the visual arrowhead lands at the child, with "is_a" / "mixin"
+  // labels next to it. Defined classes (which themselves have is_a) trail
+  // to the rightmost layer.
   for (const cls of spec.classes) {
     if (cls.isAName && classNames.has(cls.isAName)) {
       edges.push({
-        id: `edge:isa:${cls.name}->${cls.isAName}`,
-        source: nodeId("class", cls.name),
+        id: `edge:isa:${cls.isAName}->${cls.name}`,
+        source: nodeId("class", cls.isAName),
         sourceHandle: "class-source",
-        target: nodeId("class", cls.isAName),
+        target: nodeId("class", cls.name),
         label: "is_a",
         markerEnd: { type: MarkerType.ArrowClosed, color: "#475569" },
         style: { stroke: "#475569", strokeWidth: 1.25 },
@@ -243,10 +246,10 @@ export function buildGraph(
     for (const mx of cls.mixinNames) {
       if (!classNames.has(mx)) continue;
       edges.push({
-        id: `edge:mixin:${cls.name}->${mx}`,
-        source: nodeId("class", cls.name),
+        id: `edge:mixin:${mx}->${cls.name}`,
+        source: nodeId("class", mx),
         sourceHandle: "class-source",
-        target: nodeId("class", mx),
+        target: nodeId("class", cls.name),
         label: "mixin",
         markerEnd: { type: MarkerType.ArrowClosed, color: "#94a3b8" },
         style: { stroke: "#94a3b8", strokeWidth: 1, strokeDasharray: "4 3" },
