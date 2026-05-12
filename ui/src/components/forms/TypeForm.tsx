@@ -2,7 +2,6 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
-import type { SpecType } from "../../types/spec";
 import {
   CheckboxField as _Cb,
   ErrText,
@@ -30,7 +29,7 @@ const Schema = z.object({
 export type TypeFormValues = z.infer<typeof Schema>;
 
 interface Props {
-  initial?: Partial<SpecType>;
+  initial?: { name?: string; base?: string; pattern?: string; description?: string };
   /** When editing, the name is locked (delete+add for renames). */
   lockName?: boolean;
   onSubmit: (vals: TypeFormValues) => Promise<void>;

@@ -3,7 +3,7 @@ import type { NodeProps } from "@xyflow/react";
 
 import type { SpecNodeData } from "../../lib/buildGraph";
 import { slotHandleId } from "../../lib/buildGraph";
-import { BUILTIN_TYPES } from "../../types/spec";
+import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../types/spec";
 import type {
   SpecConstraint,
   SpecSlot,
@@ -12,11 +12,15 @@ import type {
 import KindBadge from "./KindBadge";
 
 /**
- * Class card — the only node kind in the default class-card-centric view.
- * Renders header + per-slot rows + sources / constraints chip lines.
- * Click handlers stop propagation so clicking a slot row / source chip /
- * constraint chip routes a "select non-node entity" event to the page via
- * `data.onSelect` (set by the page wrapping `nodeTypes`).
+ * Class card — the only node kind in the spec graph. Renders header +
+ * per-slot rows + sources / constraints chip lines. Click handlers on
+ * slot rows / source chips / constraint chips dispatch a "select non-node
+ * entity" event via `data.onSelect` (set by the page wrapping `nodeTypes`).
+ *
+ * Reified-relation classes (`card.isJunction === true` — classes with ≥2
+ * ClassRef slots, like a `Credit` between `Movie` and `Person`) get a
+ * cut-corner octagon clip + violet accent so they're scannable in dense
+ * graphs.
  */
 export default function ClassNode({
   data,
@@ -29,24 +33,31 @@ export default function ClassNode({
   const slots = card?.slots ?? [];
   const sources = card?.sources ?? [];
   const constraints = card?.constraints ?? [];
-  const compactSlotNames = card?.compactSlotNames;
-  const compactSourceNames = card?.compactSourceNames ?? [];
-  const compactConstraintNames = card?.compactConstraintNames ?? [];
-  // `compactSlotNames` is the marker that this card is for the details
-  // view: full row data isn't carried (slots/sources/constraints are
-  // standalone nodes); render names-as-chips instead.
-  const isCompact = compactSlotNames !== undefined;
+  const isJunction = card?.isJunction === true;
 
-  const ring = selected ? "ring-2 ring-blue-500" : "";
-  const hasMeta = isCompact
-    ? compactSourceNames.length > 0 || compactConstraintNames.length > 0
-    : sources.length > 0 || constraints.length > 0;
+  const ring = selected
+    ? "ring-2 ring-blue-500"
+    : isJunction
+      ? "ring-1 ring-violet-300"
+      : "";
+  const border = isJunction ? "border-violet-400" : "border-slate-300";
+  const hasMeta = sources.length > 0 || constraints.length > 0;
 
   const onSelect = (data as { onSelect?: SelectFn }).onSelect;
 
+  // Chamfered octagon clip for junctions — cuts each corner at 12px so the
+  // shape reads as "associative entity" without breaking axis-aligned content.
+  const junctionStyle: React.CSSProperties | undefined = isJunction
+    ? {
+        clipPath:
+          "polygon(12px 0%, calc(100% - 12px) 0%, 100% 12px, 100% calc(100% - 12px), calc(100% - 12px) 100%, 12px 100%, 0% calc(100% - 12px), 0% 12px)",
+      }
+    : undefined;
+
   return (
     <div
-      className={`rounded-lg border border-slate-300 bg-white shadow-sm hover:shadow-md transition-shadow w-[280px] text-xs ${ring}`}
+      style={junctionStyle}
+      className={`${isJunction ? "" : "rounded-lg"} border bg-white shadow-sm hover:shadow-md transition-shadow w-[280px] text-xs ${border} ${ring}`}
     >
       {/* Incoming edges (is_a / mixin / FK) anchor on the card's left side. */}
       <Handle
@@ -56,7 +67,9 @@ export default function ClassNode({
       />
 
       {/* Header */}
-      <div className="px-3 py-1.5 border-b border-slate-200 bg-slate-50 rounded-t-lg flex items-center justify-between gap-2">
+      <div
+        className={`px-3 py-1.5 border-b border-slate-200 bg-slate-50 ${isJunction ? "" : "rounded-t-lg"} flex items-center justify-between gap-2`}
+      >
         <div className="flex items-center gap-1.5 min-w-0">
           <KindBadge kind="class" />
           <span
@@ -66,29 +79,29 @@ export default function ClassNode({
             {cls.name}
           </span>
         </div>
-        <span
-          className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide ${
-            cls.abstract
-              ? "bg-slate-200 text-slate-700"
-              : "bg-emerald-100 text-emerald-800"
-          }`}
-        >
-          {cls.abstract ? "abstract" : "concrete"}
-        </span>
+        <div className="flex items-center gap-1">
+          {isJunction && (
+            <span
+              className="text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide bg-violet-100 text-violet-800"
+              title="Reified relation — ≥2 class-reference slots"
+            >
+              junction
+            </span>
+          )}
+          <span
+            className={`text-[9px] uppercase px-1.5 py-0.5 rounded font-mono tracking-wide ${
+              cls.abstract
+                ? "bg-slate-200 text-slate-700"
+                : "bg-emerald-100 text-emerald-800"
+            }`}
+          >
+            {cls.abstract ? "abstract" : "concrete"}
+          </span>
+        </div>
       </div>
 
-      {/* Slot rows (full) OR compact chip list (details mode) */}
-      {isCompact ? (
-        compactSlotNames.length === 0 ? (
-          <div className="px-3 py-2 italic text-slate-400">no slots</div>
-        ) : (
-          <div className="px-3 py-1.5 flex flex-wrap gap-1">
-            {compactSlotNames.map((n) => (
-              <NameChip key={n} name={n} tone="bg-green-100 text-green-800" />
-            ))}
-          </div>
-        )
-      ) : slots.length === 0 ? (
+      {/* Slot rows */}
+      {slots.length === 0 ? (
         <div className="px-3 py-2 italic text-slate-400">no slots</div>
       ) : (
         <div className="py-1">
@@ -103,69 +116,24 @@ export default function ClassNode({
         <>
           <div className="border-t border-slate-200" />
           <div className="px-3 py-1.5 space-y-1">
-            {isCompact ? (
-              <>
-                {compactSourceNames.length > 0 && (
-                  <MetaRow label="sources">
-                    {compactSourceNames.map((n) => (
-                      <NameChip
-                        key={n}
-                        name={n}
-                        tone="bg-purple-100 text-purple-800"
-                      />
-                    ))}
-                  </MetaRow>
-                )}
-                {compactConstraintNames.length > 0 && (
-                  <MetaRow label="constraints">
-                    {compactConstraintNames.map((n) => (
-                      <NameChip
-                        key={n}
-                        name={n}
-                        tone="bg-rose-100 text-rose-800"
-                      />
-                    ))}
-                  </MetaRow>
-                )}
-              </>
-            ) : (
-              <>
-                {sources.length > 0 && (
-                  <MetaRow label="sources">
-                    {sources.map((src) => (
-                      <SourceChip key={src.name} src={src} onSelect={onSelect} />
-                    ))}
-                  </MetaRow>
-                )}
-                {constraints.length > 0 && (
-                  <MetaRow label="constraints">
-                    {constraints.map((k) => (
-                      <ConstraintChip key={k.name} k={k} onSelect={onSelect} />
-                    ))}
-                  </MetaRow>
-                )}
-              </>
+            {sources.length > 0 && (
+              <MetaRow label="sources">
+                {sources.map((src) => (
+                  <SourceChip key={src.name} src={src} onSelect={onSelect} />
+                ))}
+              </MetaRow>
+            )}
+            {constraints.length > 0 && (
+              <MetaRow label="constraints">
+                {constraints.map((k) => (
+                  <ConstraintChip key={k.name} k={k} onSelect={onSelect} />
+                ))}
+              </MetaRow>
             )}
           </div>
         </>
       )}
     </div>
-  );
-}
-
-/**
- * Static name chip — no click handler. Used for the compact slot/source/
- * constraint name lists shown on a class card in ontology-details mode,
- * where the entity itself has a standalone node the user can click.
- */
-function NameChip({ name, tone }: { name: string; tone: string }) {
-  return (
-    <span
-      className={`text-[10px] font-mono px-1.5 py-px rounded ${tone}`}
-      title={name}
-    >
-      {name}
-    </span>
   );
 }
 
@@ -181,7 +149,7 @@ function SlotRow({
   onSelect?: SelectFn;
 }) {
   const icon = slotIcon(slot);
-  const isClassRange = slot.rangeKind === "class";
+  const isClassRange = isClassKind(slot.typeKind);
 
   return (
     <div
@@ -222,19 +190,19 @@ function SlotRow({
 }
 
 function SlotRange({ slot }: { slot: SpecSlot }) {
-  if (!slot.rangeKind || !slot.rangeName) {
+  if (!slot.typeKind || !slot.typeName) {
     return <span className="text-slate-400 italic">derived</span>;
   }
-  if (slot.rangeKind === "type") {
-    const isBuiltin = BUILTIN_TYPES.has(slot.rangeName);
+  if (isPrimitiveKind(slot.typeKind)) {
+    const isBuiltin = BUILTIN_TYPES.has(slot.typeName);
     return (
       <span
         className={`font-mono truncate ${
           isBuiltin ? "text-slate-500" : "text-amber-700"
         }`}
-        title={slot.rangeName}
+        title={slot.typeName}
       >
-        {slot.rangeName}
+        {slot.typeName}
       </span>
     );
   }
@@ -242,9 +210,9 @@ function SlotRange({ slot }: { slot: SpecSlot }) {
   return (
     <span
       className="font-mono text-blue-700 bg-blue-50 px-1.5 rounded truncate"
-      title={slot.rangeName}
+      title={slot.typeName}
     >
-      {slot.rangeName}
+      {slot.typeName}
     </span>
   );
 }
@@ -255,7 +223,7 @@ function SlotChips({ slot }: { slot: SpecSlot }) {
     chips.push({ label: "ID", tone: "bg-emerald-600 text-white" });
   if (slot.required)
     chips.push({ label: "REQ", tone: "bg-amber-100 text-amber-800" });
-  if (slot.multivalued)
+  if (isArrayKind(slot.typeKind))
     chips.push({ label: "MV", tone: "bg-violet-100 text-violet-800" });
   if (chips.length === 0) return null;
   return (
@@ -273,10 +241,10 @@ function SlotChips({ slot }: { slot: SpecSlot }) {
 }
 
 function slotIcon(slot: SpecSlot): string {
-  if (slot.identifier) return "◆"; // ◆
-  if (slot.rangeKind === "class") return "→"; // →
-  if (!slot.rangeKind) return "λ"; // λ derived
-  return "◇"; // ◇
+  if (slot.identifier) return "◆";
+  if (isClassKind(slot.typeKind)) return "→";
+  if (!slot.typeKind) return "λ"; // derived
+  return "◇";
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -349,11 +317,10 @@ function ConstraintChip({
 }
 
 // ──────────────────────────────────────────────────────────────────────────
-// Internal type — duplicated rather than imported from PropertyPanel to keep
-// this leaf component decoupled.
+// Internal type
 // ──────────────────────────────────────────────────────────────────────────
 
 type SelectFn = (sel: {
-  kind: "class" | "slot" | "source" | "constraint" | "type";
+  kind: "class" | "slot" | "source" | "constraint";
   name: string;
 }) => void;

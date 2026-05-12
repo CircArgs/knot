@@ -3,6 +3,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 
 import type { PublishedSpec, SpecSlot } from "../../types/spec";
+import { BUILTIN_TYPES } from "../../types/spec";
 import {
   CheckboxField,
   ErrText,
@@ -17,13 +18,30 @@ import {
 const NAME_PATTERN = /^[A-Za-z_][A-Za-z0-9_]{0,62}$/;
 const POLICIES = ["argmax_trust", "posterior_mean", "lcb"] as const;
 
+/**
+ * typeKind encodes both "primitive vs class" and "scalar vs array":
+ *   ""                  — derived (no type expression)
+ *   "primitive"         — scalar primitive  e.g. string, integer
+ *   "array_of_primitive"— list of primitives
+ *   "class"             — FK to a class (scalar)
+ *   "array_of_class"    — FK list to a class
+ */
+const TYPE_KIND_OPTIONS = [
+  { value: "", label: "(derived)" },
+  { value: "primitive", label: "primitive (scalar)" },
+  { value: "array_of_primitive", label: "primitive (array)" },
+  { value: "class", label: "class ref (scalar)" },
+  { value: "array_of_class", label: "class ref (array)" },
+] as const;
+
+type TypeKindValue = "" | "primitive" | "array_of_primitive" | "class" | "array_of_class";
+
 const Schema = z.object({
   name: z.string().regex(NAME_PATTERN, "must match ^[A-Za-z_][A-Za-z0-9_]{0,62}$"),
-  rangeKind: z.enum(["", "type", "class"]),
-  rangeName: z.string(),
+  typeKind: z.enum(["", "primitive", "array_of_primitive", "class", "array_of_class"]),
+  typeName: z.string(),
   identifier: z.boolean(),
   required: z.boolean(),
-  multivalued: z.boolean(),
   resolutionPolicy: z.enum(POLICIES),
   pattern: z.string(),
   minimumValue: z.string(),
@@ -50,6 +68,11 @@ function normalizePolicy(p: string | undefined): (typeof POLICIES)[number] | nul
     : null;
 }
 
+/** Map an existing SpecSlot's typeKind (null means derived) to the form's string enum. */
+function toFormTypeKind(typeKind: SpecSlot["typeKind"]): TypeKindValue {
+  return typeKind ?? "";
+}
+
 export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
   const {
     register,
@@ -61,11 +84,10 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
     resolver: zodResolver(Schema),
     defaultValues: {
       name: initial?.name ?? "",
-      rangeKind: (initial?.rangeKind as "type" | "class" | null) ?? "",
-      rangeName: initial?.rangeName ?? "",
+      typeKind: toFormTypeKind(initial?.typeKind ?? null),
+      typeName: initial?.typeName ?? "",
       identifier: initial?.identifier ?? false,
       required: initial?.required ?? false,
-      multivalued: initial?.multivalued ?? false,
       resolutionPolicy:
         normalizePolicy(initial?.resolutionPolicy) ?? "argmax_trust",
       pattern: initial?.pattern ?? "",
@@ -76,19 +98,19 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
       derivation: "",
     },
   });
-  const rangeKind = watch("rangeKind");
-  const rangeOptions =
-    rangeKind === "type"
-      ? spec.types.map((t) => t.name)
-      : rangeKind === "class"
-        ? spec.classes.map((c) => c.name)
-        : [];
 
-  const [identifier, required, multivalued] = [
-    watch("identifier"),
-    watch("required"),
-    watch("multivalued"),
-  ];
+  const typeKind = watch("typeKind") as TypeKindValue;
+  const isPrimitive = typeKind === "primitive" || typeKind === "array_of_primitive";
+  const isClass = typeKind === "class" || typeKind === "array_of_class";
+
+  // Dropdown options for typeName depend on typeKind.
+  const typeNameOptions: string[] = isPrimitive
+    ? Array.from(BUILTIN_TYPES)
+    : isClass
+      ? spec.classes.map((c) => c.name)
+      : [];
+
+  const [identifier, required] = [watch("identifier"), watch("required")];
 
   return (
     <form onSubmit={handleSubmit(onSubmit)}>
@@ -105,24 +127,28 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
 
       <div className="grid grid-cols-2 gap-3">
         <FieldRow>
-          <Label>range kind</Label>
-          <select {...register("rangeKind")} className={selectClass}>
-            <option value="">(unranged)</option>
-            <option value="type">type</option>
-            <option value="class">class</option>
+          <Label>type kind</Label>
+          <select {...register("typeKind")} className={selectClass}>
+            {TYPE_KIND_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
           </select>
         </FieldRow>
         <FieldRow>
-          <Label>range name</Label>
+          <Label>type name</Label>
           <input
-            list="range-options"
-            {...register("rangeName")}
+            list="type-name-options"
+            {...register("typeName")}
             className={inputClass}
-            disabled={!rangeKind}
-            placeholder={rangeKind ? `pick a ${rangeKind}` : "—"}
+            disabled={!typeKind}
+            placeholder={
+              isPrimitive ? "e.g. string" : isClass ? "pick a class" : "—"
+            }
           />
-          <datalist id="range-options">
-            {rangeOptions.map((opt) => (
+          <datalist id="type-name-options">
+            {typeNameOptions.map((opt) => (
               <option key={opt} value={opt} />
             ))}
           </datalist>
@@ -140,11 +166,6 @@ export default function SlotForm({ spec, initial, lockName, onSubmit }: Props) {
             label="required"
             checked={required}
             onChange={(b) => setValue("required", b)}
-          />
-          <CheckboxField
-            label="multivalued"
-            checked={multivalued}
-            onChange={(b) => setValue("multivalued", b)}
           />
         </div>
       </FieldRow>

@@ -71,10 +71,6 @@ export function resolveSelection(
   sel: SpecSelection,
 ): SpecEntity | null {
   switch (sel.kind) {
-    case "type": {
-      const v = spec.types.find((t) => t.name === sel.name);
-      return v ? { kind: "type", value: v } : null;
-    }
     case "slot": {
       const v = spec.slots.find((s) => s.name === sel.name);
       return v ? { kind: "slot", value: v } : null;

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { z } from "zod";
 
 import type { PublishedSpec, SpecSlot } from "../../types/spec";
+import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../types/spec";
 import {
   CheckboxField,
   ErrText,
@@ -32,7 +33,7 @@ const Schema = z.object({
   /** Raw text input; we coerce per-slot at submit time. */
   text: z.string(),
   bool: z.boolean(),
-  list: z.string(), // comma-separated for multivalued
+  list: z.string(), // comma-separated for array slots
   classRangeId: z.string(),
 });
 
@@ -41,10 +42,10 @@ type FormValues = z.infer<typeof Schema>;
 /**
  * Edit one slot value for one canonical entity.
  *
- * The "value" input is rendered conditionally on the slot's `multivalued`
- * + `rangeKind`. For class-range slots, we hand off to CanonicalIdPicker so
- * the operator picks an existing target canonical_id (debounced search,
- * since classes can have thousands of rows).
+ * The "value" input is rendered conditionally on the slot's typeKind.
+ * For class-range slots, we hand off to CanonicalIdPicker so the operator
+ * picks an existing target canonical_id (debounced search, since classes
+ * can have thousands of rows).
  */
 export default function PropertyCorrectionForm({
   spec,
@@ -54,11 +55,11 @@ export default function PropertyCorrectionForm({
   onSubmit,
 }: Props) {
   const cls = spec.classes.find((c) => c.name === className);
-  // Stored slots only: range_kind must be set (derived slots have null).
+  // Stored slots only: typeKind must be set (derived slots have null).
   const slotsByName = new Map(spec.slots.map((s) => [s.name, s]));
   const storedSlots: SpecSlot[] = (cls?.slotNames ?? [])
     .map((n) => slotsByName.get(n))
-    .filter((s): s is SpecSlot => !!s && s.rangeKind !== null);
+    .filter((s): s is SpecSlot => !!s && s.typeKind !== null);
 
   const {
     register,
@@ -127,7 +128,6 @@ export default function PropertyCorrectionForm({
         <FieldRow>
           <Label>value</Label>
           <SlotValueInput
-            spec={spec}
             slot={slot}
             text={watch("text")}
             list={watch("list")}
@@ -151,13 +151,12 @@ export default function PropertyCorrectionForm({
 }
 
 function rangeLabel(slot: SpecSlot): string {
-  if (slot.rangeKind === "class") return `→ ${slot.rangeName}`;
-  if (slot.rangeKind === "type") return slot.rangeName ?? "type";
+  if (isClassKind(slot.typeKind)) return `→ ${slot.typeName}`;
+  if (isPrimitiveKind(slot.typeKind)) return slot.typeName ?? "primitive";
   return "derived";
 }
 
 function SlotValueInput({
-  spec,
   slot,
   text,
   list,
@@ -168,7 +167,6 @@ function SlotValueInput({
   setBool,
   setClassRangeId,
 }: {
-  spec: PublishedSpec;
   slot: SpecSlot;
   text: string;
   list: string;
@@ -180,8 +178,8 @@ function SlotValueInput({
   setClassRangeId: (v: string) => void;
 }) {
   // Class-range slot — CanonicalIdPicker debounce-searches the target class.
-  if (slot.rangeKind === "class" && slot.rangeName) {
-    if (slot.multivalued) {
+  if (isClassKind(slot.typeKind) && slot.typeName) {
+    if (isArrayKind(slot.typeKind)) {
       return (
         <textarea
           value={list}
@@ -193,14 +191,14 @@ function SlotValueInput({
     }
     return (
       <CanonicalIdPicker
-        className={slot.rangeName}
+        className={slot.typeName}
         value={classRangeId}
         onChange={setClassRangeId}
       />
     );
   }
 
-  const baseType = baseTypeFor(spec, slot);
+  const baseType = baseTypeFor(slot);
   if (baseType === "boolean") {
     return (
       <CheckboxField
@@ -210,7 +208,7 @@ function SlotValueInput({
       />
     );
   }
-  if (slot.multivalued) {
+  if (isArrayKind(slot.typeKind)) {
     return (
       <textarea
         value={list}
@@ -236,31 +234,26 @@ function SlotValueInput({
       value={text}
       onChange={(e) => setText(e.target.value)}
       className={inputClass}
-      placeholder={slot.rangeName ?? "value"}
+      placeholder={slot.typeName ?? "value"}
       step={baseType === "float" ? "any" : undefined}
     />
   );
 }
 
-function baseTypeFor(spec: PublishedSpec, slot: SpecSlot): string {
-  if (slot.rangeKind !== "type" || !slot.rangeName) return "string";
-  const t = spec.types.find((x) => x.name === slot.rangeName);
-  // Walk up the base chain to find a builtin name.
-  let cur: string | null = t?.base ?? slot.rangeName;
-  for (let i = 0; i < 8 && cur; i++) {
-    if (["string", "integer", "float", "boolean", "date", "datetime"].includes(cur)) {
-      return cur;
-    }
-    const next = spec.types.find((x) => x.name === cur);
-    if (!next) break;
-    cur = next.base;
-  }
+/**
+ * Walk typeName to find the base primitive. Since types are now language-level
+ * (no spec.types lookup), we just check if typeName is directly a builtin.
+ */
+function baseTypeFor(slot: SpecSlot): string {
+  if (!isPrimitiveKind(slot.typeKind) || !slot.typeName) return "string";
+  const name = slot.typeName.toLowerCase();
+  if (BUILTIN_TYPES.has(name)) return name;
   return "string";
 }
 
 function coerceValue(slot: SpecSlot, vals: FormValues): unknown {
-  if (slot.rangeKind === "class") {
-    if (slot.multivalued) {
+  if (isClassKind(slot.typeKind)) {
+    if (isArrayKind(slot.typeKind)) {
       return vals.list
         .split(",")
         .map((s) => s.trim())
@@ -268,14 +261,14 @@ function coerceValue(slot: SpecSlot, vals: FormValues): unknown {
     }
     return vals.classRangeId || null;
   }
-  if (slot.multivalued) {
+  if (isArrayKind(slot.typeKind)) {
     return vals.list
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean);
   }
-  if (slot.rangeKind === "type") {
-    const t = slot.rangeName?.toLowerCase() ?? "";
+  if (isPrimitiveKind(slot.typeKind)) {
+    const t = slot.typeName?.toLowerCase() ?? "";
     if (t.includes("int")) return vals.text === "" ? null : Number.parseInt(vals.text, 10);
     if (t.includes("float") || t.includes("double") || t.includes("number")) {
       return vals.text === "" ? null : Number.parseFloat(vals.text);

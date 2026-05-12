@@ -43,11 +43,11 @@ export async function withSlotDetached<T>(
 }
 
 /**
- * For non-class entities (Type, Slot, Source, Constraint), edit = delete + add
+ * For non-class entities (Slot, Source, Constraint), edit = delete + add
  * with detaching of any referencing class slot_names. Returns the new spec
  * after the mutation, by ID.
  */
-export type EditableKind = "type" | "slot" | "source" | "constraint";
+export type EditableKind = "slot" | "source" | "constraint";
 
 export async function editEntityViaDeleteAdd(
   draftId: number,
@@ -61,11 +61,6 @@ export async function editEntityViaDeleteAdd(
       await api.deleteSlot(draftId, oldName);
       await performAdd();
     });
-    return;
-  }
-  if (kind === "type") {
-    await api.deleteType(draftId, oldName);
-    await performAdd();
     return;
   }
   if (kind === "source") {
@@ -122,5 +117,5 @@ export async function autoDetach(
     }
     return;
   }
-  // type/source/constraint are leaf-ish; no cascade structurally.
+  // source/constraint are leaf-ish; no cascade structurally.
 }

@@ -12,6 +12,7 @@ import type { Edge, Node } from "@xyflow/react";
 
 import type { ContributionRow, ResolvedRecord } from "./dataApi";
 import type { PublishedSpec, SpecClass, SpecSlot } from "../types/spec";
+import { isArrayKind, isClassKind } from "../types/spec";
 
 export interface EntityNodeData extends Record<string, unknown> {
   className: string;
@@ -104,11 +105,11 @@ export function buildDataGraph(
     // solid blue edge anchored at the slot row's source handle.
     if (!e.resolved) continue;
     for (const slot of slots) {
-      if (slot.rangeKind !== "class" || !slot.rangeName) continue;
-      const targetClass = slot.rangeName;
+      if (!isClassKind(slot.typeKind) || !slot.typeName) continue;
+      const targetClass = slot.typeName;
       const raw = e.resolved[slot.name];
       if (raw == null) continue;
-      const targetIds = slot.multivalued
+      const targetIds = isArrayKind(slot.typeKind)
         ? (Array.isArray(raw) ? raw : []).map((v) => String(v))
         : [String(raw)];
       for (const targetId of targetIds) {

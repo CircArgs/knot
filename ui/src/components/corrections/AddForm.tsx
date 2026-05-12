@@ -4,6 +4,7 @@ import { z } from "zod";
 import { useState } from "react";
 
 import type { PublishedSpec, SpecSlot } from "../../types/spec";
+import { BUILTIN_TYPES, isArrayKind, isClassKind, isPrimitiveKind } from "../../types/spec";
 import {
   ErrText,
   FieldRow,
@@ -44,7 +45,7 @@ export default function AddForm({ spec, className, onSubmit }: Props) {
   const slotsByName = new Map(spec.slots.map((s) => [s.name, s]));
   const storedSlots: SpecSlot[] = (cls?.slotNames ?? [])
     .map((n) => slotsByName.get(n))
-    .filter((s): s is SpecSlot => !!s && s.rangeKind !== null);
+    .filter((s): s is SpecSlot => !!s && s.typeKind !== null);
 
   const {
     register,
@@ -65,7 +66,7 @@ export default function AddForm({ spec, className, onSubmit }: Props) {
   const submit = handleSubmit(async (vals) => {
     setSubmitErr(null);
     try {
-      const values = buildValues(spec, storedSlots, text, bool, classRefs);
+      const values = buildValues(storedSlots, text, bool, classRefs);
       await onSubmit({ newCanonicalId: vals.newCanonicalId.trim(), values });
     } catch (e) {
       setSubmitErr(String((e as Error).message ?? e));
@@ -103,7 +104,6 @@ export default function AddForm({ spec, className, onSubmit }: Props) {
           <Label required={slot.required}>{slot.name}</Label>
           <SlotInput
             slot={slot}
-            spec={spec}
             text={text[slot.name] ?? ""}
             bool={bool[slot.name] ?? false}
             classRef={classRefs[slot.name] ?? ""}
@@ -127,7 +127,6 @@ export default function AddForm({ spec, className, onSubmit }: Props) {
 
 function SlotInput({
   slot,
-  spec,
   text,
   bool,
   classRef,
@@ -136,7 +135,6 @@ function SlotInput({
   setClassRef,
 }: {
   slot: SpecSlot;
-  spec: PublishedSpec;
   text: string;
   bool: boolean;
   classRef: string;
@@ -144,8 +142,8 @@ function SlotInput({
   setBool: (v: boolean) => void;
   setClassRef: (v: string) => void;
 }) {
-  if (slot.rangeKind === "class" && slot.rangeName) {
-    if (slot.multivalued) {
+  if (isClassKind(slot.typeKind) && slot.typeName) {
+    if (isArrayKind(slot.typeKind)) {
       return (
         <textarea
           value={text}
@@ -157,15 +155,15 @@ function SlotInput({
     }
     return (
       <CanonicalIdPicker
-        className={slot.rangeName}
+        className={slot.typeName}
         value={classRef}
         onChange={setClassRef}
       />
     );
   }
 
-  const baseType = baseTypeFor(spec, slot);
-  if (baseType === "boolean" && !slot.multivalued) {
+  const baseType = baseTypeFor(slot);
+  if (baseType === "boolean" && !isArrayKind(slot.typeKind)) {
     return (
       <label className="flex items-center gap-2 text-sm text-slate-700">
         <input
@@ -177,7 +175,7 @@ function SlotInput({
       </label>
     );
   }
-  if (slot.multivalued) {
+  if (isArrayKind(slot.typeKind)) {
     return (
       <textarea
         value={text}
@@ -206,22 +204,18 @@ function SlotInput({
   );
 }
 
-function baseTypeFor(spec: PublishedSpec, slot: SpecSlot): string {
-  if (slot.rangeKind !== "type" || !slot.rangeName) return "string";
-  let cur: string | null = slot.rangeName;
-  for (let i = 0; i < 8 && cur; i++) {
-    if (["string", "integer", "float", "boolean", "date", "datetime"].includes(cur)) {
-      return cur;
-    }
-    const t = spec.types.find((x) => x.name === cur);
-    if (!t) break;
-    cur = t.base;
-  }
+/**
+ * Walk typeName to find the base primitive. Since types are now language-level
+ * (no spec.types lookup), we just check if typeName is directly a builtin.
+ */
+function baseTypeFor(slot: SpecSlot): string {
+  if (!isPrimitiveKind(slot.typeKind) || !slot.typeName) return "string";
+  const name = slot.typeName.toLowerCase();
+  if (BUILTIN_TYPES.has(name)) return name;
   return "string";
 }
 
 function buildValues(
-  spec: PublishedSpec,
   slots: SpecSlot[],
   text: Record<string, string>,
   bool: Record<string, boolean>,
@@ -229,8 +223,8 @@ function buildValues(
 ): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const slot of slots) {
-    if (slot.rangeKind === "class") {
-      if (slot.multivalued) {
+    if (isClassKind(slot.typeKind)) {
+      if (isArrayKind(slot.typeKind)) {
         const t = text[slot.name];
         if (t == null || !t.trim()) continue;
         const ids = t
@@ -244,14 +238,14 @@ function buildValues(
       }
       continue;
     }
-    const baseType = baseTypeFor(spec, slot);
-    if (baseType === "boolean" && !slot.multivalued) {
+    const baseType = baseTypeFor(slot);
+    if (baseType === "boolean" && !isArrayKind(slot.typeKind)) {
       // Booleans are always present in the bool map; only emit if the user
       // explicitly checked it — leaving blank means "skip this slot".
       if (slot.name in bool) out[slot.name] = bool[slot.name];
       continue;
     }
-    if (slot.multivalued) {
+    if (isArrayKind(slot.typeKind)) {
       const t = text[slot.name];
       if (t == null || !t.trim()) continue;
       const parts = t.split(",").map((s) => s.trim()).filter(Boolean);

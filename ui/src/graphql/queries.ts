@@ -11,25 +11,18 @@ export const PUBLISHED_SPEC = gql`
       version
       revision
       contentHash
-      types {
-        name
-        base
-        pattern
-        description
-      }
       slots {
         name
         identifier
         required
-        multivalued
         description
         pattern
         minimumValue
         maximumValue
         permissibleValues
         resolutionPolicy
-        rangeKind
-        rangeName
+        typeKind
+        typeName
       }
       classes {
         name
@@ -44,6 +37,7 @@ export const PUBLISHED_SPEC = gql`
         entityClassName
         identifierSlotName
         description
+        trustScore
       }
       constraints {
         name

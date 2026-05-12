@@ -9,6 +9,7 @@ import type {
 import { slotHandleId } from "../../lib/buildDataGraph";
 import type { ContributionRow } from "../../lib/dataApi";
 import type { SpecSlot } from "../../types/spec";
+import { isArrayKind, isClassKind } from "../../types/spec";
 import ActionMenu from "../corrections/ActionMenu";
 
 /**
@@ -38,10 +39,10 @@ export default function EntityCard({
   const ring = selected ? "ring-2 ring-blue-500" : "";
   const opacity = tombstoned ? "opacity-60" : "";
   // Slots that should appear on the card: all stored slots of the class.
-  // Derived slots have rangeKind=null and never get a value back from
+  // Derived slots have typeKind=null and never get a value back from
   // either the resolved view or contributions, so we skip them.
   const storedSlots = useMemo(
-    () => slots.filter((s) => s.rangeKind !== null),
+    () => slots.filter((s) => s.typeKind !== null),
     [slots],
   );
 
@@ -139,7 +140,7 @@ function ResolvedRow({
   value: unknown;
   loading: boolean;
 }) {
-  const isClassRange = slot.rangeKind === "class";
+  const isClassRange = isClassKind(slot.typeKind);
   const icon = slot.identifier ? "◆" : isClassRange ? "→" : "◇";
   // The card prominently shows ID slots; render others slightly muted.
   const nameTone = slot.identifier ? "text-slate-900 font-semibold" : "text-slate-800";
@@ -190,8 +191,8 @@ function ResolvedValue({
   if (value === undefined || value === null) {
     return <span className="font-mono text-slate-400 italic">—</span>;
   }
-  if (slot.rangeKind === "class") {
-    const arr = slot.multivalued
+  if (isClassKind(slot.typeKind)) {
+    const arr = isArrayKind(slot.typeKind)
       ? (Array.isArray(value) ? value : []).map((v) => String(v))
       : [String(value)];
     return (
@@ -208,7 +209,7 @@ function ResolvedValue({
       </span>
     );
   }
-  if (slot.multivalued && Array.isArray(value)) {
+  if (isArrayKind(slot.typeKind) && Array.isArray(value)) {
     return (
       <span
         className="font-mono text-slate-700 truncate max-w-[170px]"

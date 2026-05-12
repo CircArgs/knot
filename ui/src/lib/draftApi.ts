@@ -12,13 +12,12 @@
 
 import type {
   PublishedSpec,
-  RangeKind,
   Severity,
+  SlotTypeKind,
   SpecClass,
   SpecConstraint,
   SpecSlot,
   SpecSource,
-  SpecType,
 } from "../types/spec";
 
 export class ApiError extends Error {
@@ -120,14 +119,14 @@ export async function getDraftSpec(id: number): Promise<PublishedSpec> {
  * Convert the cycle-safe spec_to_dict payload to the flat GraphQL-shape used
  * by the UI. References are dereferenced via `$uid` -> first definition.
  *
- * The payload's slot ranges are inline `{$kind: TypeDefinition | OntologyClass}`
- * objects (or `$ref` placeholders); we flatten to `rangeKind` + `rangeName`.
+ * The payload's slot type is encoded as (type_kind, type_name) on each slot
+ * object — same shape as the REST `/spec/published/slots` and GraphQL endpoints.
  */
 export function normalizeDraftSpec(
   raw: Record<string, any>,
   override: { revision?: number; contentHash?: string } = {},
 ): PublishedSpec {
-  // Build uid -> name map across types/slots/classes for $ref resolution.
+  // Build uid -> name map across slots/classes for $ref resolution.
   const uidNames = new Map<number, string>();
   const walkForNames = (node: unknown) => {
     if (!node) return;
@@ -152,37 +151,13 @@ export function normalizeDraftSpec(
     return null;
   };
 
-  const types: SpecType[] = (raw.types ?? []).map(
-    (t: Record<string, any>): SpecType => ({
-      name: t.name,
-      base: t.base ?? null,
-      pattern: t.pattern ?? null,
-      description: t.description ?? null,
-    }),
-  );
-
   const slots: SpecSlot[] = (raw.slots ?? []).map(
     (s: Record<string, any>): SpecSlot => {
-      let rangeKind: RangeKind = null;
-      let rangeName: string | null = null;
-      if (s.range) {
-        const r = s.range as Record<string, any>;
-        const refKind = r.$kind;
-        if (refKind === "TypeDefinition") {
-          rangeKind = "type";
-        } else if (refKind === "OntologyClass") {
-          rangeKind = "class";
-        } else if (refKind === undefined && typeof r.$ref === "number") {
-          // Pure $ref — kind not encoded; infer from name overlap.
-          const n = uidNames.get(r.$ref);
-          if (n) {
-            rangeName = n;
-            if (types.some((t) => t.name === n)) rangeKind = "type";
-            else rangeKind = "class";
-          }
-        }
-        if (rangeKind && rangeName == null) rangeName = resolveName(r);
-      }
+      // The spec_to_dict payload encodes TypeExpression inline on the slot:
+      // type_kind and type_name are top-level fields (mirrors the REST summary).
+      // If they're absent (older payload), fall back gracefully to null.
+      const typeKind: SlotTypeKind = s.type_kind ?? null;
+      const typeName: string | null = s.type_name ?? null;
       const permVals = (s.permissible_values ?? []).map((pv: any) =>
         typeof pv === "string" ? pv : pv?.text ?? String(pv?.value ?? ""),
       );
@@ -190,15 +165,14 @@ export function normalizeDraftSpec(
         name: s.name,
         identifier: !!s.identifier,
         required: !!s.required,
-        multivalued: !!s.multivalued,
         description: s.description ?? null,
         pattern: s.pattern ?? null,
         minimumValue: s.minimum_value ?? null,
         maximumValue: s.maximum_value ?? null,
         permissibleValues: permVals,
         resolutionPolicy: s.resolution_policy ?? "argmax_trust",
-        rangeKind,
-        rangeName,
+        typeKind,
+        typeName,
       };
     },
   );
@@ -220,6 +194,7 @@ export function normalizeDraftSpec(
       entityClassName: resolveName(src.entity_class) ?? "",
       identifierSlotName: resolveName(src.identifier_slot) ?? "",
       description: src.description ?? null,
+      trustScore: src.trust_score ?? 1.0,
     }),
   );
 
@@ -237,7 +212,6 @@ export function normalizeDraftSpec(
     version: raw.version ?? "",
     revision: override.revision ?? 0,
     contentHash: override.contentHash ?? "",
-    types,
     slots,
     classes,
     sources,
@@ -247,19 +221,12 @@ export function normalizeDraftSpec(
 
 // ─── Add / patch / delete ───────────────────────────────────────────────────
 
-export interface TypeCreate {
-  name: string;
-  base?: string | null;
-  pattern?: string | null;
-  description?: string | null;
-}
 export interface SlotCreate {
   name: string;
-  range_kind?: RangeKind;
-  range_name?: string | null;
+  type_kind?: SlotTypeKind;
+  type_name?: string | null;
   identifier?: boolean;
   required?: boolean;
-  multivalued?: boolean;
   resolution_policy?: string;
   pattern?: string | null;
   minimum_value?: number | null;
@@ -298,12 +265,6 @@ export interface ConstraintCreate {
   message?: string | null;
 }
 
-export const addType = (id: number, body: TypeCreate) =>
-  request<MutationResponse>(`/spec/drafts/${id}/types`, {
-    method: "POST",
-    body: JSON.stringify(body),
-  });
-
 export const addSlot = (id: number, body: SlotCreate) =>
   request<MutationResponse>(`/spec/drafts/${id}/slots`, {
     method: "POST",
@@ -333,9 +294,6 @@ export const addConstraint = (id: number, body: ConstraintCreate) =>
     method: "POST",
     body: JSON.stringify(body),
   });
-
-export const deleteType = (id: number, name: string) =>
-  request<MutationResponse>(`/spec/drafts/${id}/types/${name}`, { method: "DELETE" });
 
 export const deleteSlot = (id: number, name: string) =>
   request<MutationResponse>(`/spec/drafts/${id}/slots/${name}`, { method: "DELETE" });

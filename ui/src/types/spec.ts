@@ -6,29 +6,27 @@
  * `knot.api.spec` request/response shapes.
  */
 
-export interface SpecType {
-  name: string;
-  base: string | null;
-  pattern: string | null;
-  description: string | null;
-}
+export type SlotTypeKind =
+  | "primitive"
+  | "class"
+  | "array_of_primitive"
+  | "array_of_class"
+  | null;
 
-export type RangeKind = "type" | "class" | null;
 export type ResolutionPolicy = "argmax_trust" | "posterior_mean" | "lcb";
 
 export interface SpecSlot {
   name: string;
   identifier: boolean;
   required: boolean;
-  multivalued: boolean;
   description: string | null;
   pattern: string | null;
   minimumValue: number | null;
   maximumValue: number | null;
   permissibleValues: string[];
   resolutionPolicy: ResolutionPolicy | string;
-  rangeKind: RangeKind;
-  rangeName: string | null;
+  typeKind: SlotTypeKind;
+  typeName: string | null;
 }
 
 export interface SpecClass {
@@ -45,6 +43,7 @@ export interface SpecSource {
   entityClassName: string;
   identifierSlotName: string;
   description: string | null;
+  trustScore: number;
 }
 
 export type Severity = "error" | "warning";
@@ -61,7 +60,6 @@ export interface PublishedSpec {
   version: string;
   revision: number;
   contentHash: string;
-  types: SpecType[];
   slots: SpecSlot[];
   classes: SpecClass[];
   sources: SpecSource[];
@@ -73,7 +71,6 @@ export interface PublishedSpec {
  * Carried as React Flow `node.data.entity` so panels/forms can switch on `kind`.
  */
 export type SpecEntity =
-  | { kind: "type"; value: SpecType }
   | { kind: "slot"; value: SpecSlot }
   | { kind: "class"; value: SpecClass }
   | { kind: "source"; value: SpecSource }
@@ -81,7 +78,7 @@ export type SpecEntity =
 
 export type SpecEntityKind = SpecEntity["kind"];
 
-/** Names of the six standard primitive types auto-seeded by the base spec. */
+/** Names of the six standard primitive types — language-level builtins, not spec data. */
 export const BUILTIN_TYPES = new Set([
   "string",
   "integer",
@@ -90,3 +87,27 @@ export const BUILTIN_TYPES = new Set([
   "datetime",
   "date",
 ]);
+
+/**
+ * Returns true when the slot's typeKind is one of the array variants.
+ * Equivalent to the old `slot.multivalued`.
+ */
+export function isArrayKind(typeKind: SlotTypeKind): boolean {
+  return typeKind === "array_of_primitive" || typeKind === "array_of_class";
+}
+
+/**
+ * Returns true when the slot's typeKind targets a primitive type.
+ * Equivalent to the old `slot.rangeKind === "type"`.
+ */
+export function isPrimitiveKind(typeKind: SlotTypeKind): boolean {
+  return typeKind === "primitive" || typeKind === "array_of_primitive";
+}
+
+/**
+ * Returns true when the slot's typeKind targets a class.
+ * Equivalent to the old `slot.rangeKind === "class"`.
+ */
+export function isClassKind(typeKind: SlotTypeKind): boolean {
+  return typeKind === "class" || typeKind === "array_of_class";
+}

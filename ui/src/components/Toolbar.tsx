@@ -7,10 +7,6 @@ interface Props {
   draftRevision: number | null;
   onToggleMode: () => void;
   onRefetch: () => void;
-  showOntologyDetails: boolean;
-  onToggleOntologyDetails: () => void;
-  includeBuiltins: boolean;
-  onToggleBuiltins: () => void;
   onAdd?: (kind: AddKind) => void;
   onPublish?: () => void;
   onDiscard?: () => void;
@@ -18,7 +14,6 @@ interface Props {
 }
 
 const KIND_LABELS: Record<AddKind, string> = {
-  type: "Type",
   slot: "Slot",
   class: "Class",
   source: "Source",
@@ -30,10 +25,6 @@ export default function Toolbar({
   draftRevision,
   onToggleMode,
   onRefetch,
-  showOntologyDetails,
-  onToggleOntologyDetails,
-  includeBuiltins,
-  onToggleBuiltins,
   onAdd,
   onPublish,
   onDiscard,
@@ -61,26 +52,6 @@ export default function Toolbar({
       >
         ↻
       </button>
-
-      <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
-        <input
-          type="checkbox"
-          checked={showOntologyDetails}
-          onChange={onToggleOntologyDetails}
-        />
-        show ontology details
-      </label>
-
-      {showOntologyDetails && (
-        <label className="flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={includeBuiltins}
-            onChange={onToggleBuiltins}
-          />
-          include built-in primitives
-        </label>
-      )}
 
       {editing && onAdd && (
         <>

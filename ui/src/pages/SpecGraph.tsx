@@ -16,22 +16,17 @@ import toast, { Toaster } from "react-hot-toast";
 import { useNavigate, useParams } from "react-router-dom";
 
 import ClassNode from "../components/nodes/ClassNode";
-import ConstraintNode from "../components/nodes/ConstraintNode";
 import Legend from "../components/Legend";
 import Modal from "../components/Modal";
 import PropertyPanel, {
   resolveSelection,
   type SpecSelection,
 } from "../components/PropertyPanel";
-import SlotNode from "../components/nodes/SlotNode";
-import SourceNode from "../components/nodes/SourceNode";
 import Toolbar, { type AddKind } from "../components/Toolbar";
-import TypeNode from "../components/nodes/TypeNode";
 import ClassForm from "../components/forms/ClassForm";
 import ConstraintForm from "../components/forms/ConstraintForm";
 import SlotForm from "../components/forms/SlotForm";
 import SourceForm from "../components/forms/SourceForm";
-import TypeForm from "../components/forms/TypeForm";
 import { PUBLISHED_SPEC } from "../graphql/queries";
 import {
   buildGraph,
@@ -44,15 +39,12 @@ import * as api from "../lib/draftApi";
 import { ApiError, normalizeDraftSpec } from "../lib/draftApi";
 import { autoDetach, editEntityViaDeleteAdd } from "../lib/draftHelpers";
 import { layoutGraph } from "../lib/layout";
-import { useLocalStorage } from "../lib/useLocalStorage";
 import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
 
+// Only Class is rendered as a node now — slots, sources, and constraints
+// live inline inside the class card.
 const NODE_TYPES = {
-  specType: TypeNode,
-  specSlot: SlotNode,
   specClass: ClassNode,
-  specSource: SourceNode,
-  specConstraint: ConstraintNode,
 };
 
 interface QueryResult {
@@ -65,11 +57,6 @@ export default function SpecGraph() {
   const draftId = draftIdParam ? Number(draftIdParam) : null;
   const mode: "view" | "edit" = draftId !== null ? "edit" : "view";
 
-  const [showOntologyDetails, setShowOntologyDetails] = useLocalStorage(
-    "knot:show-ontology-details",
-    false,
-  );
-  const [includeBuiltins, setIncludeBuiltins] = useState(true);
   const [selection, setSelection] = useState<SpecSelection | null>(null);
   const [nodes, setNodes] = useState<SpecNode[]>([]);
   const [edges, setEdges] = useState<SpecEdge[]>([]);
@@ -118,14 +105,11 @@ export default function SpecGraph() {
       setEdges([]);
       return;
     }
-    const { nodes: ns, edges: es } = buildGraph(spec, {
-      includeBuiltinTypes: includeBuiltins,
-      showOntologyDetails,
-    });
+    const { nodes: ns, edges: es } = buildGraph(spec);
     // Inject onSelect into class-card data so slot rows / chips can dispatch
     // selection without bubbling through React Flow's node-click handler.
     const withHandlers = ns.map((n) =>
-      n.data.entity.kind === "class" && !showOntologyDetails
+      n.data.entity.kind === "class"
         ? { ...n, data: { ...n.data, onSelect: setSelection } }
         : n,
     );
@@ -134,14 +118,7 @@ export default function SpecGraph() {
       const saved = positionsRef.current[n.id];
       return saved ? { ...n, position: saved } : n;
     });
-    // Class cards are wider + taller than the old generic nodes; use bigger
-    // sizing inputs so elk leaves enough room between layers. Details mode
-    // gets a moderate bump so the class card (which now carries a compact
-    // slot-name list + source/constraint name lists) doesn't visually
-    // overlap its `has` edges to standalone slot nodes.
-    const sizing = showOntologyDetails
-      ? { width: 240, height: 160 }
-      : { width: 300, height: 220 };
+    const sizing = { width: 300, height: 220 };
     layoutGraph(preserved, es, sizing).then((laid) => {
       if (cancelled) return;
       const merged = laid.map((n) => {
@@ -155,7 +132,7 @@ export default function SpecGraph() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spec, includeBuiltins, showOntologyDetails]);
+  }, [spec]);
 
   // ── React Flow change handlers ────────────────────────────────────────────
   const onNodesChange = useCallback((changes: NodeChange[]) => {
@@ -280,8 +257,6 @@ export default function SpecGraph() {
       if (!ok) return;
       const attempt = async () => {
         switch (entity.kind) {
-          case "type":
-            return api.deleteType(draftId, name);
           case "slot":
             return api.deleteSlot(draftId, name);
           case "class":
@@ -307,7 +282,7 @@ export default function SpecGraph() {
             await autoDetach(
               draftId,
               spec,
-              entity.kind as "class" | "slot" | "type" | "source" | "constraint",
+              entity.kind as "class" | "slot" | "source" | "constraint",
               name,
             );
             await attempt();
@@ -374,21 +349,13 @@ export default function SpecGraph() {
       if (draftId === null || !spec) return;
       const performAdd = async () => {
         switch (kind) {
-          case "type":
-            return api.addType(draftId, {
-              name: vals.name,
-              base: vals.base || null,
-              pattern: vals.pattern || null,
-              description: vals.description || null,
-            });
           case "slot":
             return api.addSlot(draftId, {
               name: vals.name,
-              range_kind: vals.rangeKind || null,
-              range_name: vals.rangeName || null,
+              type_kind: vals.typeKind || null,
+              type_name: vals.typeName || null,
               identifier: vals.identifier,
               required: vals.required,
-              multivalued: vals.multivalued,
               resolution_policy: vals.resolutionPolicy,
               pattern: vals.pattern || null,
               minimum_value: vals.minimumValue ? Number(vals.minimumValue) : null,
@@ -449,7 +416,7 @@ export default function SpecGraph() {
           await editEntityViaDeleteAdd(
             draftId,
             spec,
-            kind as "type" | "slot" | "source" | "constraint",
+            kind as "slot" | "source" | "constraint",
             editing.value.name,
             performAdd,
           );
@@ -483,10 +450,6 @@ export default function SpecGraph() {
         draftRevision={draftId}
         onToggleMode={onToggleMode}
         onRefetch={() => (mode === "view" ? publishedQ.refetch() : reloadDraft())}
-        showOntologyDetails={showOntologyDetails}
-        onToggleOntologyDetails={() => setShowOntologyDetails((b) => !b)}
-        includeBuiltins={includeBuiltins}
-        onToggleBuiltins={() => setIncludeBuiltins((b) => !b)}
         onAdd={handleAdd}
         onPublish={onPublish}
         onDiscard={onDiscard}
@@ -519,7 +482,7 @@ export default function SpecGraph() {
             <Background gap={20} />
             <Controls />
           </ReactFlow>
-          <Legend mode={showOntologyDetails ? "details" : "class-card"} />
+          <Legend />
         </div>
         <PropertyPanel
           selection={selection}
@@ -566,14 +529,6 @@ function renderForm(
   onSubmit: (vals: any) => Promise<void>,
 ) {
   switch (kind) {
-    case "type":
-      return (
-        <TypeForm
-          initial={editing?.kind === "type" ? editing.value : undefined}
-          lockName={!!editing}
-          onSubmit={onSubmit}
-        />
-      );
     case "slot":
       return (
         <SlotForm
@@ -636,20 +591,16 @@ async function applyConnection(
     });
     return;
   }
-  // Slot → Type / Class (range): delete + add slot with new range.
-  if (
-    src.kind === "slot" &&
-    (tgt.kind === "type" || tgt.kind === "class")
-  ) {
+  // Slot → Class (range): delete + add slot with new class range.
+  if (src.kind === "slot" && tgt.kind === "class") {
     const slot = src.value;
     await editEntityViaDeleteAdd(draftId, spec, "slot", slot.name, async () => {
       await api.addSlot(draftId, {
         name: slot.name,
-        range_kind: tgt.kind,
-        range_name: tgt.value.name,
+        type_kind: "class",
+        type_name: tgt.value.name,
         identifier: slot.identifier,
         required: slot.required,
-        multivalued: slot.multivalued,
         resolution_policy: String(slot.resolutionPolicy),
         pattern: slot.pattern,
         minimum_value: slot.minimumValue,
