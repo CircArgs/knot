@@ -244,7 +244,9 @@ async def ingest_rows(
         #    and filtered to rows whose _knot_row_id is in the batch, so
         #    pre-existing violating rows don't taint the new batch.
         error_violations: list[dict[str, Any]] = []
-        relevant = [c for c in spec.constraints if c.primary.name == cls.name]
+        from knot.spec.effective_constraints import effective_constraints
+
+        relevant = effective_constraints(cls, spec)
         if relevant:
             from knot.spec.compile.postgres._context import CompileContext
             from knot.spec.compile.postgres._naming import bindings_table_id, table_id

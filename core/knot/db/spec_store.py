@@ -734,11 +734,13 @@ async def evaluate_gates(
     The ``run_preflight`` flag can be set False for unit tests or contexts
     where the data plane isn't yet set up.
     """
+    from knot.spec import effective_constraints
     from knot.spec.compile.postgres import compile_constraint
     from knot.spec.compile.postgres.migration import (
         diff_specs,
         is_destructive,
     )
+    from knot.spec.metaschema import DefinedClass, OntologyClass
 
     candidate = await get_revision(conn, draft_id)
     publish_gate(candidate)
@@ -768,59 +770,76 @@ async def evaluate_gates(
         )
 
     # Constraint gate.
+    #
+    # Inheritance: a constraint with primary=MediaItem (abstract) revalidates
+    # against every concrete descendant (Movie, TVSeries, Episode) — we walk
+    # the is_a + mixin chain via effective_constraints(cls, candidate).
+    #
+    # New/changed-only: skip constraints whose canonical hash matches the
+    # previously-published copy AND whose primary class existed in the prev
+    # spec (so existing data has already been validated against this rule).
     prev_class_names: set[str] = {c.name for c in (prev.classes if prev else [])}
     prev_constraint_hashes: dict[str, str] = {}
     if prev:
         for con in prev.constraints:
             prev_constraint_hashes[con.name] = compute_content_hash(con)
 
-    defined_class_names: set[str] = {
-        c.name for c in candidate.classes if getattr(c, "definition", None) is not None
-    }
+    cand_cls_map = {c.name: c for c in candidate.classes}
 
-    for con in candidate.constraints:
-        cand_hash = compute_content_hash(con)
-        prev_hash = prev_constraint_hashes.get(con.name)
-        if cand_hash == prev_hash:
+    for cand_cls in candidate.classes:
+        # Only concrete OntologyClasses have stored rows to revalidate against.
+        if isinstance(cand_cls, DefinedClass):
             continue
-        if con.primary.name not in prev_class_names:
+        if not isinstance(cand_cls, OntologyClass) or cand_cls.abstract:
             continue
-        if con.primary.name in defined_class_names:
-            continue
+        if cand_cls.name not in prev_class_names:
+            continue  # brand-new class — no existing rows yet
 
-        cls = con.primary
-        cand_cls_map = {c.name: c for c in candidate.classes}
-        stmt, params = compile_constraint(con, cls, classes_by_name=cand_cls_map)
-        try:
-            violations = await (await conn.execute(stmt, params)).fetchall()
-        except Exception as exc:
-            blockers.append(
-                {
-                    "kind": "constraint_sql_error",
-                    "constraint": con.name,
-                    "detail": str(exc),
-                }
-            )
-            continue
+        for con in effective_constraints(cand_cls, candidate):
+            cand_hash = compute_content_hash(con)
+            prev_hash = prev_constraint_hashes.get(con.name)
+            # Skip only if the rule is unchanged AND its primary already
+            # existed (so previously-published data was validated under
+            # this rule). A new descendant inheriting an existing rule
+            # still needs validation, but that's handled by the
+            # cand_cls.name not in prev_class_names short-circuit above.
+            if cand_hash == prev_hash and con.primary.name in prev_class_names:
+                continue
 
-        if violations:
-            n = len(violations)
-            if con.severity.value == "error":
+            stmt, params = compile_constraint(con, cand_cls, classes_by_name=cand_cls_map)
+            try:
+                violations = await (await conn.execute(stmt, params)).fetchall()
+            except Exception as exc:
                 blockers.append(
                     {
-                        "kind": "constraint_violation",
+                        "kind": "constraint_sql_error",
                         "constraint": con.name,
-                        "count": n,
-                        "severity": "error",
+                        "class": cand_cls.name,
+                        "detail": str(exc),
                     }
                 )
-            else:
-                logger.warning(
-                    "Constraint %r has %d violation(s) against existing data "
-                    "(severity=WARNING); publishing anyway.",
-                    con.name,
-                    n,
-                )
+                continue
+
+            if violations:
+                n = len(violations)
+                if con.severity.value == "error":
+                    blockers.append(
+                        {
+                            "kind": "constraint_violation",
+                            "constraint": con.name,
+                            "class": cand_cls.name,
+                            "count": n,
+                            "severity": "error",
+                        }
+                    )
+                else:
+                    logger.warning(
+                        "Constraint %r has %d violation(s) on class %r "
+                        "(severity=WARNING); publishing anyway.",
+                        con.name,
+                        n,
+                        cand_cls.name,
+                    )
 
     # Pre-flight checks.
     if run_preflight:

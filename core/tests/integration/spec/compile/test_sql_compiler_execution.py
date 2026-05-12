@@ -282,3 +282,132 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     # Should not raise.
     result = await publish_draft(conn, rev2)
     assert result == rev2
+
+
+# ---------------------------------------------------------------------------
+# Constraint inheritance: a constraint on an abstract parent fires against
+# every concrete descendant's stored rows.
+# ---------------------------------------------------------------------------
+
+
+async def test_publish_gate_inherits_constraint_from_parent(clean_db):
+    """Constraint on abstract MediaItem must revalidate rows in concrete Movie.
+
+    v1: MediaItem (abstract, owns ``year``), Movie is_a MediaItem — no
+    constraints. Ingest a row into Movie with year=1800.
+    v2: add ``year_gte_1888`` constraint with primary=MediaItem. The publish
+    gate must walk the is_a chain, find that Movie inherits the rule, run
+    it against Movie's table, and block on the violating row.
+    """
+    conn = clean_db
+
+    imdb_id_slot = Slot(
+        name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+    )
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    media = OntologyClass(
+        name="MediaItem", kind="abstract", slots=[imdb_id_slot, year_slot]
+    )
+    movie = OntologyClass(name="Movie", is_a=media)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
+
+    # v1: no constraints.
+    spec_v1 = Spec(
+        id="test",
+        version="1.0.0",
+        classes=[media, movie],
+        sources=[src],
+        source_bindings=[binding],
+    )
+    rev1 = await create_draft(conn)
+    await update_draft(conn, rev1, spec_v1)
+    await publish_draft(conn, rev1)
+
+    # Ingest a violating row into Movie (year < 1888).
+    from knot.db.graph_store import insert_rows
+
+    await insert_rows(
+        conn,
+        source=src,
+        cls=movie,
+        spec_revision=rev1,
+        rows=[{"imdb_id": "tt0000001", "year": 1800}],
+        canonical_ids=["tt0000001"],
+    )
+
+    # v2: add the constraint on the abstract PARENT.
+    constraint = Constraint(
+        name="year_gte_1888",
+        primary=media,
+        body="year >= 1888",
+        severity=Severity.ERROR,
+    )
+    spec_v2 = Spec(
+        id="test",
+        version="1.0.0",
+        classes=[media, movie],
+        sources=[src],
+        source_bindings=[binding],
+        constraints=[constraint],
+    )
+    rev2 = await create_draft(conn)
+    await update_draft(conn, rev2, spec_v2)
+
+    # Publish must block — Movie inherits the rule via is_a.
+    with pytest.raises(PublishGateError, match="year_gte_1888"):
+        await publish_draft(conn, rev2)
+
+
+async def test_ingest_inherits_constraint_from_parent(clean_db):
+    """Ingest into Movie must apply the parent's constraint.
+
+    Spec has the constraint on MediaItem from the start; ingesting a
+    violating row into Movie must trigger the error-severity block.
+    """
+    from knot.graph.ingest import ConstraintViolations, ingest_rows
+
+    conn = clean_db
+
+    imdb_id_slot = Slot(
+        name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+    )
+    year_slot = Slot(name="year", type=Primitive(name="integer"))
+    media = OntologyClass(
+        name="MediaItem", kind="abstract", slots=[imdb_id_slot, year_slot]
+    )
+    movie = OntologyClass(name="Movie", is_a=media)
+    src = Source(name="imdb")
+    binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
+    constraint = Constraint(
+        name="year_gte_1888",
+        primary=media,
+        body="year >= 1888",
+        severity=Severity.ERROR,
+    )
+    spec = Spec(
+        id="test",
+        version="1.0.0",
+        classes=[media, movie],
+        sources=[src],
+        source_bindings=[binding],
+        constraints=[constraint],
+    )
+
+    rev = await create_draft(conn)
+    await update_draft(conn, rev, spec)
+    await publish_draft(conn, rev)
+
+    # Ingest a violating row. The constraint is on the parent; ingest
+    # walks the is_a chain via effective_constraints and triggers a
+    # ConstraintViolations rollback.
+    with pytest.raises(ConstraintViolations) as ex:
+        await ingest_rows(
+            conn=conn,
+            binding=binding,
+            spec=spec,
+            spec_revision=rev,
+            rows=[{"imdb_id": "tt0000001", "year": 1800}],
+            batch_id="batch-1",
+        )
+    assert any(v["rule_id"] == "year_gte_1888" for v in ex.value.violations)

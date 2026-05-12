@@ -6,6 +6,7 @@ and the canonical-form hasher (``canonical``) live here. Expression-tree
 """
 
 from knot.spec.canonical import canonical_dump, compute_content_hash
+from knot.spec.effective_constraints import effective_constraints
 from knot.spec.effective_slots import effective_slots, is_stored, stored_slot_names
 from knot.spec.errors import (
     DraftAlreadyPublishedError,
@@ -98,6 +99,8 @@ __all__ = [
     "effective_slots",
     "is_stored",
     "stored_slot_names",
+    # effective-constraint helpers (walks is_a + mixin chain)
+    "effective_constraints",
     # errors
     "DraftAlreadyPublishedError",
     "DraftNotFoundError",

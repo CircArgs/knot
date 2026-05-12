@@ -37,49 +37,56 @@ async def check_all_constraints(conn: psycopg.AsyncConnection, spec: Spec) -> li
     ``'execute failure: ...'``) so operators can see the broken rule rather
     than silently getting zero violations.
     """
+    from knot.spec import effective_constraints
     from knot.spec.compile.postgres import compile_constraint
+    from knot.spec.metaschema import DefinedClass
 
     violations: list[ViolationRow] = []
-    classes_by_name = {c.name: c for c in spec.classes}
 
-    for constraint in spec.constraints:
-        cls = classes_by_name.get(constraint.primary.name)
-        if cls is None or cls.abstract:
-            continue
-        try:
-            stmt, params = compile_constraint(constraint, cls)
-        except Exception as exc:
-            violations.append(
-                ViolationRow(
-                    rule_id=constraint.name,
-                    class_name=constraint.primary.name,
-                    slot_name=None,
-                    offending_pk="*",
-                    detail=f"compile failure: {exc}",
+    # Iterate concrete classes (rows live in their tables) and run every
+    # constraint that applies — own + inherited via is_a + mixin chains.
+    # A constraint with primary=MediaItem fires once per concrete descendant
+    # (Movie, TVSeries, Episode) against that descendant's table.
+    for cls in spec.classes:
+        if isinstance(cls, DefinedClass):
+            continue  # backed by a VIEW — descendants run the underlying check
+        if cls.abstract:
+            continue  # no rows stored
+        for constraint in effective_constraints(cls, spec):
+            try:
+                stmt, params = compile_constraint(constraint, cls)
+            except Exception as exc:
+                violations.append(
+                    ViolationRow(
+                        rule_id=constraint.name,
+                        class_name=cls.name,
+                        slot_name=None,
+                        offending_pk="*",
+                        detail=f"compile failure: {exc}",
+                    )
                 )
-            )
-            continue
-        try:
-            rows = await (await conn.execute(stmt, params)).fetchall()
-        except Exception as exc:
-            violations.append(
-                ViolationRow(
-                    rule_id=constraint.name,
-                    class_name=constraint.primary.name,
-                    slot_name=None,
-                    offending_pk="*",
-                    detail=f"execute failure: {exc}",
+                continue
+            try:
+                rows = await (await conn.execute(stmt, params)).fetchall()
+            except Exception as exc:
+                violations.append(
+                    ViolationRow(
+                        rule_id=constraint.name,
+                        class_name=cls.name,
+                        slot_name=None,
+                        offending_pk="*",
+                        detail=f"execute failure: {exc}",
+                    )
                 )
-            )
-            continue
-        for row in rows:
-            violations.append(
-                ViolationRow(
-                    rule_id=row[0],
-                    class_name=row[1],
-                    slot_name=row[2],
-                    offending_pk=str(row[3]),
-                    detail=row[4] or "",
+                continue
+            for row in rows:
+                violations.append(
+                    ViolationRow(
+                        rule_id=row[0],
+                        class_name=row[1],
+                        slot_name=row[2],
+                        offending_pk=str(row[3]),
+                        detail=row[4] or "",
+                    )
                 )
-            )
     return violations
