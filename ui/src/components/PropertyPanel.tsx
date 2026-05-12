@@ -1,4 +1,11 @@
+import { useEffect, useRef, useState } from "react";
+
 import type { PublishedSpec, SpecEntity, SpecEntityKind } from "../types/spec";
+import { useLocalStorage } from "../lib/useLocalStorage";
+
+const MIN_WIDTH = 280;
+const MAX_WIDTH = 900;
+const DEFAULT_WIDTH = 480;
 
 /**
  * What the panel can be focused on. In the class-card view, slot rows /
@@ -21,10 +28,61 @@ interface Props {
 
 export default function PropertyPanel({ selection, spec, onClose }: Props) {
   const entity = selection && spec ? resolveSelection(spec, selection) : null;
+  const [width, setWidth] = useLocalStorage<number>(
+    "knot:property-panel:width",
+    DEFAULT_WIDTH,
+  );
+  const startRef = useRef<{ x: number; w: number } | null>(null);
+  const [dragging, setDragging] = useState(false);
+
+  useEffect(() => {
+    if (!dragging) return;
+    const onMove = (e: MouseEvent) => {
+      if (!startRef.current) return;
+      // The panel sits on the RIGHT side; dragging the left-edge handle to
+      // the LEFT (negative deltaX) should widen it.
+      const delta = startRef.current.x - e.clientX;
+      const next = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, startRef.current.w + delta));
+      setWidth(next);
+    };
+    const onUp = () => {
+      setDragging(false);
+      startRef.current = null;
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging, setWidth]);
+
+  const onDragStart = (e: React.MouseEvent) => {
+    startRef.current = { x: e.clientX, w: width };
+    setDragging(true);
+    e.preventDefault();
+  };
+
+  // Resize handle: a 4px-wide draggable strip on the left edge.
+  const dragHandle = (
+    <div
+      onMouseDown={onDragStart}
+      className={`absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-blue-300 transition-colors ${
+        dragging ? "bg-blue-400" : "bg-transparent"
+      }`}
+      title="Drag to resize"
+    />
+  );
+
+  const asideStyle = { width: `${width}px`, flexShrink: 0 } as const;
 
   if (!selection) {
     return (
-      <aside className="w-80 border-l border-slate-200 bg-white p-4 text-sm text-slate-500">
+      <aside
+        style={asideStyle}
+        className="relative border-l border-slate-200 bg-white p-4 text-sm text-slate-500"
+      >
+        {dragHandle}
         <div className="italic">
           Select a class, slot, source, or constraint to inspect its properties.
         </div>
@@ -33,7 +91,11 @@ export default function PropertyPanel({ selection, spec, onClose }: Props) {
   }
   if (!entity) {
     return (
-      <aside className="w-80 border-l border-slate-200 bg-white p-4 text-sm text-slate-500">
+      <aside
+        style={asideStyle}
+        className="relative border-l border-slate-200 bg-white p-4 text-sm text-slate-500"
+      >
+        {dragHandle}
         <div className="italic">
           {selection.kind} "{selection.name}" not found in spec.
         </div>
@@ -42,7 +104,11 @@ export default function PropertyPanel({ selection, spec, onClose }: Props) {
   }
 
   return (
-    <aside className="w-80 border-l border-slate-200 bg-white overflow-y-auto">
+    <aside
+      style={asideStyle}
+      className="relative border-l border-slate-200 bg-white overflow-y-auto"
+    >
+      {dragHandle}
       <header className="p-4 border-b border-slate-200 flex items-center justify-between sticky top-0 bg-white">
         <div>
           <div className="text-[10px] uppercase tracking-wide text-slate-500">
