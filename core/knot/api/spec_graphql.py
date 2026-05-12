@@ -116,6 +116,7 @@ class SourceBindingGQL:
 class ConstraintGQL:
     name: str
     primary_class_name: str
+    body: str
     severity: str
     message: str | None
 
@@ -218,6 +219,7 @@ def _to_constraint(c: Constraint) -> ConstraintGQL:
     return ConstraintGQL(
         name=c.name,
         primary_class_name=c.primary.name,
+        body=c.body,
         severity=severity,
         message=c.message,
     )

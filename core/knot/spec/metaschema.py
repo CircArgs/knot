@@ -568,6 +568,11 @@ class OntologyClass(SpecBase):
     `__getattr__` resolves slot names so impl authors write
     `Movie.imdb_id` rather than indexing into a slot list.  Walks the
     is_a chain + mixins to inherit slot visibility.
+
+    ``definition`` — SQL predicate string (WHERE-clause).  When set, the
+    class is a *defined class* backed by a VIEW rather than a table.
+    The VIEW selects rows from the ``is_a`` parent table that satisfy
+    the predicate.  Validated via sqlglot at publish time.
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
@@ -576,6 +581,7 @@ class OntologyClass(SpecBase):
     slots: list[Slot] = Field(default_factory=list)
     abstract: bool = False
     description: str | None = None
+    definition: str | None = None  # SQL predicate; presence makes this a defined class (VIEW)
 
     def __getattr__(self, item: str) -> Slot:
         # Pydantic and Python internals probe for sentinel attributes; raise
@@ -639,15 +645,18 @@ _sentinel_class = OntologyClass(name="__sentinel__")
 class Constraint(SpecBase):
     """Cross-row / cross-class invariant.
 
-    `body` is an expression-tree node (`Compare`, `BoolExpr`, `RelationAll`,
-    `RelationAny`) evaluated per primary row.  Knot's SQL generator emits
-    validation SQL with the uniform `(rule_id, class_name, slot_name,
-    offending_pk, detail)` shape per `spec-model.md` + `dq-design.md`.
+    ``body`` is a SQL predicate string (WHERE-clause fragment) validated via
+    sqlglot at publish time.  Knot's SQL generator emits validation SQL with
+    the uniform ``(rule_id, class_name, slot_name, offending_pk, detail)``
+    shape per the constraint spec.
+
+    Example body: ``year >= 1888``
+    Example body with ClassRef traversal: ``director IS NOT NULL``
     """
 
     name: str = Field(pattern=_ENTITY_NAME_PATTERN)
     primary: OntologyClass
-    body: Any  # BoolExpr | Compare | RelationAll | RelationAny
+    body: str  # SQL predicate validated via sqlglot
     severity: Severity = Severity.ERROR
     message: str | None = None
 
@@ -681,7 +690,7 @@ class Source(SpecBase):
 class NullSemantics(StrEnum):
     """How to interpret a NULL value from a source field."""
 
-    NO_CLAIM = "no_claim"            # NULL means "I don't know" — skip in resolution
+    NO_CLAIM = "no_claim"  # NULL means "I don't know" — skip in resolution
     ASSERTED_ABSENT = "asserted_absent"  # NULL means "I assert this has no value"
 
 

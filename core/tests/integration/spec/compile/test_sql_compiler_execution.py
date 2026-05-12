@@ -21,17 +21,11 @@ from knot.db.spec_store import (
 from knot.spec.compile.postgres import compile_constraint
 from knot.spec.errors import PublishGateError
 from knot.spec.metaschema import (
-    BoolExpr,
-    BoolOpKind,
-    Compare,
-    CompareOp,
     Constraint,
-    Literal_,
     OntologyClass,
     Primitive,
     Severity,
     Slot,
-    SlotPath,
     Source,
     SourceBinding,
     Spec,
@@ -65,31 +59,18 @@ async def test_compile_constraint_catches_violating_rows(clean_db):
     conn = clean_db
 
     # Build spec with constraint: year must be >= 1888 AND <= 2100
-    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    imdb_id_slot = Slot(
+        name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
-    body = BoolExpr(
-        op=BoolOpKind.AND,
-        operands=[
-            Compare(
-                op=CompareOp.GTE,
-                left=SlotPath(from_class=movie, slots=[year_slot]),
-                right=Literal_(value=1888),
-            ),
-            Compare(
-                op=CompareOp.LTE,
-                left=SlotPath(from_class=movie, slots=[year_slot]),
-                right=Literal_(value=2100),
-            ),
-        ],
-    )
     constraint = Constraint(
         name="year_in_range",
         primary=movie,
-        body=body,
+        body="year >= 1888 AND year <= 2100",
         severity=Severity.ERROR,
     )
     spec = Spec(
@@ -138,21 +119,18 @@ async def test_compile_constraint_no_violations(clean_db):
     """All rows valid → constraint returns zero offending rows."""
     conn = clean_db
 
-    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    imdb_id_slot = Slot(
+        name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id_slot)  # type: ignore[call-arg]
 
-    body = Compare(
-        op=CompareOp.GTE,
-        left=SlotPath(from_class=movie, slots=[year_slot]),
-        right=Literal_(value=1888),
-    )
     constraint = Constraint(
         name="year_gte_1888",
         primary=movie,
-        body=body,
+        body="year >= 1888",
         severity=Severity.ERROR,
     )
     spec = Spec(
@@ -196,7 +174,9 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     """
     conn = clean_db
 
-    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    imdb_id_slot = Slot(
+        name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
@@ -227,15 +207,10 @@ async def test_publish_gate_blocks_error_constraint_on_existing_data(clean_db):
     )
 
     # v2: add ERROR constraint that the ingested row violates.
-    body = Compare(
-        op=CompareOp.GTE,
-        left=SlotPath(from_class=movie, slots=[year_slot]),
-        right=Literal_(value=1888),
-    )
     constraint = Constraint(
         name="year_gte_1888",
         primary=movie,
-        body=body,
+        body="year >= 1888",
         severity=Severity.ERROR,
     )
     spec_v2 = Spec(
@@ -257,7 +232,9 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
     """Same setup but constraint is WARNING → publish succeeds."""
     conn = clean_db
 
-    imdb_id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+    imdb_id_slot = Slot(
+        name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     year_slot = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id_slot, year_slot])
     src = Source(name="imdb")
@@ -285,15 +262,10 @@ async def test_publish_gate_warning_constraint_allows_publish(clean_db):
         canonical_ids=["tt0000001"],
     )
 
-    body = Compare(
-        op=CompareOp.GTE,
-        left=SlotPath(from_class=movie, slots=[year_slot]),
-        right=Literal_(value=1888),
-    )
     constraint = Constraint(
         name="year_gte_1888",
         primary=movie,
-        body=body,
+        body="year >= 1888",
         severity=Severity.WARNING,  # WARNING — should not block
     )
     spec_v2 = Spec(

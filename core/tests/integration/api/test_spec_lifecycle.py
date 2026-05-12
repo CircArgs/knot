@@ -165,6 +165,7 @@ async def test_update_published_draft_raises(clean_spec):
 async def test_publish_gate_rejects_dangling_classref(clean_spec):
     """A slot whose ClassRef target is not on spec.classes fails gate."""
     from knot.spec import ClassRef
+
     orphan_class = OntologyClass(name="Orphan", slots=[])
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
     bad_slot = Slot(name="bad", type=ClassRef(target_class=orphan_class))

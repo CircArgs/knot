@@ -25,15 +25,9 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.spec import (
-    BoolExpr,
-    BoolOpKind,
-    Compare,
-    CompareOp,
     Constraint,
-    Literal_,
     OntologyClass,
     Slot,
-    SlotPath,
     Source,
     Spec,
 )
@@ -59,11 +53,7 @@ def _spec_with_unreferenced_extras() -> Spec:
     year_check = Constraint(
         name="year_positive",
         primary=movie,
-        body=Compare(
-            op=CompareOp.GTE,
-            left=SlotPath(from_class=movie, slots=[year]),
-            right=Literal_(value=0),
-        ),
+        body="year >= 0",
     )
     return Spec(
         id="test",
@@ -77,7 +67,9 @@ def _spec_with_unreferenced_extras() -> Spec:
 
 def _spec_with_class_ref() -> Spec:
     """Movie + Person where Movie.directed_by has ClassRef→Person."""
-    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_id = Slot(
+        name="person_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     person = OntologyClass(name="Person", slots=[person_id])
 
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
@@ -124,16 +116,7 @@ def _spec_with_constraint_and_class() -> Spec:
     nonneg = Constraint(
         name="year_positive",
         primary=movie,
-        body=BoolExpr(
-            op=BoolOpKind.AND,
-            operands=[
-                Compare(
-                    op=CompareOp.GTE,
-                    left=SlotPath(from_class=movie, slots=[year]),
-                    right=Literal_(value=0),
-                ),
-            ],
-        ),
+        body="year >= 0",
     )
     return Spec(
         id="test",

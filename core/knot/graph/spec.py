@@ -138,9 +138,7 @@ class ReferencedEntityError(Exception):
         self.name = name
         self.references = references
         ref_summary = ", ".join(f"{k}={n}" for k, n in references[:5])
-        super().__init__(
-            f"Cannot remove {entity_kind} {name!r} — referenced by: {ref_summary}"
-        )
+        super().__init__(f"Cannot remove {entity_kind} {name!r} — referenced by: {ref_summary}")
 
 
 class RollbackToCurrentError(Exception):
@@ -322,7 +320,7 @@ async def add_class(
     mixin_names: list[str],
     abstract: bool,
     description: str | None,
-    definition: ExprJson | None,
+    definition: str | None,
 ) -> Spec:
     """Add an OntologyClass with inline slot definitions.
 
@@ -352,7 +350,7 @@ async def add_class(
         # Build inline slots
         slot_names_seen: set[str] = set()
         built_slots: list[Slot] = []
-        for slot_def in (slots or []):
+        for slot_def in slots or []:
             sname = slot_def.get("name", "")
             if sname.lower() in slot_names_seen:
                 raise CollisionError("Slot", sname)
@@ -386,12 +384,15 @@ async def add_class(
 
         new_cls.slots = built_slots
 
-        definition_obj = None
         if definition is not None:
-            primary = is_a if is_a is not None else new_cls
-            definition_obj = translate_expr(definition, spec, primary)
-        if definition_obj is not None:
-            new_cls.definition = definition_obj  # type: ignore[attr-defined]
+            # Validate the SQL predicate parses cleanly before storing.
+            from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+
+            try:
+                parse_predicate(definition)
+            except SqlPredicateError as exc:
+                raise ExprTranslationError(str(exc)) from exc
+            new_cls.definition = definition
 
         spec.classes.append(new_cls)
     return spec
@@ -520,8 +521,10 @@ async def add_source_binding(
         cls = _find_class(spec, class_name)
 
         # Check for duplicate binding
-        if any(b.source.name == source_name and b.class_.name == class_name
-               for b in spec.source_bindings):
+        if any(
+            b.source.name == source_name and b.class_.name == class_name
+            for b in spec.source_bindings
+        ):
             raise CollisionError("SourceBinding", f"{source_name}__{class_name}")
 
         # Resolve identifier_slot from effective slots (includes inherited)
@@ -534,7 +537,7 @@ async def add_source_binding(
 
         # Build SlotMapping objects
         slot_mappings: list[SlotMapping] = []
-        for m in (mappings or []):
+        for m in mappings or []:
             slot = all_slots.get(m["slot_name"])
             if slot is None:
                 raise InvalidIdentifierSlotError(
@@ -547,17 +550,19 @@ async def add_source_binding(
             prior: tuple[float, float] | None = None
             if prior_raw is not None:
                 prior = (float(prior_raw[0]), float(prior_raw[1]))
-            slot_mappings.append(SlotMapping(
-                slot=slot,
-                source_field=m.get("source_field", slot.name),
-                default=m.get("default"),
-                null_semantics=null_sem_val,
-                prior=prior,
-            ))
+            slot_mappings.append(
+                SlotMapping(
+                    slot=slot,
+                    source_field=m.get("source_field", slot.name),
+                    default=m.get("default"),
+                    null_semantics=null_sem_val,
+                    prior=prior,
+                )
+            )
 
         # Resolve required slots
         req_slots: list[Slot] = []
-        for rname in (required_slot_names or []):
+        for rname in required_slot_names or []:
             rslot = all_slots.get(rname)
             if rslot is None:
                 raise InvalidIdentifierSlotError(
@@ -600,22 +605,29 @@ async def add_constraint(
     *,
     name: str,
     primary_class_name: str,
-    body: ExprJson,
+    body: str,
     severity: Severity,
     message: str | None,
 ) -> Spec:
+    # Validate the SQL predicate parses cleanly before storing.
+    from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+
+    try:
+        parse_predicate(body)
+    except SqlPredicateError as exc:
+        raise ExprTranslationError(str(exc)) from exc
+
     async with spec_store.edit_draft(conn, draft_id) as spec:
         if any(c.name.lower() == name.lower() for c in spec.constraints):
             raise CollisionError("Constraint", name)
 
         primary = _find_class(spec, primary_class_name)
-        expr = translate_expr(body, spec, primary)
 
         spec.constraints.append(
             Constraint(
                 name=name,
                 primary=primary,
-                body=expr,
+                body=body,
                 severity=severity,
                 message=message,
             )
@@ -834,9 +846,7 @@ async def remove_source(
     """
     async with spec_store.edit_draft(conn, draft_id) as spec:
         target = _find_source(spec, name)
-        spec.source_bindings = [
-            b for b in spec.source_bindings if b.source is not target
-        ]
+        spec.source_bindings = [b for b in spec.source_bindings if b.source is not target]
         spec.sources = [s for s in spec.sources if s is not target]
     return spec
 

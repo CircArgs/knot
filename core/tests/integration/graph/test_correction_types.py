@@ -45,7 +45,11 @@ async def ct_db(pg_conn):
     await db.apply_schema()
 
     imdb_id = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
+    title = Slot(
+        name="title",
+        type=Primitive(name="string"),
+        resolution_policy=ResolutionPolicy.POSTERIOR_MEAN,
+    )
     year = Slot(name="year", type=Primitive(name="integer"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title, year])
     src_a = Source(name="source_a")

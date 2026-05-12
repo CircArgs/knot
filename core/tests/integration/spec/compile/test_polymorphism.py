@@ -54,7 +54,9 @@ def _build_movie_credit_spec() -> tuple[Spec, OntologyClass, OntologyClass, Sour
     title = Slot(name="title", type=Primitive(name="string"))
     movie = OntologyClass(name="Movie", slots=[imdb_id, title])
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    credit_id = Slot(
+        name="credit_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     movie_fk = Slot(name="movie", type=ClassRef(target_class=movie))
     role = Slot(name="role", type=Primitive(name="string"))
     credit = OntologyClass(name="Credit", slots=[credit_id, movie_fk, role])
@@ -99,8 +101,7 @@ async def test_movie_and_credit_tables_created(fk_db):
     conn, *_ = fk_db
     for table in ("movie", "credit"):
         cur = await conn.execute(
-            "SELECT count(*) FROM pg_tables "
-            "WHERE schemaname = 'knot_data' AND tablename = %s",
+            "SELECT count(*) FROM pg_tables WHERE schemaname = 'knot_data' AND tablename = %s",
             (table,),
         )
         row = await cur.fetchone()

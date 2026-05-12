@@ -373,7 +373,9 @@ async def test_change_source_identifier_slot_rekeys_rows(clean_db):
     title = Slot(name="title", type=Primitive(name="string"), identifier=True, required=True)
 
     def _build(identifier):
-        imdb_id_ = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
+        imdb_id_ = Slot(
+            name="imdb_id", type=Primitive(name="string"), identifier=True, required=True
+        )
         title_ = Slot(name="title", type=Primitive(name="string"), identifier=True, required=True)
         movie = OntologyClass(name="Movie", slots=[imdb_id_, title_])
         # Use the correct slot object from this class for the binding

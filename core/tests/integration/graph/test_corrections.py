@@ -44,7 +44,11 @@ async def corrections_db(pg_conn):
     await db.apply_schema()
 
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
+    title = Slot(
+        name="title",
+        type=Primitive(name="string"),
+        resolution_policy=ResolutionPolicy.POSTERIOR_MEAN,
+    )
     tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[id_slot, title, tags])
     src_a = Source(name="source_a")
@@ -270,7 +274,9 @@ async def test_apply_merge_rewrites_cross_class_fk_references(pg_conn):
     await pg_conn.execute("TRUNCATE TABLE spec_revisions CASCADE")
     await db.apply_schema()
 
-    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_id = Slot(
+        name="person_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     person_name = Slot(name="name", type=Primitive(name="string"))
     person = OntologyClass(name="Person", slots=[person_id, person_name])
 

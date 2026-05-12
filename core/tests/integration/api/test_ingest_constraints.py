@@ -21,12 +21,8 @@ from knot.api.auth.security import Principal, require_user
 from knot.db import graph_store
 from knot.spec import OntologyClass, Primitive, Slot, Source, Spec
 from knot.spec.metaschema import (
-    Compare,
-    CompareOp,
     Constraint,
-    Literal_,
     Severity,
-    SlotPath,
     SourceBinding,
 )
 from tests._helpers import publish_spec
@@ -65,10 +61,7 @@ def _year_gte_constraint(
     name: str = "year_gte_1888",
     severity: Severity = Severity.ERROR,
 ) -> Constraint:
-    year_slot = next(s for s in movie_cls.slots if s.name == "year")
-    path = SlotPath(from_class=movie_cls, slots=[year_slot])
-    body = Compare(op=CompareOp.GTE, left=path, right=Literal_(value=threshold))
-    return Constraint(name=name, primary=movie_cls, body=body, severity=severity)
+    return Constraint(name=name, primary=movie_cls, body=f"year >= {threshold}", severity=severity)
 
 
 # ---------------------------------------------------------------------------
@@ -241,13 +234,10 @@ async def test_multiple_constraints_one_violated_reports_violation(clean_db, cli
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
 
-    year_slot = next(s for s in movie.slots if s.name == "year")
     # Constraint 1: year >= 1888 (violated by 1500)
     c1 = _year_gte_constraint(movie, 1888, name="year_min")
     # Constraint 2: year <= 9999 (satisfied by 1500)
-    path = SlotPath(from_class=movie, slots=[year_slot])
-    body2 = Compare(op=CompareOp.LTE, left=path, right=Literal_(value=9999))
-    c2 = Constraint(name="year_max", primary=movie, body=body2, severity=Severity.ERROR)
+    c2 = Constraint(name="year_max", primary=movie, body="year <= 9999", severity=Severity.ERROR)
 
     spec.constraints.extend([c1, c2])
     await publish_spec(conn, spec)
@@ -273,11 +263,8 @@ async def test_multiple_constraints_all_pass(clean_db, client):
     conn = clean_db
     spec, movie, src = _build_spec_with_constraints([])
 
-    year_slot = next(s for s in movie.slots if s.name == "year")
     c1 = _year_gte_constraint(movie, 1888, name="year_min")
-    path = SlotPath(from_class=movie, slots=[year_slot])
-    body2 = Compare(op=CompareOp.LTE, left=path, right=Literal_(value=9999))
-    c2 = Constraint(name="year_max", primary=movie, body=body2, severity=Severity.ERROR)
+    c2 = Constraint(name="year_max", primary=movie, body="year <= 9999", severity=Severity.ERROR)
     spec.constraints.extend([c1, c2])
     await publish_spec(conn, spec)
 
@@ -346,10 +333,8 @@ async def test_constraint_on_other_class_not_checked(clean_db, client):
     age = Slot(name="age", type=Primitive(name="integer"))
     person = OntologyClass(name="Person", slots=[pid, age])
 
-    path = SlotPath(from_class=person, slots=[age])
-    body = Compare(op=CompareOp.GTE, left=path, right=Literal_(value=0))
     person_constraint = Constraint(
-        name="age_non_negative", primary=person, body=body, severity=Severity.ERROR
+        name="age_non_negative", primary=person, body="age >= 0", severity=Severity.ERROR
     )
     psrc = Source(name="people")
     person_binding = SourceBinding(source=psrc, class_=person, identifier_slot=pid)  # type: ignore[call-arg]

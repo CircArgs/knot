@@ -36,8 +36,6 @@ from knot.spec.compile.postgres._context import CompileContext
 from knot.spec.compile.postgres._dispatch import CompilerError, compile_predicate
 from knot.spec.metaschema import Constraint, OntologyClass
 
-from ._naming import bindings_table_id, table_id
-
 
 def compile_order_by(
     order_terms: list[tuple[str, str]],
@@ -77,48 +75,28 @@ def compile_constraint(
 ) -> tuple[sql.Composable, list[Any]]:
     """Emit a SELECT returning offending rows in the uniform violation shape.
 
-    Generated SQL (parameterized):
+    Generated SQL (literals inlined by sqlglot; no positional params):
         SELECT
-            %s AS rule_id,
-            %s AS class_name,
+            '<rule_id>' AS rule_id,
+            '<class_name>' AS class_name,
             NULL::text AS slot_name,
-            s._canonical_id AS offending_pk,
+            b.canonical_id AS offending_pk,
             row_to_json(s)::text AS detail
         FROM knot_data.<class> s
         JOIN knot_data.<class>_bindings b
             ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL
         WHERE NOT ( <compiled body> )
 
-    Returns ``(composable, params)`` where params is a flat list of positional
-    values ready to pass to ``conn.execute(composable, params)``.
+    ``constraint.body`` is a SQL predicate string validated + compiled via
+    ``knot.spec.sql_validate``.
 
-    The compiled body is evaluated against the source-row alias ``s``.
+    Returns ``(composable, [])`` — params list is always empty; literals are
+    folded into the SQL string by sqlglot, so no placeholder substitution is
+    needed.
     """
-    ctx = CompileContext(primary_class=cls, alias="s")
-    body_sql = compile_predicate(constraint.body, ctx)
+    from knot.spec.sql_validate import compile_constraint_sql
 
-    # Prepend the two scalar params (rule_id, class_name) that appear before
-    # any body params in the SELECT list.
-    params: list[Any] = [constraint.name, cls.name] + ctx.params
-
-    stmt = sql.SQL(
-        "SELECT"
-        " %s AS rule_id,"
-        " %s AS class_name,"
-        " NULL::text AS slot_name,"
-        " b.canonical_id AS offending_pk,"
-        " row_to_json(s)::text AS detail"
-        " FROM {src_table} s"
-        " JOIN {bind_table} b"
-        "   ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL"
-        " WHERE NOT ({body})"
-    ).format(
-        src_table=table_id(cls),
-        bind_table=bindings_table_id(cls),
-        body=body_sql,
-    )
-
-    return stmt, params
+    return compile_constraint_sql(constraint, cls)
 
 
 # compile_value is an alias for compile_predicate in value-expression contexts.

@@ -134,7 +134,9 @@ def test_diff_specs_add_class():
     )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
-    add_class = [c for c in changes if isinstance(c, migration.AddClass) and c.cls.name == "Director"]
+    add_class = [
+        c for c in changes if isinstance(c, migration.AddClass) and c.cls.name == "Director"
+    ]
     assert add_class, f"Expected AddClass for Director; got {changes}"
 
 
@@ -152,5 +154,7 @@ def test_diff_specs_drop_class():
     cand_spec = Spec(id="t", version="1", classes=[person], sources=[])
 
     changes = migration.diff_specs(prev_spec, cand_spec)
-    drop_class = [c for c in changes if isinstance(c, migration.DropClass) and c.class_name == "Director"]
+    drop_class = [
+        c for c in changes if isinstance(c, migration.DropClass) and c.class_name == "Director"
+    ]
     assert drop_class, f"Expected DropClass for Director; got {changes}"

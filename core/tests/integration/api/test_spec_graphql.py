@@ -18,17 +18,11 @@ from fastapi.testclient import TestClient
 from knot import db
 from knot.spec import OntologyClass, Slot, Source, Spec
 from knot.spec.metaschema import (
-    BoolExpr,
-    BoolOpKind,
     ClassRef,
-    Compare,
-    CompareOp,
     Constraint,
-    Literal_,
     Primitive,
     Severity,
     SlotConstraints,
-    SlotPath,
     SourceBinding,
 )
 from tests._helpers import publish_spec
@@ -56,7 +50,9 @@ def _build_spec() -> Spec:
         type=Primitive(name="integer"),
         constraints=SlotConstraints(min_value=1888.0, max_value=2100.0),
     )
-    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_id = Slot(
+        name="person_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     name = Slot(name="name", type=Primitive(name="string"), required=True)
 
     person = OntologyClass(
@@ -77,12 +73,10 @@ def _build_spec() -> Spec:
     wiki_binding = SourceBinding(source=wiki_src, class_=person, identifier_slot=person_id)  # type: ignore[call-arg]
 
     # Constraint: year must be > 1900 (toy invariant exercising surface).
-    year_path = SlotPath(from_class=movie, slots=[year])
-    year_gt_1900 = Compare(op=CompareOp.GT, left=year_path, right=Literal_(value=1900))
     year_check = Constraint(
         name="movie_year_after_1900",
         primary=movie,
-        body=BoolExpr(op=BoolOpKind.AND, operands=[year_gt_1900]),
+        body="year > 1900",
         severity=Severity.WARNING,
         message="Movie year should be after 1900.",
     )

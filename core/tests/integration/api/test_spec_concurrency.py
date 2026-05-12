@@ -68,7 +68,9 @@ async def test_concurrent_edit_draft_serializes(pg_conn):
             conn = await _new_conn()
             try:
                 async with edit_draft(conn, rev) as spec:
-                    spec.classes[0].slots.append(Slot(name=slot_name, type=Primitive(name="string")))
+                    spec.classes[0].slots.append(
+                        Slot(name=slot_name, type=Primitive(name="string"))
+                    )
                     # Small yield to allow the other coroutine to attempt the lock.
                     await asyncio.sleep(0.1)
             finally:
@@ -106,7 +108,9 @@ async def test_edit_draft_rolls_back_on_exception(pg_conn):
 
     with pytest.raises(Boom):
         async with edit_draft(pg_conn, rev) as spec:
-            spec.classes[0].slots.append(Slot(name="should_not_persist", type=Primitive(name="string")))
+            spec.classes[0].slots.append(
+                Slot(name="should_not_persist", type=Primitive(name="string"))
+            )
             raise Boom()
 
     after = await spec_store.get_revision(pg_conn, rev)

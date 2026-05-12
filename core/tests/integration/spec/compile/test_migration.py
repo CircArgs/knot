@@ -161,8 +161,11 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     src = Source(name="s")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", classes=[movie],
-        sources=[src], source_bindings=[binding],
+        id="t",
+        version="1.0.0",
+        classes=[movie],
+        sources=[src],
+        source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -176,8 +179,11 @@ async def test_publish_blocks_destructive_slot_drop_without_flag(clean_db):
     src_v2 = Source(name="s")
     binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", classes=[movie_v2],
-        sources=[src_v2], source_bindings=[binding_v2],
+        id="t",
+        version="1.0.0",
+        classes=[movie_v2],
+        sources=[src_v2],
+        source_bindings=[binding_v2],
     )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)
@@ -192,8 +198,11 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     src = Source(name="s")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", classes=[movie],
-        sources=[src], source_bindings=[binding],
+        id="t",
+        version="1.0.0",
+        classes=[movie],
+        sources=[src],
+        source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -205,8 +214,11 @@ async def test_publish_allows_destructive_slot_drop_with_flag(clean_db):
     src_v2 = Source(name="s")
     binding_v2 = SourceBinding(source=src_v2, class_=movie_v2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", classes=[movie_v2],
-        sources=[src_v2], source_bindings=[binding_v2],
+        id="t",
+        version="1.0.0",
+        classes=[movie_v2],
+        sources=[src_v2],
+        source_bindings=[binding_v2],
     )
     rev2 = await create_draft(clean_db)
     await update_draft(clean_db, rev2, spec_v2)

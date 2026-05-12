@@ -262,7 +262,10 @@ async def apply_merge(
         )
         id_remap = {old: keep_canonical_id for old in deduped}
         await graph_store.update_cross_class_references(
-            conn, spec=spec, merged_class=cls, id_remap=id_remap,
+            conn,
+            spec=spec,
+            merged_class=cls,
+            id_remap=id_remap,
         )
         await graph_store.append_lineage_event(
             conn,

@@ -21,11 +21,10 @@ from knot.db.spec_store import (
     publish_draft,
     update_draft,
 )
-from knot.graph.spec import rename_slot, CollisionError, EntityNotOnDraftError
+from knot.graph.spec import CollisionError, EntityNotOnDraftError, rename_slot
 from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
-from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
-
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -95,9 +94,7 @@ async def test_rename_slot_preserves_data(clean_db):
 
     # Column should now be called "name" and data preserved.
     row = await (
-        await clean_db.execute(
-            f"SELECT name FROM {schema()}.movie WHERE _source_row_id = 'tt1'"
-        )
+        await clean_db.execute(f"SELECT name FROM {schema()}.movie WHERE _source_row_id = 'tt1'")
     ).fetchone()
     assert row is not None
     assert row[0] == "The Matrix"

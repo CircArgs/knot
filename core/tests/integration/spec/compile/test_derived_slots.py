@@ -101,7 +101,9 @@ def _build_full_spec() -> tuple[
     Source,  # credit_src
 ]:
     # --- Person ---
-    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_id = Slot(
+        name="person_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     person_name_slot = Slot(name="name", type=Primitive(name="string"))
     person_cls = OntologyClass(name="Person", slots=[person_id, person_name_slot])
 
@@ -112,7 +114,9 @@ def _build_full_spec() -> tuple[
     movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title])
 
     # --- Credit ---
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    credit_id = Slot(
+        name="credit_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     # movie FK: TEXT column holding the movie's canonical_id
     credit_movie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_role = Slot(name="role", type=Primitive(name="string"))
@@ -566,8 +570,12 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     credit_v1 = OntologyClass(name="Credit", slots=[cid_v1, cmovie_v1])
     movie_src_v1 = Source(name="imdb")
     credit_src_v1 = Source(name="credits")
-    movie_binding_v1 = SourceBinding(source=movie_src_v1, class_=movie_v1, identifier_slot=imdb_id_v1)  # type: ignore[call-arg]
-    credit_binding_v1 = SourceBinding(source=credit_src_v1, class_=credit_v1, identifier_slot=cid_v1)  # type: ignore[call-arg]
+    movie_binding_v1 = SourceBinding(
+        source=movie_src_v1, class_=movie_v1, identifier_slot=imdb_id_v1
+    )  # type: ignore[call-arg]
+    credit_binding_v1 = SourceBinding(
+        source=credit_src_v1, class_=credit_v1, identifier_slot=cid_v1
+    )  # type: ignore[call-arg]
 
     spec_v1 = Spec(
         id="test",
@@ -599,8 +607,12 @@ async def test_republish_with_new_derived_slot_no_destructive_migration(clean_db
     movie_v1.slots = [imdb_id_v1, title_v1, count_slot]
     movie_src_v2 = Source(name="imdb")
     credit_src_v2 = Source(name="credits")
-    movie_binding_v2 = SourceBinding(source=movie_src_v2, class_=movie_v1, identifier_slot=imdb_id_v1)  # type: ignore[call-arg]
-    credit_binding_v2 = SourceBinding(source=credit_src_v2, class_=credit_v1, identifier_slot=cid_v1)  # type: ignore[call-arg]
+    movie_binding_v2 = SourceBinding(
+        source=movie_src_v2, class_=movie_v1, identifier_slot=imdb_id_v1
+    )  # type: ignore[call-arg]
+    credit_binding_v2 = SourceBinding(
+        source=credit_src_v2, class_=credit_v1, identifier_slot=cid_v1
+    )  # type: ignore[call-arg]
 
     spec_v2 = Spec(
         id="test",

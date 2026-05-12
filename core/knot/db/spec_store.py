@@ -203,7 +203,7 @@ def publish_gate(candidate: Spec) -> None:
 
     # Defined-class validation (classes with a definition body — VIEW-backed).
     for c in candidate.classes:
-        if getattr(c, "definition", None) is None:
+        if c.definition is None:
             continue
         # is_a must be set for defined classes.
         if c.is_a is None:
@@ -215,15 +215,22 @@ def publish_gate(candidate: Spec) -> None:
                 f"{c.is_a.name!r} not on spec.classes."
             )
             continue
-        # Definition must compile without error.
-        from knot.spec.compile.postgres import CompileContext, compile_predicate
-        from knot.spec.compile.postgres._dispatch import CompilerError
+        # Definition must parse without error (sqlglot parse validation).
+        from knot.spec.sql_validate import SqlPredicateError, parse_predicate
 
         try:
-            ctx = CompileContext(primary_class=c.is_a, alias="s")
-            compile_predicate(c.definition, ctx)
-        except (CompilerError, NotImplementedError) as exc:
-            errors.append(f"Defined class {c.name!r}.definition failed to compile: {exc}")
+            parse_predicate(c.definition)
+        except SqlPredicateError as exc:
+            errors.append(f"Defined class {c.name!r}.definition failed to parse: {exc}")
+
+    # Constraint body validation — SQL predicates must parse cleanly.
+    from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+
+    for con in candidate.constraints:
+        try:
+            parse_predicate(con.body)
+        except SqlPredicateError as exc:
+            errors.append(f"Constraint {con.name!r}.body failed to parse: {exc}")
 
     if errors:
         raise PublishGateError("Publish gate failed:\n  - " + "\n  - ".join(errors))
@@ -502,10 +509,7 @@ async def run_preflight_checks(
                         "slot": change.slot.name,
                         "from": change.prev_pg_type,
                         "to": change.new_pg_type,
-                        "detail": (
-                            "lossy: array → scalar would silently collapse "
-                            "multiple values"
-                        ),
+                        "detail": ("lossy: array → scalar would silently collapse multiple values"),
                     }
                 )
                 continue
@@ -517,21 +521,15 @@ async def run_preflight_checks(
             col_ident = sql.Identifier(change.slot.name)
             newt = sql.SQL(change.new_pg_type)
             if not prev_is_array and new_is_array:
-                cast_expr = sql.SQL("ARRAY[{col}]::{newt}").format(
-                    col=col_ident, newt=newt
-                )
+                cast_expr = sql.SQL("ARRAY[{col}]::{newt}").format(col=col_ident, newt=newt)
             else:
-                cast_expr = sql.SQL("{col}::{newt}").format(
-                    col=col_ident, newt=newt
-                )
+                cast_expr = sql.SQL("{col}::{newt}").format(col=col_ident, newt=newt)
             sp_name = f"preflight_cast_{change.cls.name.lower()}_{change.slot.name}"
             try:
                 await conn.execute(f"SAVEPOINT {sp_name}")
                 await (
                     await conn.execute(
-                        sql.SQL(
-                            "SELECT {cast} FROM {tbl} WHERE {col} IS NOT NULL"
-                        ).format(
+                        sql.SQL("SELECT {cast} FROM {tbl} WHERE {col} IS NOT NULL").format(
                             cast=cast_expr,
                             tbl=sql.Identifier(schema(), change.cls.name.lower()),
                             col=col_ident,
@@ -593,9 +591,7 @@ async def run_preflight_checks(
                         "kind": "identifier_duplicates",
                         "source": change.source_name,
                         "slot": change.new_slot,
-                        "samples": [
-                            {"value": str(r[0]), "count": r[1]} for r in dup_rows[:5]
-                        ],
+                        "samples": [{"value": str(r[0]), "count": r[1]} for r in dup_rows[:5]],
                     }
                 )
 
@@ -607,8 +603,7 @@ async def run_preflight_checks(
             null_row = await (
                 await conn.execute(
                     sql.SQL(
-                        "SELECT count(*) FROM {tbl} "
-                        "WHERE _source != {uc} AND {col} IS NULL"
+                        "SELECT count(*) FROM {tbl} WHERE _source != {uc} AND {col} IS NULL"
                     ).format(tbl=tbl, col=col, uc=sql.Literal(user_corrections_source())),
                 )
             ).fetchone()
@@ -666,9 +661,7 @@ class _PendingRenames:
         return bool(self.class_renames)
 
 
-async def _get_pending_renames(
-    conn: psycopg.AsyncConnection, draft_id: int
-) -> _PendingRenames:
+async def _get_pending_renames(conn: psycopg.AsyncConnection, draft_id: int) -> _PendingRenames:
     """Load pending rename hints for a draft from spec_revisions.pending_renames.
 
     The column stores a JSON object with two keys:

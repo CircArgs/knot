@@ -214,9 +214,7 @@ def _required_check_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
 
 def _required_check_drop_sql(cls: OntologyClass, slot: Slot) -> sql.Composable:
     """``DROP CONSTRAINT IF EXISTS`` for a required-slot CHECK."""
-    return sql.SQL(
-        "ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {chk}"
-    ).format(
+    return sql.SQL("ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {chk}").format(
         tbl=_table_id(cls),
         chk=sql.Identifier(_required_check_name(cls, slot)),
     )
@@ -301,7 +299,7 @@ class RenameSlot(Change):
     """
 
     cls: OntologyClass
-    slot: Slot          # candidate-side slot object (carries new name + required flag)
+    slot: Slot  # candidate-side slot object (carries new name + required flag)
     old_name: str
     new_name: str
 
@@ -912,11 +910,11 @@ def _diff_constraints(prev: Spec | None, candidate: Spec) -> list[Change]:
                     new_primary=cc.primary.name,
                 )
             )
-        if pc.body is not cc.body:
-            # Body is an ExprNode — compare by object identity (same caveat
-            # as ChangeSlotDerivation; the publish-time content hash already
-            # detects body changes via JCS bytes). When identity differs we
-            # emit the record so the destructive/revalidation gate sees it.
+        # Compare body by AST-canonical hash so byte-different but equivalent
+        # SQL predicates don't generate spurious ChangeConstraintBody records.
+        from knot.spec.sql_validate import canonical_hash as _canonical_hash
+
+        if _canonical_hash(pc.body) != _canonical_hash(cc.body):
             changes.append(ChangeConstraintBody(constraint_name=name))
         if pc.severity != cc.severity:
             changes.append(
@@ -977,9 +975,7 @@ def diff_specs(
             cand_cls = cand_classes[new_n]
             prev_cls_renamed = prev_classes[old_n]
             if not cand_cls.abstract and not _is_defined(cand_cls):
-                changes.append(
-                    RenameClass(old_name=old_n, new_name=new_n, cls=cand_cls)
-                )
+                changes.append(RenameClass(old_name=old_n, new_name=new_n, cls=cand_cls))
                 # Diff slots between the old and new class — the table is the
                 # same table (just renamed), so we emit AddSlot/DropSlot/RenameSlot
                 # relative to the CANDIDATE class object (new name).
@@ -1111,7 +1107,11 @@ def diff_specs(
             # Both defined: re-create view if definition changed (simplest
             # approach; view DDL is idempotent via CREATE OR REPLACE).
             changes.append(AddDefinedClass(cls=cand_cls))
-            if prev_cls.definition is not cand_cls.definition:
+            from knot.spec.sql_validate import canonical_hash as _canonical_hash
+
+            prev_def = prev_cls.definition or ""
+            cand_def = cand_cls.definition or ""
+            if _canonical_hash(prev_def) != _canonical_hash(cand_def):
                 changes.append(
                     ChangeClassDefinition(
                         cls=cand_cls,
@@ -1237,7 +1237,8 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
 
     elif isinstance(change, AddDefinedClass):
         """Create (or replace) a VIEW for the defined class."""
-        from knot.spec.compile.postgres import CompileContext, compile_predicate
+        from knot.spec.compile.postgres._context import CompileContext
+        from knot.spec.sql_validate import compile_to_sql
 
         cls = change.cls
         if cls.is_a is None:
@@ -1245,12 +1246,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         parent = cls.is_a
 
         ctx = CompileContext(primary_class=parent, alias="s")
-        where_sql = compile_predicate(cls.definition, ctx)
-
-        if ctx.joins:
-            joins_sql = sql.SQL(" ") + sql.SQL(" ").join(ctx.joins)
-        else:
-            joins_sql = sql.SQL("")
+        where_sql = compile_to_sql(cls.definition, parent, ctx)
 
         view_stmt = sql.SQL(
             "CREATE OR REPLACE VIEW {view} AS "
@@ -1258,22 +1254,16 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
             "FROM {parent_tbl} s "
             "JOIN {parent_btbl} {bind_alias} "
             "  ON {bind_alias}.knot_row_id = s._knot_row_id "
-            " AND {bind_alias}.valid_to IS NULL"
-            "{joins} "
+            " AND {bind_alias}.valid_to IS NULL "
             "WHERE ({where})"
         ).format(
             view=_table_id(cls),
             bind_alias=sql.Identifier("b"),
             parent_tbl=_table_id(parent),
             parent_btbl=_bindings_table_id(parent),
-            joins=joins_sql,
             where=where_sql,
         )
-        from psycopg import AsyncClientCursor
-
-        ccur = AsyncClientCursor(conn)
-        rendered = ccur.mogrify(view_stmt, ctx.params)
-        await conn.execute(rendered)
+        await conn.execute(view_stmt)
 
     elif isinstance(change, DropDefinedClass):
         await conn.execute(
@@ -1320,16 +1310,10 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         col_ident = sql.Identifier(change.slot.name)
         pgtype_sql = sql.SQL(change.new_pg_type)
         if not prev_is_array and new_is_array:
-            using = sql.SQL("ARRAY[{col}]::{pgtype}").format(
-                col=col_ident, pgtype=pgtype_sql
-            )
+            using = sql.SQL("ARRAY[{col}]::{pgtype}").format(col=col_ident, pgtype=pgtype_sql)
         else:
-            using = sql.SQL("{col}::{pgtype}").format(
-                col=col_ident, pgtype=pgtype_sql
-            )
-        stmt = sql.SQL(
-            "ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype} USING {using}"
-        ).format(
+            using = sql.SQL("{col}::{pgtype}").format(col=col_ident, pgtype=pgtype_sql)
+        stmt = sql.SQL("ALTER TABLE {table} ALTER COLUMN {col} TYPE {pgtype} USING {using}").format(
             table=_table_id(change.cls),
             col=col_ident,
             pgtype=pgtype_sql,
@@ -1350,9 +1334,7 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
     elif isinstance(change, RenameSlot):
         # Step 1: rename the column.
         await conn.execute(
-            sql.SQL(
-                "ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}"
-            ).format(
+            sql.SQL("ALTER TABLE {table} RENAME COLUMN {old_col} TO {new_col}").format(
                 table=_table_id(change.cls),
                 old_col=sql.Identifier(change.old_name),
                 new_col=sql.Identifier(change.new_name),
@@ -1416,16 +1398,11 @@ async def emit_ddl(change: Change, conn: psycopg.AsyncConnection) -> None:
         for slot in _effective_slots(change.cls):
             if not _is_stored(slot) or not slot.required:
                 continue
-            old_slot_for_cls = type(
-                "FakeCls", (), {"name": change.old_name}
-            )()  # lightweight stand-in for old class name
             old_chk = f"{old_lower}_{slot.name}_required_chk"
             new_chk = _required_check_name(change.cls, slot)
             if old_chk != new_chk:
                 await conn.execute(
-                    sql.SQL(
-                        "ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {old_chk}"
-                    ).format(
+                    sql.SQL("ALTER TABLE {tbl} DROP CONSTRAINT IF EXISTS {old_chk}").format(
                         tbl=_table_id(change.cls),
                         old_chk=sql.Identifier(old_chk),
                     )

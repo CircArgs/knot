@@ -587,7 +587,9 @@ def _build_derived_spec():
     year = Slot(name="year", type=Primitive(name="integer"))
     movie_cls = OntologyClass(name="Movie", slots=[imdb_id, title, year])
 
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    credit_id = Slot(
+        name="credit_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     credit_movie = Slot(name="movie", type=ClassRef(target_class=movie_cls))
     credit_role = Slot(name="role", type=Primitive(name="string"))
     credit_cls = OntologyClass(name="Credit", slots=[credit_id, credit_movie, credit_role])
@@ -595,7 +597,9 @@ def _build_derived_spec():
     credit_count_deriv = RelationCount(
         relation=ReverseRelation(target_class=credit_cls, fk_slot=credit_movie),
     )
-    credit_count_slot = Slot(name="credit_count", type=Primitive(name="integer"), derivation=credit_count_deriv)
+    credit_count_slot = Slot(
+        name="credit_count", type=Primitive(name="integer"), derivation=credit_count_deriv
+    )
     movie_cls.slots = [imdb_id, title, year, credit_count_slot]
 
     movie_src = Source(name="imdb")

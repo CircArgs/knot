@@ -142,7 +142,7 @@ class ClassCreate(_StrictBase):
     mixin_names: list[str] = Field(default_factory=list)
     abstract: bool = False
     description: str | None = None
-    definition: ExprJson | None = None
+    definition: str | None = None  # SQL predicate; presence makes this a defined class (VIEW)
 
 
 class ClassUpdate(_StrictBase):
@@ -191,7 +191,7 @@ class SourceBindingTrustUpdate(_StrictBase):
 class ConstraintCreate(_StrictBase):
     name: str = Field(pattern=_NAME_PATTERN)
     primary_class_name: str
-    body: ExprJson
+    body: str  # SQL predicate validated via sqlglot
     severity: Severity = Severity.ERROR
     message: str | None = None
 
@@ -523,6 +523,14 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
         if s.name.lower() in seen:
             raise HTTPException(400, f"Duplicate slot name {s.name!r} in class definition.")
         seen.add(s.name.lower())
+    # Validate definition SQL parses (if provided).
+    if body.definition is not None:
+        from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+
+        try:
+            parse_predicate(body.definition)
+        except SqlPredicateError as exc:
+            raise HTTPException(422, f"Invalid SQL predicate in definition: {exc}") from exc
     async with db.connect() as conn:
         try:
             spec = await graph_spec.add_class(
@@ -541,7 +549,7 @@ async def add_class(draft_id: int, body: ClassCreate) -> MutationResponse:
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ExprTranslationError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(422, str(exc)) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
@@ -667,6 +675,14 @@ async def update_source_binding_trust(
     dependencies=[Depends(require_user)],
 )
 async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationResponse:
+    # Validate SQL body parses before hitting the database.
+    from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+
+    try:
+        parse_predicate(body.body)
+    except SqlPredicateError as exc:
+        raise HTTPException(422, f"Invalid SQL predicate in body: {exc}") from exc
+
     async with db.connect() as conn:
         try:
             spec = await graph_spec.add_constraint(
@@ -683,7 +699,7 @@ async def add_constraint(draft_id: int, body: ConstraintCreate) -> MutationRespo
         except graph_spec.EntityNotOnDraftError as exc:
             raise _map_entity_not_on_draft(exc) from exc
         except graph_spec.ExprTranslationError as exc:
-            raise HTTPException(404, str(exc)) from exc
+            raise HTTPException(422, str(exc)) from exc
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
@@ -727,9 +743,7 @@ async def rename_slot(
     dependencies=[Depends(require_user)],
     summary="Rename a class (non-destructive ALTER TABLE … RENAME at publish)",
 )
-async def rename_class(
-    draft_id: int, class_name: str, body: ClassRename
-) -> MutationResponse:
+async def rename_class(draft_id: int, class_name: str, body: ClassRename) -> MutationResponse:
     """Rename an OntologyClass on a draft.
 
     Records a rename hint so that ``publish`` emits non-destructive
@@ -741,9 +755,7 @@ async def rename_class(
     """
     async with db.connect() as conn:
         try:
-            spec = await graph_spec.rename_class(
-                conn, draft_id, class_name, body.new_name
-            )
+            spec = await graph_spec.rename_class(conn, draft_id, class_name, body.new_name)
         except graph_spec.CollisionError as exc:
             raise _map_collision(exc) from exc
         except graph_spec.EntityNotOnDraftError as exc:
@@ -822,6 +834,41 @@ async def remove_constraint(draft_id: int, name: str) -> MutationResponse:
         except graph_spec.DraftAlreadyPublishedError as exc:
             raise _map_already_published(exc) from exc
     return _response(draft_id, spec)
+
+
+# ─── Constraint SQL validation ──────────────────────────────────────────────
+
+
+class ConstraintValidateRequest(_StrictBase):
+    body: str
+
+
+class ConstraintValidateResponse(_StrictBase):
+    valid: bool
+    errors: list[str]
+
+
+@router.post(
+    "/drafts/{draft_id}/_validate_constraint",
+    response_model=ConstraintValidateResponse,
+    summary="Validate a SQL constraint predicate via sqlglot (no DB required)",
+)
+async def validate_constraint_body(
+    draft_id: int, body: ConstraintValidateRequest
+) -> ConstraintValidateResponse:
+    """Parse the SQL predicate string and return any syntax errors.
+
+    Returns ``{valid: true, errors: []}`` on success or
+    ``{valid: false, errors: ["..."]}`` on parse failure. Draft ID is
+    accepted in the path for API symmetry but is not required for validation.
+    """
+    from knot.spec.sql_validate import SqlPredicateError, parse_predicate
+
+    try:
+        parse_predicate(body.body)
+        return ConstraintValidateResponse(valid=True, errors=[])
+    except SqlPredicateError as exc:
+        return ConstraintValidateResponse(valid=False, errors=[str(exc)])
 
 
 # ─── Preview ────────────────────────────────────────────────────────────────

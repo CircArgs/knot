@@ -174,9 +174,7 @@ async def ingest_rows(
     # 3. Built-in default canonical_id: {source_name}:{identifier_slot_value}
     if pre.canonical_ids is None:
         id_name = binding.identifier_slot.name
-        pre.canonical_ids = [
-            f"{source.name}:{getattr(r, id_name)}" for r in pre.rows
-        ]
+        pre.canonical_ids = [f"{source.name}:{getattr(r, id_name)}" for r in pre.rows]
 
     wire_rows = [r.model_dump(exclude_none=False) for r in pre.rows]
 

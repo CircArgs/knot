@@ -44,9 +44,17 @@ async def resolve_db(pg_conn):
     await db.apply_schema()
 
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
-    title = Slot(name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.ARGMAX_TRUST)
-    pm_slot = Slot(name="pm_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.POSTERIOR_MEAN)
-    lcb_slot = Slot(name="lcb_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.LCB)
+    title = Slot(
+        name="title", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.ARGMAX_TRUST
+    )
+    pm_slot = Slot(
+        name="pm_field",
+        type=Primitive(name="string"),
+        resolution_policy=ResolutionPolicy.POSTERIOR_MEAN,
+    )
+    lcb_slot = Slot(
+        name="lcb_field", type=Primitive(name="string"), resolution_policy=ResolutionPolicy.LCB
+    )
     tags = Slot(name="tags", type=Array(of=Primitive(name="string")))
     movie = OntologyClass(name="Movie", slots=[id_slot, title, pm_slot, lcb_slot, tags])
     src_a = Source(name="source_a")

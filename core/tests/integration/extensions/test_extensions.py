@@ -153,7 +153,9 @@ async def test_dispatcher_isinstance_matches_subclass(pg_conn):
     ctx = _make_ctx(pg_conn)
     await d.dispatch(_make_event(src, spec=spec, binding=binding), ctx)
     await d.dispatch(
-        RowsIngested(source=src, binding=binding, spec=spec, rows=[], inserted_count=0, canonical_ids=[]),
+        RowsIngested(
+            source=src, binding=binding, spec=spec, rows=[], inserted_count=0, canonical_ids=[]
+        ),
         ctx,
     )
 

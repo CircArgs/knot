@@ -46,17 +46,19 @@ from tests._helpers import publish_spec
 # ---------------------------------------------------------------------------
 
 
-def _build_person_credit_spec() -> tuple[
-    Spec, OntologyClass, OntologyClass, Source, Source
-]:
+def _build_person_credit_spec() -> tuple[Spec, OntologyClass, OntologyClass, Source, Source]:
     """Build a Spec with Person and Credit (FK→Person)."""
     # Person slots
-    person_id = Slot(name="person_id", type=Primitive(name="string"), identifier=True, required=True)
+    person_id = Slot(
+        name="person_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     person_name = Slot(name="name", type=Primitive(name="string"))
     person = OntologyClass(name="Person", slots=[person_id, person_name])
 
     # Credit slots — person FK stored as canonical_id TEXT
-    credit_id = Slot(name="credit_id", type=Primitive(name="string"), identifier=True, required=True)
+    credit_id = Slot(
+        name="credit_id", type=Primitive(name="string"), identifier=True, required=True
+    )
     person_fk = Slot(name="person", type=ClassRef(target_class=person))
     role = Slot(name="role", type=Primitive(name="string"))
     credit = OntologyClass(name="Credit", slots=[credit_id, person_fk, role])
@@ -308,7 +310,9 @@ def test_diff_specs_add_class():
     )
 
     changes = migration.diff_specs(prev_spec, cand_spec)
-    add_class = [c for c in changes if isinstance(c, migration.AddClass) and c.cls.name == "Director"]
+    add_class = [
+        c for c in changes if isinstance(c, migration.AddClass) and c.cls.name == "Director"
+    ]
     assert add_class, f"Expected AddClass for Director; got {changes}"
 
 
@@ -330,7 +334,9 @@ def test_diff_specs_drop_class():
     cand_spec = Spec(id="t", version="1", classes=[person], sources=[])
 
     changes = migration.diff_specs(prev_spec, cand_spec)
-    drop_class = [c for c in changes if isinstance(c, migration.DropClass) and c.class_name == "Director"]
+    drop_class = [
+        c for c in changes if isinstance(c, migration.DropClass) and c.class_name == "Director"
+    ]
     assert drop_class, f"Expected DropClass for Director; got {changes}"
 
 

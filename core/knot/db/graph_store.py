@@ -653,9 +653,9 @@ async def update_cross_class_references(
                     ).format(table=_table_id(cls), col=col)
                     cur = await conn.execute(stmt, (old_id, new_id, old_id))
                 else:
-                    stmt = sql.SQL(
-                        "UPDATE {table} SET {col} = %s WHERE {col} = %s"
-                    ).format(table=_table_id(cls), col=col)
+                    stmt = sql.SQL("UPDATE {table} SET {col} = %s WHERE {col} = %s").format(
+                        table=_table_id(cls), col=col
+                    )
                     cur = await conn.execute(stmt, (new_id, old_id))
                 total += cur.rowcount or 0
     return total

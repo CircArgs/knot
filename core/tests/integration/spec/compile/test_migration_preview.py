@@ -48,8 +48,11 @@ def _minimal_spec() -> Spec:
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=imdb_id)  # type: ignore[call-arg]
     return Spec(
-        id="t", version="1.0.0", classes=[movie],
-        sources=[src], source_bindings=[binding],
+        id="t",
+        version="1.0.0",
+        classes=[movie],
+        sources=[src],
+        source_bindings=[binding],
     )
 
 
@@ -109,8 +112,11 @@ async def test_preview_drop_class_not_publishable(clean_db):
     src_m2 = Source(name="imdb")
     binding_m2 = SourceBinding(source=src_m2, class_=movie2, identifier_slot=imdb_id2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", classes=[movie2],
-        sources=[src_m2], source_bindings=[binding_m2],
+        id="t",
+        version="1.0.0",
+        classes=[movie2],
+        sources=[src_m2],
+        source_bindings=[binding_m2],
     )
 
     rev2 = await create_draft(clean_db)
@@ -140,8 +146,11 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", classes=[movie],
-        sources=[src], source_bindings=[binding],
+        id="t",
+        version="1.0.0",
+        classes=[movie],
+        sources=[src],
+        source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -162,8 +171,11 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
     src2 = Source(name="imdb")
     binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec_v2 = Spec(
-        id="t", version="1.0.0", classes=[movie2],
-        sources=[src2], source_bindings=[binding2],
+        id="t",
+        version="1.0.0",
+        classes=[movie2],
+        sources=[src2],
+        source_bindings=[binding2],
     )
 
     rev2 = await create_draft(clean_db)
@@ -185,7 +197,6 @@ async def test_preview_bad_cast_shows_blocker(clean_db):
 
 async def test_preview_constraint_violation_shows_blocker(clean_db):
     """A new ERROR-severity constraint that existing data violates surfaces as a blocker."""
-    from knot.spec.expressions import Compare, CompareOp, Literal_, SlotPath
     from knot.spec.metaschema import Constraint, Severity
 
     id_slot = Slot(name="imdb_id", type=Primitive(name="string"), identifier=True, required=True)
@@ -194,8 +205,11 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)  # type: ignore[call-arg]
     spec_v1 = Spec(
-        id="t", version="1.0.0", classes=[movie],
-        sources=[src], source_bindings=[binding],
+        id="t",
+        version="1.0.0",
+        classes=[movie],
+        sources=[src],
+        source_bindings=[binding],
     )
 
     rev1 = await create_draft(clean_db)
@@ -229,13 +243,10 @@ async def test_preview_constraint_violation_shows_blocker(clean_db):
     src2 = Source(name="imdb")
     binding2 = SourceBinding(source=src2, class_=movie2, identifier_slot=id_slot2)  # type: ignore[call-arg]
 
-    # Build constraint using expression node objects directly.
-    path = SlotPath(from_class=movie2, slots=[year_slot2])
-    body = Compare(op=CompareOp.GTE, left=path, right=Literal_(value=1900))
     con = Constraint(
         name="year_gte_1900",
         primary=movie2,
-        body=body,
+        body="year >= 1900",
         severity=Severity.ERROR,
     )
     spec_v2 = Spec(

@@ -177,9 +177,7 @@ async def full_scan(
     """
     inserted = 0
     bindings = [
-        b
-        for b in spec.source_bindings
-        if source_filter is None or b.source.name == source_filter
+        b for b in spec.source_bindings if source_filter is None or b.source.name == source_filter
     ]
     seen_class_source: set[tuple[str, str]] = set()
 

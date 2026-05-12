@@ -23,15 +23,14 @@ from knot.db.spec_store import (
     update_draft,
 )
 from knot.graph.spec import (
-    rename_class,
-    rename_slot,
     CollisionError,
     EntityNotOnDraftError,
+    rename_class,
+    rename_slot,
 )
 from knot.spec import OntologyClass, Slot, Source, SourceBinding, Spec
-from knot.spec.metaschema import Primitive
 from knot.spec.compile.postgres._naming import schema
-
+from knot.spec.metaschema import Primitive
 
 # ---------------------------------------------------------------------------
 # Fixture
@@ -86,8 +85,7 @@ async def _table_exists(conn, table_name: str) -> bool:
 async def _index_exists(conn, index_name: str) -> bool:
     row = await (
         await conn.execute(
-            "SELECT 1 FROM pg_indexes "
-            "WHERE schemaname = %s AND indexname = %s",
+            "SELECT 1 FROM pg_indexes WHERE schemaname = %s AND indexname = %s",
             (schema(), index_name),
         )
     ).fetchone()
@@ -187,9 +185,7 @@ async def test_rename_class_preserves_data(clean_db):
     await publish_draft(clean_db, rev2)
 
     row = await (
-        await clean_db.execute(
-            f"SELECT title FROM {schema()}.film WHERE _source_row_id = 'tt1'"
-        )
+        await clean_db.execute(f"SELECT title FROM {schema()}.film WHERE _source_row_id = 'tt1'")
     ).fetchone()
     assert row is not None
     assert row[0] == "The Matrix"
@@ -209,17 +205,20 @@ async def test_rename_class_renames_required_check_constraints(clean_db):
     await publish_draft(clean_db, rev1)
 
     # Verify old constraint exists.
-    assert await _constraint_exists(clean_db, "movie", "movie_title_required_chk"), \
+    assert await _constraint_exists(clean_db, "movie", "movie_title_required_chk"), (
         "Old constraint should exist before rename"
+    )
 
     rev2 = await create_draft(clean_db, parent_revision=rev1)
     await rename_class(clean_db, rev2, "Movie", "Film")
     await publish_draft(clean_db, rev2)
 
-    assert not await _constraint_exists(clean_db, "film", "movie_title_required_chk"), \
+    assert not await _constraint_exists(clean_db, "film", "movie_title_required_chk"), (
         "Old constraint name should be gone after rename"
-    assert await _constraint_exists(clean_db, "film", "film_title_required_chk"), \
+    )
+    assert await _constraint_exists(clean_db, "film", "film_title_required_chk"), (
         "New constraint name should exist after rename"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,9 +251,7 @@ async def test_rename_class_and_slot_together(clean_db):
     await publish_draft(clean_db, rev2)
 
     row = await (
-        await clean_db.execute(
-            f"SELECT name FROM {schema()}.film WHERE _source_row_id = 'tt1'"
-        )
+        await clean_db.execute(f"SELECT name FROM {schema()}.film WHERE _source_row_id = 'tt1'")
     ).fetchone()
     assert row is not None
     assert row[0] == "Inception"
@@ -267,7 +264,6 @@ async def test_rename_class_and_slot_together(clean_db):
 
 async def test_rename_class_source_binding_follows_rename(clean_db):
     """After rename_class(), the draft spec's SourceBinding still has class_ = Film."""
-    from knot.db.spec_store import get_revision
 
     spec_v1 = _make_movie_spec()
 
@@ -298,8 +294,10 @@ async def test_rename_class_collision(clean_db):
     b1 = SourceBinding(source=src, class_=cls_a, identifier_slot=id_slot1)  # type: ignore[call-arg]
     b2 = SourceBinding(source=src, class_=cls_b, identifier_slot=id_slot2)  # type: ignore[call-arg]
     spec = Spec(
-        id="t", version="1.0.0",
-        classes=[cls_a, cls_b], sources=[src],
+        id="t",
+        version="1.0.0",
+        classes=[cls_a, cls_b],
+        sources=[src],
         source_bindings=[b1, b2],
     )
 

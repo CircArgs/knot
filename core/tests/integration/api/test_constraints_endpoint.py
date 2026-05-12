@@ -1,9 +1,9 @@
 """Tests for POST /spec/drafts/{draft_id}/constraints.
 
 Covers:
-  - Simple Compare-based constraint (year >= 1888)
-  - BoolExpr(AND, [Compare>=1888, Compare<=2100])
-  - 404 on unknown class / slot reference
+  - Simple SQL constraint (year >= 1888)
+  - SQL AND constraint (year >= 1888 AND year <= 2100)
+  - 404 on unknown class
   - 409 on duplicate constraint name (case-twin)
   - 422 on invalid name pattern
   - End-to-end: POST constraint → publish → ingest violating row → check → violation reported
@@ -110,12 +110,7 @@ def test_add_compare_constraint_returns_mutation_response(draft_with_movie, clie
     body = {
         "name": "year_not_before_cinema",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "compare",
-            "op": "gte",
-            "left": {"kind": "slot_path", "slots": ["year"]},
-            "right": {"kind": "literal", "value": 1888},
-        },
+        "body": "year >= 1888",
         "severity": "error",
         "message": "Year must be >= 1888",
     }
@@ -132,12 +127,7 @@ async def test_add_compare_constraint_persisted_on_spec(draft_with_movie, client
     body = {
         "name": "year_not_before_cinema",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "compare",
-            "op": "gte",
-            "left": {"kind": "slot_path", "slots": ["year"]},
-            "right": {"kind": "literal", "value": 1888},
-        },
+        "body": "year >= 1888",
     }
     client.post(f"/spec/drafts/{draft_id}/constraints", json=body)
 
@@ -159,24 +149,7 @@ async def test_add_bool_expr_constraint(draft_with_movie, client):
     body = {
         "name": "year_plausible_range",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "bool_expr",
-            "op": "and",
-            "args": [
-                {
-                    "kind": "compare",
-                    "op": "gte",
-                    "left": {"kind": "slot_path", "slots": ["year"]},
-                    "right": {"kind": "literal", "value": 1888},
-                },
-                {
-                    "kind": "compare",
-                    "op": "lte",
-                    "left": {"kind": "slot_path", "slots": ["year"]},
-                    "right": {"kind": "literal", "value": 2100},
-                },
-            ],
-        },
+        "body": "year >= 1888 AND year <= 2100",
         "severity": "warning",
         "message": "Year should be between 1888 and 2100",
     }
@@ -188,11 +161,9 @@ async def test_add_bool_expr_constraint(draft_with_movie, client):
     spec = await get_revision(conn, draft_id)
     con = spec.constraints[0]
     assert con.name == "year_plausible_range"
-    from knot.spec.metaschema import BoolExpr, BoolOpKind
-
-    assert isinstance(con.body, BoolExpr)
-    assert con.body.op == BoolOpKind.AND
-    assert len(con.body.operands) == 2
+    assert isinstance(con.body, str)
+    assert "1888" in con.body
+    assert "2100" in con.body
 
 
 # ---------------------------------------------------------------------------
@@ -206,32 +177,27 @@ def test_unknown_primary_class_returns_404(draft_with_movie, client_no_exc):
     body = {
         "name": "bad_constraint",
         "primary_class_name": "DoesNotExist",
-        "body": {"kind": "literal", "value": True},
+        "body": "year >= 0",
     }
     resp = client_no_exc.post(f"/spec/drafts/{draft_id}/constraints", json=body)
     assert resp.status_code == 404
 
 
 # ---------------------------------------------------------------------------
-# 4. 404 on unknown slot reference in body
+# 4. 422 on invalid SQL in body
 # ---------------------------------------------------------------------------
 
 
-def test_unknown_slot_in_body_returns_404(draft_with_movie, client_no_exc):
+def test_invalid_sql_in_body_returns_422(draft_with_movie, client_no_exc):
     conn, draft_id = draft_with_movie
 
     body = {
-        "name": "bad_slot_ref",
+        "name": "bad_sql",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "compare",
-            "op": "gte",
-            "left": {"kind": "slot_path", "slots": ["no_such_slot"]},
-            "right": {"kind": "literal", "value": 0},
-        },
+        "body": "SELECT * FROM foo",  # full SELECT not allowed — must be predicate
     }
     resp = client_no_exc.post(f"/spec/drafts/{draft_id}/constraints", json=body)
-    assert resp.status_code == 404
+    assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -245,12 +211,7 @@ def test_duplicate_constraint_name_returns_409(draft_with_movie, client, client_
     body = {
         "name": "year_check",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "compare",
-            "op": "gte",
-            "left": {"kind": "slot_path", "slots": ["year"]},
-            "right": {"kind": "literal", "value": 1888},
-        },
+        "body": "year >= 1888",
     }
     resp = client.post(f"/spec/drafts/{draft_id}/constraints", json=body)
     assert resp.status_code == 200
@@ -272,7 +233,7 @@ def test_invalid_name_pattern_returns_422(draft_with_movie, client_no_exc):
     body = {
         "name": "bad name with spaces",  # fails _NAME_PATTERN
         "primary_class_name": "Movie",
-        "body": {"kind": "literal", "value": True},
+        "body": "year >= 0",
     }
     resp = client_no_exc.post(f"/spec/drafts/{draft_id}/constraints", json=body)
     assert resp.status_code == 422
@@ -290,12 +251,7 @@ def test_e2e_constraint_violation_reported(draft_with_movie, client):
     body = {
         "name": "year_not_before_cinema",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "compare",
-            "op": "gte",
-            "left": {"kind": "slot_path", "slots": ["year"]},
-            "right": {"kind": "literal", "value": 1888},
-        },
+        "body": "year >= 1888",
         "severity": "error",
     }
     resp = client.post(f"/spec/drafts/{draft_id}/constraints", json=body)
@@ -334,12 +290,7 @@ def test_e2e_no_violations_when_all_rows_valid(draft_with_movie, client):
     body = {
         "name": "year_not_before_cinema",
         "primary_class_name": "Movie",
-        "body": {
-            "kind": "compare",
-            "op": "gte",
-            "left": {"kind": "slot_path", "slots": ["year"]},
-            "right": {"kind": "literal", "value": 1888},
-        },
+        "body": "year >= 1888",
         "severity": "error",
     }
     client.post(f"/spec/drafts/{draft_id}/constraints", json=body)

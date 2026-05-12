@@ -17,10 +17,6 @@ Publish-gate tests that drive the full draft → publish flow live in
 from __future__ import annotations
 
 from knot.spec import (
-    BoolExpr,
-    BoolOpKind,
-    Compare,
-    CompareOp,
     Constraint,
     Literal_,
     OntologyClass,
@@ -29,7 +25,6 @@ from knot.spec import (
     Severity,
     Slot,
     SlotConstraints,
-    SlotPath,
     Source,
     SourceBinding,
     Spec,
@@ -501,6 +496,7 @@ def test_diff_change_source_binding_trust_emits_record():
     compares live objects directly and emits a Bucket C audit record.
     No DDL is emitted; the record is non-destructive.
     """
+
     def build(*, trust_prior):
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         cls = OntologyClass(name="Movie", slots=[id_slot])
@@ -548,12 +544,12 @@ def _build_constraint_spec(*, body_value=1, severity=Severity.ERROR, primary_nam
     primary_cls = {"Movie": movie, "Series": series}[primary_name]
     src = Source(name="imdb")
     binding = SourceBinding(source=src, class_=movie, identifier_slot=id_slot)
-    body = Compare(
-        op=CompareOp.GT,
-        left=SlotPath(from_class=primary_cls, slots=[year]),
-        right=Literal_(value=body_value),
+    con = Constraint(
+        name="year_positive",
+        primary=primary_cls,
+        body=f"year > {body_value}",
+        severity=severity,
     )
-    con = Constraint(name="year_positive", primary=primary_cls, body=body, severity=severity)
     return Spec(
         id="t",
         version="1.0.0",
@@ -658,21 +654,14 @@ def test_change_constraint_severity_is_not_destructive():
 # ---------------------------------------------------------------------------
 
 
-def test_diff_bool_expr_constraint_body_emits_change_constraint_body():
-    """Sanity check: a BoolExpr-bodied constraint that changes should still
-    produce a ChangeConstraintBody record."""
+def test_diff_change_constraint_body_different_sql_emits_record():
+    """AST-inequivalent SQL bodies produce a ChangeConstraintBody record."""
 
     def build(*, value):
         id_slot = Slot(name="id", type=Primitive(name="string"), identifier=True)
         year = Slot(name="year", type=Primitive(name="integer"))
         movie = OntologyClass(name="Movie", slots=[id_slot, year])
-        cmp_left = Compare(
-            op=CompareOp.GT,
-            left=SlotPath(from_class=movie, slots=[year]),
-            right=Literal_(value=value),
-        )
-        body = BoolExpr(op=BoolOpKind.AND, operands=[cmp_left])
-        con = Constraint(name="c", primary=movie, body=body)
+        con = Constraint(name="c", primary=movie, body=f"year > {value}")
         return Spec(
             id="t",
             version="1.0.0",
