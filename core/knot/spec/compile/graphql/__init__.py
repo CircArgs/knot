@@ -302,15 +302,17 @@ def _make_classref_array_resolver(
 
 
 def _make_reverse_classref_resolver(
-    source_type: type, source_oc: OntologyClass, fk_slot: str
+    source_type: type, source_oc: OntologyClass, fk_slot: str, *, fk_is_array: bool
 ):
-    """Async resolver for a back-edge field on the target side of a
-    scalar ClassRef.
+    """Async resolver for a back-edge field on the target side of a ClassRef.
 
-    Given ``Credit.movie : ClassRef → Movie``, the resolver attached to
-    ``Movie.credits`` (back-edge) fetches every Credit row whose ``movie``
-    column equals ``self.canonical_id``. Uses ``graph_store.query_rows``
-    with a single-column predicate.
+    Scalar source slot (``Credit.movie : ClassRef → Movie``): match where
+    ``source.<slot> = self.canonical_id``.
+
+    Array-valued source slot (``Movie.actors : list[ClassRef → Person]``):
+    match where ``self.canonical_id = ANY(source.<slot>)``.
+
+    Both shapes use ``graph_store.query_rows`` with a single-predicate WHERE.
     """
     async def resolver(root):
         cid = getattr(root, "canonical_id", None)
@@ -322,7 +324,10 @@ def _make_reverse_classref_resolver(
         from knot.db import graph_store
         from psycopg import sql as _sql
 
-        pred = _sql.SQL("s.{col} = %s").format(col=_sql.Identifier(fk_slot))
+        if fk_is_array:
+            pred = _sql.SQL("%s = ANY(s.{col})").format(col=_sql.Identifier(fk_slot))
+        else:
+            pred = _sql.SQL("s.{col} = %s").format(col=_sql.Identifier(fk_slot))
         async with db.connect() as conn:
             rows = await graph_store.query_rows(
                 conn,
@@ -333,27 +338,34 @@ def _make_reverse_classref_resolver(
         return [_row_to_typed(source_type, source_oc, r) for r in rows]
 
     resolver.__annotations__ = {"root": Any, "return": list[source_type]}
-    resolver.__name__ = f"resolve_{source_oc.name.lower()}_back_via_{fk_slot}"
+    suffix = "any" if fk_is_array else "eq"
+    resolver.__name__ = f"resolve_{source_oc.name.lower()}_back_{suffix}_{fk_slot}"
     return resolver
 
 
 def _compute_back_edges(
     concrete: list[OntologyClass],
-) -> dict[str, list[tuple[OntologyClass, str]]]:
-    """Map ``target_class_name → [(source_oc, source_slot_name), ...]``.
+) -> dict[str, list[tuple[OntologyClass, str, bool]]]:
+    """Map ``target_class_name → [(source_oc, slot_name, fk_is_array), ...]``.
 
-    A back-edge exists whenever some concrete class's scalar ClassRef slot
-    points to a target class also in the concrete set. Array-of-ClassRef
-    back-edges are deferred (SQL predicate would need ANY(); not in demo).
+    A back-edge exists whenever some concrete class has either a scalar
+    ClassRef slot or an Array-of-ClassRef slot pointing at a target class
+    also in the concrete set. The ``fk_is_array`` flag picks the SQL
+    predicate shape at resolver time (= vs ANY()).
     """
     name_to_oc = {oc.name: oc for oc in concrete}
-    out: dict[str, list[tuple[OntologyClass, str]]] = {n: [] for n in name_to_oc}
+    out: dict[str, list[tuple[OntologyClass, str, bool]]] = {n: [] for n in name_to_oc}
     for oc in concrete:
         for slot in _all_slots(oc):
-            if isinstance(slot.type, ClassRef):
-                tname = slot.type.target_class.name
+            t = slot.type
+            if isinstance(t, ClassRef):
+                tname = t.target_class.name
                 if tname in name_to_oc:
-                    out[tname].append((oc, slot.name))
+                    out[tname].append((oc, slot.name, False))
+            elif isinstance(t, Array) and isinstance(t.of, ClassRef):
+                tname = t.of.target_class.name
+                if tname in name_to_oc:
+                    out[tname].append((oc, slot.name, True))
     return out
 
 
@@ -421,14 +433,14 @@ def _make_class_object_type(
             annotations[slot.name] = py | None
             ns[slot.name] = None
 
-    # Back-edge fields: for every (source, slot) where source.slot → this class.
-    # Group by source class so we can disambiguate when one source has
-    # multiple ClassRef paths to the same target.
+    # Back-edge fields: for every (source, slot, is_array) where source.slot
+    # → this class. Group by source class so we can disambiguate when one
+    # source has multiple ClassRef paths to the same target.
     own_back = back_edges.get(oc.name, [])
     by_source: dict[str, list[str]] = {}
-    for src_oc, slot_name in own_back:
+    for src_oc, slot_name, _is_arr in own_back:
         by_source.setdefault(src_oc.name, []).append(slot_name)
-    for src_oc, slot_name in own_back:
+    for src_oc, slot_name, fk_is_array in own_back:
         src_type = raw_classes[src_oc.name]
         n_paths = len(by_source[src_oc.name])
         field_name = _back_edge_field_name(src_oc, slot_name, n_paths)
@@ -437,7 +449,9 @@ def _make_class_object_type(
             field_name = f"{field_name}_via_{slot_name}"
         annotations[field_name] = list[src_type]
         ns[field_name] = strawberry.field(
-            resolver=_make_reverse_classref_resolver(src_type, src_oc, slot_name)
+            resolver=_make_reverse_classref_resolver(
+                src_type, src_oc, slot_name, fk_is_array=fk_is_array
+            )
         )
 
     # System canonical_id (unless shadowed by a slot of the same name).
