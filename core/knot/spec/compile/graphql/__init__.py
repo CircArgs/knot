@@ -175,21 +175,55 @@ def _make_slot_where_type(slot: Slot, class_name: str) -> type:
     return strawberry.input(cls)
 
 
-def _make_class_where_type(oc: OntologyClass) -> type:
+def _class_where_fields(
+    oc: OntologyClass,
+    *,
+    where_types_by_name: dict[str, type],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Compute ``(annotations, ns)`` for a class's top-level WhereInput.
+
+    For scalar Primitive / Array / derived slots, emit the existing per-slot
+    where-input (eq/neq/gt/in/like/...).
+
+    For scalar ClassRef slots, replace the per-slot operator-bag with the
+    *target class's* WhereInput — so filtering like
+    ``credit(where: { movie: { title: { eq: "Inception" } } })`` works.
+    The compiler turns this into a subquery filter (see
+    ``_compile_nested_where_subquery``).
+    """
+    annotations: dict[str, Any] = {}
+    ns: dict[str, Any] = {}
+    for slot in _all_slots(oc):
+        t = slot.type
+        if isinstance(t, ClassRef) and t.target_class.name in where_types_by_name:
+            target_where = where_types_by_name[t.target_class.name]
+            annotations[slot.name] = Optional[target_where]
+            ns[slot.name] = strawberry.UNSET
+        else:
+            slot_where = _make_slot_where_type(slot, oc.name)
+            annotations[slot.name] = Optional[slot_where]
+            ns[slot.name] = strawberry.UNSET
+    return annotations, ns
+
+
+def _make_class_where_type(
+    oc: OntologyClass,
+    *,
+    where_types_by_name: dict[str, type] | None = None,
+) -> type:
     """Build the top-level WhereInput for a class (one field per slot).
 
-    Both stored slots and derived slots appear in WhereInput.  Filtering on a
-    derived slot compiles its derivation expression as a subquery placed in the
-    WHERE clause.
+    Stored slots + derived slots both appear. For ClassRef slots, the field
+    is typed as the target's WhereInput (nested filtering). Defined classes
+    walk the is_a chain to collect inherited slots so the GraphQL surface
+    matches actual columns.
 
-    For defined classes (is_a set + definition), walks the is_a chain to
-    collect all inherited slots so the GraphQL surface matches actual columns.
+    When ``where_types_by_name`` is omitted, ClassRef slots fall back to
+    canonical-id scalar filtering (legacy callers).
     """
+    where_types_by_name = where_types_by_name or {}
     type_name = f"WhereInput_{oc.name}"
-    all_s = _all_slots(oc)
-    slot_types = {s.name: _make_slot_where_type(s, oc.name) for s in all_s}
-    annotations: dict[str, Any] = {name: t | None for name, t in slot_types.items()}
-    ns: dict[str, Any] = {name: strawberry.UNSET for name in annotations}
+    annotations, ns = _class_where_fields(oc, where_types_by_name=where_types_by_name)
     cls = type(type_name, (), {"__annotations__": annotations, **ns})
     return strawberry.input(cls)
 
@@ -471,9 +505,26 @@ def _make_field_enum(oc: OntologyClass) -> type:
     Member names are camelCase (matching the GraphQL field convention) while
     enum *values* are the underlying snake_case slot names — so callers reading
     ``item.field.value`` get the real slot name back.
+
+    Also emits relation-path entries for each scalar ClassRef slot so callers
+    can sort by a related class's primitive property. E.g. on Credit (with
+    ``movie: ClassRef → Movie``) the enum carries ``MOVIE_YEAR`` →
+    ``movie.year``, ``MOVIE_TITLE`` → ``movie.title``, etc. The compiler
+    turns dotted values into correlated subqueries (see ``_build_order_by_sql``).
     """
     enum_name = f"Field_{oc.name}"
-    members = {_slot_camel(s.name): s.name for s in _all_slots(oc)}
+    members: dict[str, str] = {}
+    for s in _all_slots(oc):
+        members[_slot_camel(s.name)] = s.name
+        # Relation paths: only one hop, only primitive target slots (no
+        # nested ClassRef / Array sorting through relations).
+        if isinstance(s.type, ClassRef):
+            target_oc = s.type.target_class
+            for ts in _all_slots(target_oc):
+                if isinstance(ts.type, (ClassRef, Array)):
+                    continue
+                key = f"{_slot_camel(s.name)}_{_slot_camel(ts.name)}"
+                members[key] = f"{s.name}.{ts.name}"
     py_enum = enum.Enum(enum_name, members)  # type: ignore[misc]
     return strawberry.enum(py_enum)
 
@@ -624,6 +675,68 @@ def _derived_slot_where_to_sql(
     return fragments
 
 
+def _compile_nested_where_subquery(
+    target_oc: OntologyClass,
+    nested_where: Any,
+    alias_suffix: str,
+) -> tuple[sql.Composable, list[Any]]:
+    """Build ``SELECT canonical_id FROM <target> JOIN <bindings> WHERE <inner>``
+    for the inside of a ClassRef nested-where filter.
+
+    ``alias_suffix`` disambiguates aliases when multiple ClassRef filters
+    nest at the same level (e.g., ``where: { movie: {...}, person: {...} }``).
+    Uses ``s_<suffix>`` / ``b_<suffix>`` so generated SQL doesn't collide
+    with the outer query's aliases (which are typically ``s`` / ``b``).
+    """
+    from knot.spec.compile.postgres._naming import (
+        bindings_table_id as _bind_id,
+    )
+    from knot.spec.compile.postgres._naming import (
+        table_id as _tbl_id,
+    )
+
+    # Defined classes are backed by a VIEW with _canonical_id in-row; the
+    # JOIN to a _bindings table doesn't apply. Filter through the parent.
+    storage_class = target_oc
+    if getattr(target_oc, "definition", None) is not None and target_oc.is_a is not None:
+        storage_class = target_oc.is_a
+
+    inner_s = f"s_{alias_suffix}"
+    inner_b = f"b_{alias_suffix}"
+    inner_pred, inner_params = build_predicate_sql(target_oc, nested_where, alias=inner_s)
+    src = _tbl_id(storage_class)
+    bind = _bind_id(storage_class)
+
+    if inner_pred is not None:
+        subq = sql.SQL(
+            "SELECT {bind_id}.canonical_id FROM {src} {s_a} "
+            "JOIN {bind} {b_a} "
+            "ON {bind_id}.knot_row_id = {src_id}._knot_row_id "
+            "AND {bind_id}.valid_to IS NULL "
+            "WHERE {pred}"
+        ).format(
+            src=src,
+            bind=bind,
+            s_a=sql.Identifier(inner_s),
+            b_a=sql.Identifier(inner_b),
+            src_id=sql.Identifier(inner_s),
+            bind_id=sql.Identifier(inner_b),
+            pred=inner_pred,
+        )
+    else:
+        # No inner predicate → match any current binding (rare; just
+        # filters parents that have a live target row at all).
+        subq = sql.SQL(
+            "SELECT {bind_id}.canonical_id FROM {bind} {b_a} "
+            "WHERE {bind_id}.valid_to IS NULL"
+        ).format(
+            bind=bind,
+            b_a=sql.Identifier(inner_b),
+            bind_id=sql.Identifier(inner_b),
+        )
+    return subq, inner_params
+
+
 def build_predicate_sql(
     oc: OntologyClass,
     where_input: Any,
@@ -656,6 +769,24 @@ def build_predicate_sql(
     for slot in _all_slots(oc):
         slot_where = getattr(where_input, slot.name, strawberry.UNSET)
         if slot_where is strawberry.UNSET or slot_where is None:
+            continue
+
+        # ClassRef slot: nested-where is the target's WhereInput; compile a
+        # subquery filter on the foreign-key column.
+        if isinstance(slot.type, ClassRef):
+            subq, sub_params = _compile_nested_where_subquery(
+                slot.type.target_class, slot_where, slot.name
+            )
+            fragment = (
+                sql.SQL("{a}.{col} IN (").format(
+                    a=sql.Identifier(alias),
+                    col=sql.Identifier(slot.name),
+                )
+                + subq
+                + sql.SQL(")")
+            )
+            ctx.params.extend(sub_params)
+            all_fragments.append(fragment)
             continue
 
         if getattr(slot, "derivation", None) is None:
@@ -742,9 +873,56 @@ def _build_order_by_sql(
     # Re-iterate to emit in input order.
     slot_by_name2: dict[str, Slot] = {s.name: s for s in _all_slots(oc)}
     CompileContext(primary_class=storage_class, alias=alias, params=[])
-    for item in order_by_list:
+    for idx, item in enumerate(order_by_list):
         field_name = item.field.value
         direction = item.direction.value.upper()
+
+        # Relation-path sort: enum value like "movie.year" → compile a
+        # correlated subquery that returns the target column.
+        if "." in field_name:
+            fk_slot_name, target_slot_name = field_name.split(".", 1)
+            fk_slot = slot_by_name2.get(fk_slot_name)
+            if fk_slot is None or not isinstance(fk_slot.type, ClassRef):
+                # Unknown / malformed path — skip silently to avoid an
+                # internal-server-error from a stale enum value.
+                continue
+            target_oc = fk_slot.type.target_class
+            storage_target = target_oc
+            if (
+                getattr(target_oc, "definition", None) is not None
+                and target_oc.is_a is not None
+            ):
+                storage_target = target_oc.is_a
+            from knot.spec.compile.postgres._naming import (
+                bindings_table_id as _bind_id,
+            )
+            from knot.spec.compile.postgres._naming import (
+                table_id as _tbl_id,
+            )
+
+            inner_s = f"os{idx}"
+            inner_b = f"ob{idx}"
+            subq = sql.SQL(
+                "(SELECT {s}.{col} FROM {src} {s_a} JOIN {bind} {b_a} "
+                "ON {b}.knot_row_id = {s}._knot_row_id "
+                "AND {b}.valid_to IS NULL "
+                "AND {b}.canonical_id = {outer}.{fk} "
+                "LIMIT 1) {dir}"
+            ).format(
+                src=_tbl_id(storage_target),
+                bind=_bind_id(storage_target),
+                s_a=sql.Identifier(inner_s),
+                b_a=sql.Identifier(inner_b),
+                s=sql.Identifier(inner_s),
+                b=sql.Identifier(inner_b),
+                col=sql.Identifier(target_slot_name),
+                outer=sql.Identifier(alias),
+                fk=sql.Identifier(fk_slot_name),
+                dir=sql.SQL(direction),
+            )
+            all_parts.append(subq)
+            continue
+
         slot = slot_by_name2.get(field_name)
         if slot is not None and getattr(slot, "derivation", None) is not None:
             # Derived: compile fresh to get params in order.
@@ -930,9 +1108,25 @@ def _build_schema(spec: Spec) -> Schema:
     for oc in concrete_classes:
         class_object_types[oc.name] = strawberry.type(raw_classes[oc.name])
 
+    # WhereInputs use the same stub-then-patch pattern as object types so
+    # ClassRef slots can reference the target's WhereInput (enabling
+    # nested filtering like ``credit(where: { movie: { title: ... } })``).
+    raw_where_types: dict[str, type] = {}
+    for oc in concrete_classes:
+        raw_where_types[oc.name] = type(f"WhereInput_{oc.name}", (), {})
+
+    for oc in concrete_classes:
+        cls = raw_where_types[oc.name]
+        annotations, ns = _class_where_fields(oc, where_types_by_name=raw_where_types)
+        cls.__annotations__ = annotations
+        for k, v in ns.items():
+            setattr(cls, k, v)
+
+    for oc in concrete_classes:
+        where_types[oc.name] = strawberry.input(raw_where_types[oc.name])
+
     # All remaining per-class types are independent of each other.
     for oc in concrete_classes:
-        where_types[oc.name] = _make_class_where_type(oc)
         field_enums[oc.name] = _make_field_enum(oc)
         order_by_inputs[oc.name] = _make_order_by_input(oc, field_enums[oc.name])
         agg_result_types[oc.name], agg_fields_map[oc.name] = _make_aggregate_result_type(oc)
