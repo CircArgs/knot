@@ -40,8 +40,10 @@ def emit_ddl(
     *,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
+    resolved_suffix: str = "_resolved",
     if_not_exists: bool = False,
     emit_bindings: bool = True,
+    emit_resolved_views: bool = True,
     emit_descriptions: bool = False,
 ) -> list[str]:
     """Return the DDL statements that materialize ``spec``.
@@ -54,15 +56,25 @@ def emit_ddl(
     bindings_suffix
         Suffix appended to the class table name to form the SCD2
         bindings table name.
+    resolved_suffix
+        Suffix appended to the class name for the resolved-view that
+        argmaxes across currently-open bindings.
     if_not_exists
         When True, emit ``CREATE TABLE IF NOT EXISTS`` and ``CREATE OR
         REPLACE VIEW``. Use for re-runnable migrations.
     emit_bindings
         When False, skip the ``<class>_bindings`` tables entirely.
+    emit_resolved_views
+        When False, skip the ``<class>_resolved`` views. Set to False
+        for write-direct workflows that hit the canonical table.
     emit_descriptions
         When True, follow each entity with ``COMMENT ON TABLE / COLUMN /
         VIEW`` for any non-empty ``description`` fields.
     """
+    # Local import — resolver imports from knot.spec, ddl imports from
+    # knot.spec; resolver doesn't import from ddl, so no cycle.
+    from knot.compile.resolver import emit_resolved_view
+
     stmts: list[str] = [f"CREATE SCHEMA IF NOT EXISTS {schema};"]
     for cls in spec.classes:
         if isinstance(cls, OntologyClass):
@@ -79,6 +91,18 @@ def emit_ddl(
                         cls,
                         schema=schema,
                         bindings_suffix=bindings_suffix,
+                        if_not_exists=if_not_exists,
+                    )
+                )
+            if emit_resolved_views and emit_bindings:
+                # Resolved view depends on the bindings table existing.
+                stmts.append(
+                    emit_resolved_view(
+                        spec,
+                        cls,
+                        schema=schema,
+                        bindings_suffix=bindings_suffix,
+                        resolved_suffix=resolved_suffix,
                         if_not_exists=if_not_exists,
                     )
                 )

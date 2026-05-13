@@ -9,16 +9,21 @@ def _all_parse(stmts: list[str]) -> bool:
     return all(sqlglot.parse_one(s, dialect="postgres") for s in stmts)
 
 
-def test_default_emits_canonical_and_bindings_table_per_concrete(movie_spec):
+def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
     stmts = emit_ddl(movie_spec)
-    # CREATE SCHEMA + 3 concrete classes × 2 tables (canonical + bindings) + 1 view
     assert stmts[0].startswith("CREATE SCHEMA IF NOT EXISTS knot_data")
-    canonical = [s for s in stmts if " (\n" in s and "_bindings" not in s and "CREATE TABLE" in s]
-    bindings = [s for s in stmts if "_bindings" in s]
-    views = [s for s in stmts if "CREATE VIEW" in s or "CREATE OR REPLACE VIEW" in s]
-    assert len(canonical) == 3  # Movie, Person, Credit
-    assert len(bindings) == 3
-    assert len(views) == 1  # DirectedMovie
+    canonical = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" not in s]
+    bindings = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" in s]
+    resolved_views = [s for s in stmts if "_resolved AS" in s]
+    virtual_views = [
+        s for s in stmts
+        if (s.startswith("CREATE VIEW") or s.startswith("CREATE OR REPLACE VIEW"))
+        and "_resolved AS" not in s
+    ]
+    assert len(canonical) == 3       # Movie, Person, Credit canonical tables
+    assert len(bindings) == 3        # Movie, Person, Credit bindings tables
+    assert len(resolved_views) == 3  # Movie, Person, Credit resolved views
+    assert len(virtual_views) == 1   # DirectedMovie (the virtual class)
     assert _all_parse(stmts)
 
 

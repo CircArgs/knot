@@ -67,10 +67,18 @@ def test_class_table_ref_qualified():
     )
     rewrites = dict(emit_validation(spec))
     sql = rewrites["has_director"]
-    assert "knot_data.credit" in sql
-    assert "knot_data.credit.movie" in sql
-    assert "knot_data.credit.role" in sql
-    assert "knot_data.movie.canonical_id" in sql
+    # Default target_suffix='_resolved' — refs go to the resolved views.
+    assert "knot_data.credit_resolved" in sql
+    assert "knot_data.credit_resolved.movie" in sql
+    assert "knot_data.credit_resolved.role" in sql
+    assert "knot_data.movie_resolved.canonical_id" in sql
+
+    # And with target_suffix='' — canonical-table targeting.
+    rewrites_canonical = dict(emit_validation(spec, target_suffix=""))
+    sql_c = rewrites_canonical["has_director"]
+    assert "knot_data.credit.movie" in sql_c
+    assert "knot_data.movie.canonical_id" in sql_c
+    assert "_resolved" not in sql_c
 
 
 def test_alias_preserved():
