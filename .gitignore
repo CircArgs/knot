@@ -19,6 +19,10 @@ __marimo__/
 # OS
 .DS_Store
 Thumbs.db
+.nfs*
+
+# Claude Code per-project settings
+.claude/
 
 # UI build/install artifacts
 ui/node_modules/
