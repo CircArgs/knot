@@ -629,6 +629,16 @@ class Spec:
                         f"slot {slot_name!r} not on class"
                     )
 
+        # is_a / mixin cycle detection
+        for c in self.classes:
+            if isinstance(c, OntologyClass) and _participates_in_cycle(c):
+                errs.append(
+                    f"class {c.name!r} participates in an is_a / mixin cycle"
+                )
+
+        # Constraint body class-qualified slot reference checking
+        _validate_body_refs(self, errs)
+
         return errs
 
     def validate_strict(self) -> None:
@@ -642,6 +652,78 @@ class Spec:
 
 class SpecError(ValueError):
     """Raised by ``Spec.validate_strict`` when well-formedness fails."""
+
+
+# ---------------------------------------------------------------------------
+# Validation helpers (module-level so they can be unit-tested in isolation
+# and don't pollute Spec's instance namespace)
+# ---------------------------------------------------------------------------
+
+
+def _participates_in_cycle(cls: OntologyClass) -> bool:
+    """True iff ``cls`` would appear in its own is_a / mixin chain.
+
+    Walks parents BFS without ``chain()``'s dedup; returns True the
+    moment we encounter ``cls`` itself in the parent set."""
+    seen: set[int] = set()
+    queue: list[OntologyClass] = []
+    if cls.is_a is not None:
+        queue.append(cls.is_a)
+    queue.extend(cls.mixins)
+    while queue:
+        cur = queue.pop(0)
+        if cur is cls:
+            return True
+        if id(cur) in seen:
+            continue
+        seen.add(id(cur))
+        if cur.is_a is not None:
+            queue.append(cur.is_a)
+        queue.extend(cur.mixins)
+    return False
+
+
+def _validate_body_refs(spec: Spec, errs: list[str]) -> None:
+    """For every ``Constraint.body`` and ``VirtualClass.definition``,
+    parse the SQL and check that any class-qualified column reference
+    (``Class.slot``) resolves to a real slot on that class.
+
+    Table references to unknown names are NOT flagged — they may be
+    external tables. Bare column references (``year`` not ``Movie.year``)
+    are also not flagged, since false positives from subqueries /
+    aliases / function arguments dominate.
+
+    Reports body parse failures as a separate error class.
+    """
+    import sqlglot
+    from sqlglot import expressions as exp
+
+    classes_by_name = {
+        c.name: c for c in spec.classes if isinstance(c, OntologyClass)
+    }
+
+    def _check(label: str, body: str) -> None:
+        try:
+            tree = sqlglot.parse_one(body, dialect="postgres")
+        except Exception as e:
+            errs.append(f"{label}: body fails to parse — {e}")
+            return
+        for col in tree.find_all(exp.Column):
+            tbl = col.table
+            if tbl and tbl in classes_by_name:
+                target = classes_by_name[tbl]
+                slot_names = {s.name for s in target.effective_slots()}
+                if col.name not in slot_names:
+                    errs.append(
+                        f"{label}: references {tbl}.{col.name} but "
+                        f"{tbl!r} has no slot {col.name!r}"
+                    )
+
+    for c in spec.constraints:
+        _check(f"constraint {c.name!r}", c.body)
+    for c in spec.classes:
+        if isinstance(c, VirtualClass):
+            _check(f"virtual class {c.name!r}", c.definition)
 
 
 __all__ = [

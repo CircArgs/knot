@@ -269,3 +269,132 @@ def test_validate_strict_raises_with_all_errors():
     msg = str(ei.value)
     assert "no identifier" in msg
     assert "Ghost" in msg
+
+
+# ---------------------------------------------------------------------------
+# Cycle detection on is_a / mixins
+# ---------------------------------------------------------------------------
+
+
+def test_validate_self_is_a_cycle():
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.is_a = movie  # direct self-reference
+    errs = spec.validate()
+    assert any("cycle" in e for e in errs)
+
+
+def test_validate_mutual_is_a_cycle():
+    spec = Spec(id="m", version="0.1")
+    a = spec.add_class("A")
+    a.slot("canonical_id", Primitive.TEXT, identifier=True)
+    b = spec.add_class("B")
+    b.slot("canonical_id", Primitive.TEXT, identifier=True)
+    a.is_a = b
+    b.is_a = a
+    errs = spec.validate()
+    assert sum(1 for e in errs if "cycle" in e) == 2
+
+
+def test_validate_mixin_cycle():
+    spec = Spec(id="m", version="0.1")
+    a = spec.add_class("A")
+    a.slot("canonical_id", Primitive.TEXT, identifier=True)
+    b = spec.add_class("B")
+    b.slot("canonical_id", Primitive.TEXT, identifier=True)
+    a.mixins.append(b)
+    b.mixins.append(a)
+    errs = spec.validate()
+    assert any("cycle" in e for e in errs)
+
+
+def test_validate_no_false_positive_for_chain(movie_spec):
+    # Title <- Movie is a legit linear chain — should NOT be flagged
+    errs = movie_spec.validate()
+    assert not any("cycle" in e for e in errs)
+
+
+# ---------------------------------------------------------------------------
+# Constraint body class-qualified slot reference checks
+# ---------------------------------------------------------------------------
+
+
+def test_validate_body_ref_rejects_unknown_slot():
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("year", Primitive.INTEGER)
+    spec.add_constraint("bad", primary=movie, body="Movie.nonexistent_slot >= 1888")
+    errs = spec.validate()
+    assert any("nonexistent_slot" in e for e in errs)
+
+
+def test_validate_body_ref_accepts_existing_slot(movie_spec):
+    # Default movie_spec has constraint `year_sane: year >= 1888` (bare col,
+    # not class-qualified) and a VirtualClass with Class.slot refs that
+    # are all valid. Should validate clean.
+    assert movie_spec.validate() == []
+
+
+def test_validate_body_ref_accepts_inherited_slot():
+    spec = Spec(id="m", version="0.1")
+    title = spec.add_class("Title", kind="abstract")
+    title.slot("canonical_id", Primitive.TEXT, identifier=True)
+    title.slot("name", Primitive.TEXT, required=True)
+    movie = spec.add_class("Movie", is_a=title)
+    # Movie.name is inherited; class-qualified ref should resolve via
+    # effective_slots(), not raise.
+    spec.add_constraint("nm", primary=movie, body="Movie.name IS NOT NULL")
+    assert spec.validate() == []
+
+
+def test_validate_body_ref_class_unknown_not_flagged():
+    # `external.something` is not a class in the spec — leave it alone
+    # (might be a postgres builtin / external table).
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    spec.add_constraint("ext", primary=movie, body="external.value > 0")
+    errs = spec.validate()
+    assert not any("nonexistent" in e or "no slot" in e for e in errs)
+
+
+def test_validate_body_alias_refs_left_alone():
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    credit = spec.add_class("Credit")
+    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
+    credit.fk("movie", to=movie)
+    spec.add_constraint(
+        "via_alias",
+        primary=movie,
+        body=(
+            "EXISTS (SELECT 1 FROM Credit c WHERE c.movie = Movie.canonical_id)"
+        ),
+    )
+    # c.movie is an alias — should NOT be checked against the spec.
+    errs = spec.validate()
+    assert errs == []
+
+
+def test_validate_body_parse_failure_reported():
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    spec.add_constraint("bad_sql", primary=movie, body="SELECT (")  # malformed
+    errs = spec.validate()
+    assert any("fails to parse" in e for e in errs)
+
+
+def test_validate_virtual_class_definition_ref_rejected():
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("year", Primitive.INTEGER)
+    spec.add_virtual_class(
+        "OldMovie", base=movie, where="Movie.nonexistent > 0"
+    )
+    errs = spec.validate()
+    assert any("nonexistent" in e and "virtual" in e for e in errs)
