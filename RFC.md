@@ -199,6 +199,48 @@ POST /graph/corrections
 }
 ```
 
+## User Flows
+
+The architecture above supports four primary workflows. Each is shown from the perspective of the persona who initiates it.
+
+### Flow 1: Core Team Onboards a New Data Source
+
+**Persona:** Ontology curator / data engineer on the core team.
+
+1. **Assess fit.** The curator examines the incoming source's schema (e.g., a TMDB export). If its fields map cleanly to existing classes (e.g., `title` → `Movie.title`, `release_year` → `Movie.year`), skip to step 3.
+2. **Model new classes (if needed).** If the source introduces concepts the ontology doesn't yet cover (e.g., `ProductionCompany`), the curator creates a draft, adds the new class with its slots, and publishes. The compiler emits DDL and extends the GraphQL surface automatically.
+3. **Add a source + source binding.** In the same or a new draft, the curator declares the source (e.g., `tmdb`) and a binding that maps the source's raw field names to the ontology's slots, sets a trust prior, and designates the identifier slot.
+4. **Add or inherit constraints.** If the new source needs tighter validation (e.g., `budget >= 0`), the curator attaches constraints — which can target the class (inherited by all sources) or the binding (source-specific). The publish gate revalidates existing data against any new constraints before the draft lands.
+5. **Preview and publish.** `POST /spec/drafts/{id}/preview` returns the exact DDL diff, whether `allow_destructive` is needed, and any constraint violations. Once clean, `POST /spec/drafts/{id}/publish` atomically applies everything.
+6. **Set up ingestion.** The data engineer writes a lightweight batch job (cron, Airflow task, or script) that reads from the source and posts rows to `POST /graph/ingest/tmdb?class_name=Movie`. Knot handles mapping, validation, constraint enforcement, ER dispatch (if configured), and DQ observation recording — the job itself is just "read rows, POST JSON."
+
+### Flow 2: Consumer Queries the Knowledge Graph
+
+**Persona:** Downstream analyst, application developer, or LLM agent.
+
+- **Direct GraphQL.** The consumer hits `POST /graph/query` with a GraphQL query. The schema is compiler-generated from the published spec, so every concrete and defined class is queryable with filtering, pagination, and nested joins — including multi-hop traversals like `Movie → credits → Person → credits → Movie`.
+- **AI-assisted querying.** The `ai/` sibling service accepts natural-language questions, translates them to GraphQL using the published spec's schema as context, executes the query against knot, and returns structured results with the generated query visible for transparency.
+- **Resolved vs. raw views.** For any entity, the consumer can choose between the raw per-source contributions (`GET /graph/classes/{class}/{canonical_id}`) — useful for debugging — or the single trust-resolved record (`GET .../resolved`) — the "best current answer" as determined by the per-slot resolution policy.
+
+### Flow 3: User Issues a Correction
+
+**Persona:** Curator, analyst, or automated QA process.
+
+1. The user identifies a bad value — e.g., "The Godfather's year is wrong" — via the query surface, the corrections console, or an external review workflow.
+2. The user submits a typed correction via `POST /graph/corrections` (or the UI's corrections console). Four correction types are available: **slot override**, **merge** (collapse two canonical IDs), **split** (separate one canonical ID into two), and **add** (insert a new entity attributed to the synthetic `_user_corrections` source).
+3. Knot atomically: records an immutable audit row, mutates the data plane (SCD2 close + reopen), and fires negative bandit feedback against the source that provided the overridden value.
+4. The correction is **immediately live** — the next query reflects the updated value. No pipeline run required.
+5. Over time, the accumulated feedback shifts the Beta posteriors: sources that are frequently corrected on a given slot see their trust scores decline, and the resolution engine automatically prefers more reliable sources.
+
+### Flow 4: Core Team Updates Entity Resolution
+
+**Persona:** ER engineer on the core team.
+
+1. The ER service (`er/`, `:8002`) runs as a standalone FastAPI process. It registers as a pre-INSERT extension handler via `KNOT_ER_URL` — when set, the ER shim fires on every `RowsIngesting` event, sending the batch to the ER service over HTTP.
+2. The ER service returns canonical IDs for each row (matching, merging, or minting new entities). The shim writes these IDs into the rows before they hit the database.
+3. To update the ER model (e.g., retrain on new features, adjust thresholds), the ER engineer deploys a new version of the `er/` service. No changes to knot core are needed — the extension contract is stable.
+4. Merge/split corrections submitted through Flow 3 are recorded in the structured `_user_corrections` audit log with full payloads, providing a labeled dataset that can feed back into ER model training.
+
 ## What knot is NOT
 
 Each comparator does part of what knot does well; none unify all four problems above.
