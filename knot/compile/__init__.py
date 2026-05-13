@@ -15,7 +15,12 @@ Public surface is re-exported here for convenience.
 """
 
 from knot.compile.constraints import emit_validation, emit_validation_union
-from knot.compile.data_io import BindingWrite, emit_binding_write
+from knot.compile.data_io import (
+    BindingWrite,
+    MappedBindingWrite,
+    emit_binding_write,
+    emit_mapped_binding_write,
+)
 from knot.compile.ddl import emit_ddl
 from knot.compile.meta import emit_meta_ddl
 from knot.compile.spec_io import load_queries, load_spec, save_spec
@@ -30,4 +35,6 @@ __all__ = [
     "emit_validation_union",
     "BindingWrite",
     "emit_binding_write",
+    "MappedBindingWrite",
+    "emit_mapped_binding_write",
 ]
