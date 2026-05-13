@@ -149,9 +149,13 @@ Attach a constraint to `MediaItem`: `year` between `1888` and `now + 5 years`, s
 
 ### 8. The query surface
 
-A consumer never sees postgres or hand-written SQL: the published spec produces a GraphQL surface with one root field per concrete or defined class (`movie`, `person`, `credit`, `director`, ...), each filterable by slot, joinable by relation, projectable. The same spec that produces the storage layout produces the read surface; they cannot drift.
+A consumer never sees postgres or hand-written SQL: the published spec produces a GraphQL surface with one root field per concrete or defined class (`movie`, `person`, `credit`, `director`, ...), each filterable by slot, joinable by relation, projectable. The same spec that produces the storage layout produces the read surface; they cannot drift. Even sophisticated multi-hop queries — `Movie → Credit → Person → Credits → Movie` — work out of the box, closing loops and returning nested JSON:
 
-![GraphQL Playground showing a multi-hop join query (Movie → Credit → Person → Credits → Movie) with graph visualization of The Godfather and Marlon Brando](assets/query_graph.png)
+![Multi-hop GraphQL query returning nested JSON: The Godfather → Credit (actor) → Marlon Brando → Credits → The Godfather](assets/query_json.png)
+
+The same result rendered as an interactive graph, showing entities as typed nodes and relations as labeled edges:
+
+![Graph visualization of the multi-hop query results, showing Movie, Credit, and Person nodes with labeled edges](assets/query_graph_deep.png)
 
 ### 9. Ingesting Data
 
