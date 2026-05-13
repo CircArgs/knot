@@ -1,123 +1,55 @@
 /**
- * Heuristic visual renderer for a GraphQL response.
+ * Subgraph view of a GraphQL data-plane response.
  *
- * Three patterns recognised:
- *   1. `publishedSpec { classes { ... } }`  → class-card graph (reuse existing builder)
- *   2. `<entity>(limit: N)` returning a JSON-typed list   → one card per row
- *   3. `<entity>ByCanonicalId` / `<entity>Resolved` returning a JSON string
- *      → parse and render each top-level object as a card
+ * Walks the response tree alongside the introspection schema. Every object
+ * that carries a `canonicalId` field is treated as an entity instance; we
+ * emit one React Flow node per `(typeName, canonicalId)` pair (deduped, so
+ * the same Person referenced from three different Credits surfaces as one
+ * node with three incoming edges). Each nested entity field becomes a
+ * directed edge labelled by the GraphQL field name.
  *
- * Anything else falls through to a "graph view not available" hint — the JSON
- * tab is still there for the long tail.
+ * No introspection of __typename is required — the schema lookup (Query →
+ * field → return type, recursively) tells us the type at every level.
+ *
+ * If the response carries no entities (typename has no canonicalId), or if
+ * the schema isn't loaded yet, we surface a hint instead of an empty graph.
  */
 import { useEffect, useMemo, useState } from "react";
-import { ReactFlow, Background, Controls } from "@xyflow/react";
-import type { Edge, Node } from "@xyflow/react";
+import {
+  ReactFlow,
+  Background,
+  Controls,
+  Handle,
+  Position,
+} from "@xyflow/react";
+import type { Edge, Node, NodeProps } from "@xyflow/react";
+import type { GraphQLSchema, GraphQLObjectType, GraphQLOutputType } from "graphql";
+import { getNamedType, isObjectType } from "graphql";
 import "@xyflow/react/dist/style.css";
 
-import type { PublishedSpec } from "../../types/spec";
-import { buildGraph } from "../../lib/buildGraph";
 import { layoutGraph } from "../../lib/layout";
-import ClassNode from "../nodes/ClassNode";
-import SlotNode from "../nodes/SlotNode";
-import SourceNode from "../nodes/SourceNode";
-import ConstraintNode from "../nodes/ConstraintNode";
 
 interface Props {
   data: unknown;
+  schema: GraphQLSchema | null;
 }
 
-const nodeTypes = {
-  specClass: ClassNode,
-  specSlot: SlotNode,
-  specSource: SourceNode,
-  specConstraint: ConstraintNode,
-} as const;
-
-export default function GraphView({ data }: Props) {
-  const pattern = useMemo(() => detectPattern(data), [data]);
-
-  if (pattern.kind === "published-spec") {
-    return <PublishedSpecGraph spec={pattern.spec} />;
-  }
-  if (pattern.kind === "row-list") {
-    return <RowCards title={pattern.field} rows={pattern.rows} />;
-  }
-  if (pattern.kind === "json-blob") {
-    return <RowCards title={pattern.field} rows={pattern.rows} />;
-  }
-  return (
-    <div className="p-6 text-sm text-knot-muted">
-      Graph view not available for this query shape. Try the JSON tab.
-    </div>
-  );
+interface EntityNodeData {
+  typeName: string;
+  canonicalId: string;
+  // Scalar properties surfaced on the card (everything in the row except
+  // nested objects / arrays / canonicalId itself).
+  scalars: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
-// ─── Pattern detection ────────────────────────────────────────────────────
-
-type Pattern =
-  | { kind: "none" }
-  | { kind: "published-spec"; spec: PublishedSpec }
-  | { kind: "row-list"; field: string; rows: Record<string, unknown>[] }
-  | { kind: "json-blob"; field: string; rows: Record<string, unknown>[] };
-
-function detectPattern(raw: unknown): Pattern {
-  if (!raw || typeof raw !== "object") return { kind: "none" };
-  const body = raw as { data?: Record<string, unknown> };
-  const data = body.data;
-  if (!data || typeof data !== "object") return { kind: "none" };
-
-  // 1) publishedSpec shape
-  const ps = data["publishedSpec"];
-  if (
-    ps &&
-    typeof ps === "object" &&
-    Array.isArray((ps as { classes?: unknown }).classes)
-  ) {
-    return { kind: "published-spec", spec: ps as PublishedSpec };
-  }
-
-  // Pick the first field on the data object that we recognise.
-  for (const [field, value] of Object.entries(data)) {
-    // 2) array of row objects — typical `movie(limit: 10)` return
-    if (Array.isArray(value)) {
-      const rows = value.filter(
-        (v) => v && typeof v === "object" && !Array.isArray(v),
-      ) as Record<string, unknown>[];
-      if (rows.length > 0) return { kind: "row-list", field, rows };
-    }
-    // 3) JSON string (Resolved blob) or array of strings (ByCanonicalId)
-    if (typeof value === "string") {
-      const parsed = tryParseJSON(value);
-      if (parsed !== undefined) {
-        const rows = Array.isArray(parsed) ? parsed : [parsed];
-        const objs = rows.filter(
-          (r) => r && typeof r === "object" && !Array.isArray(r),
-        ) as Record<string, unknown>[];
-        if (objs.length > 0) return { kind: "json-blob", field, rows: objs };
-      }
-    }
-  }
-  return { kind: "none" };
-}
-
-function tryParseJSON(s: string): unknown {
-  try {
-    return JSON.parse(s);
-  } catch {
-    return undefined;
-  }
-}
-
-// ─── publishedSpec → class-card graph ─────────────────────────────────────
-
-function PublishedSpecGraph({ spec }: { spec: PublishedSpec }) {
+export default function GraphView({ data, schema }: Props) {
+  const built = useMemo(() => buildGraph(data, schema), [data, schema]);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
 
   useEffect(() => {
-    const built = buildGraph(fillMissing(spec));
-    layoutGraph(built.nodes, built.edges)
+    layoutGraph(built.nodes, built.edges, { width: 240, height: 120 })
       .then((laid) => {
         setNodes(laid as Node[]);
         setEdges(built.edges);
@@ -126,13 +58,30 @@ function PublishedSpecGraph({ spec }: { spec: PublishedSpec }) {
         setNodes(built.nodes as Node[]);
         setEdges(built.edges);
       });
-  }, [spec]);
+  }, [built]);
+
+  if (!schema) {
+    return (
+      <div className="p-6 text-sm text-knot-muted">
+        Loading schema… (graph view needs introspection)
+      </div>
+    );
+  }
+  if (built.nodes.length === 0) {
+    return (
+      <div className="p-6 text-sm text-knot-muted">
+        No entity rows in the response. Add <code>canonicalId</code> to your
+        selection sets to render a graph (e.g. <code>movie {"{"} canonicalId
+        title {"}"}</code>).
+      </div>
+    );
+  }
 
   return (
     <ReactFlow
       nodes={nodes}
       edges={edges}
-      nodeTypes={nodeTypes}
+      nodeTypes={{ entity: EntityNode }}
       fitView
       minZoom={0.1}
       maxZoom={2}
@@ -144,75 +93,144 @@ function PublishedSpecGraph({ spec }: { spec: PublishedSpec }) {
   );
 }
 
-/** Pad a partial publishedSpec response into the shape buildGraph expects. */
-function fillMissing(p: Partial<PublishedSpec>): PublishedSpec {
-  return {
-    id: p.id ?? "",
-    version: p.version ?? "",
-    revision: p.revision ?? 0,
-    contentHash: p.contentHash ?? "",
-    classes: (p.classes ?? []).map((c) => ({
-      name: c.name,
-      abstract: c.abstract ?? false,
-      description: c.description ?? null,
-      definition: c.definition ?? null,
-      isAName: c.isAName ?? null,
-      mixinNames: c.mixinNames ?? [],
-      slots: c.slots ?? [],
-      effectiveSlots: c.effectiveSlots ?? [],
-    })),
-    sources: p.sources ?? [],
-    sourceBindings: p.sourceBindings ?? [],
-    constraints: p.constraints ?? [],
-  };
+// ─── Response → (nodes, edges) walker ────────────────────────────────────
+
+interface BuiltGraph {
+  nodes: Node[];
+  edges: Edge[];
 }
 
-// ─── Generic row cards ────────────────────────────────────────────────────
+function buildGraph(raw: unknown, schema: GraphQLSchema | null): BuiltGraph {
+  if (!raw || typeof raw !== "object" || !schema) return { nodes: [], edges: [] };
+  const body = raw as { data?: Record<string, unknown> };
+  const data = body.data;
+  if (!data || typeof data !== "object") return { nodes: [], edges: [] };
 
-function RowCards({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: Record<string, unknown>[];
-}) {
-  return (
-    <div className="p-4 overflow-auto h-full">
-      <div className="text-xs uppercase tracking-wide text-knot-muted mb-2">
-        {title} · {rows.length} row{rows.length === 1 ? "" : "s"}
-      </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-        {rows.map((row, i) => (
-          <RowCard key={i} row={row} index={i} />
-        ))}
-      </div>
-    </div>
-  );
+  const queryType = schema.getQueryType();
+  if (!queryType) return { nodes: [], edges: [] };
+
+  const nodeMap = new Map<string, Node>();
+  const edges: Edge[] = [];
+  const seenEdges = new Set<string>();
+
+  function nodeId(typeName: string, cid: string): string {
+    return `${typeName}::${cid}`;
+  }
+
+  function emitNode(typeName: string, cid: string, scalars: Record<string, unknown>): string {
+    const id = nodeId(typeName, cid);
+    if (!nodeMap.has(id)) {
+      nodeMap.set(id, {
+        id,
+        type: "entity",
+        position: { x: 0, y: 0 },
+        data: { typeName, canonicalId: cid, scalars } satisfies EntityNodeData,
+      });
+    }
+    return id;
+  }
+
+  function emitEdge(from: string, to: string, label: string): void {
+    const key = `${from}->${to}:${label}`;
+    if (seenEdges.has(key)) return;
+    seenEdges.add(key);
+    edges.push({
+      id: key,
+      source: from,
+      target: to,
+      label,
+      labelStyle: { fontSize: 10, fill: "#475569" },
+      labelBgStyle: { fill: "#f8fafc" },
+      labelBgPadding: [3, 1],
+      type: "smoothstep",
+    });
+  }
+
+  /** Walk a JSON value alongside a GraphQL type. Emit node for entity-shaped
+   *  values; recurse into nested object/list fields. */
+  function walk(value: unknown, gqlType: GraphQLOutputType, parentNodeId: string | null, fieldLabel: string | null): void {
+    if (value == null) return;
+    const named = getNamedType(gqlType);
+
+    // Arrays: walk each element with the same type
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        walk(item, gqlType, parentNodeId, fieldLabel);
+      }
+      return;
+    }
+
+    if (!isObjectType(named) || typeof value !== "object") return;
+
+    const obj = value as Record<string, unknown>;
+    const cidRaw = obj["canonicalId"];
+    let myNodeId: string | null = null;
+    if (typeof cidRaw === "string" && cidRaw) {
+      // Entity: emit a node.
+      const scalars: Record<string, unknown> = {};
+      for (const [k, v] of Object.entries(obj)) {
+        if (k === "canonicalId") continue;
+        if (v != null && typeof v === "object") continue; // nested handled below
+        scalars[k] = v;
+      }
+      myNodeId = emitNode(named.name, cidRaw, scalars);
+      if (parentNodeId && fieldLabel) {
+        emitEdge(parentNodeId, myNodeId, fieldLabel);
+      }
+    }
+
+    // Recurse into fields that point to other object types.
+    const fields = (named as GraphQLObjectType).getFields();
+    for (const [fieldName, childValue] of Object.entries(obj)) {
+      const f = fields[fieldName];
+      if (!f) continue;
+      walk(childValue, f.type, myNodeId ?? parentNodeId, fieldName);
+    }
+  }
+
+  // Top level: walk each root field.
+  const rootFields = queryType.getFields();
+  for (const [fieldName, value] of Object.entries(data)) {
+    const f = rootFields[fieldName];
+    if (!f) continue;
+    walk(value, f.type, null, null);
+  }
+
+  return { nodes: Array.from(nodeMap.values()), edges };
 }
 
-function RowCard({ row, index }: { row: Record<string, unknown>; index: number }) {
-  const entries = Object.entries(row);
+// ─── Minimal node component for entity instances ──────────────────────────
+
+function EntityNode({ data }: NodeProps & { data: EntityNodeData }) {
+  const { typeName, canonicalId, scalars } = data;
+  // Identifier-ish fields first if present, then any other scalars; cap
+  // the rendered list so cards stay compact.
+  const entries = Object.entries(scalars).slice(0, 6);
   return (
-    <div className="border rounded shadow-sm bg-white">
-      <div className="px-3 py-1.5 border-b text-xs text-knot-muted bg-slate-50 rounded-t">
-        #{index}
+    <div className="border border-slate-300 rounded bg-white shadow-sm w-[240px] text-xs">
+      <Handle type="target" position={Position.Left} className="!bg-slate-400" />
+      <div className="px-2 py-1 border-b bg-slate-50 rounded-t flex items-center justify-between gap-2">
+        <span className="font-semibold text-slate-900 truncate" title={typeName}>
+          {typeName}
+        </span>
+        <span className="font-mono text-[10px] text-slate-500 truncate" title={canonicalId}>
+          {canonicalId}
+        </span>
       </div>
-      <div className="p-3 text-xs space-y-1">
+      <div className="p-2 space-y-0.5">
+        {entries.length === 0 && (
+          <div className="italic text-slate-400">no scalar fields selected</div>
+        )}
         {entries.map(([k, v]) => (
           <div key={k} className="flex gap-2">
-            <span className="text-knot-muted shrink-0 min-w-[6rem]">{k}</span>
-            <span className="font-mono break-all">{formatValue(v)}</span>
+            <span className="text-slate-500 shrink-0 min-w-[5rem] truncate">{k}</span>
+            <span className="font-mono truncate" title={String(v)}>
+              {v == null ? "—" : String(v)}
+            </span>
           </div>
         ))}
       </div>
+      <Handle type="source" position={Position.Right} className="!bg-slate-400" />
     </div>
   );
-}
-
-function formatValue(v: unknown): string {
-  if (v === null) return "null";
-  if (v === undefined) return "—";
-  if (typeof v === "string") return v;
-  if (typeof v === "number" || typeof v === "boolean") return String(v);
-  return JSON.stringify(v);
 }

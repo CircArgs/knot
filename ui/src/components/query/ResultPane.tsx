@@ -7,6 +7,7 @@
  * you happen to be on.
  */
 import { useState } from "react";
+import type { GraphQLSchema } from "graphql";
 
 import JsonView from "./JsonView";
 import GraphView from "./GraphView";
@@ -15,11 +16,14 @@ interface Props {
   /** Whole response object from the server, or `null` before first run. */
   response: { data?: unknown; errors?: unknown[] } | null;
   loading: boolean;
+  /** Introspection schema for the data endpoint — used by GraphView to
+   *  resolve nested field types as it walks the response. */
+  schema: GraphQLSchema | null;
 }
 
 type Tab = "json" | "graph";
 
-export default function ResultPane({ response, loading }: Props) {
+export default function ResultPane({ response, loading, schema }: Props) {
   const [tab, setTab] = useState<Tab>("json");
 
   return (
@@ -55,7 +59,7 @@ export default function ResultPane({ response, loading }: Props) {
         ) : tab === "json" ? (
           <JsonView value={response} />
         ) : (
-          <GraphView data={response} />
+          <GraphView data={response} schema={schema} />
         )}
       </div>
     </div>

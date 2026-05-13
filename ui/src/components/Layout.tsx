@@ -12,6 +12,7 @@ export default function Layout({ children }: Props) {
           <Link to="/" className="hover:text-knot-ink">home</Link>
           <Link to="/spec-graph" className="hover:text-knot-ink">spec graph</Link>
           <Link to="/query" className="hover:text-knot-ink">query</Link>
+          <Link to="/corrections" className="hover:text-knot-ink">corrections</Link>
         </nav>
       </header>
       <main className="flex-1 overflow-auto">{children}</main>

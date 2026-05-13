@@ -1,9 +1,8 @@
 /**
- * /query — GraphQL playground for both knot surfaces.
+ * /query — GraphQL playground for the data plane.
  *
- * Layout (Tailwind grid):
  *   ┌─────────────────────────────────────────────────────────────────┐
- *   │ toolbar: endpoint switcher | Run | Reset                        │
+ *   │ toolbar: Run | Reset                                            │
  *   ├──────────────┬──────────────────────────────────────────────────┤
  *   │ schema       │ editor (top)                                     │
  *   │ explorer     ├──────────────────────────────────────────────────┤
@@ -11,32 +10,24 @@
  *   └──────────────┴──────────────────────────────────────────────────┘
  *
  * State that survives reloads (via localStorage):
- *   - selected endpoint
- *   - last query text per endpoint
+ *   - last query text
  *
- * Introspection results are cached in component state (re-introspect on
- * first switch to each endpoint, then keep the cached schema).
+ * Introspection result is cached in component state.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { GraphQLSchema, IntrospectionQuery } from "graphql";
 
-import EndpointSwitcher from "../components/query/EndpointSwitcher";
 import QueryEditor from "../components/query/QueryEditor";
 import SchemaExplorer from "../components/query/SchemaExplorer";
 import ResultPane from "../components/query/ResultPane";
 import { useLocalStorage } from "../lib/useLocalStorage";
-import {
-  ENDPOINTS,
-  type EndpointKey,
-} from "../lib/queryEndpoints";
+import { ENDPOINTS } from "../lib/queryEndpoints";
 import { introspectEndpoint, runGraphQL } from "../lib/introspect";
 
 interface EndpointState {
   introspection: IntrospectionQuery | null;
   schema: GraphQLSchema | null;
-  /** Last fetch error if introspection failed; cleared on success. */
   error: string | null;
-  /** True while introspection is in flight. */
   loading: boolean;
 }
 
@@ -48,15 +39,7 @@ const EMPTY_STATE: EndpointState = {
 };
 
 export default function Query() {
-  const [endpoint, setEndpoint] = useLocalStorage<EndpointKey>(
-    "knot:query:endpoint",
-    "spec",
-  );
-  const [querySpec, setQuerySpec] = useLocalStorage<string>(
-    "knot:query:editor:spec",
-    ENDPOINTS.spec.defaultQuery,
-  );
-  const [queryData, setQueryData] = useLocalStorage<string>(
+  const [query, setQuery] = useLocalStorage<string>(
     "knot:query:editor:data",
     ENDPOINTS.data.defaultQuery,
   );
@@ -65,37 +48,20 @@ export default function Query() {
     true,
   );
 
-  const setQueryFor = (key: EndpointKey, text: string) =>
-    key === "spec" ? setQuerySpec(text) : setQueryData(text);
-  const queryFor = (key: EndpointKey) =>
-    key === "spec" ? querySpec : queryData;
-
-  // Per-endpoint introspection cache.
-  const [specState, setSpecState] = useState<EndpointState>(EMPTY_STATE);
-  const [dataState, setDataState] = useState<EndpointState>(EMPTY_STATE);
-  const stateFor = (key: EndpointKey) =>
-    key === "spec" ? specState : dataState;
-  const setStateFor = (key: EndpointKey, next: EndpointState) =>
-    key === "spec" ? setSpecState(next) : setDataState(next);
-
-  const currentState = stateFor(endpoint);
-  const currentQuery = queryFor(endpoint);
-
-  // Result pane state — single shared object; switching endpoints clears it.
+  const [state, setState] = useState<EndpointState>(EMPTY_STATE);
   const [response, setResponse] = useState<
     { data?: unknown; errors?: unknown[] } | null
   >(null);
   const [running, setRunning] = useState(false);
 
-  // Introspect once per endpoint, on first activation.
   useEffect(() => {
-    if (currentState.introspection || currentState.loading) return;
+    if (state.introspection || state.loading) return;
     let cancelled = false;
-    setStateFor(endpoint, { ...EMPTY_STATE, loading: true });
-    introspectEndpoint(ENDPOINTS[endpoint].path)
+    setState({ ...EMPTY_STATE, loading: true });
+    introspectEndpoint(ENDPOINTS.data.path)
       .then((r) => {
         if (cancelled) return;
-        setStateFor(endpoint, {
+        setState({
           introspection: r.introspection,
           schema: r.schema,
           error: null,
@@ -104,7 +70,7 @@ export default function Query() {
       })
       .catch((e) => {
         if (cancelled) return;
-        setStateFor(endpoint, {
+        setState({
           introspection: null,
           schema: null,
           error: String(e),
@@ -115,44 +81,32 @@ export default function Query() {
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint]);
-
-  // Reset response when endpoint changes (the schemas are unrelated).
-  useEffect(() => {
-    setResponse(null);
-  }, [endpoint]);
+  }, []);
 
   const handleRun = useCallback(async () => {
     setRunning(true);
     try {
-      const body = await runGraphQL(ENDPOINTS[endpoint].path, queryFor(endpoint));
+      const body = await runGraphQL(ENDPOINTS.data.path, query);
       setResponse(body);
     } catch (e) {
       setResponse({ errors: [{ message: String(e) }] });
     } finally {
       setRunning(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint, querySpec, queryData]);
+  }, [query]);
 
-  // Used by SchemaExplorer to insert a field name at the end of the editor.
-  // We keep it dumb: append-with-newline. Wiring it to Monaco's caret is a
-  // nice-to-have we don't need today.
   const handleInsert = useCallback(
     (text: string) => {
-      const current = queryFor(endpoint);
-      const sep = current.endsWith("\n") ? "" : "\n";
-      setQueryFor(endpoint, `${current}${sep}${text}\n`);
+      const sep = query.endsWith("\n") ? "" : "\n";
+      setQuery(`${query}${sep}${text}\n`);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [endpoint, querySpec, queryData],
+    [query, setQuery],
   );
 
   const handleReset = useCallback(() => {
-    setQueryFor(endpoint, ENDPOINTS[endpoint].defaultQuery);
+    setQuery(ENDPOINTS.data.defaultQuery);
     setResponse(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [endpoint]);
+  }, [setQuery]);
 
   // Page-level Cmd/Ctrl+Enter — works even when focus is outside the editor.
   const runRef = useRef(handleRun);
@@ -177,11 +131,9 @@ export default function Query() {
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="border-b px-3 py-2 flex items-center gap-3">
-        <EndpointSwitcher
-          value={endpoint}
-          onChange={setEndpoint}
-          disabled={running}
-        />
+        <span className="text-sm font-semibold text-knot-ink">data graph</span>
+        <span className="text-xs text-knot-muted">/graph/query</span>
+        <div className="flex-1" />
         <button
           type="button"
           onClick={handleRun}
@@ -200,15 +152,13 @@ export default function Query() {
         >
           Reset
         </button>
-        {currentState.error && (
+        {state.error && (
           <span className="text-xs text-red-700 ml-2">
-            schema: {currentState.error}
+            schema: {state.error}
           </span>
         )}
-        {currentState.loading && (
-          <span className="text-xs text-knot-muted ml-2">
-            introspecting…
-          </span>
+        {state.loading && (
+          <span className="text-xs text-knot-muted ml-2">introspecting…</span>
         )}
       </div>
 
@@ -237,7 +187,7 @@ export default function Query() {
           {sidebarOpen && (
             <div className="flex-1 min-h-0">
               <SchemaExplorer
-                introspection={currentState.introspection}
+                introspection={state.introspection}
                 onInsert={handleInsert}
               />
             </div>
@@ -247,15 +197,15 @@ export default function Query() {
         <div className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 min-h-0 border-b">
             <QueryEditor
-              value={currentQuery}
-              onChange={(v) => setQueryFor(endpoint, v)}
+              value={query}
+              onChange={setQuery}
               onRun={handleRun}
-              schema={currentState.schema}
-              endpointKey={endpoint}
+              schema={state.schema}
+              endpointKey="data"
             />
           </div>
           <div className="flex-1 min-h-0">
-            <ResultPane response={response} loading={running} />
+            <ResultPane response={response} loading={running} schema={state.schema} />
           </div>
         </div>
       </div>
