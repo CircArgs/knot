@@ -44,6 +44,7 @@ def emit_ddl(
     if_not_exists: bool = False,
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
+    emit_fk_references: bool = True,
     emit_descriptions: bool = False,
 ) -> list[str]:
     """Return the DDL statements that materialize ``spec``.
@@ -61,12 +62,20 @@ def emit_ddl(
         argmaxes across currently-open bindings.
     if_not_exists
         When True, emit ``CREATE TABLE IF NOT EXISTS`` and ``CREATE OR
-        REPLACE VIEW``. Use for re-runnable migrations.
+        REPLACE VIEW``. Use for re-runnable migrations. FK constraints
+        are emitted as ``DROP CONSTRAINT IF EXISTS`` + ``ADD
+        CONSTRAINT`` so the alter pass is idempotent too.
     emit_bindings
         When False, skip the ``<class>_bindings`` tables entirely.
     emit_resolved_views
         When False, skip the ``<class>_resolved`` views. Set to False
         for write-direct workflows that hit the canonical table.
+    emit_fk_references
+        When True, emit ``ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY``
+        for every ``ClassRef`` slot on every concrete canonical table,
+        targeting the referenced class's identifier column. Bindings
+        tables intentionally stay loose (a binding may claim about a
+        canonical that doesn't exist yet).
     emit_descriptions
         When True, follow each entity with ``COMMENT ON TABLE / COLUMN /
         VIEW`` for any non-empty ``description`` fields.
@@ -118,6 +127,17 @@ def emit_ddl(
                         cls.description,
                     )
                 )
+
+    # Second pass: FK constraints on canonical class tables. Emitted
+    # after every CREATE TABLE so target tables exist regardless of
+    # spec.classes order.
+    if emit_fk_references:
+        for cls in spec.classes:
+            if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
+                stmts.extend(
+                    _emit_fk_alters(cls, schema=schema, if_not_exists=if_not_exists)
+                )
+
     return stmts
 
 
@@ -249,6 +269,48 @@ def _emit_class_comments(cls: OntologyClass, *, schema: str) -> list[str]:
                     "COLUMN", f"{table_id}.{slot.name}", slot.description
                 )
             )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# Foreign-key constraint emission (second pass over the canonical tables)
+# ---------------------------------------------------------------------------
+
+
+def _emit_fk_alters(
+    cls: OntologyClass,
+    *,
+    schema: str,
+    if_not_exists: bool,
+) -> list[str]:
+    """For every ``ClassRef`` slot on ``cls``, emit an ``ALTER TABLE``
+    that adds a foreign-key constraint to the target's canonical
+    identifier. Only emitted for the canonical table — bindings tables
+    intentionally stay loose because a binding can claim about a
+    canonical that doesn't exist yet.
+
+    Constraint names are deterministic (``fk_<class>_<slot>``); when
+    ``if_not_exists`` is True the alter is preceded by ``DROP
+    CONSTRAINT IF EXISTS`` so the pass is idempotent.
+    """
+    table = f"{schema}.{cls.name.lower()}"
+    out: list[str] = []
+    for slot in cls.effective_slots():
+        if not isinstance(slot.type, ClassRef):
+            continue
+        target = slot.type.target
+        target_table = f"{schema}.{target.name.lower()}"
+        target_pk = target.identifier_slot().name
+        constraint = f"fk_{cls.name.lower()}_{slot.name}"
+        if if_not_exists:
+            out.append(
+                f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint};"
+            )
+        out.append(
+            f"ALTER TABLE {table} ADD CONSTRAINT {constraint}\n"
+            f"    FOREIGN KEY ({slot.name}) "
+            f"REFERENCES {target_table}({target_pk});"
+        )
     return out
 
 
