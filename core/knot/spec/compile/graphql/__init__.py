@@ -199,24 +199,88 @@ def _make_class_where_type(oc: OntologyClass) -> type:
 # ---------------------------------------------------------------------------
 
 
-def _make_class_object_type(oc: OntologyClass) -> type:
+def _make_classref_resolver(
+    target_type: type, target_oc: OntologyClass, fk_attr: str
+):
+    """Async field resolver for a scalar ClassRef property.
+
+    Reads ``self.<fk_attr>`` (the canonical_id of the related row, stored as
+    a strawberry.Private field on the parent type), fetches all contributions
+    for that canonical_id from the target class's table, merges them via
+    alphabetical-source resolution, and returns a typed instance of the
+    target's GraphQL object type.
+    """
+    async def resolver(root):
+        cid = getattr(root, fk_attr, None)
+        if cid is None:
+            return None
+        from knot import db
+        from knot.db import graph_store
+
+        async with db.connect() as conn:
+            contribs = await graph_store.get_canonical_contributions(
+                conn, cls=target_oc, canonical_id=cid
+            )
+        if not contribs:
+            return None
+        merged = _merge_contributions(contribs, target_oc)
+        merged.setdefault("_canonical_id", cid)
+        return _row_to_typed(target_type, target_oc, merged)
+
+    # Inject the runtime-bound return type so Strawberry's field-type
+    # inference sees the actual target class (the function body has
+    # ``from __future__ import annotations`` so its source annotations
+    # would be strings).
+    resolver.__annotations__ = {"root": Any, "return": Optional[target_type]}
+    resolver.__name__ = f"resolve_{target_oc.name.lower()}_for_{fk_attr}"
+    return resolver
+
+
+def _make_class_object_type(
+    oc: OntologyClass,
+    *,
+    class_object_types_so_far: dict[str, type] | None = None,
+) -> type:
     """Strawberry object type with one Optional field per slot.
 
     Every field is Optional because contributions may be partial (a row from
     one source may not carry every slot). ``canonical_id`` is exposed as a
     convenience system field; if a class actually declares a slot named
     ``canonical_id`` it shadows the system field (slot wins).
+
+    Scalar ClassRef slots emit a resolver-backed field whose type is the
+    target class's strawberry type (so ``{ credit { movie { title } } }``
+    traverses through). The canonical_id is kept on a parallel
+    ``strawberry.Private`` field; the public field is computed via the
+    resolver. Arrays of ClassRef still surface as ``list[str]`` (multi-
+    valued traversal is a follow-up).
     """
+    class_object_types_so_far = class_object_types_so_far or {}
     type_name = f"Type_{oc.name}"
     annotations: dict[str, Any] = {}
     ns: dict[str, Any] = {}
 
     for slot in _all_slots(oc):
-        # ``py`` is already the full python type (``list[str]`` for Array,
-        # ``str``/``int``/... for Primitive). No extra wrapping needed.
-        py = _slot_python_type(slot)
-        annotations[slot.name] = py | None
-        ns[slot.name] = None
+        t = slot.type
+        if isinstance(t, ClassRef) and t.target_class.name in class_object_types_so_far:
+            # Scalar ClassRef → resolver-backed nested type.
+            target_type = class_object_types_so_far[t.target_class.name]
+            target_oc = t.target_class
+            fk_attr = f"_{slot.name}_id"
+            # Private field holds the canonical_id from the source row.
+            annotations[fk_attr] = strawberry.Private[Optional[str]]
+            ns[fk_attr] = None
+            # Public field is resolver-backed.
+            annotations[slot.name] = Optional[target_type]
+            ns[slot.name] = strawberry.field(
+                resolver=_make_classref_resolver(target_type, target_oc, fk_attr)
+            )
+        else:
+            # Non-ClassRef (or ClassRef whose target wasn't built yet — falls
+            # back to canonical_id string, which used to be the only behaviour).
+            py = _slot_python_type(slot)
+            annotations[slot.name] = py | None
+            ns[slot.name] = None
 
     if "canonical_id" not in annotations:
         annotations["canonical_id"] = str | None
@@ -232,14 +296,68 @@ def _row_to_typed(class_type: type, oc: OntologyClass, row: Any) -> Any:
     Returns None if the input is None. The graph_store dict uses ``_canonical_id``
     for the system-attribution canonical id; we surface that as ``canonical_id``
     on the GraphQL type unless the class shadows it with its own slot.
+
+    For scalar ClassRef slots, the row carries the canonical_id of the
+    related entity. The public slot field is resolver-backed (computed
+    on access), so we route the canonical_id into the parallel
+    ``_<slot>_id`` private field instead.
     """
     if row is None:
         return None
-    slot_names = {s.name for s in _all_slots(oc)}
-    kwargs: dict[str, Any] = {n: row.get(n) for n in slot_names}
-    if "canonical_id" not in slot_names:
+    own_slot_names = {s.name for s in _all_slots(oc)}
+    kwargs: dict[str, Any] = {}
+    for s in _all_slots(oc):
+        if isinstance(s.type, ClassRef):
+            # canonical_id of the related row → private field; public field
+            # is computed by the resolver attached to the strawberry type.
+            kwargs[f"_{s.name}_id"] = row.get(s.name)
+        else:
+            kwargs[s.name] = row.get(s.name)
+    if "canonical_id" not in own_slot_names:
         kwargs["canonical_id"] = row.get("_canonical_id") or row.get("canonical_id")
     return class_type(**kwargs)
+
+
+def _topo_sort_by_classref(concrete: list[OntologyClass]) -> list[OntologyClass]:
+    """Order classes so each ClassRef target is built before its referrer.
+
+    Builds a dependency edge ``target → source`` for every scalar ClassRef
+    slot on a class. Returns Kahn-ordered output (no-deps first → leaves
+    last). Raises ``ValueError`` if a cycle is present (rare in practice;
+    the Netflix demo has none).
+    """
+    name_to_oc = {oc.name: oc for oc in concrete}
+    deps: dict[str, set[str]] = {oc.name: set() for oc in concrete}
+    for oc in concrete:
+        for slot in _all_slots(oc):
+            t = slot.type
+            target_name: str | None = None
+            if isinstance(t, ClassRef):
+                target_name = t.target_class.name
+            elif isinstance(t, Array) and isinstance(t.of, ClassRef):
+                # Array-of-ClassRef doesn't get nested resolution yet, but we
+                # still order it for forward compat when it does.
+                target_name = t.of.target_class.name
+            if target_name and target_name in name_to_oc and target_name != oc.name:
+                deps[oc.name].add(target_name)
+
+    in_count = {n: len(d) for n, d in deps.items()}
+    out: list[str] = []
+    queue: list[str] = sorted(n for n, c in in_count.items() if c == 0)
+    while queue:
+        n = queue.pop(0)
+        out.append(n)
+        for other, other_deps in deps.items():
+            if n in other_deps:
+                in_count[other] -= 1
+                if in_count[other] == 0:
+                    queue.append(other)
+    if len(out) != len(concrete):
+        remaining = set(deps) - set(out)
+        raise ValueError(
+            f"cycle in ClassRef dependencies among classes: {sorted(remaining)}"
+        )
+    return [name_to_oc[n] for n in out]
 
 
 # ---------------------------------------------------------------------------
@@ -703,9 +821,17 @@ def _build_schema(spec: Spec) -> Schema:
     order_by_inputs: dict[str, type] = {}
     agg_result_types: dict[str, type] = {}
     agg_fields_map: dict[str, list[tuple[str, str, str]]] = {}
+    # Build class_object_types in ClassRef-dependency order (targets first).
+    # The dependency: every scalar ClassRef slot needs its target type
+    # already built so the resolver-backed field can reference Type_Target.
+    for oc in _topo_sort_by_classref(concrete_classes):
+        class_object_types[oc.name] = _make_class_object_type(
+            oc, class_object_types_so_far=class_object_types
+        )
+
+    # All remaining per-class types are independent of each other.
     for oc in concrete_classes:
         where_types[oc.name] = _make_class_where_type(oc)
-        class_object_types[oc.name] = _make_class_object_type(oc)
         field_enums[oc.name] = _make_field_enum(oc)
         order_by_inputs[oc.name] = _make_order_by_input(oc, field_enums[oc.name])
         agg_result_types[oc.name], agg_fields_map[oc.name] = _make_aggregate_result_type(oc)
