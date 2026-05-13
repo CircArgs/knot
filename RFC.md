@@ -119,6 +119,14 @@ Below we build a small spec from nothing and watch the running system grow at ea
 
 ![Spec graph showing all classes, sources, bindings, mixins, constraints, and defined classes](assets/spec_graph.png)
 
+Zooming in, every class card is legible — showing its slots, types, badges (CONCRETE, ABSTRACT, DEFINED, JUNCTION), inherited slots, and attached constraints. The right-hand panel shows a constraint inspector with the SQL body, severity, and human-readable message:
+
+![Zoomed spec graph with the year_plausible constraint inspector open, showing SQL body, severity, and constraint inheritance from MediaItem to Movie](assets/spec_graph_constraint_detail.png)
+
+Source binding cards at the top of the graph show each source's trust prior (Beta posteriors), identifier slot, mapping count, and required-field count:
+
+![Spec graph with source binding cards visible (imdb→Credit, imdb→Person, wiki→Person, imdb→Movie, wiki→Movie) and the director_credit_role_is_known constraint inspector](assets/spec_graph_bindings_trust.png)
+
 ### 1. A single class
 
 Declare `Movie` with a handful of slots: `title`, `year`, `runtime`. The compiler emits a `movie` table in the data plane (one column per slot, plus knot's system columns for provenance and history) and a `movie` field on the GraphQL surface that returns rows.
