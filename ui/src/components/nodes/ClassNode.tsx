@@ -81,12 +81,14 @@ export default function ClassNode({
         className="!bg-slate-400"
       />
 
-      {/* Header — clicking the header selects the class as a whole (not a slot). */}
+      {/* Header — clicking the header selects the class as a whole (not a slot).
+          Intentionally NOT stopping propagation so React Flow's onNodeClick
+          also fires, which sets the focus state used for graph dimming. The
+          inner onSelect call is then redundant but harmless. */}
       <div
         role="button"
         tabIndex={0}
-        onClick={(e) => {
-          e.stopPropagation();
+        onClick={() => {
           onSelect?.({ kind: "class", name: cls.name });
         }}
         className={`px-3 py-1.5 border-b border-slate-200 bg-slate-50 ${isJunction ? "" : "rounded-t-lg"} flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-100`}
