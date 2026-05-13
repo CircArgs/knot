@@ -1,142 +1,151 @@
-# CLAUDE.md — knot
+# CLAUDE.md — knot library
 
-**knot** is an API-first knowledge-graph + ontology platform. Single team,
-no tenants. Postgres data plane. The repo is a **monorepo of sibling
-services**, each self-contained (code + tests + own pyproject/package.json).
+**knot** is a reflective ontology compiler — a pure library that takes a
+typed Pydantic spec (classes, properties, sources, source-bindings,
+constraints) and emits the runtime artifacts (postgres DDL + GraphQL
+schema + Pydantic row validators + constraint SQL).
 
-This file is the contract between the codebase and any agent that mutates it.
-Read it before making changes.
+This branch (`library/v0`) is the focused library. Anything that talks
+to a connection, serves HTTP, or holds runtime state lives outside the
+library — in a *reference adapter* a team builds around it. The earlier
+monorepo (API service + UI + ingest + corrections + ER + AI) is in git
+history on the `draft-rfc` and `main` branches.
 
-The previous `design/` tree (architectural commitments, staging docs, personas)
-has been removed for a fresh slate. It's preserved in git history and other
-branches. The new docs site is being planned in `.knot-docs-plan.md` and
-`.knot-docs-infra.md`.
+Two ground-truth docs:
+- `RFC.md` — what knot is, framed for a consumer / new teammate.
+- `LIBRARY_DESIGN.md` — what knot is, framed for an implementer:
+  phased plan, file-by-file map, test strategy, Java port track.
 
-## Posture (load-bearing)
+## Posture
 
-- **Single-team tool, no tenants.** The team that operates knot owns every
-  impl, every spec edit, and the lake/graph-store infrastructure. External
-  users only enter at three narrow surfaces: read published outputs, query
-  via the translator, submit corrections via UI.
-- **Trusted authors.** No sandboxing of impls. Full Python power. Defensive
-  multi-tenant infrastructure does NOT apply unless explicitly chosen.
-- **Knot is a compiler that delegates execution.** No internal SQL engine,
-  no internal queue, no internal scheduler. Bound DI impls do all execution.
-- **Async-first.** psycopg `AsyncConnection`; async FastAPI routes. The
-  compile/metaschema layers stay sync (pure transforms over Pydantic types).
-- **Sibling services talk via HTTP only.** `ai/` and `er/` never import
-  `knot/`. They call knot's public API. The framework inside `knot/extensions/`
-  is a thin shim that POSTs to those services when configured.
+- **Pure library.** No FastAPI, no HTTP, no `psycopg.connect`, no
+  ingest path. The library returns `sql.Composable`, `strawberry.Schema`,
+  `BaseModel` subclasses; the host runs them.
+- **No runtime config.** Names like the postgres schema (`knot_data`)
+  and the synthetic corrections source (`_user_corrections`) are
+  module-level constants in `knot.spec.compile.postgres._naming`. A host
+  that needs a non-default schema rebinds the constants before importing
+  the emitters; there is no env-var indirection.
+- **Single team posture survives.** Trusted authors of the spec, no
+  multi-tenant defenses, no sandboxing.
+- **Async-aware but not async-only.** Compiler is sync (pure transforms).
+  Resolvers emitted into the GraphQL schema are async because Strawberry
+  expects that.
 
-## Layout (monorepo)
+## Layout
 
 ```
-core/                 # knot core Python package (importable as "knot")
-  knot/               # the package itself
-    api/              # FastAPI + Strawberry GraphQL (graph/, auth/, ai/, lake, spec, dq)
-    db/               # SQL execution layer; only this dir touches postgres
-    spec/             # Spec model + compilation (compile/postgres, compile/graphql)
-    extensions/       # Master dispatcher; HTTP shims to sibling services
-    graph/            # Orchestration tier; one function per API operation
-    config/           # Settings (KNOT_ env prefix)
-  tests/              # unit/ (pure Python, no I/O) + integration/ (real postgres)
-  pyproject.toml      # knot core deps and config
-ai/                   # AI sibling FastAPI service (knot_ai) on :8001
-  knot_ai/            # NL→GraphQL etc., talks to knot via HTTP only
+core/                                  # the library package
+  pyproject.toml                       # core deps only (pydantic, jcs,
+                                       # sqlglot, psycopg, strawberry)
+  knot/
+    __version__.py
+    __init__.py                        # public re-exports
+    spec/
+      metaschema.py                    # Spec + OntologyClass + DefinedClass + Slot + ...
+      canonical.py                     # canonical_dump, compute_content_hash
+      serialization.py                 # spec_to_dict / spec_from_dict
+      effective_slots.py               # effective_slots, is_stored, stored_slot_names
+      effective_constraints.py         # effective_constraints
+      errors.py                        # PublishGateError, ...
+      expressions.py                   # ExprTree + translate_expr
+      sql_validate.py                  # sqlglot-validated constraint SQL
+      primitives.py                    # STANDARD_PRIMITIVE_NAMES
+      compile/
+        postgres/                      # DDL + predicate + order-by + relation
+          __init__.py                  # public compile_* functions
+          _context.py                  # CompileContext
+          _dispatch.py                 # single-dispatch over expression tree
+          _naming.py                   # SCHEMA + USER_CORRECTIONS_SOURCE constants
+          _types.py                    # slot_pg_type
+          _queries.py                  # select_with_binding / _with_derivations
+          _predicate.py                # WHERE-fragment compiler
+          _relation.py                 # ClassRef / Array traversal SQL
+          migration.py                 # Change types + diff_specs + DDL emitters
+          lake.py                      # lake-side compile helpers
+        graphql/
+          __init__.py                  # build schema entry point
+        validators/
+          __init__.py
+          row_models.py                # Pydantic row-model factories
   tests/
-  pyproject.toml
-er/                   # ER sibling FastAPI service (knot_er) on :8002
-  knot_er/            # entity resolution strategies; receives RowsIngesting payloads
-  tests/
-  pyproject.toml
-ui/                   # React + Vite + React Flow + Apollo (pnpm)
-  src/
-  package.json
-notebooks/            # marimo demo notebooks
-scripts/              # docker-compose helpers (up.sh, down.sh, wait-ready.sh)
-docker-compose.yml    # Local postgres for dev + tests
+    unit/                              # pure unit tests (no I/O)
+RFC.md                                 # consumer-facing pitch + walkthrough
+LIBRARY_DESIGN.md                      # implementer-facing handoff
+assets/                                # images referenced by RFC
 ```
-
-## Boundary rules
-
-- **Execute SQL → `core/knot/db/`.** Build SQL from models →
-  `core/knot/spec/compile/`. No crosstalk between the two for compilation.
-  Metadata reads (e.g., schema name from settings) are tolerable.
-- **Configurable names → `core/knot/config/`.** No hardcoded schema names,
-  table names, or role names anywhere else.
-- **Spec → DB direction only.** `core/knot/db/` may import typed metadata
-  from `core/knot/spec/`. `core/knot/spec/compile/` must NOT import from
-  `core/knot/db/`.
-- **Siblings never import knot.** `ai/`, `er/`, `ui/` talk via HTTP.
-  `core/knot/extensions/` may register HTTP-delegating shims (e.g., calls
-  the `er/` service on `RowsIngesting` events when `KNOT_ER_URL` is set).
 
 ## Workflow
 
 ```bash
-# Bring up postgres
-./scripts/up.sh
-
-# Install knot core in the root .venv (only needed once / after deps change)
+# Install in the root .venv (editable; library only — no service deps).
 .venv/bin/pip install -e ./core
 
-# Unit tests — fast, no docker required
+# Smoke-test the public surface.
+.venv/bin/python -c "
+from knot.spec import Spec, OntologyClass, DefinedClass, Slot
+from knot.spec.compile.postgres import compile_constraint
+from knot.spec.compile.graphql import get_or_build_schema
+from knot.spec.compile.validators import build_row_model
+print('library import surface ok')
+"
+
+# Unit tests (pure, no I/O).
 .venv/bin/pytest core/tests/unit/ -q
 
-# Full suite (requires docker-compose postgres up)
-cd core && KNOT_DEV_MODE=1 ../.venv/bin/pytest tests/ -q
-
-# Lint + format + types
+# Lint + types.
 .venv/bin/ruff check core/knot/ core/tests/
 .venv/bin/ruff format core/knot/ core/tests/
 .venv/bin/mypy core/knot/
-
-# Sibling services (each self-contained)
-cd ai && pip install -e . && uvicorn knot_ai.main:app --port 8001
-cd er && pip install -e . && uvicorn knot_er.main:app --port 8002
-cd ui && pnpm install && pnpm dev   # :5173, proxies to all three
-
-# Tear down
-./scripts/down.sh
 ```
 
-`KNOT_DEV_MODE=1` is required for tests — the fail-closed DSN guard falls
-back to the docker-compose default only when this is set. It also implies
-`KNOT_AUTH_DEV_MODE=1`, so mutation routes (`POST /spec/drafts/...`,
-`POST /graph/ingest/...`, `POST /graph/corrections`) bypass auth in the
-same single-env-var dev stack.
+There is no docker-compose, no uvicorn, no UI on this branch. Integration
+tests that need postgres live with a reference adapter (separate repo or
+`examples/` subdir, TBD).
+
+## Boundary rules
+
+- **No I/O in the library.** Anything in `knot/` that calls
+  `psycopg.connect`, `await conn.execute`, or otherwise talks to a
+  resource is a bug. The library *returns* `sql.Composable` and parameter
+  lists; the host runs them.
+- **No env-var indirection.** Per-deployment knobs are
+  module-level constants (rebindable by the host before import) or
+  function parameters, never `os.environ.get`.
+- **Spec → compile direction only.** `knot/spec/compile/` may import
+  from `knot/spec/` but `knot/spec/` must not import from
+  `knot/spec/compile/`. The metaschema is upstream of every emitter.
+- **No sibling services.** `ai/` and `er/` are gone from this branch.
+  Compatible external services can be wired by a reference adapter,
+  not by the library.
 
 ## Conventions (apply proactively)
 
-- **Real Pydantic types over discriminator strings.** Class-based discrimination
-  + real enums. Strings are for data, not structural shape.
-- **Walk the typed entity tree directly via single-dispatch.** Don't build
-  parallel meta-structures.
-- **Interrogate every named entity.** "Is this an actual thing or just a label
-  for a bundle of existing things?"
-- **No v0/v1/future-work framing.** Either commit to a design or explicitly
-  mark it open with the question stated.
-- **Baby-step + ELI5 pacing.** One self-contained step per turn; wait for
-  confirmation. Long structured walkthroughs are a smell.
-- **Comparative anchoring.** When proposing architecture, name 2-3 comparators
-  (dbt, DataJunction, LinkML, SHACL, OWL, Splink, Atlas, RDF, Neo4j) and
-  explicitly position. If we're reinventing, earn the cost.
-- **Cull claims that don't earn their cost.** Don't preserve existing
-  decisions out of inertia.
+- **Real Pydantic types over discriminator strings.** Real enums, real
+  class-based discrimination. Strings are for data, not structural shape.
+- **Walk the typed entity tree via single-dispatch.** No parallel meta
+  structures.
+- **Interrogate every named entity.** Is this an actual thing or a label
+  for a bundle of existing things?
+- **No v0/v1/future-work framing.** Either commit to a design or
+  explicitly state the open question.
+- **Comparative anchoring when proposing architecture.** Name 2-3
+  comparators (LinkML, DataJunction, dbt, RDF+SHACL, Foundry's ontology
+  layer) and explicitly position.
+- **Cull claims that don't earn their cost.** No inertia commits.
 
 ## What NOT to do
 
-- Don't reach for sandboxing or multi-tenant defenses — trust posture is
-  single-team.
-- Don't use v0/v1/future-work framing as a deferral.
-- Don't build parallel meta-structures when the typed entity tree carries
-  the data.
-- Don't introduce new named entities without interrogating whether they
-  earn their place.
-- Don't reach into `design/` — it's gone. The new docs site (planned in
-  `.knot-docs-plan.md` and `.knot-docs-infra.md`) is the replacement.
+- Don't add a service, a router, or anything that mounts an HTTP route.
+  This branch is a library.
+- Don't reach for env-var config. Constants are rebindable; that's enough.
+- Don't reintroduce `knot.db`, `knot.api`, `knot.graph`, or
+  `knot.extensions` modules. Those moved to history.
+- Don't introduce new named metaschema entities without interrogating
+  whether they earn their place.
 
 ## Auto-memory
 
-`~/.claude/projects/-mnt-main-code-knot/memory/` — `feedback_design_thinking_style.md`
-condenses the patterns above for proactive application.
+`~/.claude/projects/-mnt-main-code-knot/memory/MEMORY.md` —
+`feedback_design_thinking_style.md` condenses the patterns above for
+proactive application.

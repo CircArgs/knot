@@ -1,14 +1,3 @@
-"""Top-level test configuration.
-
-Sets ``KNOT_DEV_MODE=1`` before ``knot.config`` is imported so the
-fail-closed DSN guard falls back to the local docker-compose default.
-Both unit and integration layers need this — unit tests import knot
-modules that touch ``knot.config`` at import time.
-
-Postgres setup (``pg_conn``, schema bootstrap) lives in
-``tests/integration/conftest.py``; unit tests must not trigger it.
+"""Test configuration — the library has no env-driven config, so this is
+deliberately empty. Per-layer conftests can add fixtures.
 """
-
-import os
-
-os.environ.setdefault("KNOT_DEV_MODE", "1")

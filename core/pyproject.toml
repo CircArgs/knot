@@ -1,46 +1,38 @@
 [project]
 name = "knot"
 dynamic = ["version"]
-description = "Knowledge graph + ontology platform; API-first, postgres data plane"
+description = "knot — reflective ontology compiler library (spec → DDL + GraphQL + Pydantic validators + constraint SQL)"
 requires-python = ">=3.11"
 dependencies = [
+    # Typed metaschema + serialization.
     "pydantic>=2.5",
-    "pydantic-settings>=2.0",
+    # JCS canonicalization for content hashing.
     "jcs>=0.2",
+    # SQL parsing + AST rewriting for constraint bodies + spec-aware
+    # references inside Constraint.body and DefinedClass.definition.
     "sqlglot>=25.0",
+    # Compiler emits psycopg.sql.Composable fragments (parameterised
+    # DDL + predicate + order-by SQL). The runtime that executes them
+    # provides the connection; the library only constructs them.
+    "psycopg[binary]>=3.1",
+    # Compiler emits Strawberry types and a Schema object for the host
+    # GraphQL server to mount.
+    "strawberry-graphql>=0.200",
 ]
 
 [project.optional-dependencies]
-runtime = [
-    "fastapi>=0.110",
-    "uvicorn>=0.29",
-    "strawberry-graphql[fastapi]>=0.200",
-]
-test = [
+dev = [
     "pytest>=8",
     "pytest-asyncio",
-    "psycopg[binary]>=3.1",
-    "httpx",  # required by fastapi.testclient
-]
-notebook = [
-    "marimo>=0.10",
-    "pandas>=2.0",
-    "sqlalchemy>=2.0",
-    "requests>=2.31",
-]
-dev = [
     "ruff>=0.4",
     "mypy>=1.10",
-    "mkdocs-material",
-    "pymdown-extensions",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = [
-    "unit: pure unit test (no I/O, no postgres)",
-    "integration: integration test (requires docker-compose postgres)",
+    "unit: pure unit test (no I/O)",
 ]
 
 [tool.ruff]
@@ -59,11 +51,10 @@ select = [
 ]
 ignore = [
     "E501",  # line too long — formatter handles wrapping
-    "B008",  # function calls in defaults (FastAPI Depends pattern)
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**/*.py" = ["B011"]  # assert False is fine in tests
+"tests/**/*.py" = ["B011"]
 
 [tool.ruff.format]
 quote-style = "double"
@@ -75,7 +66,7 @@ strict = false
 warn_unused_ignores = true
 warn_redundant_casts = true
 ignore_missing_imports = true
-exclude = "^(notebooks|tests)"
+exclude = "^(tests)"
 
 [build-system]
 requires = ["hatchling"]
