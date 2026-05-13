@@ -72,14 +72,116 @@ logger = logging.getLogger(__name__)
 # Schema cache  {content_hash: strawberry.Schema}
 # ---------------------------------------------------------------------------
 
-_schema_cache: dict[str, Schema] = {}
+_schema_cache: dict[str, "_SchemaBundle"] = {}
+
+
+class _SchemaBundle:
+    """Per-spec cache entry — Schema plus the maps needed to build per-request
+    DataLoaders for ClassRef forward resolution."""
+
+    __slots__ = ("schema", "class_object_types", "name_to_oc")
+
+    def __init__(
+        self,
+        schema: Schema,
+        class_object_types: dict[str, type],
+        name_to_oc: dict[str, OntologyClass],
+    ) -> None:
+        self.schema = schema
+        self.class_object_types = class_object_types
+        self.name_to_oc = name_to_oc
 
 
 def get_or_build_schema(spec: Spec, content_hash: str) -> Schema:
     """Return the cached schema for content_hash, building it on miss."""
     if content_hash not in _schema_cache:
-        _schema_cache[content_hash] = _build_schema(spec)
-    return _schema_cache[content_hash]
+        schema, ctypes, name_to_oc = _build_schema(spec)
+        _schema_cache[content_hash] = _SchemaBundle(schema, ctypes, name_to_oc)
+    return _schema_cache[content_hash].schema
+
+
+def build_request_context(content_hash: str, conn: Any) -> dict[str, Any]:
+    """Build the GraphQL execution context for one request.
+
+    Per-target-class DataLoaders share the provided psycopg connection so
+    a single request issues one query per (target_class, batch) instead
+    of one per ClassRef field per parent row (N+1 → 1+1). The Strawberry
+    DataLoader also dedupes repeated canonical_id lookups within a tick.
+
+    Forward ClassRef resolvers consult ``info.context["loaders"][target_name]``
+    when present; if absent (direct schema.execute without context), they
+    fall back to opening their own connection.
+    """
+    bundle = _schema_cache.get(content_hash)
+    if bundle is None:
+        return {"conn": conn, "loaders": {}}
+    loaders: dict[str, Any] = {}
+    for name, ctype in bundle.class_object_types.items():
+        target_oc = bundle.name_to_oc[name]
+        loaders[name] = _make_classref_dataloader(ctype, target_oc, conn)
+    return {"conn": conn, "loaders": loaders}
+
+
+def _make_classref_dataloader(target_type: type, target_oc: OntologyClass, conn: Any):
+    """Strawberry DataLoader that batches canonical_id lookups for one
+    target class. The batched fetch issues a single ``WHERE canonical_id =
+    ANY(%s)`` query against the target's table+bindings (or the VIEW for a
+    defined class), then groups + merges contributions in Python."""
+    from strawberry.dataloader import DataLoader
+
+    is_defined = getattr(target_oc, "definition", None) is not None
+
+    async def load_fn(keys: list[str]) -> list[Any]:
+        if not keys:
+            return []
+        from psycopg import sql as _sql
+        from psycopg.rows import dict_row
+
+        from knot.db.graph_store import _serialize_row as _serialize
+        from knot.spec.compile.postgres._naming import (
+            bindings_table_id as _bind_id,
+        )
+        from knot.spec.compile.postgres._naming import (
+            table_id as _tbl_id,
+        )
+
+        unique_keys = list({k for k in keys if k is not None})
+        if not unique_keys:
+            return [None] * len(keys)
+
+        if is_defined:
+            stmt = _sql.SQL(
+                "SELECT s.* FROM {view} s "
+                "WHERE s._canonical_id = ANY(%s::text[]) "
+                "ORDER BY s._canonical_id, s._source"
+            ).format(view=_tbl_id(target_oc))
+        else:
+            stmt = _sql.SQL(
+                "SELECT s.*, b.canonical_id AS _canonical_id "
+                "FROM {src} s JOIN {bind} b "
+                "ON b.knot_row_id = s._knot_row_id AND b.valid_to IS NULL "
+                "WHERE b.canonical_id = ANY(%s::text[]) "
+                "ORDER BY b.canonical_id, s._source"
+            ).format(src=_tbl_id(target_oc), bind=_bind_id(target_oc))
+
+        cur = await conn.cursor(row_factory=dict_row).execute(stmt, [unique_keys])
+        raw_rows = await cur.fetchall()
+        by_cid: dict[str, list[dict[str, Any]]] = {}
+        for row in raw_rows:
+            cid = row.get("_canonical_id")
+            if cid is None:
+                continue
+            by_cid.setdefault(cid, []).append(_serialize(row))
+
+        results: dict[str, Any] = {}
+        for cid, contribs in by_cid.items():
+            merged = _merge_contributions(contribs, target_oc)
+            merged.setdefault("_canonical_id", cid)
+            results[cid] = _row_to_typed(target_type, target_oc, merged)
+
+        return [results.get(k) for k in keys]
+
+    return DataLoader(load_fn=load_fn)
 
 
 # ---------------------------------------------------------------------------
@@ -239,15 +341,26 @@ def _make_classref_resolver(
     """Async field resolver for a scalar ClassRef property — forward edge.
 
     Reads ``self.<fk_attr>`` (the canonical_id of the related row, stored as
-    a strawberry.Private field on the parent type), fetches all contributions
-    for that canonical_id from the target class's table, merges them via
-    alphabetical-source resolution, and returns a typed instance of the
-    target's GraphQL object type.
+    a strawberry.Private field on the parent type) and returns a typed
+    instance of the target class.
+
+    Uses ``info.context["loaders"][target_name]`` when the per-request
+    DataLoader bundle is set (see ``build_request_context``), batching
+    sibling-row lookups inside a tick to avoid N+1 round-trips. Falls back
+    to a direct per-row fetch if no context is present — that keeps the
+    function callable from unit tests / schema.execute without a context.
     """
-    async def resolver(root):
+    target_name = target_oc.name
+
+    async def resolver(root, info):
         cid = getattr(root, fk_attr, None)
         if cid is None:
             return None
+        ctx = getattr(info, "context", None) or {}
+        loaders = ctx.get("loaders") if isinstance(ctx, dict) else None
+        if loaders and target_name in loaders:
+            return await loaders[target_name].load(cid)
+        # Fallback: open a connection and fetch directly.
         from knot import db
         from knot.db import graph_store
 
@@ -261,7 +374,11 @@ def _make_classref_resolver(
         merged.setdefault("_canonical_id", cid)
         return _row_to_typed(target_type, target_oc, merged)
 
-    resolver.__annotations__ = {"root": Any, "return": Optional[target_type]}
+    resolver.__annotations__ = {
+        "root": Any,
+        "info": strawberry.Info,
+        "return": Optional[target_type],
+    }
     resolver.__name__ = f"resolve_{target_oc.name.lower()}_for_{fk_attr}"
     return resolver
 
@@ -269,17 +386,25 @@ def _make_classref_resolver(
 def _make_classref_array_resolver(
     target_type: type, target_oc: OntologyClass, fk_attr: str
 ):
-    """Async resolver for a scalar Array-of-ClassRef property — forward edge.
+    """Async resolver for an Array-of-ClassRef property — forward edge.
 
-    ``self.<fk_attr>`` is a list[str] of canonical_ids; fetch each and return
-    a list of typed instances. Misses (no contributions for an id) are dropped
-    rather than surfacing as None entries — the consumer cares about the
-    relation, not about gaps.
+    ``self.<fk_attr>`` is a list[str] of canonical_ids; the resolver returns
+    a list of typed instances. Uses DataLoader batching when available so a
+    parent with N related rows fires one batched fetch instead of N.
     """
-    async def resolver(root):
+    target_name = target_oc.name
+
+    async def resolver(root, info):
         cids = getattr(root, fk_attr, None) or []
         if not cids:
             return []
+        ctx = getattr(info, "context", None) or {}
+        loaders = ctx.get("loaders") if isinstance(ctx, dict) else None
+        if loaders and target_name in loaders:
+            loader = loaders[target_name]
+            fetched = await loader.load_many(cids)
+            return [r for r in fetched if r is not None]
+        # Fallback: per-key direct fetch.
         from knot import db
         from knot.db import graph_store
 
@@ -296,7 +421,11 @@ def _make_classref_array_resolver(
                 out.append(_row_to_typed(target_type, target_oc, merged))
         return out
 
-    resolver.__annotations__ = {"root": Any, "return": list[target_type]}
+    resolver.__annotations__ = {
+        "root": Any,
+        "info": strawberry.Info,
+        "return": list[target_type],
+    }
     resolver.__name__ = f"resolve_{target_oc.name.lower()}_for_{fk_attr}_array"
     return resolver
 
@@ -1066,7 +1195,7 @@ def _make_aggregate_result_type(oc: OntologyClass) -> tuple[type, list[tuple[str
 # ---------------------------------------------------------------------------
 
 
-def _build_schema(spec: Spec) -> Schema:
+def _build_schema(spec: Spec) -> tuple[Schema, dict[str, type], dict[str, OntologyClass]]:
     """Build a Strawberry Schema from the published Spec.
 
     Strategy for dynamic resolver types:
@@ -1397,4 +1526,6 @@ def _build_schema(spec: Spec) -> Schema:
             )
 
     Query = strawberry.type(type("Query", (), query_fields))
-    return strawberry.Schema(query=Query)
+    schema = strawberry.Schema(query=Query)
+    name_to_oc = {oc.name: oc for oc in concrete_classes}
+    return schema, class_object_types, name_to_oc

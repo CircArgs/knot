@@ -62,18 +62,21 @@ async def graphql_query(body: GraphQLBody) -> dict[str, Any]:
     standard GraphQL response envelope.
     """
     from knot.db import spec_store
-    from knot.spec.compile.graphql import get_or_build_schema
+    from knot.spec.compile.graphql import build_request_context, get_or_build_schema
 
     async with db.connect() as conn:
         spec = await published_or_409(conn)
         content_hash = await spec_store.get_published_content_hash(conn) or ""
-
-    schema = get_or_build_schema(spec, content_hash)
-    result = await schema.execute(
-        body.query,
-        variable_values=body.variables,
-        operation_name=body.operation_name,
-    )
+        schema = get_or_build_schema(spec, content_hash)
+        # Per-request DataLoader bundle — batches ClassRef forward
+        # resolution across all rows in a single tick, eliminating N+1.
+        context = build_request_context(content_hash, conn)
+        result = await schema.execute(
+            body.query,
+            variable_values=body.variables,
+            operation_name=body.operation_name,
+            context_value=context,
+        )
     response: dict[str, Any] = {}
     if result.data is not None:
         response["data"] = result.data
