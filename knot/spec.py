@@ -6,24 +6,34 @@ in ``SourceBinding.mappings``).
 
 The type system is structural — a ``TypeExpression`` is one of:
 
-  - ``Primitive``       — enum of the closed primitive set
-  - ``Array(of=…)``     — homogeneous container over another TypeExpression
+  - ``Primitive``           — enum of the closed primitive set
+  - ``Array(of=…)``         — homogeneous container over another TypeExpression
   - ``ClassRef(target=…)``  — FK to another class (stored as canonical_id)
 
 Builder methods accept either a ``TypeExpression`` or a primitive name
 string (``"text"`` → ``Primitive.TEXT``). All entities are plain
-``@dataclass`` records so a future Java port maps 1:1 to
-``record`` / ``sealed interface`` / ``enum``.
+``@dataclass`` records so a future Java port maps 1:1 to ``record`` /
+``sealed interface`` / ``enum``.
+
+Validation happens at two levels:
+
+  - Entity-local: ``__post_init__`` rejects empty names, out-of-range
+    accuracy, and (via ``StrEnum`` coercion) unknown ``ClassKind`` /
+    ``Severity`` values.
+  - Cross-entity: ``Spec.validate()`` returns a list of well-formedness
+    errors (orphan references, missing identifier slots, duplicate
+    names, etc.). Empty list = valid.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
 
 
 # ---------------------------------------------------------------------------
-# Type expressions
+# Enums
 # ---------------------------------------------------------------------------
 
 
@@ -36,6 +46,27 @@ class Primitive(StrEnum):
     BOOLEAN = "boolean"
     DATE = "date"
     TIMESTAMP = "timestamp"
+
+
+class ClassKind(StrEnum):
+    """Whether an ``OntologyClass`` materializes a table (``CONCRETE``)
+    or is mixin-only (``ABSTRACT``)."""
+
+    CONCRETE = "concrete"
+    ABSTRACT = "abstract"
+
+
+class Severity(StrEnum):
+    """Constraint violation severity. ``ERROR`` blocks writes; ``WARNING``
+    is reported but does not block."""
+
+    ERROR = "error"
+    WARNING = "warning"
+
+
+# ---------------------------------------------------------------------------
+# Type expressions
+# ---------------------------------------------------------------------------
 
 
 @dataclass
@@ -85,6 +116,21 @@ def _coerce_type(t: TypeExpression | str) -> TypeExpression:
 # ---------------------------------------------------------------------------
 
 
+_NAME_PATTERN = r"^[A-Za-z_][A-Za-z0-9_]*$"
+
+
+def _check_name(kind: str, name: str) -> None:
+    import re
+
+    if not isinstance(name, str) or not name:
+        raise ValueError(f"{kind} name must be a non-empty string, got {name!r}")
+    if not re.match(_NAME_PATTERN, name):
+        raise ValueError(
+            f"{kind} name {name!r} must match {_NAME_PATTERN} "
+            f"(letters, digits, underscores; starts with letter or underscore)"
+        )
+
+
 @dataclass
 class Slot:
     """A property of a class — primitive, array, or FK."""
@@ -94,6 +140,13 @@ class Slot:
     identifier: bool = False
     required: bool = False
     description: str | None = None
+
+    def __post_init__(self) -> None:
+        _check_name("Slot", self.name)
+        if self.identifier and not self.required:
+            # An identifier is by definition required (NOT NULL in the
+            # canonical table). Coerce silently — common builder mistake.
+            self.required = True
 
     @property
     def is_fk(self) -> bool:
@@ -110,11 +163,22 @@ class OntologyClass:
     """A typed entity class — concrete (has a table) or abstract (mixin only)."""
 
     name: str
-    kind: str = "concrete"  # "concrete" | "abstract"
+    kind: ClassKind = ClassKind.CONCRETE
     is_a: OntologyClass | None = None
     mixins: list[OntologyClass] = field(default_factory=list)
     slots: list[Slot] = field(default_factory=list)
     description: str | None = None
+
+    def __post_init__(self) -> None:
+        _check_name("OntologyClass", self.name)
+        if isinstance(self.kind, str):
+            try:
+                self.kind = ClassKind(self.kind)
+            except ValueError as e:
+                raise ValueError(
+                    f"OntologyClass.kind must be one of "
+                    f"{[k.value for k in ClassKind]}; got {self.kind!r}"
+                ) from e
 
     def slot(
         self,
@@ -125,6 +189,10 @@ class OntologyClass:
         required: bool = False,
         description: str | None = None,
     ) -> Slot:
+        if any(s.name == name for s in self.slots):
+            raise ValueError(
+                f"OntologyClass {self.name!r} already has a slot named {name!r}"
+            )
         s = Slot(
             name=name,
             type=_coerce_type(type),
@@ -143,6 +211,10 @@ class OntologyClass:
         required: bool = False,
         description: str | None = None,
     ) -> Slot:
+        if any(s.name == name for s in self.slots):
+            raise ValueError(
+                f"OntologyClass {self.name!r} already has a slot named {name!r}"
+            )
         s = Slot(
             name=name,
             type=ClassRef(target=to),
@@ -153,7 +225,7 @@ class OntologyClass:
         return s
 
     def get_slot(self, name: str) -> Slot:
-        for cls in self._chain():
+        for cls in self.chain():
             for sl in cls.slots:
                 if sl.name == name:
                     return sl
@@ -162,7 +234,15 @@ class OntologyClass:
     def __getitem__(self, name: str) -> Slot:
         return self.get_slot(name)
 
-    def _chain(self) -> list[OntologyClass]:
+    def identifier_slot(self) -> Slot:
+        """The first slot up the is_a + mixin chain marked ``identifier=True``."""
+        for sl in self.effective_slots():
+            if sl.identifier:
+                return sl
+        raise ValueError(f"OntologyClass {self.name!r} has no identifier slot")
+
+    def chain(self) -> list[OntologyClass]:
+        """Self + is_a ancestors + mixins, breadth-first."""
         seen: list[OntologyClass] = []
         queue: list[OntologyClass] = [self]
         while queue:
@@ -175,6 +255,19 @@ class OntologyClass:
             queue.extend(cur.mixins)
         return seen
 
+    def effective_slots(self) -> list[Slot]:
+        """Every slot ``self`` effectively has — own + inherited via
+        ``is_a`` + mixins. First-seen-wins on name collision."""
+        seen: set[str] = set()
+        out: list[Slot] = []
+        for parent in self.chain():
+            for sl in parent.slots:
+                if sl.name in seen:
+                    continue
+                seen.add(sl.name)
+                out.append(sl)
+        return out
+
 
 @dataclass
 class VirtualClass:
@@ -185,6 +278,13 @@ class VirtualClass:
     is_a: OntologyClass
     definition: str
     description: str | None = None
+
+    def __post_init__(self) -> None:
+        _check_name("VirtualClass", self.name)
+        if not isinstance(self.definition, str) or not self.definition.strip():
+            raise ValueError(
+                f"VirtualClass {self.name!r} requires a non-empty SQL definition"
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -199,8 +299,23 @@ class Constraint:
     name: str
     primary: OntologyClass
     body: str
-    severity: str = "error"  # "error" | "warning"
+    severity: Severity = Severity.ERROR
     message: str | None = None
+
+    def __post_init__(self) -> None:
+        _check_name("Constraint", self.name)
+        if not isinstance(self.body, str) or not self.body.strip():
+            raise ValueError(
+                f"Constraint {self.name!r} requires a non-empty SQL body"
+            )
+        if isinstance(self.severity, str):
+            try:
+                self.severity = Severity(self.severity)
+            except ValueError as e:
+                raise ValueError(
+                    f"Constraint.severity must be one of "
+                    f"{[s.value for s in Severity]}; got {self.severity!r}"
+                ) from e
 
 
 @dataclass
@@ -209,6 +324,9 @@ class Source:
 
     name: str
     description: str | None = None
+
+    def __post_init__(self) -> None:
+        _check_name("Source", self.name)
 
 
 # Module-level default stiffness for source priors, in evidence-units.
@@ -232,6 +350,12 @@ class SourceBinding:
     accuracy: float = 0.67
     mappings: dict[str, str] = field(default_factory=dict)
     description: str | None = None
+
+    def __post_init__(self) -> None:
+        if not (0.0 <= self.accuracy <= 1.0):
+            raise ValueError(
+                f"SourceBinding accuracy must be in [0, 1]; got {self.accuracy}"
+            )
 
     def map(self, **mappings: str) -> SourceBinding:
         self.mappings.update(mappings)
@@ -261,18 +385,26 @@ class Spec:
     source_bindings: list[SourceBinding] = field(default_factory=list)
     constraints: list[Constraint] = field(default_factory=list)
 
+    def __post_init__(self) -> None:
+        _check_name("Spec.id", self.id)
+        if not isinstance(self.version, str) or not self.version.strip():
+            raise ValueError("Spec.version must be a non-empty string")
+
+    # -- builder methods --
+
     def add_class(
         self,
         name: str,
         *,
-        kind: str = "concrete",
+        kind: ClassKind | str = ClassKind.CONCRETE,
         is_a: OntologyClass | None = None,
         mixins: list[OntologyClass] | None = None,
         description: str | None = None,
     ) -> OntologyClass:
+        self._check_unique_class_name(name)
         cls = OntologyClass(
             name=name,
-            kind=kind,
+            kind=kind if isinstance(kind, ClassKind) else ClassKind(kind),
             is_a=is_a,
             mixins=list(mixins) if mixins else [],
             description=description,
@@ -288,6 +420,7 @@ class Spec:
         where: str,
         description: str | None = None,
     ) -> VirtualClass:
+        self._check_unique_class_name(name)
         vc = VirtualClass(
             name=name,
             is_a=base,
@@ -303,14 +436,16 @@ class Spec:
         *,
         primary: OntologyClass,
         body: str,
-        severity: str = "error",
+        severity: Severity | str = Severity.ERROR,
         message: str | None = None,
     ) -> Constraint:
+        if any(c.name == name for c in self.constraints):
+            raise ValueError(f"Spec already has a constraint named {name!r}")
         c = Constraint(
             name=name,
             primary=primary,
             body=body,
-            severity=severity,
+            severity=severity if isinstance(severity, Severity) else Severity(severity),
             message=message,
         )
         self.constraints.append(c)
@@ -322,6 +457,8 @@ class Spec:
         *,
         description: str | None = None,
     ) -> Source:
+        if any(s.name == name for s in self.sources):
+            raise ValueError(f"Spec already has a source named {name!r}")
         s = Source(name=name, description=description)
         self.sources.append(s)
         return s
@@ -335,6 +472,13 @@ class Spec:
         accuracy: float = 0.67,
         description: str | None = None,
     ) -> SourceBinding:
+        if any(
+            b.source is source and b.class_ is class_ for b in self.source_bindings
+        ):
+            raise ValueError(
+                f"Spec already has a binding for source {source.name!r} → "
+                f"class {class_.name!r}"
+            )
         b = SourceBinding(
             source=source,
             class_=class_,
@@ -345,9 +489,165 @@ class Spec:
         self.source_bindings.append(b)
         return b
 
+    def _check_unique_class_name(self, name: str) -> None:
+        if any(c.name == name for c in self.classes):
+            raise ValueError(f"Spec already has a class named {name!r}")
+
+    # -- well-formedness validation --
+
+    def class_by_name(self, name: str) -> OntologyClass | VirtualClass:
+        for c in self.classes:
+            if c.name == name:
+                return c
+        raise KeyError(f"Spec has no class named {name!r}")
+
+    def validate(self) -> list[str]:
+        """Cross-entity well-formedness checks.
+
+        Returns a list of error messages; empty list means the spec is
+        valid. Local entity checks (name shape, accuracy bounds, enum
+        values) have already run in each entity's ``__post_init__``.
+        """
+        errs: list[str] = []
+        classes_by_name: dict[str, OntologyClass | VirtualClass] = {}
+        for c in self.classes:
+            if c.name in classes_by_name:
+                errs.append(f"duplicate class name {c.name!r}")
+            classes_by_name[c.name] = c
+
+        concrete_or_abstract: dict[str, OntologyClass] = {
+            c.name: c for c in self.classes if isinstance(c, OntologyClass)
+        }
+
+        for c in self.classes:
+            # is_a / mixins of OntologyClass
+            if isinstance(c, OntologyClass):
+                if c.is_a is not None and c.is_a.name not in concrete_or_abstract:
+                    errs.append(
+                        f"class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
+                    )
+                for m in c.mixins:
+                    if m.name not in concrete_or_abstract:
+                        errs.append(
+                            f"class {c.name!r} mixin {m.name!r}: not in spec"
+                        )
+                # Slot name uniqueness within the class
+                seen_slots: set[str] = set()
+                for sl in c.slots:
+                    if sl.name in seen_slots:
+                        errs.append(
+                            f"class {c.name!r} has duplicate slot {sl.name!r}"
+                        )
+                    seen_slots.add(sl.name)
+                    # ClassRef target must exist
+                    if isinstance(sl.type, ClassRef):
+                        if sl.type.target.name not in concrete_or_abstract:
+                            errs.append(
+                                f"slot {c.name}.{sl.name} ClassRef → "
+                                f"{sl.type.target.name!r}: not in spec"
+                            )
+                # Concrete classes must have exactly one identifier slot
+                # (effective — counting inherited)
+                if c.kind == ClassKind.CONCRETE:
+                    ids = [s for s in c.effective_slots() if s.identifier]
+                    if len(ids) == 0:
+                        errs.append(
+                            f"concrete class {c.name!r} has no identifier slot"
+                        )
+                    elif len(ids) > 1:
+                        names = ", ".join(s.name for s in ids)
+                        errs.append(
+                            f"concrete class {c.name!r} has multiple "
+                            f"identifier slots: {names}"
+                        )
+            elif isinstance(c, VirtualClass):
+                if c.is_a.name not in concrete_or_abstract:
+                    errs.append(
+                        f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: "
+                        f"not in spec"
+                    )
+
+        # Constraint references
+        constraint_names: set[str] = set()
+        for c in self.constraints:
+            if c.name in constraint_names:
+                errs.append(f"duplicate constraint name {c.name!r}")
+            constraint_names.add(c.name)
+            if c.primary.name not in concrete_or_abstract:
+                errs.append(
+                    f"constraint {c.name!r}.primary → {c.primary.name!r}: "
+                    f"not in spec"
+                )
+
+        # Source name uniqueness
+        sources_by_name: dict[str, Source] = {}
+        for s in self.sources:
+            if s.name in sources_by_name:
+                errs.append(f"duplicate source name {s.name!r}")
+            sources_by_name[s.name] = s
+
+        # SourceBinding references
+        binding_keys: set[tuple[str, str]] = set()
+        for b in self.source_bindings:
+            key = (b.source.name, b.class_.name)
+            if key in binding_keys:
+                errs.append(
+                    f"duplicate binding source={b.source.name!r} "
+                    f"class={b.class_.name!r}"
+                )
+            binding_keys.add(key)
+            if b.source.name not in sources_by_name:
+                errs.append(
+                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
+                    f"source not in spec"
+                )
+            if b.class_.name not in concrete_or_abstract:
+                errs.append(
+                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
+                    f"class not in spec"
+                )
+                continue
+            cls = concrete_or_abstract[b.class_.name]
+            if cls.kind != ClassKind.CONCRETE:
+                errs.append(
+                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
+                    f"class is {cls.kind.value}, only concrete classes can bind"
+                )
+            # identifier_slot must be on the bound class's effective slots
+            eff_names = {s.name for s in cls.effective_slots()}
+            if b.identifier_slot.name not in eff_names:
+                errs.append(
+                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
+                    f"identifier_slot {b.identifier_slot.name!r} not on class"
+                )
+            # mapping keys must be slots on the bound class
+            for slot_name in b.mappings:
+                if slot_name not in eff_names:
+                    errs.append(
+                        f"binding source={b.source.name!r} "
+                        f"class={b.class_.name!r}: mapping references "
+                        f"slot {slot_name!r} not on class"
+                    )
+
+        return errs
+
+    def validate_strict(self) -> None:
+        """Like ``validate`` but raises ``SpecError`` on any failure."""
+        errs = self.validate()
+        if errs:
+            raise SpecError(
+                "Spec failed validation:\n  - " + "\n  - ".join(errs)
+            )
+
+
+class SpecError(ValueError):
+    """Raised by ``Spec.validate_strict`` when well-formedness fails."""
+
 
 __all__ = [
     "Primitive",
+    "ClassKind",
+    "Severity",
     "Array",
     "ClassRef",
     "TypeExpression",
@@ -359,4 +659,5 @@ __all__ = [
     "SourceBinding",
     "BINDING_PRIOR_STRENGTH",
     "Spec",
+    "SpecError",
 ]

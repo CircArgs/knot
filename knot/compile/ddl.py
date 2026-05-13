@@ -20,10 +20,10 @@ from __future__ import annotations
 
 from knot.spec import (
     Array,
+    ClassKind,
     ClassRef,
     OntologyClass,
     Primitive,
-    Slot,
     Spec,
     TypeExpression,
     VirtualClass,
@@ -66,7 +66,7 @@ def emit_ddl(
     stmts: list[str] = [f"CREATE SCHEMA IF NOT EXISTS {schema};"]
     for cls in spec.classes:
         if isinstance(cls, OntologyClass):
-            if cls.kind != "concrete":
+            if cls.kind != ClassKind.CONCRETE:
                 continue
             stmts.append(
                 _emit_table(cls, schema=schema, if_not_exists=if_not_exists)
@@ -123,23 +123,6 @@ def _pg_type(t: TypeExpression) -> str:
 
 
 # ---------------------------------------------------------------------------
-# Slot walking — is_a + mixins, dedup by slot name
-# ---------------------------------------------------------------------------
-
-
-def _effective_slots(cls: OntologyClass) -> list[Slot]:
-    seen: set[str] = set()
-    out: list[Slot] = []
-    for parent in cls._chain():
-        for sl in parent.slots:
-            if sl.name in seen:
-                continue
-            seen.add(sl.name)
-            out.append(sl)
-    return out
-
-
-# ---------------------------------------------------------------------------
 # Per-entity emitters
 # ---------------------------------------------------------------------------
 
@@ -155,7 +138,7 @@ def _create_view(*, if_not_exists: bool) -> str:
 def _emit_table(cls: OntologyClass, *, schema: str, if_not_exists: bool) -> str:
     columns: list[str] = []
     pk_cols: list[str] = []
-    for slot in _effective_slots(cls):
+    for slot in cls.effective_slots():
         col = f"    {slot.name} {_pg_type(slot.type)}"
         if slot.identifier or slot.required:
             col += " NOT NULL"
@@ -193,7 +176,7 @@ def _emit_bindings_table(
         "    source_identifier text NOT NULL",
     ]
     identifier_name: str | None = None
-    for slot in _effective_slots(cls):
+    for slot in cls.effective_slots():
         # Identifier is NOT NULL in bindings (every claim references a
         # canonical row); other slots are nullable since a source may
         # only project some of them.
@@ -235,7 +218,7 @@ def _emit_class_comments(cls: OntologyClass, *, schema: str) -> list[str]:
     table_id = f"{schema}.{cls.name.lower()}"
     if cls.description:
         out.append(_comment_on("TABLE", table_id, cls.description))
-    for slot in _effective_slots(cls):
+    for slot in cls.effective_slots():
         if slot.description:
             out.append(
                 _comment_on(

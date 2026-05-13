@@ -34,17 +34,7 @@ from __future__ import annotations
 import sqlglot
 from sqlglot import expressions as exp
 
-from knot.spec import OntologyClass, Slot, Spec
-
-
-def _identifier_slot(cls: OntologyClass) -> Slot:
-    """Find the (first) slot on ``cls`` (or up its is_a / mixin chain)
-    marked ``identifier=True``."""
-    for parent in cls._chain():
-        for sl in parent.slots:
-            if sl.identifier:
-                return sl
-    raise ValueError(f"{cls.name!r} has no identifier slot")
+from knot.spec import OntologyClass, Spec
 
 
 def _escape_literal(s: str) -> str:
@@ -90,7 +80,7 @@ def emit_validation(
     out: list[tuple[str, str]] = []
     for c in spec.constraints:
         primary = c.primary
-        identifier = _identifier_slot(primary)
+        identifier = primary.identifier_slot()
         table = f"{schema}.{primary.name.lower()}"
         message_literal = (
             f"'{_escape_literal(c.message)}'" if c.message else "NULL"

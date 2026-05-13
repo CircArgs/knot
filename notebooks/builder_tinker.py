@@ -177,7 +177,7 @@ def _(movie):
     inherited = movie["name"]
     own = movie["year"]
     genres = movie["genres"]
-    chain = [c.name for c in movie._chain()]
+    chain = [c.name for c in movie.chain()]
     {
         "chain": chain,
         "inherited (Title.name)": (inherited.name, str(inherited.type), inherited.required),

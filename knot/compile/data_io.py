@@ -25,7 +25,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from knot.spec import OntologyClass, Slot, Spec
+from knot.spec import ClassKind, OntologyClass, Spec
 
 
 @dataclass(frozen=True)
@@ -41,32 +41,13 @@ class BindingWrite:
 def _find_concrete(spec: Spec, name: str) -> OntologyClass:
     for c in spec.classes:
         if isinstance(c, OntologyClass) and c.name == name:
-            if c.kind != "concrete":
+            if c.kind != ClassKind.CONCRETE:
                 raise ValueError(
-                    f"class {name!r} is {c.kind!r}; only concrete classes "
+                    f"class {name!r} is {c.kind.value!r}; only concrete classes "
                     f"have bindings tables"
                 )
             return c
     raise ValueError(f"no concrete class named {name!r} in spec")
-
-
-def _effective_slots(cls: OntologyClass) -> list[Slot]:
-    seen: set[str] = set()
-    out: list[Slot] = []
-    for parent in cls._chain():
-        for sl in parent.slots:
-            if sl.name in seen:
-                continue
-            seen.add(sl.name)
-            out.append(sl)
-    return out
-
-
-def _identifier_slot(cls: OntologyClass) -> Slot:
-    for sl in _effective_slots(cls):
-        if sl.identifier:
-            return sl
-    raise ValueError(f"{cls.name!r} has no identifier slot")
 
 
 def emit_binding_write(
@@ -78,7 +59,7 @@ def emit_binding_write(
 ) -> BindingWrite:
     """Return the two-statement SCD2 write machinery for ``class_name``."""
     cls = _find_concrete(spec, class_name)
-    ident = _identifier_slot(cls)
+    ident = cls.identifier_slot()
     bindings_table = f"{schema}.{cls.name.lower()}{bindings_suffix}"
 
     close_out_columns = (ident.name, "source_name", "source_identifier")
@@ -91,7 +72,7 @@ def emit_binding_write(
         f"  AND valid_to IS NULL;"
     )
 
-    slot_columns = tuple(sl.name for sl in _effective_slots(cls))
+    slot_columns = tuple(sl.name for sl in cls.effective_slots())
     insert_columns = ("source_name", "source_identifier") + slot_columns
     columns_csv = ", ".join(insert_columns)
     placeholders_csv = ", ".join(f"%({c})s" for c in insert_columns)

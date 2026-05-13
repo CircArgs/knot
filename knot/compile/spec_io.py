@@ -106,7 +106,7 @@ def save_spec(
                         sid,
                         sver,
                         cls.name,
-                        cls.kind,
+                        cls.kind.value,
                         cls.is_a.name if cls.is_a else None,
                         cls.description,
                     ],
@@ -212,7 +212,7 @@ def save_spec(
                     c.name,
                     c.primary.name,
                     c.body,
-                    c.severity,
+                    c.severity.value,
                     c.message,
                 ],
             )
