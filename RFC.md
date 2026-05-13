@@ -115,39 +115,43 @@ Read paths (`query_observations`, `summarize`) support time-windowed, per-source
 
 ## Examples — building up a spec
 
-Below we build a small spec from nothing and watch the running system grow at each step. The domain is intentionally tiny — a movie database — so the conceptual moves stand out. Screenshots from a live instance accompany each step (omitted here).
+Below we build a small spec from nothing and watch the running system grow at each step. The domain is intentionally tiny — a movie database — so the conceptual moves stand out. The screenshot below shows the fully built-out spec graph from a live instance; each step below adds one element to this picture.
+
+![Spec graph showing all classes, sources, bindings, mixins, constraints, and defined classes](assets/spec_graph.png)
 
 ### 1. A single class
 
-Declare `Movie` with a handful of slots: `title`, `year`, `runtime`. The compiler emits a `movie` table in the data plane (one column per slot, plus knot's system columns for provenance and history) and a `movie` field on the GraphQL surface that returns rows. *[screenshot: spec graph showing one class node + the emitted table shape]*
+Declare `Movie` with a handful of slots: `title`, `year`, `runtime`. The compiler emits a `movie` table in the data plane (one column per slot, plus knot's system columns for provenance and history) and a `movie` field on the GraphQL surface that returns rows.
 
 ### 2. A source binding
 
-Declare an `imdb` source and bind it to `Movie`, mapping IMDB's field names (`primaryTitle`, `startYear`) to our slots. Posting IMDB rows to the ingest endpoint now validates them through the binding's mapping and lands them in the `movie` table; GraphQL reads return them. *[screenshot: binding card + a few ingested rows]*
+Declare an `imdb` source and bind it to `Movie`, mapping IMDB's field names (`primaryTitle`, `startYear`) to our slots. Posting IMDB rows to the ingest endpoint now validates them through the binding's mapping and lands them in the `movie` table; GraphQL reads return them.
 
 ### 3. Inheritance
 
-Add an abstract `MediaItem` class that `Movie` (and later `TVSeries`, `Episode`) declare via `is_a`. `MediaItem` itself has no table — only concrete descendants do — but its slots, its mixins, and its constraints flow to every descendant automatically. *[screenshot: spec graph with the is_a edge]*
+Add an abstract `MediaItem` class that `Movie` (and later `TVSeries`, `Episode`) declare via `is_a`. `MediaItem` itself has no table — only concrete descendants do — but its slots, its mixins, and its constraints flow to every descendant automatically.
 
 ### 4. A mixin
 
-Declare an `Auditable` mixin with `created_at` / `updated_at` and apply it to `MediaItem`. Every concrete descendant gains those two columns; no separate `auditable` table appears — mixins are slot-bundles that get pulled in, not parallel tables. *[screenshot: spec graph showing mixin edge; descendant table now wider]*
+Declare an `Auditable` mixin with `created_at` / `updated_at` and apply it to `MediaItem`. Every concrete descendant gains those two columns; no separate `auditable` table appears — mixins are slot-bundles that get pulled in, not parallel tables.
 
 ### 5. A reified relation
 
-Declare `Credit` as its own class with two relation-typed slots (`movie` → `Movie`, `person` → `Person`) plus `role` and `billing_order`. `Credit` gets its own table and its own ingestion path; the GraphQL surface lets you traverse `Movie → credits → Person` and back, with the relation's own slots available along the edge. *[screenshot: junction node with two FK edges]*
+Declare `Credit` as its own class with two relation-typed slots (`movie` → `Movie`, `person` → `Person`) plus `role` and `billing_order`. `Credit` gets its own table and its own ingestion path; the GraphQL surface lets you traverse `Movie → credits → Person` and back, with the relation's own slots available along the edge.
 
 ### 6. A defined class
 
-Declare `Director` as "a `Person` where there exists a `Credit` with `role='director'`". The compiler emits a SQL VIEW (not a table) over `Person` filtered by that predicate, and the GraphQL surface gains a `director` field that returns only matching Persons — refreshed automatically as new `Credit`s arrive. *[screenshot: spec graph with defined-class chip; query result]*
+Declare `Director` as "a `Person` where there exists a `Credit` with `role='director'`". The compiler emits a SQL VIEW (not a table) over `Person` filtered by that predicate, and the GraphQL surface gains a `director` field that returns only matching Persons — refreshed automatically as new `Credit`s arrive.
 
 ### 7. A constraint with inheritance
 
-Attach a constraint to `MediaItem`: `year` between `1888` and `now + 5 years`, severity error. The predicate is a SQL string (validated at publish time); ingest enforces it batch-wise (rolling back violators), and the publish gate revalidates against existing data before any spec edit lands. Because `Movie` is_a `MediaItem`, it inherits this constraint automatically — no per-class duplication. *[screenshot: constraint chip on MediaItem + ingest-time rejection]*
+Attach a constraint to `MediaItem`: `year` between `1888` and `now + 5 years`, severity error. The predicate is a SQL string (validated at publish time); ingest enforces it batch-wise (rolling back violators), and the publish gate revalidates against existing data before any spec edit lands. Because `Movie` is_a `MediaItem`, it inherits this constraint automatically — no per-class duplication.
 
 ### 8. The query surface
 
-A consumer never sees postgres or hand-written SQL: the published spec produces a GraphQL surface with one root field per concrete or defined class (`movie`, `person`, `credit`, `director`, ...), each filterable by slot, joinable by relation, projectable. The same spec that produces the storage layout produces the read surface; they cannot drift. *[screenshot: GraphQL Playground returning a join query]*
+A consumer never sees postgres or hand-written SQL: the published spec produces a GraphQL surface with one root field per concrete or defined class (`movie`, `person`, `credit`, `director`, ...), each filterable by slot, joinable by relation, projectable. The same spec that produces the storage layout produces the read surface; they cannot drift.
+
+![GraphQL Playground showing a multi-hop join query (Movie → Credit → Person → Credits → Movie) with graph visualization of The Godfather and Marlon Brando](assets/query_graph.png)
 
 ### 9. Ingesting Data
 
@@ -169,6 +173,8 @@ POST /graph/ingest/imdb?class_name=Movie
 ### 10. Manual Corrections
 
 If automated ingestion gets a slot wrong, a curator (or an LLM extension) can submit a typed correction. The correction atomically writes an audit row, mutates the data plane, and registers negative bandit feedback against the source that provided the bad data, ensuring the system learns over time.
+
+![Corrections console showing existing canonical IDs and the Add Data form with typed fields derived from the Movie spec](assets/corrections_add.png)
 
 ```json
 POST /graph/corrections
