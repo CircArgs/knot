@@ -24,19 +24,6 @@ def _(mo):
 
 @app.cell
 def _():
-    # Make the repo-root `knot/` package importable when the notebook
-    # is launched from the repo root.
-    import sys
-    from pathlib import Path
-
-    repo_root = Path.cwd()
-    if (repo_root / "knot").is_dir() and str(repo_root) not in sys.path:
-        sys.path.insert(0, str(repo_root))
-    return
-
-
-@app.cell
-def _():
     from knot import Array, Primitive, Spec, VirtualClass
 
     return Array, Primitive, Spec, VirtualClass
