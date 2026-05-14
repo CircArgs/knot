@@ -29,7 +29,6 @@ from knot.spec import (
     VirtualClass,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
@@ -111,67 +110,60 @@ def emit_ddl(
         )
 
     for cls in spec.classes:
-        if isinstance(cls, OntologyClass):
-            if cls.kind != ClassKind.CONCRETE:
-                continue
-            stmts.append(
-                _emit_table(cls, schema=schema, if_not_exists=if_not_exists)
-            )
-            if emit_descriptions:
-                stmts.extend(_emit_class_comments(cls, schema=schema))
-            if emit_bindings:
-                stmts.append(
-                    _emit_bindings_table(
-                        cls,
-                        schema=schema,
-                        bindings_suffix=bindings_suffix,
-                        if_not_exists=if_not_exists,
-                    )
-                )
-                if emit_indexes:
-                    stmts.extend(
-                        _emit_bindings_indexes(
+        match cls:
+            case OntologyClass(kind=ClassKind.CONCRETE):
+                stmts.append(_emit_table(cls, schema=schema, if_not_exists=if_not_exists))
+                if emit_descriptions:
+                    stmts.extend(_emit_class_comments(cls, schema=schema))
+                if emit_bindings:
+                    stmts.append(
+                        _emit_bindings_table(
                             cls,
                             schema=schema,
                             bindings_suffix=bindings_suffix,
                             if_not_exists=if_not_exists,
                         )
                     )
-            if emit_resolved_views and emit_bindings:
-                # Resolved view depends on the bindings table existing.
-                stmts.append(
-                    emit_resolved_view(
-                        spec,
-                        cls,
-                        schema=schema,
-                        bindings_suffix=bindings_suffix,
-                        resolved_suffix=resolved_suffix,
-                        trust_table_name=trust_table_name,
-                        if_not_exists=if_not_exists,
+                    if emit_indexes:
+                        stmts.extend(
+                            _emit_bindings_indexes(
+                                cls,
+                                schema=schema,
+                                bindings_suffix=bindings_suffix,
+                                if_not_exists=if_not_exists,
+                            )
+                        )
+                if emit_resolved_views and emit_bindings:
+                    # Resolved view depends on the bindings table existing.
+                    stmts.append(
+                        emit_resolved_view(
+                            spec,
+                            cls,
+                            schema=schema,
+                            bindings_suffix=bindings_suffix,
+                            resolved_suffix=resolved_suffix,
+                            trust_table_name=trust_table_name,
+                            if_not_exists=if_not_exists,
+                        )
                     )
-                )
-        elif isinstance(cls, VirtualClass):
-            stmts.append(
-                _emit_view(cls, schema=schema, if_not_exists=if_not_exists)
-            )
-            if emit_descriptions and cls.description:
-                stmts.append(
-                    _comment_on(
-                        "VIEW",
-                        f"{schema}.{cls.name.lower()}",
-                        cls.description,
+            case VirtualClass():
+                stmts.append(_emit_view(cls, schema=schema, if_not_exists=if_not_exists))
+                if emit_descriptions and cls.description:
+                    stmts.append(
+                        _comment_on(
+                            "VIEW",
+                            f"{schema}.{cls.name.lower()}",
+                            cls.description,
+                        )
                     )
-                )
+            # Abstract OntologyClass falls through (no table).
 
     # Second pass: FK constraints on canonical class tables. Emitted
     # after every CREATE TABLE so target tables exist regardless of
     # spec.classes order.
     if emit_fk_references:
-        for cls in spec.classes:
-            if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
-                stmts.extend(
-                    _emit_fk_alters(cls, schema=schema, if_not_exists=if_not_exists)
-                )
+        for cls in spec.concrete_classes():
+            stmts.extend(_emit_fk_alters(cls, schema=schema, if_not_exists=if_not_exists))
 
     return stmts
 
@@ -230,10 +222,7 @@ def _emit_table(cls: OntologyClass, *, schema: str, if_not_exists: bool) -> str:
     if pk_cols:
         columns.append(f"    PRIMARY KEY ({', '.join(pk_cols)})")
     body = ",\n".join(columns)
-    return (
-        f"{_create_table(if_not_exists=if_not_exists)} "
-        f"{schema}.{cls.name.lower()} (\n{body}\n);"
-    )
+    return f"{_create_table(if_not_exists=if_not_exists)} {schema}.{cls.name.lower()} (\n{body}\n);"
 
 
 def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
@@ -280,8 +269,7 @@ def _emit_bindings_table(
     columns.append("    valid_to timestamptz")
     if identifier_name is not None:
         columns.append(
-            f"    PRIMARY KEY ({identifier_name}, source_name, "
-            f"source_identifier, valid_from)"
+            f"    PRIMARY KEY ({identifier_name}, source_name, source_identifier, valid_from)"
         )
     body = ",\n".join(columns)
     return (
@@ -311,11 +299,7 @@ def _emit_class_comments(cls: OntologyClass, *, schema: str) -> list[str]:
         out.append(_comment_on("TABLE", table_id, cls.description))
     for slot in cls.effective_slots():
         if slot.description:
-            out.append(
-                _comment_on(
-                    "COLUMN", f"{table_id}.{slot.name}", slot.description
-                )
-            )
+            out.append(_comment_on("COLUMN", f"{table_id}.{slot.name}", slot.description))
     return out
 
 
@@ -350,9 +334,7 @@ def _emit_fk_alters(
         target_pk = target.identifier_slot().name
         constraint = f"fk_{cls.name.lower()}_{slot.name}"
         if if_not_exists:
-            out.append(
-                f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint};"
-            )
+            out.append(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint};")
         out.append(
             f"ALTER TABLE {table} ADD CONSTRAINT {constraint}\n"
             f"    FOREIGN KEY ({slot.name}) "

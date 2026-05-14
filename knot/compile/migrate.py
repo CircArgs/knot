@@ -31,8 +31,9 @@ to mock in unit tests.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable
+from typing import Any
 
 from knot.compile.ddl import (
     _emit_bindings_indexes,
@@ -43,8 +44,7 @@ from knot.compile.ddl import (
     _emit_view,
 )
 from knot.compile.resolver import emit_resolved_view
-from knot.spec import ClassKind, ClassRef, OntologyClass, Spec, VirtualClass
-
+from knot.spec import ClassRef, OntologyClass, Spec
 
 # Query callable: takes (sql, params) and returns row tuples.
 QueryFn = Callable[[str, tuple[Any, ...]], list[tuple[Any, ...]]]
@@ -83,9 +83,7 @@ class MigrationOp:
 
 
 def _existing_schemas(query: QueryFn) -> set[str]:
-    rows = query(
-        "SELECT schema_name FROM information_schema.schemata", ()
-    )
+    rows = query("SELECT schema_name FROM information_schema.schemata", ())
     return {r[0] for r in rows}
 
 
@@ -100,8 +98,7 @@ def _existing_tables(query: QueryFn, schema: str) -> set[str]:
 
 def _existing_views(query: QueryFn, schema: str) -> set[str]:
     rows = query(
-        "SELECT table_name FROM information_schema.views "
-        "WHERE table_schema = %s",
+        "SELECT table_name FROM information_schema.views WHERE table_schema = %s",
         (schema,),
     )
     return {r[0] for r in rows}
@@ -166,8 +163,7 @@ def _normalize_pg_type(data_type: str, udt_name: str | None) -> str:
 
 def _existing_indexes(query: QueryFn, schema: str, table: str) -> set[str]:
     rows = query(
-        "SELECT indexname FROM pg_indexes "
-        "WHERE schemaname = %s AND tablename = %s",
+        "SELECT indexname FROM pg_indexes WHERE schemaname = %s AND tablename = %s",
         (schema, table),
     )
     return {r[0] for r in rows}
@@ -279,7 +275,6 @@ def diff_against_db(
             )
         )
     db_tables = _existing_tables(query, schema)
-    db_views = _existing_views(query, schema)
 
     # 2. Trust table
     if trust_table_name not in db_tables:
@@ -296,59 +291,54 @@ def diff_against_db(
         )
 
     # 3-6. Per-class structure
-    for cls in spec.classes:
-        if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
-            ops.extend(
-                _diff_concrete_class(
-                    cls,
-                    query=query,
-                    db_tables=db_tables,
-                    schema=schema,
-                    bindings_suffix=bindings_suffix,
-                    renames=renames.get(cls.name, {}),
-                )
-            )
-
-    # 7. Resolved views (always replace — handles spec changes too)
-    for cls in spec.classes:
-        if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
-            view_name = f"{cls.name.lower()}{resolved_suffix}"
-            sql = emit_resolved_view(
-                spec,
+    for cls in spec.concrete_classes():
+        ops.extend(
+            _diff_concrete_class(
                 cls,
+                query=query,
+                db_tables=db_tables,
                 schema=schema,
                 bindings_suffix=bindings_suffix,
-                resolved_suffix=resolved_suffix,
-                trust_table_name=trust_table_name,
-                if_not_exists=True,
+                renames=renames.get(cls.name, {}),
             )
-            ops.append(
-                MigrationOp(
-                    description=f"replace_view_{view_name}",
-                    sql=sql,
-                    target="resolved_view",
-                )
+        )
+
+    # 7. Resolved views (always replace — handles spec changes too)
+    for cls in spec.concrete_classes():
+        view_name = f"{cls.name.lower()}{resolved_suffix}"
+        sql = emit_resolved_view(
+            spec,
+            cls,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+            resolved_suffix=resolved_suffix,
+            trust_table_name=trust_table_name,
+            if_not_exists=True,
+        )
+        ops.append(
+            MigrationOp(
+                description=f"replace_view_{view_name}",
+                sql=sql,
+                target="resolved_view",
             )
+        )
 
     # 8. Virtual class views
-    for cls in spec.classes:
-        if isinstance(cls, VirtualClass):
-            sql = _emit_view(cls, schema=schema, if_not_exists=True)
-            ops.append(
-                MigrationOp(
-                    description=f"replace_view_{cls.name.lower()}",
-                    sql=sql,
-                    target="virtual_view",
-                )
+    for cls in spec.virtual_classes():
+        sql = _emit_view(cls, schema=schema, if_not_exists=True)
+        ops.append(
+            MigrationOp(
+                description=f"replace_view_{cls.name.lower()}",
+                sql=sql,
+                target="virtual_view",
             )
+        )
 
     # 9. Trust seed — always emit; UPSERTs are idempotent. We render
     # them inline rather than calling emit_trust_seed because we want
     # the static SQL form here (a MigrationOp carries SQL, not params).
     trust_rows = _existing_trust_rows(query, schema, trust_table_name)
     for b in spec.source_bindings:
-        if not isinstance(b.class_, OntologyClass):
-            continue
         key = (b.source.name, b.class_.name)
         existing = trust_rows.get(key)
         if existing is not None and abs(existing - b.accuracy) < 1e-9:
@@ -357,9 +347,7 @@ def diff_against_db(
         class_lit = "'" + b.class_.name.replace("'", "''") + "'"
         ops.append(
             MigrationOp(
-                description=(
-                    f"upsert_trust_{b.source.name}_{b.class_.name}"
-                ),
+                description=(f"upsert_trust_{b.source.name}_{b.class_.name}"),
                 sql=(
                     f"INSERT INTO {schema}.{trust_table_name} "
                     f"(source_name, class_name, accuracy) "
@@ -402,13 +390,8 @@ def _diff_renames(
                 if old in existing and new not in existing:
                     ops.append(
                         MigrationOp(
-                            description=(
-                                f"rename_column_{canonical}_{old}_to_{new}"
-                            ),
-                            sql=(
-                                f"ALTER TABLE {schema}.{canonical} "
-                                f"RENAME COLUMN {old} TO {new};"
-                            ),
+                            description=(f"rename_column_{canonical}_{old}_to_{new}"),
+                            sql=(f"ALTER TABLE {schema}.{canonical} RENAME COLUMN {old} TO {new};"),
                             target="canonical",
                         )
                     )
@@ -417,13 +400,8 @@ def _diff_renames(
                 if old in existing and new not in existing:
                     ops.append(
                         MigrationOp(
-                            description=(
-                                f"rename_column_{bindings}_{old}_to_{new}"
-                            ),
-                            sql=(
-                                f"ALTER TABLE {schema}.{bindings} "
-                                f"RENAME COLUMN {old} TO {new};"
-                            ),
+                            description=(f"rename_column_{bindings}_{old}_to_{new}"),
+                            sql=(f"ALTER TABLE {schema}.{bindings} RENAME COLUMN {old} TO {new};"),
                             target="bindings",
                         )
                     )
@@ -438,9 +416,7 @@ def _apply_rename_translation(
     post-rename target shape so the rest of the diff sees a consistent
     world. Works for either dict (column details) or set (names only)."""
     if isinstance(cols, dict):
-        return {
-            rename_map.get(name, name): info for name, info in cols.items()
-        }
+        return {rename_map.get(name, name): info for name, info in cols.items()}
     return {rename_map.get(c, c) for c in cols}
 
 
@@ -465,22 +441,14 @@ def _diff_drops(
     db_tables = _existing_tables(query, schema)
     db_views = _existing_views(query, schema)
 
-    expected_canonical = {
-        cls.name.lower()
-        for cls in spec.classes
-        if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE
-    }
+    expected_canonical = {cls.name.lower() for cls in spec.concrete_classes()}
     expected_bindings = {f"{n}{bindings_suffix}" for n in expected_canonical}
     expected_resolved_views = {f"{n}{resolved_suffix}" for n in expected_canonical}
-    expected_virtual_views = {
-        cls.name.lower() for cls in spec.classes if isinstance(cls, VirtualClass)
-    }
+    expected_virtual_views = {cls.name.lower() for cls in spec.virtual_classes()}
     expected_views = expected_resolved_views | expected_virtual_views
 
     # 1. Unused FK constraints on canonical tables that ARE still in spec.
-    for cls in spec.classes:
-        if not (isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE):
-            continue
+    for cls in spec.concrete_classes():
         canonical_name = cls.name.lower()
         if canonical_name not in db_tables:
             continue
@@ -493,19 +461,14 @@ def _diff_drops(
             ops.append(
                 MigrationOp(
                     description=f"drop_fk_{fk}",
-                    sql=(
-                        f"ALTER TABLE {schema}.{canonical_name} "
-                        f"DROP CONSTRAINT IF EXISTS {fk};"
-                    ),
+                    sql=(f"ALTER TABLE {schema}.{canonical_name} DROP CONSTRAINT IF EXISTS {fk};"),
                     target="fk",
                 )
             )
 
     # 2a. Unused views — drop views that aren't in spec at all.
     for view in sorted(db_views - expected_views):
-        target = (
-            "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
-        )
+        target = "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
         ops.append(
             MigrationOp(
                 description=f"drop_view_{view}",
@@ -520,9 +483,7 @@ def _diff_drops(
     # "DependentObjectsStillExist". The additive pass recreates them
     # via CREATE OR REPLACE VIEW. Cheap, always safe.
     for view in sorted(db_views & expected_views):
-        target = (
-            "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
-        )
+        target = "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
         ops.append(
             MigrationOp(
                 description=f"drop_view_{view}_for_rebuild",
@@ -532,9 +493,7 @@ def _diff_drops(
         )
 
     # 3. Unused indexes on bindings tables that ARE still in spec.
-    for cls in spec.classes:
-        if not (isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE):
-            continue
+    for cls in spec.concrete_classes():
         bindings_name = f"{cls.name.lower()}{bindings_suffix}"
         if bindings_name not in db_tables:
             continue
@@ -557,11 +516,7 @@ def _diff_drops(
             )
 
     # 4. Unused trust rows.
-    expected_binding_keys = {
-        (b.source.name, b.class_.name)
-        for b in spec.source_bindings
-        if isinstance(b.class_, OntologyClass)
-    }
+    expected_binding_keys = {(b.source.name, b.class_.name) for b in spec.source_bindings}
     db_trust_rows = _existing_trust_rows(query, schema, trust_table_name)
     for src, cls_name in sorted(set(db_trust_rows) - expected_binding_keys):
         s_lit = "'" + src.replace("'", "''") + "'"
@@ -581,12 +536,13 @@ def _diff_drops(
     # from drop candidates — the rename pre-pass already relabeled them.
     renames = renames or {}
     bindings_framework_cols = {
-        "source_name", "source_identifier", "raw_payload",
-        "valid_from", "valid_to",
+        "source_name",
+        "source_identifier",
+        "raw_payload",
+        "valid_from",
+        "valid_to",
     }
-    for cls in spec.classes:
-        if not (isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE):
-            continue
+    for cls in spec.concrete_classes():
         canonical_name = cls.name.lower()
         bindings_name = f"{canonical_name}{bindings_suffix}"
         slot_cols = {slot.name for slot in cls.effective_slots()}
@@ -600,10 +556,7 @@ def _diff_drops(
                 ops.append(
                     MigrationOp(
                         description=f"drop_column_{canonical_name}_{col}",
-                        sql=(
-                            f"ALTER TABLE {schema}.{canonical_name} "
-                            f"DROP COLUMN IF EXISTS {col};"
-                        ),
+                        sql=(f"ALTER TABLE {schema}.{canonical_name} DROP COLUMN IF EXISTS {col};"),
                         destructive=True,
                         target="canonical",
                     )
@@ -617,10 +570,7 @@ def _diff_drops(
                 ops.append(
                     MigrationOp(
                         description=f"drop_column_{bindings_name}_{col}",
-                        sql=(
-                            f"ALTER TABLE {schema}.{bindings_name} "
-                            f"DROP COLUMN IF EXISTS {col};"
-                        ),
+                        sql=(f"ALTER TABLE {schema}.{bindings_name} DROP COLUMN IF EXISTS {col};"),
                         destructive=True,
                         target="bindings",
                     )
@@ -628,9 +578,7 @@ def _diff_drops(
 
     # 6. Unused tables (destructive). Classes no longer in spec take
     # their canonical + bindings tables with them.
-    expected_data_tables = (
-        expected_canonical | expected_bindings | {trust_table_name}
-    )
+    expected_data_tables = expected_canonical | expected_bindings | {trust_table_name}
     for table in sorted(db_tables - expected_data_tables):
         target = "bindings" if table.endswith(bindings_suffix) else "canonical"
         ops.append(
@@ -677,12 +625,8 @@ def _diff_concrete_class(
             if slot.name not in existing_details:
                 ops.append(
                     MigrationOp(
-                        description=(
-                            f"add_column_{canonical_name}_{slot.name}"
-                        ),
-                        sql=_add_column_sql(
-                            schema, canonical_name, slot
-                        ),
+                        description=(f"add_column_{canonical_name}_{slot.name}"),
+                        sql=_add_column_sql(schema, canonical_name, slot),
                         target="canonical",
                     )
                 )
@@ -748,9 +692,7 @@ def _diff_concrete_class(
         ):
             ops.append(
                 MigrationOp(
-                    description=(
-                        f"create_index_{_extract_index_name(idx_sql)}"
-                    ),
+                    description=(f"create_index_{_extract_index_name(idx_sql)}"),
                     sql=idx_sql,
                     target="index",
                 )
@@ -764,13 +706,9 @@ def _diff_concrete_class(
             if slot.name not in existing_bdetails:
                 ops.append(
                     MigrationOp(
-                        description=(
-                            f"add_column_{bindings_name}_{slot.name}"
-                        ),
+                        description=(f"add_column_{bindings_name}_{slot.name}"),
                         # Bindings columns are nullable (partial claims).
-                        sql=_add_column_sql(
-                            schema, bindings_name, slot, force_nullable=True
-                        ),
+                        sql=_add_column_sql(schema, bindings_name, slot, force_nullable=True),
                         target="bindings",
                     )
                 )
@@ -870,10 +808,7 @@ def _diff_column_type_and_nullability(
         ops.append(
             MigrationOp(
                 description=f"set_not_null_{table}_{slot.name}",
-                sql=(
-                    f"ALTER TABLE {schema}.{table}\n"
-                    f"    ALTER COLUMN {slot.name} SET NOT NULL;"
-                ),
+                sql=(f"ALTER TABLE {schema}.{table}\n    ALTER COLUMN {slot.name} SET NOT NULL;"),
                 destructive=True,
                 target="canonical" if not table.endswith("_bindings") else "bindings",
             )
@@ -882,10 +817,7 @@ def _diff_column_type_and_nullability(
         ops.append(
             MigrationOp(
                 description=f"drop_not_null_{table}_{slot.name}",
-                sql=(
-                    f"ALTER TABLE {schema}.{table}\n"
-                    f"    ALTER COLUMN {slot.name} DROP NOT NULL;"
-                ),
+                sql=(f"ALTER TABLE {schema}.{table}\n    ALTER COLUMN {slot.name} DROP NOT NULL;"),
                 target="canonical" if not table.endswith("_bindings") else "bindings",
             )
         )
@@ -914,10 +846,7 @@ def _add_column_sql(
         # didn't specify one; the host can edit the migration to
         # backfill before applying if they have existing rows.
         column += " NOT NULL DEFAULT ''"  # safe default; only relevant for text
-    return (
-        f"ALTER TABLE {schema}.{table}\n"
-        f"    ADD COLUMN IF NOT EXISTS {column};"
-    )
+    return f"ALTER TABLE {schema}.{table}\n    ADD COLUMN IF NOT EXISTS {column};"
 
 
 def _extract_fk_name(fk_sql: str) -> str | None:

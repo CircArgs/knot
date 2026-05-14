@@ -1,7 +1,7 @@
 """knot — _user_corrections synthetic source + emit_close_out."""
 
-import sqlglot
 import pytest
+import sqlglot
 
 from knot import CORRECTIONS_SOURCE_NAME, Primitive, Spec
 from knot.compile import (
@@ -10,7 +10,6 @@ from knot.compile import (
     emit_close_out,
     emit_trust_seed,
 )
-
 
 # ---------------------------------------------------------------------------
 # Spec.enable_corrections
@@ -26,9 +25,7 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
 
     src = spec.enable_corrections(accuracy=0.99)
     assert src.name == CORRECTIONS_SOURCE_NAME
-    binding_pairs = {
-        (b.source.name, b.class_.name) for b in spec.source_bindings
-    }
+    binding_pairs = {(b.source.name, b.class_.name) for b in spec.source_bindings}
     assert (CORRECTIONS_SOURCE_NAME, "Movie") in binding_pairs
     assert (CORRECTIONS_SOURCE_NAME, "Person") in binding_pairs
 
@@ -55,9 +52,7 @@ def test_enable_corrections_is_idempotent():
     src2 = spec.enable_corrections()
     assert src1 is src2  # second call returns the same Source
     # Bindings count unchanged on second call.
-    assert sum(
-        1 for b in spec.source_bindings if b.source.name == CORRECTIONS_SOURCE_NAME
-    ) == 1
+    assert sum(1 for b in spec.source_bindings if b.source.name == CORRECTIONS_SOURCE_NAME) == 1
 
 
 def test_corrections_source_name_is_reserved():
@@ -168,9 +163,15 @@ def test_corrections_write_uses_batch_write():
     b = spec.corrections_binding_for(movie)
     bw = emit_batch_write(
         spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "curator-42", "year": 1925},
-        ], use_mappings=False)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "curator-42", "year": 1925},
+                ],
+                use_mappings=False,
+            )
+        ],
         enforce=False,
     )
     # Same SCD2 machinery as any other binding write.
@@ -185,7 +186,5 @@ def test_corrections_appear_in_trust_seed():
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     spec.enable_corrections(accuracy=0.95)
     seeds = emit_trust_seed(spec)
-    correction_seed = next(
-        (sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME
-    )
+    correction_seed = next((sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME)
     assert correction_seed[1] == [CORRECTIONS_SOURCE_NAME, "Movie", 0.95]

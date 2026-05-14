@@ -3,11 +3,9 @@
 import pytest
 
 from knot import (
-    Array,
     ClassKind,
     ClassRef,
     Constraint,
-    Expr,
     OntologyClass,
     Primitive,
     Severity,
@@ -17,10 +15,8 @@ from knot import (
     Spec,
     SpecError,
     VirtualClass,
-    lit,
     raw,
 )
-
 
 # ---------------------------------------------------------------------------
 # Entity-local validation (__post_init__)
@@ -82,9 +78,7 @@ def test_constraint_severity_default_is_enum():
 def test_virtual_class_rejects_non_expr_definition():
     parent = OntologyClass(name="Movie")
     with pytest.raises(TypeError, match="must be an Expr"):
-        VirtualClass(
-            name="DirectedMovie", is_a=parent, definition="raw sql string"
-        )
+        VirtualClass(name="DirectedMovie", is_a=parent, definition="raw sql string")
 
 
 def test_source_binding_rejects_accuracy_out_of_range():
@@ -92,9 +86,7 @@ def test_source_binding_rejects_accuracy_out_of_range():
     cls = OntologyClass(name="Movie")
     cls.slot("canonical_id", Primitive.TEXT, identifier=True)
     with pytest.raises(ValueError, match="accuracy"):
-        SourceBinding(
-            source=s, class_=cls, identifier_slot=cls["canonical_id"], accuracy=1.5
-        )
+        SourceBinding(source=s, class_=cls, identifier_slot=cls["canonical_id"], accuracy=1.5)
 
 
 def test_spec_id_must_be_non_empty():
@@ -260,9 +252,7 @@ def test_validate_binding_to_abstract():
 def test_validate_mapping_slot_not_on_class(movie_spec):
     from knot import SourceMap
 
-    movie_spec.source_bindings[0].mappings["nonexistent_slot"] = SourceMap.passthrough(
-        "raw_field"
-    )
+    movie_spec.source_bindings[0].mappings["nonexistent_slot"] = SourceMap.passthrough("raw_field")
     errs = movie_spec.validate()
     assert any("nonexistent_slot" in e for e in errs)
 
@@ -282,9 +272,7 @@ def test_validate_virtual_class_is_a_missing():
 def test_validate_strict_raises_with_all_errors():
     spec = Spec(id="m", version="0.1")
     spec.add_class("Movie").slot("name", Primitive.TEXT)
-    spec.add_constraint(
-        "c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1")
-    )
+    spec.add_constraint("c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1"))
     with pytest.raises(SpecError) as ei:
         spec.validate_strict()
     msg = str(ei.value)

@@ -13,15 +13,9 @@ but semantically correct against postgres 16.
 
 from __future__ import annotations
 
-import json
-
-import pytest
-
 from knot import (
     CORRECTIONS_SOURCE_NAME,
     Primitive,
-    Severity,
-    SourceMap,
     Spec,
 )
 from knot.compile import (
@@ -35,7 +29,6 @@ from knot.compile import (
     emit_validation,
 )
 from tests.integration.conftest import exec_many, exec_script, exec_with_params
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -162,14 +155,36 @@ def test_resolved_view_picks_higher_accuracy_source(pg, schema):
 
     # IMDB says year=1925; TMDB says year=1924 (a curator-known mistake).
     # IMDB has higher accuracy (0.85 vs 0.7), so its value should win.
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "potemkin", "source_identifier": "tt001",
-         "name": "Battleship Potemkin", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
-    _write_claim(pg, spec, tmdb_b, [
-        {"canonical_id": "potemkin", "source_identifier": "tmdb-x",
-         "name": "Battleship Potemkin", "year": 1924, "runtime_minutes": 73},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "potemkin",
+                "source_identifier": "tt001",
+                "name": "Battleship Potemkin",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
+    _write_claim(
+        pg,
+        spec,
+        tmdb_b,
+        [
+            {
+                "canonical_id": "potemkin",
+                "source_identifier": "tmdb-x",
+                "name": "Battleship Potemkin",
+                "year": 1924,
+                "runtime_minutes": 73,
+            },
+        ],
+        schema=schema,
+    )
 
     with pg.cursor() as cur:
         cur.execute(
@@ -191,23 +206,44 @@ def test_resolved_view_falls_back_per_slot(pg, schema):
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
     tmdb_b = next(b for b in spec.source_bindings if b.source.name == "tmdb")
 
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt001",
-         "name": "M1", "year": 1925, "runtime_minutes": None},
-    ], schema=schema)
-    _write_claim(pg, spec, tmdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tmdb-1",
-         "name": "M1", "year": None, "runtime_minutes": 73},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt001",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": None,
+            },
+        ],
+        schema=schema,
+    )
+    _write_claim(
+        pg,
+        spec,
+        tmdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tmdb-1",
+                "name": "M1",
+                "year": None,
+                "runtime_minutes": 73,
+            },
+        ],
+        schema=schema,
+    )
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT year, runtime_minutes "
-            f"FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+            f"SELECT year, runtime_minutes FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
         )
         year, runtime = cur.fetchone()
-    assert year == 1925           # IMDB wins year
-    assert runtime == 73          # TMDB wins runtime (IMDB null)
+    assert year == 1925  # IMDB wins year
+    assert runtime == 73  # TMDB wins runtime (IMDB null)
 
 
 def test_raw_payload_preserves_unmapped_fields(pg, schema):
@@ -216,14 +252,23 @@ def test_raw_payload_preserves_unmapped_fields(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(pg, spec, imdb_b, [
-        {
-            "canonical_id": "m1", "source_identifier": "tt001",
-            "name": "M1", "year": 1925, "runtime_minutes": 75,
-            "box_office": 500000,             # not a slot
-            "director_name": "Eisenstein",    # not a slot
-        },
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt001",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+                "box_office": 500000,  # not a slot
+                "director_name": "Eisenstein",  # not a slot
+            },
+        ],
+        schema=schema,
+    )
 
     with pg.cursor() as cur:
         cur.execute(
@@ -242,14 +287,36 @@ def test_scd2_close_out_on_repeated_write(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1926, "runtime_minutes": 80},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1926,
+                "runtime_minutes": 80,
+            },
+        ],
+        schema=schema,
+    )
 
     with pg.cursor() as cur:
         cur.execute(
@@ -261,13 +328,11 @@ def test_scd2_close_out_on_repeated_write(pg, schema):
         rows = cur.fetchall()
     assert len(rows) == 2
     assert rows[0] == (1925, False)  # closed out
-    assert rows[1] == (1926, True)   # current
+    assert rows[1] == (1926, True)  # current
 
     # Resolved view sees only the current row.
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
+        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 1926
 
 
@@ -282,27 +347,46 @@ def test_user_correction_wins_over_declared_sources(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    corr_b = spec.corrections_binding_for(
-        next(c for c in spec.classes if c.name == "Movie")
-    )
+    corr_b = spec.corrections_binding_for(next(c for c in spec.classes if c.name == "Movie"))
 
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
     # Curator says year should actually be 1928.
-    _write_claim(pg, spec, corr_b, [
-        {"canonical_id": "m1", "source_identifier": "curator-42",
-         "name": None, "year": 1928, "runtime_minutes": None},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        corr_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "curator-42",
+                "name": None,
+                "year": 1928,
+                "runtime_minutes": None,
+            },
+        ],
+        schema=schema,
+    )
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT year, runtime_minutes "
-            f"FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+            f"SELECT year, runtime_minutes FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
         )
         year, runtime = cur.fetchone()
-    assert year == 1928   # correction wins
+    assert year == 1928  # correction wins
     assert runtime == 75  # IMDB wins (correction null)
 
 
@@ -315,28 +399,55 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
     movie = next(c for c in spec.classes if c.name == "Movie")
     corr_b = spec.corrections_binding_for(movie)
 
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
-    _write_claim(pg, spec, corr_b, [
-        {"canonical_id": "m1", "source_identifier": "curator-42",
-         "name": None, "year": 1928, "runtime_minutes": None},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
+    _write_claim(
+        pg,
+        spec,
+        corr_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "curator-42",
+                "name": None,
+                "year": 1928,
+                "runtime_minutes": None,
+            },
+        ],
+        schema=schema,
+    )
 
     # Withdraw the correction.
     sql = emit_close_out(
-        spec, class_name="Movie", source_name=CORRECTIONS_SOURCE_NAME,
+        spec,
+        class_name="Movie",
+        source_name=CORRECTIONS_SOURCE_NAME,
         schema=schema,
     )
-    exec_with_params(pg, sql, {
-        "canonical_id": "m1", "source_identifier": "curator-42",
-    })
+    exec_with_params(
+        pg,
+        sql,
+        {
+            "canonical_id": "m1",
+            "source_identifier": "curator-42",
+        },
+    )
 
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
+        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 1925  # back to IMDB
 
 
@@ -349,19 +460,37 @@ def test_constraint_validation_finds_violations(pg, schema):
     spec = _movies_only_spec()
     movie = next(c for c in spec.classes if c.name == "Movie")
     spec.add_constraint(
-        "year_sane", primary=movie, body=movie.col.year >= 1888,
+        "year_sane",
+        primary=movie,
+        body=movie.col.year >= 1888,
     )
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "ok", "source_identifier": "tt1",
-         "name": "Real Movie", "year": 1925, "runtime_minutes": 75},
-        {"canonical_id": "bad", "source_identifier": "tt2",
-         "name": "Anachronism", "year": 1700, "runtime_minutes": 60},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "ok",
+                "source_identifier": "tt1",
+                "name": "Real Movie",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+            {
+                "canonical_id": "bad",
+                "source_identifier": "tt2",
+                "name": "Anachronism",
+                "year": 1700,
+                "runtime_minutes": 60,
+            },
+        ],
+        schema=schema,
+    )
 
-    (name, validation_sql), = emit_validation(spec, schema=schema)
+    ((name, validation_sql),) = emit_validation(spec, schema=schema)
     assert name == "year_sane"
 
     with pg.cursor() as cur:
@@ -381,10 +510,21 @@ def test_evolve_add_slot_preserves_existing_data(pg, schema, query_fn):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
 
     # Evolve: add `original_language` slot.
     spec2 = _movies_only_spec()
@@ -398,8 +538,7 @@ def test_evolve_add_slot_preserves_existing_data(pg, schema, query_fn):
     # Existing row preserved; new column is NULL.
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT year, original_language "
-            f"FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+            f"SELECT year, original_language FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
         )
         year, lang = cur.fetchone()
     assert year == 1925
@@ -412,20 +551,40 @@ def test_evolve_change_accuracy_changes_winner(pg, schema, query_fn):
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
     tmdb_b = next(b for b in spec.source_bindings if b.source.name == "tmdb")
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
-    _write_claim(pg, spec, tmdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tmdb-1",
-         "name": "M1", "year": 1928, "runtime_minutes": 73},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
+    _write_claim(
+        pg,
+        spec,
+        tmdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tmdb-1",
+                "name": "M1",
+                "year": 1928,
+                "runtime_minutes": 73,
+            },
+        ],
+        schema=schema,
+    )
 
     # Before: IMDB wins (0.85 > 0.7) → year=1925.
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
+        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 1925
 
     # Operator decides TMDB is more reliable than IMDB.
@@ -443,9 +602,7 @@ def test_evolve_change_accuracy_changes_winner(pg, schema, query_fn):
 
     # After: TMDB wins → year=1928.
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
+        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 1928
 
 
@@ -454,10 +611,21 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(pg, spec, imdb_b, [
-        {"canonical_id": "m1", "source_identifier": "tt1",
-         "name": "M1", "year": 1925, "runtime_minutes": 75},
-    ], schema=schema)
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "m1",
+                "source_identifier": "tt1",
+                "name": "M1",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
 
     # Evolve: rename runtime_minutes → length_min.
     spec2 = Spec(id="movies", version="0.2")
@@ -472,7 +640,10 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     spec2.bind(tmdb, movie, identifier=movie["canonical_id"], accuracy=0.7)
 
     ops = diff_against_db(
-        spec2, query_fn, schema=schema, allow_destructive=True,
+        spec2,
+        query_fn,
+        schema=schema,
+        allow_destructive=True,
         renames={"Movie": {"runtime_minutes": "length_min"}},
     )
     rename_ops = [op for op in ops if op.description.startswith("rename_column_")]
@@ -481,10 +652,7 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
 
     # Data preserved under the new name.
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT length_min FROM {schema}.movie_resolved "
-            f"WHERE canonical_id = 'm1'"
-        )
+        cur.execute(f"SELECT length_min FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 75
 
 
@@ -537,7 +705,9 @@ def test_flyway_files_apply_in_order(pg, schema):
     spec.enable_corrections()
 
     ops = diff_against_db(
-        spec, lambda sql, params: [], schema=schema,
+        spec,
+        lambda sql, params: [],
+        schema=schema,
     )
     files = emit_flyway_files(ops, version="20260514_001", slug="initial")
 
@@ -548,9 +718,7 @@ def test_flyway_files_apply_in_order(pg, schema):
 
     # Smoke check: resolver view exists, trust seeded for every binding.
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT count(*) FROM {schema}.source_accuracy"
-        )
+        cur.execute(f"SELECT count(*) FROM {schema}.source_accuracy")
         assert cur.fetchone()[0] == 3  # imdb + tmdb + _user_corrections
 
         cur.execute(

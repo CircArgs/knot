@@ -37,7 +37,6 @@ from typing import Any
 
 from knot.expr import CountRel, Exists, Expr, Ref
 
-
 # ---------------------------------------------------------------------------
 # Enums
 # ---------------------------------------------------------------------------
@@ -112,8 +111,7 @@ def _coerce_type(t: TypeExpression | str) -> TypeExpression:
                 f"for FK use .fk(to=...) or pass ClassRef(target=...) directly."
             ) from e
     raise TypeError(
-        f"Slot type must be a TypeExpression or primitive name string, "
-        f"got {type(t).__name__}"
+        f"Slot type must be a TypeExpression or primitive name string, got {type(t).__name__}"
     )
 
 
@@ -224,9 +222,7 @@ class OntologyClass:
         description: str | None = None,
     ) -> Slot:
         if any(s.name == name for s in self.slots):
-            raise ValueError(
-                f"OntologyClass {self.name!r} already has a slot named {name!r}"
-            )
+            raise ValueError(f"OntologyClass {self.name!r} already has a slot named {name!r}")
         s = Slot(
             name=name,
             type=_coerce_type(type),
@@ -246,9 +242,7 @@ class OntologyClass:
         description: str | None = None,
     ) -> Slot:
         if any(s.name == name for s in self.slots):
-            raise ValueError(
-                f"OntologyClass {self.name!r} already has a slot named {name!r}"
-            )
+            raise ValueError(f"OntologyClass {self.name!r} already has a slot named {name!r}")
         s = Slot(
             name=name,
             type=ClassRef(target=to),
@@ -393,20 +387,17 @@ def _infer_back_fk(
     """Find the slot on ``other`` whose ``type`` is a ``ClassRef`` to
     ``target``. If ``via`` is given, require that specific slot."""
     candidates = [
-        sl for sl in other.effective_slots()
+        sl
+        for sl in other.effective_slots()
         if isinstance(sl.type, ClassRef) and sl.type.target is target
     ]
     if via is not None:
         chosen = [sl for sl in candidates if sl.name == via]
         if not chosen:
-            raise ValueError(
-                f"{other.name}.{via} is not a FK to {target.name!r}"
-            )
+            raise ValueError(f"{other.name}.{via} is not a FK to {target.name!r}")
         return chosen[0]
     if not candidates:
-        raise ValueError(
-            f"class {other.name!r} has no FK back to {target.name!r}"
-        )
+        raise ValueError(f"class {other.name!r} has no FK back to {target.name!r}")
     if len(candidates) > 1:
         names = ", ".join(c.name for c in candidates)
         raise ValueError(
@@ -577,9 +568,7 @@ class SourceBinding:
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.accuracy <= 1.0):
-            raise ValueError(
-                f"SourceBinding accuracy must be in [0, 1]; got {self.accuracy}"
-            )
+            raise ValueError(f"SourceBinding accuracy must be in [0, 1]; got {self.accuracy}")
 
     def map(self, **mappings: Any) -> SourceBinding:
         """Add slot mappings. Values may be ``SourceMap`` instances or
@@ -721,14 +710,13 @@ class Spec:
             return existing
         source = Source(name=CORRECTIONS_SOURCE_NAME, description=description)
         self.sources.append(source)
-        for cls in list(self.classes):
-            if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
-                self.bind(
-                    source,
-                    cls,
-                    identifier=cls.identifier_slot(),
-                    accuracy=accuracy,
-                )
+        for cls in self.concrete_classes():
+            self.bind(
+                source,
+                cls,
+                identifier=cls.identifier_slot(),
+                accuracy=accuracy,
+            )
         return source
 
     def corrections_binding_for(self, cls: OntologyClass) -> SourceBinding:
@@ -752,12 +740,9 @@ class Spec:
         accuracy: float = 0.67,
         description: str | None = None,
     ) -> SourceBinding:
-        if any(
-            b.source is source and b.class_ is class_ for b in self.source_bindings
-        ):
+        if any(b.source is source and b.class_ is class_ for b in self.source_bindings):
             raise ValueError(
-                f"Spec already has a binding for source {source.name!r} → "
-                f"class {class_.name!r}"
+                f"Spec already has a binding for source {source.name!r} → class {class_.name!r}"
             )
         b = SourceBinding(
             source=source,
@@ -774,6 +759,18 @@ class Spec:
             raise ValueError(f"Spec already has a class named {name!r}")
 
     # -- well-formedness validation --
+
+    def concrete_classes(self) -> list[OntologyClass]:
+        """Concrete ``OntologyClass`` entries — skips abstract and
+        ``VirtualClass``. Used everywhere the emitters loop over
+        "classes that materialize a table"."""
+        return [
+            c for c in self.classes if isinstance(c, OntologyClass) and c.kind == ClassKind.CONCRETE
+        ]
+
+    def virtual_classes(self) -> list[VirtualClass]:
+        """``VirtualClass`` entries — backed by a view, not a table."""
+        return [c for c in self.classes if isinstance(c, VirtualClass)]
 
     def class_by_name(self, name: str) -> OntologyClass | VirtualClass:
         for c in self.classes:
@@ -802,52 +799,40 @@ class Spec:
         }
 
         for c in self.classes:
-            # is_a / mixins of OntologyClass
-            if isinstance(c, OntologyClass):
-                if c.is_a is not None and c.is_a.name not in concrete_or_abstract:
-                    errs.append(
-                        f"class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
-                    )
-                for m in c.mixins:
-                    if m.name not in concrete_or_abstract:
-                        errs.append(
-                            f"class {c.name!r} mixin {m.name!r}: not in spec"
-                        )
-                # Slot name uniqueness within the class
-                seen_slots: set[str] = set()
-                for sl in c.slots:
-                    if sl.name in seen_slots:
-                        errs.append(
-                            f"class {c.name!r} has duplicate slot {sl.name!r}"
-                        )
-                    seen_slots.add(sl.name)
-                    # ClassRef target must exist
-                    if isinstance(sl.type, ClassRef):
-                        if sl.type.target.name not in concrete_or_abstract:
+            match c:
+                case OntologyClass():
+                    if c.is_a is not None and c.is_a.name not in concrete_or_abstract:
+                        errs.append(f"class {c.name!r}.is_a → {c.is_a.name!r}: not in spec")
+                    for m in c.mixins:
+                        if m.name not in concrete_or_abstract:
+                            errs.append(f"class {c.name!r} mixin {m.name!r}: not in spec")
+                    # Slot name uniqueness within the class
+                    seen_slots: set[str] = set()
+                    for sl in c.slots:
+                        if sl.name in seen_slots:
+                            errs.append(f"class {c.name!r} has duplicate slot {sl.name!r}")
+                        seen_slots.add(sl.name)
+                        # ClassRef target must exist
+                        if isinstance(sl.type, ClassRef):
+                            if sl.type.target.name not in concrete_or_abstract:
+                                errs.append(
+                                    f"slot {c.name}.{sl.name} ClassRef → "
+                                    f"{sl.type.target.name!r}: not in spec"
+                                )
+                    # Concrete classes must have exactly one identifier slot
+                    # (effective — counting inherited)
+                    if c.kind == ClassKind.CONCRETE:
+                        ids = [s for s in c.effective_slots() if s.identifier]
+                        if len(ids) == 0:
+                            errs.append(f"concrete class {c.name!r} has no identifier slot")
+                        elif len(ids) > 1:
+                            names = ", ".join(s.name for s in ids)
                             errs.append(
-                                f"slot {c.name}.{sl.name} ClassRef → "
-                                f"{sl.type.target.name!r}: not in spec"
+                                f"concrete class {c.name!r} has multiple identifier slots: {names}"
                             )
-                # Concrete classes must have exactly one identifier slot
-                # (effective — counting inherited)
-                if c.kind == ClassKind.CONCRETE:
-                    ids = [s for s in c.effective_slots() if s.identifier]
-                    if len(ids) == 0:
-                        errs.append(
-                            f"concrete class {c.name!r} has no identifier slot"
-                        )
-                    elif len(ids) > 1:
-                        names = ", ".join(s.name for s in ids)
-                        errs.append(
-                            f"concrete class {c.name!r} has multiple "
-                            f"identifier slots: {names}"
-                        )
-            elif isinstance(c, VirtualClass):
-                if c.is_a.name not in concrete_or_abstract:
-                    errs.append(
-                        f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: "
-                        f"not in spec"
-                    )
+                case VirtualClass():
+                    if c.is_a.name not in concrete_or_abstract:
+                        errs.append(f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: not in spec")
 
         # Constraint references
         constraint_names: set[str] = set()
@@ -856,10 +841,7 @@ class Spec:
                 errs.append(f"duplicate constraint name {c.name!r}")
             constraint_names.add(c.name)
             if c.primary.name not in concrete_or_abstract:
-                errs.append(
-                    f"constraint {c.name!r}.primary → {c.primary.name!r}: "
-                    f"not in spec"
-                )
+                errs.append(f"constraint {c.name!r}.primary → {c.primary.name!r}: not in spec")
 
         # Source name uniqueness
         sources_by_name: dict[str, Source] = {}
@@ -873,20 +855,15 @@ class Spec:
         for b in self.source_bindings:
             key = (b.source.name, b.class_.name)
             if key in binding_keys:
-                errs.append(
-                    f"duplicate binding source={b.source.name!r} "
-                    f"class={b.class_.name!r}"
-                )
+                errs.append(f"duplicate binding source={b.source.name!r} class={b.class_.name!r}")
             binding_keys.add(key)
             if b.source.name not in sources_by_name:
                 errs.append(
-                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
-                    f"source not in spec"
+                    f"binding source={b.source.name!r} class={b.class_.name!r}: source not in spec"
                 )
             if b.class_.name not in concrete_or_abstract:
                 errs.append(
-                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
-                    f"class not in spec"
+                    f"binding source={b.source.name!r} class={b.class_.name!r}: class not in spec"
                 )
                 continue
             cls = concrete_or_abstract[b.class_.name]
@@ -914,9 +891,7 @@ class Spec:
         # is_a / mixin cycle detection
         for c in self.classes:
             if isinstance(c, OntologyClass) and _participates_in_cycle(c):
-                errs.append(
-                    f"class {c.name!r} participates in an is_a / mixin cycle"
-                )
+                errs.append(f"class {c.name!r} participates in an is_a / mixin cycle")
 
         return errs
 
@@ -924,9 +899,7 @@ class Spec:
         """Like ``validate`` but raises ``SpecError`` on any failure."""
         errs = self.validate()
         if errs:
-            raise SpecError(
-                "Spec failed validation:\n  - " + "\n  - ".join(errs)
-            )
+            raise SpecError("Spec failed validation:\n  - " + "\n  - ".join(errs))
 
 
 class SpecError(ValueError):

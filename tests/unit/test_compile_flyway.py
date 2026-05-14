@@ -186,8 +186,7 @@ def test_all_files_parse_postgres():
         # each statement individually. Skip pure-comment chunks.
         for stmt in body.split("\n\n"):
             stripped = "\n".join(
-                line for line in stmt.splitlines()
-                if not line.strip().startswith("--")
+                line for line in stmt.splitlines() if not line.strip().startswith("--")
             ).strip()
             if not stripped:
                 continue

@@ -2,12 +2,10 @@
 
 from typing import Any
 
-import pytest
 import sqlglot
 
-from knot import CORRECTIONS_SOURCE_NAME, Primitive, Spec
+from knot import Primitive, Spec
 from knot.compile import MigrationOp, diff_against_db
-
 
 # ---------------------------------------------------------------------------
 # Mock DB — a callable that returns rows from a hardcoded state map.
@@ -38,11 +36,11 @@ class MockDB:
         self,
         *,
         schemas: set[str] | None = None,
-        tables: dict[str, set[str]] | None = None,        # schema → table names
-        views: dict[str, set[str]] | None = None,         # schema → view names
+        tables: dict[str, set[str]] | None = None,  # schema → table names
+        views: dict[str, set[str]] | None = None,  # schema → view names
         columns: dict[tuple[str, str], set[str]] | None = None,  # (schema, table) → cols
         indexes: dict[tuple[str, str], set[str]] | None = None,  # (schema, table) → indexes
-        fks: dict[tuple[str, str], set[str]] | None = None,      # (schema, table) → fk names
+        fks: dict[tuple[str, str], set[str]] | None = None,  # (schema, table) → fk names
         trust_rows: list[tuple[str, str, float]] | None = None,
     ):
         self.schemas = schemas or set()
@@ -74,14 +72,10 @@ class MockDB:
                 rows: list[tuple[Any, ...]] = []
                 for name, (pg_type, nullable) in sorted(items):
                     data_type, udt = _split_pg_type(pg_type)
-                    rows.append(
-                        (name, data_type, "YES" if nullable else "NO", udt)
-                    )
+                    rows.append((name, data_type, "YES" if nullable else "NO", udt))
                 return rows
             # set-only shape — defaults.
-            return [
-                (c, "text", "YES", "text") for c in sorted(entry)
-            ]
+            return [(c, "text", "YES", "text") for c in sorted(entry)]
         if "from pg_indexes" in sql_lc:
             schema, table = params
             return [(i,) for i in sorted(self.indexes.get((schema, table), set()))]
@@ -180,9 +174,7 @@ def test_canonical_present_bindings_missing():
     bindings_ops = [op for op in ops if op.target == "bindings"]
     assert canonical_ops == []  # canonical fully present
     # The CREATE TABLE for movie_bindings should still appear
-    assert any(
-        "create_table_movie_bindings" in op.description for op in bindings_ops
-    )
+    assert any("create_table_movie_bindings" in op.description for op in bindings_ops)
 
 
 # ---------------------------------------------------------------------------
@@ -199,8 +191,13 @@ def test_missing_column_emits_add_column():
         columns={
             ("knot_data", "movie"): {"canonical_id"},  # missing `year`
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
     )
@@ -221,8 +218,12 @@ def test_missing_raw_payload_column_in_bindings():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "valid_from", "valid_to",  # no raw_payload
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "valid_from",
+                "valid_to",  # no raw_payload
             },
         },
     )
@@ -245,13 +246,19 @@ def test_trust_row_already_matches_spec_no_upsert():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
             ("knot_data", "movie_bindings"): {
-                "movie_bindings_current_idx", "movie_bindings_source_idx",
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
             }
         },
         trust_rows=[("imdb", "Movie", 0.85)],
@@ -269,13 +276,19 @@ def test_trust_row_mismatch_emits_upsert():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
             ("knot_data", "movie_bindings"): {
-                "movie_bindings_current_idx", "movie_bindings_source_idx",
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
             }
         },
         # DB has the OLD value 0.7; spec wants 0.85
@@ -295,13 +308,19 @@ def test_trust_row_missing_emits_upsert():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
             ("knot_data", "movie_bindings"): {
-                "movie_bindings_current_idx", "movie_bindings_source_idx",
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
             }
         },
         trust_rows=[],  # nothing in source_accuracy yet
@@ -331,13 +350,19 @@ def test_resolved_view_always_dropped_and_replaced():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
             ("knot_data", "movie_bindings"): {
-                "movie_bindings_current_idx", "movie_bindings_source_idx",
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
             }
         },
         trust_rows=[("imdb", "Movie", 0.85)],
@@ -366,8 +391,13 @@ def test_missing_index_on_existing_bindings():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
@@ -409,8 +439,14 @@ def test_migration_op_carries_target_and_description():
         assert op.description
         assert op.sql
         assert op.target in {
-            "schema", "trust_table", "canonical", "bindings",
-            "index", "fk", "resolved_view", "virtual_view",
+            "schema",
+            "trust_table",
+            "canonical",
+            "bindings",
+            "index",
+            "fk",
+            "resolved_view",
+            "virtual_view",
             "trust_seed",
         }
 
@@ -432,8 +468,9 @@ def test_extra_table_in_db_emits_drop_when_allowed():
     # Old class (Show) lingers in the database.
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings",
-                              "show", "show_bindings"}},
+        tables={
+            "knot_data": {"source_accuracy", "movie", "movie_bindings", "show", "show_bindings"}
+        },
     )
     ops = diff_against_db(spec, db, allow_destructive=True)
     drops = [op for op in ops if op.description.startswith("drop_table_")]
@@ -463,8 +500,13 @@ def test_extra_column_emits_drop_when_allowed():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year", "deprecated_col"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
                 "deprecated_bindings_col",
             },
         },
@@ -475,8 +517,7 @@ def test_extra_column_emits_drop_when_allowed():
         op for op in drops if op.description == "drop_column_movie_deprecated_col"
     )
     bindings_drop = next(
-        op for op in drops
-        if op.description == "drop_column_movie_bindings_deprecated_bindings_col"
+        op for op in drops if op.description == "drop_column_movie_bindings_deprecated_bindings_col"
     )
     assert canonical_drop.destructive is True
     assert bindings_drop.destructive is True
@@ -495,18 +536,20 @@ def test_bindings_framework_columns_never_dropped():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
     )
     ops = diff_against_db(spec, db, allow_destructive=True)
-    framework = {"source_name", "source_identifier", "raw_payload",
-                 "valid_from", "valid_to"}
+    framework = {"source_name", "source_identifier", "raw_payload", "valid_from", "valid_to"}
     for fc in framework:
-        assert not any(
-            f"drop_column_movie_bindings_{fc}" == op.description for op in ops
-        )
+        assert not any(f"drop_column_movie_bindings_{fc}" == op.description for op in ops)
 
 
 def test_extra_view_drop_is_not_destructive():
@@ -534,8 +577,12 @@ def test_extra_fk_drop_is_not_destructive():
         columns={
             ("knot_data", "movie"): {"canonical_id"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         fks={("knot_data", "movie"): {"fk_movie_studio"}},
@@ -556,15 +603,20 @@ def test_extra_index_drop_is_not_destructive_and_preserves_pkey():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
             ("knot_data", "movie_bindings"): {
                 "movie_bindings_current_idx",
                 "movie_bindings_source_idx",
-                "movie_bindings_pkey",      # postgres PK auto-index — leave alone
+                "movie_bindings_pkey",  # postgres PK auto-index — leave alone
                 "movie_bindings_legacy_idx",
             },
         },
@@ -587,17 +639,23 @@ def test_extra_trust_row_emits_delete():
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "year", "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
         indexes={
             ("knot_data", "movie_bindings"): {
-                "movie_bindings_current_idx", "movie_bindings_source_idx",
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
             }
         },
         trust_rows=[
-            ("imdb", "Movie", 0.85),       # in spec → keep
+            ("imdb", "Movie", 0.85),  # in spec → keep
             ("rottentomatoes", "Movie", 0.6),  # not in spec → drop
         ],
     )
@@ -620,8 +678,12 @@ def test_drops_precede_adds():
         columns={
             ("knot_data", "movie"): {"canonical_id"},  # missing `year`
             ("knot_data", "movie_bindings"): {
-                "canonical_id", "source_name", "source_identifier",
-                "raw_payload", "valid_from", "valid_to",
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
             },
         },
     )
@@ -629,7 +691,8 @@ def test_drops_precede_adds():
     descriptions = [op.description for op in ops]
     # Find the first non-drop op
     first_add_idx = next(
-        i for i, d in enumerate(descriptions)
+        i
+        for i, d in enumerate(descriptions)
         if not d.startswith("drop_") and d != "create_schema_knot_data"
     )
     # All drops should appear before the first add.
@@ -684,10 +747,7 @@ def test_type_mismatch_emits_alter_column_type():
         },
     )
     ops = diff_against_db(spec, db, allow_destructive=True)
-    alter_type = [
-        op for op in ops
-        if op.description == "alter_column_type_movie_year"
-    ]
+    alter_type = [op for op in ops if op.description == "alter_column_type_movie_year"]
     assert len(alter_type) == 1
     assert alter_type[0].destructive is True
     assert "TYPE integer" in alter_type[0].sql
@@ -785,6 +845,7 @@ def test_array_type_matches_when_canonicalized():
     normalizer must produce 'text[]' for the comparison."""
     spec = Spec(id="m", version="0.1")
     from knot import Array
+
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     movie.slot("genres", Array(of=Primitive.TEXT))
@@ -912,10 +973,7 @@ def test_rename_runs_before_drops_and_adds():
         renames={"Movie": {"yr": "year"}},
     )
     descriptions = [op.description for op in ops]
-    rename_idx = next(
-        i for i, d in enumerate(descriptions)
-        if d.startswith("rename_column_")
-    )
+    rename_idx = next(i for i, d in enumerate(descriptions) if d.startswith("rename_column_"))
     # No drops or adds before the first rename.
     for d in descriptions[:rename_idx]:
         assert not d.startswith("drop_")

@@ -53,9 +53,7 @@ def emit_validation(
         primary = c.primary
         identifier = primary.identifier_slot()
         table = f"{schema}.{primary.name.lower()}{target_suffix}"
-        message_literal = (
-            f"'{_escape_literal(c.message)}'" if c.message else "NULL"
-        )
+        message_literal = f"'{_escape_literal(c.message)}'" if c.message else "NULL"
         body_sql = c.body.to_sql(schema=schema, target_suffix=target_suffix)
         sql = (
             f"SELECT\n"
@@ -81,9 +79,7 @@ def emit_validation_union(
     SELECT, or ``None`` if the spec has no constraints."""
     parts = [
         sql.rstrip(";")
-        for _, sql in emit_validation(
-            spec, schema=schema, target_suffix=target_suffix
-        )
+        for _, sql in emit_validation(spec, schema=schema, target_suffix=target_suffix)
     ]
     if not parts:
         return None

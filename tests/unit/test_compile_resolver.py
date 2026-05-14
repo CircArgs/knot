@@ -3,7 +3,7 @@
 import pytest
 import sqlglot
 
-from knot import OntologyClass, Primitive, Spec
+from knot import Primitive, Spec
 from knot.compile import emit_resolved_view, emit_resolved_views
 
 
@@ -96,8 +96,11 @@ def test_resolved_view_if_not_exists_swaps_create(movie_spec):
 def test_resolved_view_kwargs_threading(movie_spec):
     movie = next(c for c in movie_spec.classes if c.name == "Movie")
     v = emit_resolved_view(
-        movie_spec, movie,
-        schema="alt", bindings_suffix="__s", resolved_suffix="__r",
+        movie_spec,
+        movie,
+        schema="alt",
+        bindings_suffix="__s",
+        resolved_suffix="__r",
     )
     assert v.startswith("CREATE VIEW alt.movie__r AS")
     assert "FROM alt.movie__s" in v

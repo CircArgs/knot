@@ -5,9 +5,8 @@ import json
 import pytest
 import sqlglot
 
-from knot import OntologyClass, Primitive, Severity, Source, SourceBinding, Spec
+from knot import Primitive, Severity, SourceBinding, Spec
 from knot.compile import BatchWrite, ClassWrites, emit_batch_write
-
 
 # ---------------------------------------------------------------------------
 # Public dataclass shape
@@ -41,11 +40,13 @@ def test_mapped_single_row_emits_close_out_and_insert(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(
-            binding=b,
-            rows=[{"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020}],
-            use_mappings=True,
-        )],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[{"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020}],
+                use_mappings=True,
+            )
+        ],
         enforce=False,
     )
     assert "UPDATE knot_data.movie_bindings" in bw.sql
@@ -72,17 +73,33 @@ def test_mapped_sql_shape_independent_of_row_count(movie_spec):
     b = movie_spec.source_bindings[0]
     one = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=False,
     )
     many = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": f"m{i}", "source_identifier": f"tt{i:03}", "release_year": 2000 + i}
-            for i in range(50)
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {
+                        "canonical_id": f"m{i}",
+                        "source_identifier": f"tt{i:03}",
+                        "release_year": 2000 + i,
+                    }
+                    for i in range(50)
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=False,
     )
     # Constant SQL size, just the jsonb param payload grows.
@@ -93,9 +110,15 @@ def test_mapped_unmapped_slot_lands_null(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=False,
     )
     # `genres` and `name` aren't mapped — should be NULL in the SELECT projection
@@ -106,9 +129,15 @@ def test_mapped_insert_includes_raw_payload_column_and_projection(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=False,
     )
     # raw_payload is the last column in the INSERT and is sourced from
@@ -127,16 +156,22 @@ def test_direct_slot_values_use_jsonb_extraction(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {
-                "canonical_id": "m1",
-                "source_identifier": "tt001",
-                "name": "Test Film",
-                "year": 2020,
-                "genres": ["drama"],
-                "runtime_minutes": 110,
-            },
-        ], use_mappings=False)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "name": "Test Film",
+                        "year": 2020,
+                        "genres": ["drama"],
+                        "runtime_minutes": 110,
+                    },
+                ],
+                use_mappings=False,
+            )
+        ],
         enforce=False,
     )
     # Direct values means slot names appear as jsonb extracts with casts.
@@ -149,9 +184,15 @@ def test_direct_insert_passes_full_row_as_raw_payload(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "year": 2020},
-        ], use_mappings=False)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "year": 2020},
+                ],
+                use_mappings=False,
+            )
+        ],
         enforce=False,
     )
     # raw_payload is the last column in the INSERT and is sourced from
@@ -178,13 +219,26 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
     bw = emit_batch_write(
         movie_spec,
         [
-            ClassWrites(binding=movie_b, rows=[
-                {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-            ], use_mappings=True),
-            ClassWrites(binding=credit_b, rows=[
-                {"canonical_id": "c1", "source_identifier": "cr001",
-                 "role": "director", "movie": "m1", "person": "p1"},
-            ], use_mappings=False),
+            ClassWrites(
+                binding=movie_b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            ),
+            ClassWrites(
+                binding=credit_b,
+                rows=[
+                    {
+                        "canonical_id": "c1",
+                        "source_identifier": "cr001",
+                        "role": "director",
+                        "movie": "m1",
+                        "person": "p1",
+                    },
+                ],
+                use_mappings=False,
+            ),
         ],
         enforce=False,
     )
@@ -222,9 +276,15 @@ def test_enforce_true_appends_do_block(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=True,
     )
     assert "DO $$" in bw.sql
@@ -236,9 +296,15 @@ def test_enforce_false_omits_do_block(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=False,
     )
     assert "DO $$" not in bw.sql
@@ -248,16 +314,20 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
     # Add a constraint on Credit; batch only writes Movie; Credit constraint
     # should NOT appear in the DO block.
     credit = next(c for c in movie_spec.classes if c.name == "Credit")
-    movie_spec.add_constraint(
-        "role_present", primary=credit, body=credit.col.role.is_not_null()
-    )
+    movie_spec.add_constraint("role_present", primary=credit, body=credit.col.role.is_not_null())
 
     movie_b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=movie_b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=movie_b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=True,
     )
     assert "year_sane" in bw.sql
@@ -269,15 +339,23 @@ def test_enforce_skips_warning_severity():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     movie.slot("year", Primitive.INTEGER)
-    spec.add_constraint("warn_only", primary=movie, body=movie.col.year > 1900, severity=Severity.WARNING)
+    spec.add_constraint(
+        "warn_only", primary=movie, body=movie.col.year > 1900, severity=Severity.WARNING
+    )
     src = spec.add_source("imdb")
     b = spec.bind(src, movie, identifier=movie["canonical_id"])
 
     bw = emit_batch_write(
         spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "i1", "year": 2020},
-        ], use_mappings=False)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "i1", "year": 2020},
+                ],
+                use_mappings=False,
+            )
+        ],
         enforce=True,
     )
     # No error-severity constraint affects this batch → no DO block.
@@ -293,9 +371,15 @@ def test_enforce_no_constraints_at_all_no_do_block():
     b = spec.bind(src, movie, identifier=movie["canonical_id"])
     bw = emit_batch_write(
         spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "i1"},
-        ], use_mappings=False)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "i1"},
+                ],
+                use_mappings=False,
+            )
+        ],
         enforce=True,
     )
     assert "DO $$" not in bw.sql
@@ -310,9 +394,15 @@ def test_schema_and_suffix_kwargs(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "i1", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "i1", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         schema="alt",
         bindings_suffix="__s",
         enforce=False,
@@ -335,9 +425,15 @@ def test_source_name_apostrophe_escaped():
     b = spec.bind(src, movie, identifier=movie["canonical_id"])
     bw = emit_batch_write(
         spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "i1"},
-        ], use_mappings=False)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "i1"},
+                ],
+                use_mappings=False,
+            )
+        ],
         enforce=False,
     )
     assert "'o''brien'" in bw.sql
@@ -358,9 +454,15 @@ def test_abstract_class_rejected():
     with pytest.raises(ValueError, match="abstract"):
         emit_batch_write(
             spec,
-            [ClassWrites(binding=b, rows=[
-                {"canonical_id": "a1", "source_identifier": "i1"},
-            ], use_mappings=False)],
+            [
+                ClassWrites(
+                    binding=b,
+                    rows=[
+                        {"canonical_id": "a1", "source_identifier": "i1"},
+                    ],
+                    use_mappings=False,
+                )
+            ],
             enforce=False,
         )
 
@@ -374,9 +476,15 @@ def test_emitted_sql_parses_postgres(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[
-            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
-        ], use_mappings=True)],
+        [
+            ClassWrites(
+                binding=b,
+                rows=[
+                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                ],
+                use_mappings=True,
+            )
+        ],
         enforce=True,
     )
     # Multi-statement script — parse each separately (skip DO block,

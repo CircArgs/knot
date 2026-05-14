@@ -34,7 +34,6 @@ from collections.abc import Iterable
 
 from knot.compile.migrate import MigrationOp
 
-
 _STRUCTURAL_TARGETS: frozenset[str] = frozenset(
     {"schema", "trust_table", "canonical", "bindings", "index", "fk"}
 )

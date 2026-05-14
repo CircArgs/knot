@@ -8,10 +8,7 @@ from knot.compile import emit_ddl, emit_trust_seed
 
 def test_trust_table_emitted_by_default(movie_spec):
     stmts = emit_ddl(movie_spec)
-    trust = next(
-        s for s in stmts
-        if s.startswith("CREATE TABLE") and "source_accuracy" in s
-    )
+    trust = next(s for s in stmts if s.startswith("CREATE TABLE") and "source_accuracy" in s)
     assert "source_name text NOT NULL" in trust
     assert "class_name  text NOT NULL" in trust
     assert "accuracy    double precision NOT NULL" in trust

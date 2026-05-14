@@ -47,7 +47,6 @@ from knot.spec import (
     TypeExpression,
 )
 
-
 # ---------------------------------------------------------------------------
 # Public dataclasses
 # ---------------------------------------------------------------------------
@@ -87,8 +86,7 @@ class BatchWrite:
 def _check_concrete(cls: OntologyClass) -> None:
     if cls.kind != ClassKind.CONCRETE:
         raise ValueError(
-            f"class {cls.name!r} is {cls.kind.value!r}; only concrete classes "
-            f"have bindings tables"
+            f"class {cls.name!r} is {cls.kind.value!r}; only concrete classes have bindings tables"
         )
 
 
@@ -202,9 +200,7 @@ def _emit_class_insert(
     # raw_payload always trails the slot columns; preserves the full
     # ingested row so unmapped fields are recoverable later.
     insert_columns = (
-        ["source_name", "source_identifier"]
-        + [s.name for s in eff_slots]
-        + ["raw_payload"]
+        ["source_name", "source_identifier"] + [s.name for s in eff_slots] + ["raw_payload"]
     )
     columns_csv = ", ".join(insert_columns)
 
@@ -224,11 +220,7 @@ def _emit_class_insert(
         select_lines.append("    raw.__raw_payload")
         return (
             f"INSERT INTO {table} ({columns_csv})\n"
-            "SELECT\n"
-            + ",\n".join(select_lines)
-            + "\n"
-            + raw_subquery
-            + ";"
+            "SELECT\n" + ",\n".join(select_lines) + "\n" + raw_subquery + ";"
         )
     else:
         # Direct slot values — each row dict has keys matching slot names.
@@ -243,9 +235,7 @@ def _emit_class_insert(
         select_lines.append("    r")
         return (
             f"INSERT INTO {table} ({columns_csv})\n"
-            "SELECT\n"
-            + ",\n".join(select_lines)
-            + "\n"
+            "SELECT\n" + ",\n".join(select_lines) + "\n"
             f"FROM jsonb_array_elements(%({rows_param})s::jsonb) AS r;"
         )
 
@@ -369,19 +359,21 @@ def emit_batch_write(
         # would mean duplicate writes; reject explicitly.
         rows_param = f"{cls.name.lower()}_rows"
         if rows_param in params:
-            raise ValueError(
-                f"duplicate ClassWrites for class {cls.name!r} in batch"
-            )
+            raise ValueError(f"duplicate ClassWrites for class {cls.name!r} in batch")
         params[rows_param] = json.dumps(cw.rows)
         stmts.append(
             _emit_class_close_out(
-                cw, schema=schema, bindings_suffix=bindings_suffix,
+                cw,
+                schema=schema,
+                bindings_suffix=bindings_suffix,
                 rows_param=rows_param,
             )
         )
         stmts.append(
             _emit_class_insert(
-                cw, schema=schema, bindings_suffix=bindings_suffix,
+                cw,
+                schema=schema,
+                bindings_suffix=bindings_suffix,
                 rows_param=rows_param,
             )
         )

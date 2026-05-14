@@ -97,9 +97,7 @@ def emit_resolved_view(
     # currently-open binding.
     return (
         f"{create} {view_name} AS\n"
-        "SELECT\n"
-        + ",\n".join(select_lines)
-        + "\n"
+        "SELECT\n" + ",\n".join(select_lines) + "\n"
         "FROM (\n"
         f"    SELECT DISTINCT {ident.name}\n"
         f"    FROM {bindings_table}\n"

@@ -21,7 +21,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-
 # ---------------------------------------------------------------------------
 # Expression base
 # ---------------------------------------------------------------------------
@@ -29,6 +28,8 @@ from typing import Any
 
 class Expr:
     """Base class for every node in the expression tree."""
+
+    __slots__ = ()
 
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         raise NotImplementedError(self)
@@ -53,19 +54,21 @@ def _as_expr(v: Any) -> Expr:
 
 def _sql_literal(v: Any) -> str:
     """Postgres SQL literal serialization for primitive values."""
-    if v is None:
-        return "NULL"
-    if v is True:
-        return "TRUE"
-    if v is False:
-        return "FALSE"
-    if isinstance(v, str):
-        return "'" + v.replace("'", "''") + "'"
-    if isinstance(v, (int, float)):
-        return str(v)
-    if isinstance(v, (list, tuple)):
-        return "ARRAY[" + ", ".join(_sql_literal(x) for x in v) + "]"
-    raise TypeError(f"can't serialize {type(v).__name__} as SQL literal: {v!r}")
+    match v:
+        case None:
+            return "NULL"
+        case True:
+            return "TRUE"
+        case False:
+            return "FALSE"
+        case str():
+            return "'" + v.replace("'", "''") + "'"
+        case int() | float():
+            return str(v)
+        case list() | tuple():
+            return "ARRAY[" + ", ".join(_sql_literal(x) for x in v) + "]"
+        case _:
+            raise TypeError(f"can't serialize {type(v).__name__} as SQL literal: {v!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +80,8 @@ class _ValueExpr:
     """Mixin for Expr nodes that produce a SQL value (slot ref, literal,
     count-of-relation). Defines comparison + null + range operators that
     each produce a boolean Expr."""
+
+    __slots__ = ()
 
     def __gt__(self, other: Any) -> Compare:  # type: ignore[misc]
         return Compare(op=">", left=self, right=_as_expr(other))
@@ -120,7 +125,7 @@ class _ValueExpr:
 # ---------------------------------------------------------------------------
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, slots=True)
 class Ref(Expr, _ValueExpr):
     """A reference to a slot on a class. Carries names (not Slot objects)
     to keep the Expr tree independent of the OntologyClass instance."""
@@ -132,7 +137,7 @@ class Ref(Expr, _ValueExpr):
         return f"{schema}.{self.class_name.lower()}{target_suffix}.{self.slot_name}"
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, slots=True)
 class Literal(Expr, _ValueExpr):
     """A constant value, serialized via ``_sql_literal``."""
 
@@ -142,7 +147,7 @@ class Literal(Expr, _ValueExpr):
         return _sql_literal(self.value)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Compare(Expr):
     """Binary comparison: left <op> right (=, <>, <, <=, >, >=)."""
 
@@ -156,7 +161,7 @@ class Compare(Expr):
         return f"{l} {self.op} {r}"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BoolOp(Expr):
     """Boolean AND/OR of two Exprs. Use ``~`` for NOT (returns ``Not``)."""
 
@@ -170,7 +175,7 @@ class BoolOp(Expr):
         return f"({l}) {self.op} ({r})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Not(Expr):
     """Boolean negation of an Expr."""
 
@@ -180,7 +185,7 @@ class Not(Expr):
         return f"NOT ({self.expr.to_sql(schema=schema, target_suffix=target_suffix)})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class IsNull(Expr):
     """``<expr> IS NULL`` (or ``IS NOT NULL`` if negated)."""
 
@@ -192,7 +197,7 @@ class IsNull(Expr):
         return f"{self.expr.to_sql(schema=schema, target_suffix=target_suffix)} {op}"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class InList(Expr):
     """``<expr> IN (...)`` (or ``NOT IN`` if negated)."""
 
@@ -207,7 +212,7 @@ class InList(Expr):
         return f"{l} {op} ({vs})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Between(Expr):
     """``<expr> BETWEEN low AND high``."""
 
@@ -220,7 +225,7 @@ class Between(Expr):
         return f"{l} BETWEEN {_sql_literal(self.low)} AND {_sql_literal(self.high)}"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Exists(Expr):
     """``EXISTS (SELECT 1 FROM other WHERE other.fk = primary.identifier
     [AND extra-where])``. Produced by ``OntologyClass.has_any`` /
@@ -236,22 +241,14 @@ class Exists(Expr):
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         other_table = f"{schema}.{self.other_class_name.lower()}{target_suffix}"
         primary_table = f"{schema}.{self.primary_class_name.lower()}{target_suffix}"
-        clauses = [
-            f"{other_table}.{self.fk_slot_name} = "
-            f"{primary_table}.{self.primary_identifier}"
-        ]
+        clauses = [f"{other_table}.{self.fk_slot_name} = {primary_table}.{self.primary_identifier}"]
         if self.where is not None:
-            clauses.append(
-                self.where.to_sql(schema=schema, target_suffix=target_suffix)
-            )
+            clauses.append(self.where.to_sql(schema=schema, target_suffix=target_suffix))
         prefix = "NOT EXISTS" if self.negated else "EXISTS"
-        return (
-            f"{prefix} (SELECT 1 FROM {other_table} "
-            f"WHERE {' AND '.join(clauses)})"
-        )
+        return f"{prefix} (SELECT 1 FROM {other_table} WHERE {' AND '.join(clauses)})"
 
 
-@dataclass(frozen=True, eq=False)
+@dataclass(frozen=True, eq=False, slots=True)
 class CountRel(Expr, _ValueExpr):
     """``(SELECT COUNT(*) FROM other WHERE other.fk = primary.identifier
     [AND extra-where])``. A value-expression — compose with comparison
@@ -266,21 +263,13 @@ class CountRel(Expr, _ValueExpr):
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         other_table = f"{schema}.{self.other_class_name.lower()}{target_suffix}"
         primary_table = f"{schema}.{self.primary_class_name.lower()}{target_suffix}"
-        clauses = [
-            f"{other_table}.{self.fk_slot_name} = "
-            f"{primary_table}.{self.primary_identifier}"
-        ]
+        clauses = [f"{other_table}.{self.fk_slot_name} = {primary_table}.{self.primary_identifier}"]
         if self.where is not None:
-            clauses.append(
-                self.where.to_sql(schema=schema, target_suffix=target_suffix)
-            )
-        return (
-            f"(SELECT COUNT(*) FROM {other_table} "
-            f"WHERE {' AND '.join(clauses)})"
-        )
+            clauses.append(self.where.to_sql(schema=schema, target_suffix=target_suffix))
+        return f"(SELECT COUNT(*) FROM {other_table} WHERE {' AND '.join(clauses)})"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Raw(Expr):
     """Escape hatch — arbitrary SQL fragment. The user owns its
     correctness; knot does not parse, validate, or rewrite it. Use

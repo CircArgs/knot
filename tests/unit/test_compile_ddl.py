@@ -14,24 +14,24 @@ def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
     stmts = emit_ddl(movie_spec)
     assert stmts[0].startswith("CREATE SCHEMA IF NOT EXISTS knot_data")
     canonical = [
-        s for s in stmts
-        if s.startswith("CREATE TABLE")
-        and "_bindings" not in s
-        and "source_accuracy" not in s
+        s
+        for s in stmts
+        if s.startswith("CREATE TABLE") and "_bindings" not in s and "source_accuracy" not in s
     ]
     bindings = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" in s]
     trust = [s for s in stmts if s.startswith("CREATE TABLE") and "source_accuracy" in s]
     resolved_views = [s for s in stmts if "_resolved AS" in s]
     virtual_views = [
-        s for s in stmts
+        s
+        for s in stmts
         if (s.startswith("CREATE VIEW") or s.startswith("CREATE OR REPLACE VIEW"))
         and "_resolved AS" not in s
     ]
-    assert len(canonical) == 3       # Movie, Person, Credit canonical tables
-    assert len(bindings) == 3        # Movie, Person, Credit bindings tables
-    assert len(trust) == 1           # source_accuracy (invariant)
+    assert len(canonical) == 3  # Movie, Person, Credit canonical tables
+    assert len(bindings) == 3  # Movie, Person, Credit bindings tables
+    assert len(trust) == 1  # source_accuracy (invariant)
     assert len(resolved_views) == 3  # Movie, Person, Credit resolved views
-    assert len(virtual_views) == 1   # DirectedMovie (the virtual class)
+    assert len(virtual_views) == 1  # DirectedMovie (the virtual class)
     assert _all_parse(stmts)
 
 
@@ -94,8 +94,7 @@ def test_fk_alters_emitted_for_classref_slots(movie_spec):
     # Credit has two FK slots (movie, person). Title/Movie/Person have none.
     assert len(fk_stmts) == 2
     assert any(
-        "fk_credit_movie" in s and "REFERENCES knot_data.movie(canonical_id)" in s
-        for s in fk_stmts
+        "fk_credit_movie" in s and "REFERENCES knot_data.movie(canonical_id)" in s for s in fk_stmts
     )
     assert any(
         "fk_credit_person" in s and "REFERENCES knot_data.person(canonical_id)" in s
@@ -137,10 +136,7 @@ def test_fk_alters_not_emitted_for_bindings_table(movie_spec):
     # carry REFERENCES — bindings may claim about canonicals that don't
     # exist yet.
     stmts = emit_ddl(movie_spec)
-    bindings_alters = [
-        s for s in stmts
-        if s.startswith("ALTER TABLE") and "_bindings" in s
-    ]
+    bindings_alters = [s for s in stmts if s.startswith("ALTER TABLE") and "_bindings" in s]
     assert bindings_alters == []
 
 
@@ -165,9 +161,7 @@ def test_fk_alters_only_for_concrete_classes():
 
 def test_bindings_carry_raw_payload_jsonb_column(movie_spec):
     stmts = emit_ddl(movie_spec)
-    bindings = next(
-        s for s in stmts if s.startswith("CREATE TABLE") and "movie_bindings" in s
-    )
+    bindings = next(s for s in stmts if s.startswith("CREATE TABLE") and "movie_bindings" in s)
     # Bronze layer: every bindings row preserves the ingested shape.
     assert "raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb" in bindings
 
