@@ -250,6 +250,11 @@ def _emit_bindings_table(
             col += " NOT NULL"
             identifier_name = slot.name
         columns.append(col)
+    # Bronze-layer raw payload — the full row as ingested, preserved
+    # for backfilling new slots later without re-ingesting from the
+    # source. Always populated by emit_batch_write; default '{}' lets
+    # legacy bindings rows satisfy NOT NULL after an ALTER.
+    columns.append("    raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb")
     columns.append("    valid_from timestamptz NOT NULL DEFAULT now()")
     columns.append("    valid_to timestamptz")
     if identifier_name is not None:

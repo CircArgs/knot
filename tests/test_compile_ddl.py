@@ -156,6 +156,15 @@ def test_fk_alters_only_for_concrete_classes():
     assert "REFERENCES knot_data.title(canonical_id)" in alter
 
 
+def test_bindings_carry_raw_payload_jsonb_column(movie_spec):
+    stmts = emit_ddl(movie_spec)
+    bindings = next(
+        s for s in stmts if s.startswith("CREATE TABLE") and "movie_bindings" in s
+    )
+    # Bronze layer: every bindings row preserves the ingested shape.
+    assert "raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb" in bindings
+
+
 def test_indexes_emitted_per_concrete_bindings_table(movie_spec):
     stmts = emit_ddl(movie_spec)
     idx_stmts = [s for s in stmts if s.startswith("CREATE INDEX")]

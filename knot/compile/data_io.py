@@ -154,7 +154,12 @@ def _emit_raw_subquery(
     Returns the SQL and the ordered list of raw field names the host
     must populate in each row dict. Field names = identifier slot,
     ``source_identifier``, plus every raw field declared in any
-    mapping's ``SourceMap.uses``."""
+    mapping's ``SourceMap.uses``.
+
+    The inner SELECT also passes the entire jsonb row through as
+    ``__raw_payload`` so the outer SELECT can populate the bindings
+    table's ``raw_payload`` column with the full ingested shape
+    (bronze layer for unmapped fields)."""
     ident = binding.class_.identifier_slot()
     raw_fields: list[str] = [ident.name, "source_identifier"]
     seen = set(raw_fields)
@@ -167,9 +172,10 @@ def _emit_raw_subquery(
     # The raw subquery extracts each raw field as text; mapping
     # expressions cast where they care to. The identifier and
     # source_identifier are always text on the bindings table.
-    aliases = ",\n".join(
-        f"        (r->>'{f}') AS {f}" for f in raw_fields
-    )
+    # ``r`` is preserved as ``__raw_payload`` for the bronze layer.
+    alias_lines = ["        r AS __raw_payload"]
+    alias_lines.extend(f"        (r->>'{f}') AS {f}" for f in raw_fields)
+    aliases = ",\n".join(alias_lines)
     sql = (
         "FROM (\n"
         "    SELECT\n"
@@ -193,7 +199,13 @@ def _emit_class_insert(
     table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
     source_literal = _sql_literal(cw.binding.source.name)
     eff_slots = cls.effective_slots()
-    insert_columns = ["source_name", "source_identifier"] + [s.name for s in eff_slots]
+    # raw_payload always trails the slot columns; preserves the full
+    # ingested row so unmapped fields are recoverable later.
+    insert_columns = (
+        ["source_name", "source_identifier"]
+        + [s.name for s in eff_slots]
+        + ["raw_payload"]
+    )
     columns_csv = ", ".join(insert_columns)
 
     if cw.use_mappings:
@@ -209,6 +221,7 @@ def _emit_class_insert(
                 select_lines.append(f"    {cw.binding.mappings[slot.name].sql}")
             else:
                 select_lines.append("    NULL")
+        select_lines.append("    raw.__raw_payload")
         return (
             f"INSERT INTO {table} ({columns_csv})\n"
             "SELECT\n"
@@ -219,12 +232,15 @@ def _emit_class_insert(
         )
     else:
         # Direct slot values — each row dict has keys matching slot names.
+        # raw_payload preserves the host-passed dict (which IS what was
+        # ingested in this mode, even if it's already slot-shaped).
         select_lines = [
             f"    {source_literal}",
             "    (r->>'source_identifier')::text",
         ]
         for slot in eff_slots:
             select_lines.append(f"    {_jsonb_extract(slot)}")
+        select_lines.append("    r")
         return (
             f"INSERT INTO {table} ({columns_csv})\n"
             "SELECT\n"

@@ -102,6 +102,22 @@ def test_mapped_unmapped_slot_lands_null(movie_spec):
     assert "NULL" in bw.sql
 
 
+def test_mapped_insert_includes_raw_payload_column_and_projection(movie_spec):
+    b = movie_spec.source_bindings[0]
+    bw = emit_batch_write(
+        movie_spec,
+        [ClassWrites(binding=b, rows=[
+            {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+        ], use_mappings=True)],
+        enforce=False,
+    )
+    # raw_payload is the last column in the INSERT and is sourced from
+    # the inner subquery's r passthrough.
+    assert "raw_payload)" in bw.sql
+    assert "r AS __raw_payload" in bw.sql
+    assert "raw.__raw_payload" in bw.sql
+
+
 # ---------------------------------------------------------------------------
 # use_mappings=False (direct slot values)
 # ---------------------------------------------------------------------------
@@ -127,6 +143,24 @@ def test_direct_slot_values_use_jsonb_extraction(movie_spec):
     assert "(r->>'year')::integer" in bw.sql
     # Arrays go through unnest+ARRAY round-trip
     assert "jsonb_array_elements(r->'genres')" in bw.sql
+
+
+def test_direct_insert_passes_full_row_as_raw_payload(movie_spec):
+    b = movie_spec.source_bindings[0]
+    bw = emit_batch_write(
+        movie_spec,
+        [ClassWrites(binding=b, rows=[
+            {"canonical_id": "m1", "source_identifier": "tt001", "year": 2020},
+        ], use_mappings=False)],
+        enforce=False,
+    )
+    # raw_payload is the last column in the INSERT and is sourced from
+    # r directly (the jsonb element from jsonb_array_elements).
+    assert "raw_payload)" in bw.sql
+    # In direct mode the outer SELECT references `r` (no `__raw_payload`
+    # alias because there's no inner subquery wrapping).
+    select_section = bw.sql.split("FROM jsonb_array_elements")[0]
+    assert select_section.rstrip().endswith("r")
 
 
 # ---------------------------------------------------------------------------
