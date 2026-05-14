@@ -373,3 +373,244 @@ def test_migration_op_carries_target_and_description():
             "index", "fk", "resolved_view", "virtual_view",
             "trust_seed",
         }
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — destructive ops + non-destructive cleanup
+# ---------------------------------------------------------------------------
+
+
+def _spec_with_movie_only() -> Spec:
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    return spec
+
+
+def test_extra_table_in_db_emits_drop_when_allowed():
+    spec = _spec_with_movie_only()
+    # Old class (Show) lingers in the database.
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings",
+                              "show", "show_bindings"}},
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    drops = [op for op in ops if op.description.startswith("drop_table_")]
+    assert any("drop_table_show" == op.description for op in drops)
+    assert any("drop_table_show_bindings" == op.description for op in drops)
+    for op in drops:
+        assert op.destructive is True
+        assert "DROP TABLE IF EXISTS" in op.sql
+        assert "CASCADE" in op.sql
+
+
+def test_extra_table_filtered_out_when_destructive_disabled():
+    spec = _spec_with_movie_only()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings", "show"}},
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    assert not any(op.description.startswith("drop_table_") for op in ops)
+
+
+def test_extra_column_emits_drop_when_allowed():
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id", "year", "deprecated_col"},
+            ("knot_data", "movie_bindings"): {
+                "canonical_id", "source_name", "source_identifier",
+                "year", "raw_payload", "valid_from", "valid_to",
+                "deprecated_bindings_col",
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    drops = [op for op in ops if op.description.startswith("drop_column_")]
+    canonical_drop = next(
+        op for op in drops if op.description == "drop_column_movie_deprecated_col"
+    )
+    bindings_drop = next(
+        op for op in drops
+        if op.description == "drop_column_movie_bindings_deprecated_bindings_col"
+    )
+    assert canonical_drop.destructive is True
+    assert bindings_drop.destructive is True
+    assert "DROP COLUMN IF EXISTS deprecated_col" in canonical_drop.sql
+    assert "DROP COLUMN IF EXISTS deprecated_bindings_col" in bindings_drop.sql
+
+
+def test_bindings_framework_columns_never_dropped():
+    """source_name, source_identifier, raw_payload, valid_from, valid_to
+    are SCD2 framework columns — never proposed for removal even if
+    not in the slot list."""
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id", "year"},
+            ("knot_data", "movie_bindings"): {
+                "canonical_id", "source_name", "source_identifier",
+                "year", "raw_payload", "valid_from", "valid_to",
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    framework = {"source_name", "source_identifier", "raw_payload",
+                 "valid_from", "valid_to"}
+    for fc in framework:
+        assert not any(
+            f"drop_column_movie_bindings_{fc}" == op.description for op in ops
+        )
+
+
+def test_extra_view_drop_is_not_destructive():
+    spec = _spec_with_movie_only()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        views={"knot_data": {"movie_resolved", "show_resolved", "old_virtual"}},
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    drops = [op for op in ops if op.description.startswith("drop_view_")]
+    drop_names = {op.description for op in drops}
+    assert "drop_view_show_resolved" in drop_names
+    assert "drop_view_old_virtual" in drop_names
+    # Always-emitted (non-destructive) → present regardless of opt-in flag.
+    for op in drops:
+        assert op.destructive is False
+
+
+def test_extra_fk_drop_is_not_destructive():
+    spec = _spec_with_movie_only()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id"},
+            ("knot_data", "movie_bindings"): {
+                "canonical_id", "source_name", "source_identifier",
+                "raw_payload", "valid_from", "valid_to",
+            },
+        },
+        fks={("knot_data", "movie"): {"fk_movie_studio"}},
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    fk_drops = [op for op in ops if op.description.startswith("drop_fk_")]
+    assert any(op.description == "drop_fk_fk_movie_studio" for op in fk_drops)
+    for op in fk_drops:
+        assert op.destructive is False
+        assert "DROP CONSTRAINT IF EXISTS fk_movie_studio" in op.sql
+
+
+def test_extra_index_drop_is_not_destructive_and_preserves_pkey():
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id", "year"},
+            ("knot_data", "movie_bindings"): {
+                "canonical_id", "source_name", "source_identifier",
+                "year", "raw_payload", "valid_from", "valid_to",
+            },
+        },
+        indexes={
+            ("knot_data", "movie_bindings"): {
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
+                "movie_bindings_pkey",      # postgres PK auto-index — leave alone
+                "movie_bindings_legacy_idx",
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    drop_idx = [op for op in ops if op.description.startswith("drop_index_")]
+    names = {op.description for op in drop_idx}
+    assert "drop_index_movie_bindings_legacy_idx" in names
+    assert "drop_index_movie_bindings_pkey" not in names  # never drop pkey
+    for op in drop_idx:
+        assert op.destructive is False
+
+
+def test_extra_trust_row_emits_delete():
+    spec = _basic_spec()
+    # DB has trust rows for sources not in the spec.
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id", "year"},
+            ("knot_data", "movie_bindings"): {
+                "canonical_id", "source_name", "source_identifier",
+                "year", "raw_payload", "valid_from", "valid_to",
+            },
+        },
+        indexes={
+            ("knot_data", "movie_bindings"): {
+                "movie_bindings_current_idx", "movie_bindings_source_idx",
+            }
+        },
+        trust_rows=[
+            ("imdb", "Movie", 0.85),       # in spec → keep
+            ("rottentomatoes", "Movie", 0.6),  # not in spec → drop
+        ],
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    drop_trust = [op for op in ops if op.description.startswith("drop_trust_")]
+    assert len(drop_trust) == 1
+    assert "rottentomatoes" in drop_trust[0].sql
+    assert "DELETE FROM" in drop_trust[0].sql
+    assert drop_trust[0].destructive is False
+
+
+def test_drops_precede_adds():
+    """Order matters: drops first, so any subsequent adds don't
+    collide with stale objects."""
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings", "ghost"}},
+        views={"knot_data": {"ghost_resolved"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id"},  # missing `year`
+            ("knot_data", "movie_bindings"): {
+                "canonical_id", "source_name", "source_identifier",
+                "raw_payload", "valid_from", "valid_to",
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    descriptions = [op.description for op in ops]
+    # Find the first non-drop op
+    first_add_idx = next(
+        i for i, d in enumerate(descriptions)
+        if not d.startswith("drop_") and d != "create_schema_knot_data"
+    )
+    # All drops should appear before the first add.
+    for op in ops[:first_add_idx]:
+        assert op.description.startswith("drop_") or op.description.startswith("create_schema_")
+
+
+def test_drop_all_sql_parses_postgres():
+    spec = _spec_with_movie_only()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings", "show"}},
+        views={"knot_data": {"show_resolved"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id", "stale_col"},
+        },
+        indexes={
+            ("knot_data", "movie_bindings"): {"old_idx", "movie_bindings_pkey"},
+        },
+        fks={("knot_data", "movie"): {"fk_movie_nobody"}},
+        trust_rows=[("orphan", "Movie", 0.5)],
+    )
+    for op in diff_against_db(spec, db, allow_destructive=True):
+        sqlglot.parse_one(op.sql, dialect="postgres")

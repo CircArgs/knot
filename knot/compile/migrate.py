@@ -164,22 +164,41 @@ def diff_against_db(
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
     trust_table_name: str = "source_accuracy",
+    allow_destructive: bool = False,
 ) -> list[MigrationOp]:
     """Walk the spec, compare against the live database via ``query``,
-    return ordered additive operations.
+    return ordered migration operations.
 
-    Ordering enforced:
-      1. CREATE SCHEMA (if missing)
-      2. CREATE trust table (if missing)
-      3. CREATE canonical tables (per concrete class, if missing)
-      4. CREATE bindings tables + their indexes (if missing)
-      5. ALTER ADD COLUMN on existing tables for missing slots
-      6. ALTER ADD CONSTRAINT for missing FK references
-      7. CREATE OR REPLACE resolved views (always emitted — idempotent)
-      8. CREATE OR REPLACE virtual class views (always emitted)
-      9. UPSERT source_accuracy rows (always emitted — idempotent)
+    Two passes:
+
+      A. **Drops** (Phase 2). Things in the database that aren't in the
+         spec. Non-destructive cleanup (DROP FK / VIEW / INDEX, DELETE
+         FROM trust) is always emitted. Truly destructive ops (DROP
+         TABLE, DROP COLUMN) carry ``destructive=True`` and are
+         filtered out unless ``allow_destructive=True``.
+
+      B. **Adds** (Phase 1). CREATE / ALTER ADD / CREATE OR REPLACE /
+         UPSERT to bring the database into alignment with the spec.
+
+    Ordering: drops run first (cleaning the old state) so any
+    subsequent adds don't collide with stale objects.
+
+    Drop sequence: FK constraints → views → indexes → trust rows →
+    columns → tables. Add sequence: schema → trust table → canonical
+    tables → bindings tables (+ indexes) → ALTER ADD columns → ALTER
+    ADD FK constraints → resolved views → virtual views → trust seed.
     """
     ops: list[MigrationOp] = []
+    ops.extend(
+        _diff_drops(
+            spec,
+            query,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+            resolved_suffix=resolved_suffix,
+            trust_table_name=trust_table_name,
+        )
+    )
 
     # 1. Schema
     if schema not in _existing_schemas(query):
@@ -279,6 +298,186 @@ def diff_against_db(
                     f"DO UPDATE SET accuracy = EXCLUDED.accuracy;"
                 ),
                 target="trust_seed",
+            )
+        )
+
+    if not allow_destructive:
+        ops = [op for op in ops if not op.destructive]
+    return ops
+
+
+def _diff_drops(
+    spec: Spec,
+    query: QueryFn,
+    *,
+    schema: str,
+    bindings_suffix: str,
+    resolved_suffix: str,
+    trust_table_name: str,
+) -> list[MigrationOp]:
+    """Detect everything that's in the database but no longer matches
+    the spec, and emit DROP / DELETE ops.
+
+    Ordering: FK constraints → views → indexes → trust rows → columns →
+    tables. Within each tier, non-destructive ops first so a partial
+    apply leaves the DB in a usable state.
+    """
+    ops: list[MigrationOp] = []
+    db_tables = _existing_tables(query, schema)
+    db_views = _existing_views(query, schema)
+
+    expected_canonical = {
+        cls.name.lower()
+        for cls in spec.classes
+        if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE
+    }
+    expected_bindings = {f"{n}{bindings_suffix}" for n in expected_canonical}
+    expected_resolved_views = {f"{n}{resolved_suffix}" for n in expected_canonical}
+    expected_virtual_views = {
+        cls.name.lower() for cls in spec.classes if isinstance(cls, VirtualClass)
+    }
+    expected_views = expected_resolved_views | expected_virtual_views
+
+    # 1. Unused FK constraints on canonical tables that ARE still in spec.
+    for cls in spec.classes:
+        if not (isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE):
+            continue
+        canonical_name = cls.name.lower()
+        if canonical_name not in db_tables:
+            continue
+        expected_fks = {
+            f"fk_{canonical_name}_{slot.name}"
+            for slot in cls.effective_slots()
+            if isinstance(slot.type, ClassRef)
+        }
+        for fk in sorted(_existing_fk_constraints(query, schema, canonical_name) - expected_fks):
+            ops.append(
+                MigrationOp(
+                    description=f"drop_fk_{fk}",
+                    sql=(
+                        f"ALTER TABLE {schema}.{canonical_name} "
+                        f"DROP CONSTRAINT IF EXISTS {fk};"
+                    ),
+                    target="fk",
+                )
+            )
+
+    # 2. Unused views.
+    for view in sorted(db_views - expected_views):
+        target = (
+            "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
+        )
+        ops.append(
+            MigrationOp(
+                description=f"drop_view_{view}",
+                sql=f"DROP VIEW IF EXISTS {schema}.{view};",
+                target=target,
+            )
+        )
+
+    # 3. Unused indexes on bindings tables that ARE still in spec.
+    for cls in spec.classes:
+        if not (isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE):
+            continue
+        bindings_name = f"{cls.name.lower()}{bindings_suffix}"
+        if bindings_name not in db_tables:
+            continue
+        expected_idxs = {
+            f"{bindings_name}_current_idx",
+            f"{bindings_name}_source_idx",
+        }
+        for idx in sorted(_existing_indexes(query, schema, bindings_name)):
+            if idx in expected_idxs:
+                continue
+            # postgres-auto PK index; leave alone.
+            if idx.endswith("_pkey"):
+                continue
+            ops.append(
+                MigrationOp(
+                    description=f"drop_index_{idx}",
+                    sql=f"DROP INDEX IF EXISTS {schema}.{idx};",
+                    target="index",
+                )
+            )
+
+    # 4. Unused trust rows.
+    expected_binding_keys = {
+        (b.source.name, b.class_.name)
+        for b in spec.source_bindings
+        if isinstance(b.class_, OntologyClass)
+    }
+    db_trust_rows = _existing_trust_rows(query, schema, trust_table_name)
+    for src, cls_name in sorted(set(db_trust_rows) - expected_binding_keys):
+        s_lit = "'" + src.replace("'", "''") + "'"
+        c_lit = "'" + cls_name.replace("'", "''") + "'"
+        ops.append(
+            MigrationOp(
+                description=f"drop_trust_{src}_{cls_name}",
+                sql=(
+                    f"DELETE FROM {schema}.{trust_table_name} "
+                    f"WHERE source_name = {s_lit} AND class_name = {c_lit};"
+                ),
+                target="trust_seed",
+            )
+        )
+
+    # 5. Unused columns (destructive).
+    bindings_framework_cols = {
+        "source_name", "source_identifier", "raw_payload",
+        "valid_from", "valid_to",
+    }
+    for cls in spec.classes:
+        if not (isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE):
+            continue
+        canonical_name = cls.name.lower()
+        bindings_name = f"{canonical_name}{bindings_suffix}"
+        slot_cols = {slot.name for slot in cls.effective_slots()}
+        if canonical_name in db_tables:
+            extras = _existing_columns(query, schema, canonical_name) - slot_cols
+            for col in sorted(extras):
+                ops.append(
+                    MigrationOp(
+                        description=f"drop_column_{canonical_name}_{col}",
+                        sql=(
+                            f"ALTER TABLE {schema}.{canonical_name} "
+                            f"DROP COLUMN IF EXISTS {col};"
+                        ),
+                        destructive=True,
+                        target="canonical",
+                    )
+                )
+        if bindings_name in db_tables:
+            extras = (
+                _existing_columns(query, schema, bindings_name)
+                - slot_cols
+                - bindings_framework_cols
+            )
+            for col in sorted(extras):
+                ops.append(
+                    MigrationOp(
+                        description=f"drop_column_{bindings_name}_{col}",
+                        sql=(
+                            f"ALTER TABLE {schema}.{bindings_name} "
+                            f"DROP COLUMN IF EXISTS {col};"
+                        ),
+                        destructive=True,
+                        target="bindings",
+                    )
+                )
+
+    # 6. Unused tables (destructive). Classes no longer in spec take
+    # their canonical + bindings tables with them.
+    expected_data_tables = (
+        expected_canonical | expected_bindings | {trust_table_name}
+    )
+    for table in sorted(db_tables - expected_data_tables):
+        target = "bindings" if table.endswith(bindings_suffix) else "canonical"
+        ops.append(
+            MigrationOp(
+                description=f"drop_table_{table}",
+                sql=f"DROP TABLE IF EXISTS {schema}.{table} CASCADE;",
+                destructive=True,
+                target=target,
             )
         )
 
