@@ -6,25 +6,21 @@ For each concrete ``OntologyClass``, emit a SQL ``VIEW`` named
 winning value by argmax over the source's ``accuracy``. One row per
 ``canonical_id``.
 
-Resolution semantics (prototype, no observed-evidence updates yet):
+Resolution semantics:
 
-  - Each ``SourceBinding`` carries a single ``accuracy`` (0-1). Because
-    no posterior updates from data are applied yet, the prior mean
-    equals the posterior mean equals the host's stated accuracy.
+  - Each ``SourceBinding`` is associated with a row in
+    ``<schema>.<trust_table>`` (default ``source_accuracy``) carrying
+    its current accuracy. The resolved view ``LEFT JOIN``s against
+    that table at query time, so accuracy is operational state — an
+    operator can ``UPDATE source_accuracy SET accuracy = 0.8 WHERE
+    source_name = 'imdb' AND class_name = 'Movie'`` and the resolver
+    picks up the new value immediately without rebuilding the view.
   - Per slot, the winner is the binding with the highest accuracy
     among those whose value for that slot is non-null. Ties are broken
     by ``source_name`` alphabetical (deterministic).
+  - Sources missing from ``source_accuracy`` fall to ``COALESCE(...,
+    0)`` and lose every tie-break — effectively ignored.
   - Slots with no non-null claim resolve to ``NULL``.
-
-The accuracy table for each class is inlined as a ``CASE WHEN
-source_name = '…' THEN <accuracy> … ELSE 0`` expression so the view is
-self-contained. Accuracy values come from the in-code spec at compile
-time; knot does not maintain runtime source-binding metadata in the
-database.
-
-Unknown sources (rows in the bindings table whose ``source_name`` isn't
-declared as a binding in the spec) fall to ``ELSE 0`` accuracy and lose
-every tie-break — effectively ignored.
 """
 
 from __future__ import annotations
@@ -32,36 +28,24 @@ from __future__ import annotations
 from knot.spec import ClassKind, OntologyClass, Slot, Spec
 
 
-def _accuracy_case(spec: Spec, cls: OntologyClass) -> str:
-    """``CASE WHEN source_name = 'imdb' THEN 0.85 … ELSE 0`` for ``cls``'s
-    declared bindings."""
-    bindings = [b for b in spec.source_bindings if b.class_ is cls]
-    if not bindings:
-        # No declared sources → every value loses; the view stays empty
-        # except for canonical_ids actually present in bindings (which
-        # would only exist if something wrote unbound source claims).
-        return "0::double precision"
-    parts = [
-        f"WHEN b.source_name = '{b.source.name}' THEN {b.accuracy}"
-        for b in bindings
-    ]
-    return "CASE " + " ".join(parts) + " ELSE 0 END"
-
-
 def _winning_value_expr(
+    *,
     bindings_table: str,
+    trust_table: str,
+    class_name: str,
     canonical_id_slot: Slot,
     slot: Slot,
-    accuracy_case: str,
 ) -> str:
     """Correlated subquery that picks the winning value for ``slot``."""
     return (
         f"(SELECT b.{slot.name} "
         f"FROM {bindings_table} b "
+        f"LEFT JOIN {trust_table} a "
+        f"ON a.source_name = b.source_name AND a.class_name = '{class_name}' "
         f"WHERE b.{canonical_id_slot.name} = cb.{canonical_id_slot.name} "
         f"AND b.valid_to IS NULL "
         f"AND b.{slot.name} IS NOT NULL "
-        f"ORDER BY ({accuracy_case}) DESC, b.source_name "
+        f"ORDER BY COALESCE(a.accuracy, 0) DESC, b.source_name "
         f"LIMIT 1)"
     )
 
@@ -73,10 +57,16 @@ def emit_resolved_view(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
+    trust_table_name: str = "source_accuracy",
     if_not_exists: bool = False,
 ) -> str:
     """Return ``CREATE VIEW <schema>.<class><resolved_suffix>`` for one
     concrete class, resolving per-slot winners from its bindings table.
+
+    The view depends on ``<schema>.<trust_table_name>`` existing —
+    emit it via ``emit_ddl`` (which creates the table) before
+    deploying this view, and seed it via
+    ``knot.compile.trust.emit_trust_seed`` to populate the rows.
     """
     if cls.kind != ClassKind.CONCRETE:
         raise ValueError(
@@ -85,16 +75,22 @@ def emit_resolved_view(
         )
 
     bindings_table = f"{schema}.{cls.name.lower()}{bindings_suffix}"
+    trust_table = f"{schema}.{trust_table_name}"
     view_name = f"{schema}.{cls.name.lower()}{resolved_suffix}"
     ident = cls.identifier_slot()
-    accuracy = _accuracy_case(spec, cls)
     create = "CREATE OR REPLACE VIEW" if if_not_exists else "CREATE VIEW"
 
     select_lines: list[str] = [f"    cb.{ident.name}"]
     for slot in cls.effective_slots():
         if slot.name == ident.name:
             continue
-        expr = _winning_value_expr(bindings_table, ident, slot, accuracy)
+        expr = _winning_value_expr(
+            bindings_table=bindings_table,
+            trust_table=trust_table,
+            class_name=cls.name,
+            canonical_id_slot=ident,
+            slot=slot,
+        )
         select_lines.append(f"    {expr} AS {slot.name}")
 
     # The outer FROM enumerates each canonical_id that has at least one
@@ -118,6 +114,7 @@ def emit_resolved_views(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
+    trust_table_name: str = "source_accuracy",
     if_not_exists: bool = False,
 ) -> list[str]:
     """Return one ``CREATE VIEW`` per concrete class in ``spec``."""
@@ -131,6 +128,7 @@ def emit_resolved_views(
                     schema=schema,
                     bindings_suffix=bindings_suffix,
                     resolved_suffix=resolved_suffix,
+                    trust_table_name=trust_table_name,
                     if_not_exists=if_not_exists,
                 )
             )

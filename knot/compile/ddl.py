@@ -41,11 +41,13 @@ def emit_ddl(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
+    trust_table_name: str = "source_accuracy",
     if_not_exists: bool = False,
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
     emit_fk_references: bool = True,
     emit_indexes: bool = True,
+    emit_trust_table: bool = True,
     emit_descriptions: bool = False,
 ) -> list[str]:
     """Return the DDL statements that materialize ``spec``.
@@ -81,6 +83,12 @@ def emit_ddl(
         When True, emit partial indexes on each ``<class>_bindings``
         table that match the resolver's per-slot lookup and the SCD2
         close-out hot paths (both filter on ``valid_to IS NULL``).
+    emit_trust_table
+        When True, emit the invariant ``<schema>.<trust_table_name>``
+        (default ``source_accuracy``) that carries the runtime
+        per-source accuracy. The resolver view ``LEFT JOIN``s against
+        this table; seed its rows from the spec via
+        ``knot.compile.trust.emit_trust_seed``.
     emit_descriptions
         When True, follow each entity with ``COMMENT ON TABLE / COLUMN /
         VIEW`` for any non-empty ``description`` fields.
@@ -90,6 +98,18 @@ def emit_ddl(
     from knot.compile.resolver import emit_resolved_view
 
     stmts: list[str] = [f"CREATE SCHEMA IF NOT EXISTS {schema};"]
+
+    # Invariant trust-policy table — must exist before any resolved
+    # view that LEFT JOINs against it.
+    if emit_trust_table:
+        stmts.append(
+            _emit_trust_table(
+                schema=schema,
+                trust_table_name=trust_table_name,
+                if_not_exists=if_not_exists,
+            )
+        )
+
     for cls in spec.classes:
         if isinstance(cls, OntologyClass):
             if cls.kind != ClassKind.CONCRETE:
@@ -126,6 +146,7 @@ def emit_ddl(
                         schema=schema,
                         bindings_suffix=bindings_suffix,
                         resolved_suffix=resolved_suffix,
+                        trust_table_name=trust_table_name,
                         if_not_exists=if_not_exists,
                     )
                 )
@@ -377,6 +398,32 @@ def _emit_bindings_indexes(
         f"    ON {table} ({ident.name}, source_name, source_identifier)\n"
         f"    WHERE valid_to IS NULL;",
     ]
+
+
+# ---------------------------------------------------------------------------
+# Trust-policy table — runtime tuning surface for source accuracies
+# ---------------------------------------------------------------------------
+
+
+def _emit_trust_table(
+    *,
+    schema: str,
+    trust_table_name: str,
+    if_not_exists: bool,
+) -> str:
+    """Invariant table carrying the runtime per-source accuracy. The
+    resolver views ``LEFT JOIN`` against this table; operators tune
+    accuracy with plain ``UPDATE`` statements without redeploying."""
+    ct = "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
+    return (
+        f"{ct} {schema}.{trust_table_name} (\n"
+        "    source_name text NOT NULL,\n"
+        "    class_name  text NOT NULL,\n"
+        "    accuracy    double precision NOT NULL\n"
+        "                CHECK (accuracy >= 0 AND accuracy <= 1),\n"
+        "    PRIMARY KEY (source_name, class_name)\n"
+        ");"
+    )
 
 
 __all__ = ["emit_ddl"]

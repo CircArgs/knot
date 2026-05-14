@@ -13,8 +13,14 @@ def _all_parse(stmts: list[str]) -> bool:
 def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
     stmts = emit_ddl(movie_spec)
     assert stmts[0].startswith("CREATE SCHEMA IF NOT EXISTS knot_data")
-    canonical = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" not in s]
+    canonical = [
+        s for s in stmts
+        if s.startswith("CREATE TABLE")
+        and "_bindings" not in s
+        and "source_accuracy" not in s
+    ]
     bindings = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" in s]
+    trust = [s for s in stmts if s.startswith("CREATE TABLE") and "source_accuracy" in s]
     resolved_views = [s for s in stmts if "_resolved AS" in s]
     virtual_views = [
         s for s in stmts
@@ -23,6 +29,7 @@ def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
     ]
     assert len(canonical) == 3       # Movie, Person, Credit canonical tables
     assert len(bindings) == 3        # Movie, Person, Credit bindings tables
+    assert len(trust) == 1           # source_accuracy (invariant)
     assert len(resolved_views) == 3  # Movie, Person, Credit resolved views
     assert len(virtual_views) == 1   # DirectedMovie (the virtual class)
     assert _all_parse(stmts)

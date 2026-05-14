@@ -24,15 +24,23 @@ def test_resolved_view_targets_bindings_table_with_valid_to_null(movie_spec):
     assert "b.valid_to IS NULL" in v
 
 
-def test_resolved_view_argmax_uses_binding_accuracy(movie_spec):
+def test_resolved_view_left_joins_trust_table(movie_spec):
     movie = next(c for c in movie_spec.classes if c.name == "Movie")
     v = emit_resolved_view(movie_spec, movie)
-    # movie_spec binds imdb with accuracy 0.85
-    assert "b.source_name = 'imdb'" in v
-    assert "0.85" in v
+    # Resolver now reads accuracy from a runtime table via LEFT JOIN,
+    # not from inlined CASE-WHEN literals. The class_name filter scopes
+    # to the per-class accuracy row.
+    assert "LEFT JOIN knot_data.source_accuracy a" in v
+    assert "a.source_name = b.source_name" in v
+    assert "a.class_name = 'Movie'" in v
+    assert "COALESCE(a.accuracy, 0) DESC" in v
+    # Accuracy literals are NOT baked into the view anymore.
+    assert "0.85" not in v
 
 
-def test_resolved_view_multi_source_accuracy_case():
+def test_resolved_view_no_inline_case_when():
+    """The pre-trust-table inline CASE WHEN shape is gone — refactor
+    moved accuracy values into source_accuracy at runtime."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
@@ -42,10 +50,9 @@ def test_resolved_view_multi_source_accuracy_case():
     spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
     spec.bind(tmdb, movie, identifier=movie["canonical_id"], accuracy=0.7)
     v = emit_resolved_view(spec, movie)
-    assert "WHEN b.source_name = 'imdb' THEN 0.85" in v
-    assert "WHEN b.source_name = 'tmdb' THEN 0.7" in v
-    # Unknown sources fall to 0 — tie-break still deterministic.
-    assert "ELSE 0" in v
+    assert "WHEN b.source_name" not in v
+    assert "LEFT JOIN" in v
+    assert "COALESCE(a.accuracy, 0)" in v
 
 
 def test_resolved_view_one_row_per_canonical_id(movie_spec):
@@ -104,15 +111,16 @@ def test_resolved_view_rejects_abstract_class():
         emit_resolved_view(spec, title)
 
 
-def test_resolved_view_no_bindings_yields_zero_accuracy_case():
-    # Class with NO source bindings — accuracy CASE has no WHEN branches.
+def test_resolved_view_unbound_sources_fall_to_zero_via_coalesce():
+    # Sources not present in source_accuracy LEFT JOIN to NULL; the
+    # COALESCE collapses them to 0 and the tie-break loses against any
+    # source that DOES have a row.
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     movie.slot("year", Primitive.INTEGER)
     v = emit_resolved_view(spec, movie)
-    # With no bindings the CASE collapses to literal 0::double precision.
-    assert "0::double precision" in v
+    assert "COALESCE(a.accuracy, 0)" in v
     sqlglot.parse_one(v, dialect="postgres")
 
 

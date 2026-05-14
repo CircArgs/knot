@@ -23,11 +23,13 @@ from knot.compile.constraints import emit_validation, emit_validation_union
 from knot.compile.data_io import BatchWrite, ClassWrites, emit_batch_write
 from knot.compile.ddl import emit_ddl
 from knot.compile.resolver import emit_resolved_view, emit_resolved_views
+from knot.compile.trust import emit_trust_seed
 
 __all__ = [
     "emit_ddl",
     "emit_resolved_view",
     "emit_resolved_views",
+    "emit_trust_seed",
     "emit_validation",
     "emit_validation_union",
     "ClassWrites",
