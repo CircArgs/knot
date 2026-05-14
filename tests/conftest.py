@@ -2,7 +2,7 @@
 
 import pytest
 
-from knot import Array, Primitive, Spec
+from knot import Array, Primitive, SourceMap, Spec
 
 
 @pytest.fixture
@@ -10,7 +10,9 @@ def movie_spec() -> Spec:
     """The canonical Movie / Title / Person / Credit / DirectedMovie spec
     used across tests. Exercises: is_a inheritance, abstract classes,
     Array typed types, ClassRef FKs, virtual classes, constraints,
-    source bindings + per-slot mappings + accuracy."""
+    source bindings + per-slot mappings + accuracy.
+
+    Bodies authored through the semantic builder (no raw SQL)."""
     spec = Spec(id="movies", version="0.1")
 
     title = spec.add_class("Title", kind="abstract", description="title hierarchy root")
@@ -35,20 +37,19 @@ def movie_spec() -> Spec:
     spec.add_virtual_class(
         "DirectedMovie",
         base=movie,
-        where=(
-            "EXISTS (SELECT 1 FROM Credit "
-            "WHERE Credit.movie = Movie.canonical_id "
-            "AND Credit.role = 'director')"
-        ),
+        where=movie.has_any(credit, role="director"),
     )
 
-    spec.add_constraint("year_sane", primary=movie, body="year >= 1888")
+    spec.add_constraint("year_sane", primary=movie, body=movie.col.year >= 1888)
 
     imdb = spec.add_source("imdb")
     binding = spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
     binding.map(
-        year="release_year",
-        runtime_minutes="(regexp_match(runtime, '[0-9]+'))[1]::int",
+        year=SourceMap(uses=("release_year",), sql="release_year"),
+        runtime_minutes=SourceMap(
+            uses=("runtime",),
+            sql="(regexp_match(runtime, '[0-9]+'))[1]::int",
+        ),
     )
 
     return spec

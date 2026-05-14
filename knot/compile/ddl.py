@@ -200,11 +200,15 @@ def _emit_table(cls: OntologyClass, *, schema: str, if_not_exists: bool) -> str:
 
 def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
     parent = vc.is_a.name.lower()
+    # VirtualClass.definition is an Expr (from knot.expr). The view
+    # selects from the *canonical* parent table, so refs in the
+    # predicate render with no resolved-suffix.
+    body_sql = vc.definition.to_sql(schema=schema, target_suffix="")
     return (
         f"{_create_view(if_not_exists=if_not_exists)} "
         f"{schema}.{vc.name.lower()} AS\n"
         f"SELECT * FROM {schema}.{parent}\n"
-        f"WHERE {vc.definition};"
+        f"WHERE {body_sql};"
     )
 
 

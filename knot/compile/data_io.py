@@ -34,9 +34,6 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-import sqlglot
-from sqlglot import expressions as exp
-
 from knot.compile.constraints import emit_validation
 from knot.spec import (
     Array,
@@ -103,15 +100,6 @@ def _sql_literal(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
-def _extract_referenced_columns(sql_expr: str) -> set[str]:
-    """Bare column names referenced in a SQL expression."""
-    try:
-        tree = sqlglot.parse_one(sql_expr, dialect="postgres")
-    except sqlglot.errors.ParseError:
-        return set()
-    return {col.name for col in tree.find_all(exp.Column) if not col.table}
-
-
 def _jsonb_cast(t: TypeExpression) -> str:
     """Return a postgres cast suffix that pulls a typed value out of a
     jsonb-element row. Handles primitive, array, and class-ref slots."""
@@ -160,18 +148,18 @@ def _emit_raw_subquery(
 ) -> tuple[str, list[str]]:
     """Build the ``FROM (...) AS raw`` subquery for a mapped binding.
 
-    Returns the SQL and the list of raw field names the host must
-    populate in each row dict. Field names = identifier slot,
-    ``source_identifier``, plus every bare column referenced by any
-    mapping expression."""
+    Returns the SQL and the ordered list of raw field names the host
+    must populate in each row dict. Field names = identifier slot,
+    ``source_identifier``, plus every raw field declared in any
+    mapping's ``SourceMap.uses``."""
     ident = binding.class_.identifier_slot()
     raw_fields: list[str] = [ident.name, "source_identifier"]
     seen = set(raw_fields)
-    for expr in binding.mappings.values():
-        for col in sorted(_extract_referenced_columns(expr)):
-            if col not in seen:
-                raw_fields.append(col)
-                seen.add(col)
+    for source_map in binding.mappings.values():
+        for raw_field in source_map.uses:
+            if raw_field not in seen:
+                raw_fields.append(raw_field)
+                seen.add(raw_field)
 
     # The raw subquery extracts each raw field as text; mapping
     # expressions cast where they care to. The identifier and
@@ -215,7 +203,7 @@ def _emit_class_insert(
             if slot.name == ident.name:
                 select_lines.append(f"    raw.{ident.name}")
             elif slot.name in cw.binding.mappings:
-                select_lines.append(f"    {cw.binding.mappings[slot.name]}")
+                select_lines.append(f"    {cw.binding.mappings[slot.name].sql}")
             else:
                 select_lines.append("    NULL")
         return (

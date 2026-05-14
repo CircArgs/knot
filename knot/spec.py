@@ -1,8 +1,8 @@
 """knot — spec builder.
 
-Single-file dataclass-based spec construction. SQL strings everywhere SQL
-appears (``Constraint.body``, ``VirtualClass.definition``, per-slot SQL
-in ``SourceBinding.mappings``).
+Single-file dataclass-based spec construction. Bodies and view
+predicates are authored through the semantic builder (``knot.expr``);
+no raw SQL strings cross knot's user surface.
 
 The type system is structural — a ``TypeExpression`` is one of:
 
@@ -23,6 +23,10 @@ Validation happens at two levels:
   - Cross-entity: ``Spec.validate()`` returns a list of well-formedness
     errors (orphan references, missing identifier slots, duplicate
     names, etc.). Empty list = valid.
+
+Body validation (typos in slot references) is caught at construction
+time by the builder: ``movie.col.nonexistent`` raises ``KeyError``
+before the expression tree is built. No post-hoc SQL parsing required.
 """
 
 from __future__ import annotations
@@ -30,6 +34,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+from knot.expr import CountRel, Exists, Expr, Ref
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +160,34 @@ class Slot:
 
 
 # ---------------------------------------------------------------------------
+# Builder helper — col.<slot_name> accessor for spec-relative slot refs
+# ---------------------------------------------------------------------------
+
+
+class _ColAccess:
+    """``cls.col.year`` returns a ``Ref`` if ``year`` is a slot on
+    ``cls`` (walking is_a + mixins). Typos raise ``KeyError``."""
+
+    __slots__ = ("_cls",)
+
+    def __init__(self, cls: OntologyClass):
+        object.__setattr__(self, "_cls", cls)
+
+    def __getattr__(self, name: str) -> Ref:
+        # Guard pydantic / repr internals.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        cls = object.__getattribute__(self, "_cls")
+        cls.get_slot(name)  # raises KeyError if absent
+        return Ref(class_name=cls.name, slot_name=name)
+
+    def __getitem__(self, name: str) -> Ref:
+        cls = object.__getattribute__(self, "_cls")
+        cls.get_slot(name)
+        return Ref(class_name=cls.name, slot_name=name)
+
+
+# ---------------------------------------------------------------------------
 # Classes
 # ---------------------------------------------------------------------------
 
@@ -268,22 +302,160 @@ class OntologyClass:
                 out.append(sl)
         return out
 
+    # ------------------------------------------------------------------
+    # Builder methods — produce Expr objects for use in constraint
+    # bodies / VirtualClass predicates.
+    # ------------------------------------------------------------------
+
+    @property
+    def col(self) -> _ColAccess:
+        """``movie.col.year`` → ``Ref(class_name='Movie', slot_name='year')``.
+
+        ``movie.col[name]`` is the long form, useful for dynamic names.
+        Either form raises ``KeyError`` on construction if the slot
+        doesn't exist (including through is_a / mixin inheritance)."""
+        return _ColAccess(self)
+
+    def has_any(
+        self,
+        other: OntologyClass,
+        *,
+        where: Expr | None = None,
+        via: str | None = None,
+        **slot_eq: Any,
+    ) -> Exists:
+        """∃ row in ``other`` linked back to ``self`` via an FK on
+        ``other``, optionally constrained by per-slot equality kwargs
+        and an additional ``where`` predicate.
+
+        The back-pointing FK is inferred from ``other.effective_slots()``
+        — exactly one slot must be a ``ClassRef`` to ``self``. If
+        multiple FKs match, pass ``via=<fk_slot_name>`` to disambiguate.
+        """
+        fk_slot = _infer_back_fk(other, target=self, via=via)
+        ident = self.identifier_slot()
+        return Exists(
+            other_class_name=other.name,
+            fk_slot_name=fk_slot.name,
+            primary_class_name=self.name,
+            primary_identifier=ident.name,
+            where=_combine_where(other, where, slot_eq),
+            negated=False,
+        )
+
+    def has_none(
+        self,
+        other: OntologyClass,
+        *,
+        where: Expr | None = None,
+        via: str | None = None,
+        **slot_eq: Any,
+    ) -> Exists:
+        """``NOT EXISTS`` form of ``has_any``."""
+        ex = self.has_any(other, where=where, via=via, **slot_eq)
+        return Exists(
+            other_class_name=ex.other_class_name,
+            fk_slot_name=ex.fk_slot_name,
+            primary_class_name=ex.primary_class_name,
+            primary_identifier=ex.primary_identifier,
+            where=ex.where,
+            negated=True,
+        )
+
+    def has_count(
+        self,
+        other: OntologyClass,
+        *,
+        where: Expr | None = None,
+        via: str | None = None,
+        **slot_eq: Any,
+    ) -> CountRel:
+        """``(SELECT COUNT(*) …)`` — value-expression comparable with
+        ``>``/``>=``/``==``/etc.:
+        ``movie.has_count(credit) >= 3``."""
+        fk_slot = _infer_back_fk(other, target=self, via=via)
+        ident = self.identifier_slot()
+        return CountRel(
+            other_class_name=other.name,
+            fk_slot_name=fk_slot.name,
+            primary_class_name=self.name,
+            primary_identifier=ident.name,
+            where=_combine_where(other, where, slot_eq),
+        )
+
+
+def _infer_back_fk(
+    other: OntologyClass,
+    *,
+    target: OntologyClass,
+    via: str | None,
+) -> Slot:
+    """Find the slot on ``other`` whose ``type`` is a ``ClassRef`` to
+    ``target``. If ``via`` is given, require that specific slot."""
+    candidates = [
+        sl for sl in other.effective_slots()
+        if isinstance(sl.type, ClassRef) and sl.type.target is target
+    ]
+    if via is not None:
+        chosen = [sl for sl in candidates if sl.name == via]
+        if not chosen:
+            raise ValueError(
+                f"{other.name}.{via} is not a FK to {target.name!r}"
+            )
+        return chosen[0]
+    if not candidates:
+        raise ValueError(
+            f"class {other.name!r} has no FK back to {target.name!r}"
+        )
+    if len(candidates) > 1:
+        names = ", ".join(c.name for c in candidates)
+        raise ValueError(
+            f"class {other.name!r} has multiple FKs to {target.name!r} "
+            f"({names}); disambiguate with via=<slot_name>"
+        )
+    return candidates[0]
+
+
+def _combine_where(
+    other: OntologyClass,
+    where: Expr | None,
+    slot_eq: dict[str, Any],
+) -> Expr | None:
+    """Combine the user's ``where=`` predicate with ``slot=value`` kwargs
+    (validated against ``other``'s effective slots) into a single Expr."""
+    clauses: list[Expr] = []
+    for slot_name, value in slot_eq.items():
+        # Validates the slot exists; raises KeyError on typo.
+        other.get_slot(slot_name)
+        clauses.append(Ref(class_name=other.name, slot_name=slot_name) == value)
+    if where is not None:
+        clauses.append(where)
+    if not clauses:
+        return None
+    combined = clauses[0]
+    for c in clauses[1:]:
+        combined = combined & c
+    return combined
+
 
 @dataclass
 class VirtualClass:
-    """A virtual class — materialized as a SQL view over an is_a parent table,
-    rows selected by the ``definition`` predicate. No table of its own."""
+    """A virtual class — materialized as a SQL view over an is_a parent
+    table, rows selected by the ``definition`` predicate. The definition
+    is an ``Expr`` produced by the semantic builder, not raw SQL."""
 
     name: str
     is_a: OntologyClass
-    definition: str
+    definition: Expr
     description: str | None = None
 
     def __post_init__(self) -> None:
         _check_name("VirtualClass", self.name)
-        if not isinstance(self.definition, str) or not self.definition.strip():
-            raise ValueError(
-                f"VirtualClass {self.name!r} requires a non-empty SQL definition"
+        if not isinstance(self.definition, Expr):
+            raise TypeError(
+                f"VirtualClass {self.name!r}.definition must be an Expr "
+                f"(use the builder: e.g. movie.has_any(credit, ...)); "
+                f"got {type(self.definition).__name__}"
             )
 
 
@@ -294,19 +466,22 @@ class VirtualClass:
 
 @dataclass
 class Constraint:
-    """Cross-row / cross-class invariant — SQL predicate body."""
+    """Cross-row / cross-class invariant — body is an ``Expr`` from
+    the semantic builder, not raw SQL."""
 
     name: str
     primary: OntologyClass
-    body: str
+    body: Expr
     severity: Severity = Severity.ERROR
     message: str | None = None
 
     def __post_init__(self) -> None:
         _check_name("Constraint", self.name)
-        if not isinstance(self.body, str) or not self.body.strip():
-            raise ValueError(
-                f"Constraint {self.name!r} requires a non-empty SQL body"
+        if not isinstance(self.body, Expr):
+            raise TypeError(
+                f"Constraint {self.name!r}.body must be an Expr "
+                f"(use the builder: e.g. movie.col.year >= 1888); "
+                f"got {type(self.body).__name__}"
             )
         if isinstance(self.severity, str):
             try:
@@ -335,20 +510,63 @@ class Source:
 BINDING_PRIOR_STRENGTH: int = 3
 
 
+@dataclass(frozen=True)
+class SourceMap:
+    """Per-slot projection from a raw source row to a class slot value.
+
+    ``uses`` declares the raw source field names the SQL expression
+    references — the batch write emitter plumbs only these fields
+    through. ``sql`` is the postgres expression evaluated server-side,
+    referencing the raw field names by bare identifier.
+
+    For the common case of passing a single raw column through verbatim,
+    use ``SourceMap.passthrough("release_year")`` or pass a bare string
+    to ``binding.map(year="release_year")`` and it coerces.
+    """
+
+    uses: tuple[str, ...]
+    sql: str
+
+    def __post_init__(self) -> None:
+        # Tolerate ``uses=["a", "b"]`` at construction even though the
+        # field's declared type is tuple — coerce here.
+        if not isinstance(self.uses, tuple):
+            object.__setattr__(self, "uses", tuple(self.uses))
+
+    @classmethod
+    def passthrough(cls, raw_field: str) -> SourceMap:
+        """Trivial-case shorthand: ``slot = raw_field`` with no SQL transform."""
+        return cls(uses=(raw_field,), sql=raw_field)
+
+
+def _coerce_source_map(v: Any) -> SourceMap:
+    if isinstance(v, SourceMap):
+        return v
+    if isinstance(v, str):
+        return SourceMap.passthrough(v)
+    raise TypeError(
+        f"SourceBinding.map value must be a SourceMap or str (raw column "
+        f"name shorthand); got {type(v).__name__}"
+    )
+
+
 @dataclass
 class SourceBinding:
-    """(Source, OntologyClass) binding with per-slot SQL projections.
+    """(Source, OntologyClass) binding with per-slot projections.
 
     ``accuracy`` is the spec author's guess at the fraction of past claims
     this source got right (0.0 - 1.0). The resolver derives a Beta prior
     from ``accuracy`` and ``BINDING_PRIOR_STRENGTH``; see ``beta_prior``.
+
+    ``mappings`` maps slot names to ``SourceMap`` records that carry
+    both the raw fields used and the SQL expression evaluated.
     """
 
     source: Source
     class_: OntologyClass
     identifier_slot: Slot
     accuracy: float = 0.67
-    mappings: dict[str, str] = field(default_factory=dict)
+    mappings: dict[str, SourceMap] = field(default_factory=dict)
     description: str | None = None
 
     def __post_init__(self) -> None:
@@ -357,8 +575,11 @@ class SourceBinding:
                 f"SourceBinding accuracy must be in [0, 1]; got {self.accuracy}"
             )
 
-    def map(self, **mappings: str) -> SourceBinding:
-        self.mappings.update(mappings)
+    def map(self, **mappings: Any) -> SourceBinding:
+        """Add slot mappings. Values may be ``SourceMap`` instances or
+        bare strings (interpreted as the raw column name to pass through)."""
+        for slot_name, value in mappings.items():
+            self.mappings[slot_name] = _coerce_source_map(value)
         return self
 
     @property
@@ -417,7 +638,7 @@ class Spec:
         name: str,
         *,
         base: OntologyClass,
-        where: str,
+        where: Expr,
         description: str | None = None,
     ) -> VirtualClass:
         self._check_unique_class_name(name)
@@ -435,7 +656,7 @@ class Spec:
         name: str,
         *,
         primary: OntologyClass,
-        body: str,
+        body: Expr,
         severity: Severity | str = Severity.ERROR,
         message: str | None = None,
     ) -> Constraint:
@@ -506,7 +727,9 @@ class Spec:
 
         Returns a list of error messages; empty list means the spec is
         valid. Local entity checks (name shape, accuracy bounds, enum
-        values) have already run in each entity's ``__post_init__``.
+        values, body Expr typing) have already run in each entity's
+        ``__post_init__``. Body slot-ref typos are caught at expression
+        construction time by ``movie.col.<slot>`` raising ``KeyError``.
         """
         errs: list[str] = []
         classes_by_name: dict[str, OntologyClass | VirtualClass] = {}
@@ -636,9 +859,6 @@ class Spec:
                     f"class {c.name!r} participates in an is_a / mixin cycle"
                 )
 
-        # Constraint body class-qualified slot reference checking
-        _validate_body_refs(self, errs)
-
         return errs
 
     def validate_strict(self) -> None:
@@ -683,49 +903,6 @@ def _participates_in_cycle(cls: OntologyClass) -> bool:
     return False
 
 
-def _validate_body_refs(spec: Spec, errs: list[str]) -> None:
-    """For every ``Constraint.body`` and ``VirtualClass.definition``,
-    parse the SQL and check that any class-qualified column reference
-    (``Class.slot``) resolves to a real slot on that class.
-
-    Table references to unknown names are NOT flagged — they may be
-    external tables. Bare column references (``year`` not ``Movie.year``)
-    are also not flagged, since false positives from subqueries /
-    aliases / function arguments dominate.
-
-    Reports body parse failures as a separate error class.
-    """
-    import sqlglot
-    from sqlglot import expressions as exp
-
-    classes_by_name = {
-        c.name: c for c in spec.classes if isinstance(c, OntologyClass)
-    }
-
-    def _check(label: str, body: str) -> None:
-        try:
-            tree = sqlglot.parse_one(body, dialect="postgres")
-        except Exception as e:
-            errs.append(f"{label}: body fails to parse — {e}")
-            return
-        for col in tree.find_all(exp.Column):
-            tbl = col.table
-            if tbl and tbl in classes_by_name:
-                target = classes_by_name[tbl]
-                slot_names = {s.name for s in target.effective_slots()}
-                if col.name not in slot_names:
-                    errs.append(
-                        f"{label}: references {tbl}.{col.name} but "
-                        f"{tbl!r} has no slot {col.name!r}"
-                    )
-
-    for c in spec.constraints:
-        _check(f"constraint {c.name!r}", c.body)
-    for c in spec.classes:
-        if isinstance(c, VirtualClass):
-            _check(f"virtual class {c.name!r}", c.definition)
-
-
 __all__ = [
     "Primitive",
     "ClassKind",
@@ -739,6 +916,7 @@ __all__ = [
     "Constraint",
     "Source",
     "SourceBinding",
+    "SourceMap",
     "BINDING_PRIOR_STRENGTH",
     "Spec",
     "SpecError",

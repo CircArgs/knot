@@ -203,17 +203,22 @@ def test_roundtrip_preserves_virtual_class_with_is_a(movie_spec):
     dm = next(c for c in restored.classes if c.name == "DirectedMovie")
     movie = next(c for c in restored.classes if c.name == "Movie")
     assert dm.is_a is movie
-    assert "director" in dm.definition
+    # Definition is an Expr; rendered SQL should still mention "director"
+    assert "director" in dm.definition.to_sql(schema="knot_data", target_suffix="")
 
 
 def test_roundtrip_preserves_binding_accuracy_and_mappings(movie_spec):
+    from knot import SourceMap
+
     rows = _simulate_inserts(save_spec(movie_spec))
     restored = load_spec(rows)
     b = restored.source_bindings[0]
     assert b.accuracy == 0.85
     assert b.mappings == {
-        "year": "release_year",
-        "runtime_minutes": "(regexp_match(runtime, '[0-9]+'))[1]::int",
+        "year": SourceMap(uses=("release_year",), sql="release_year"),
+        "runtime_minutes": SourceMap(
+            uses=("runtime",), sql="(regexp_match(runtime, '[0-9]+'))[1]::int"
+        ),
     }
 
 

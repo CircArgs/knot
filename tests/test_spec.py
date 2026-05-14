@@ -7,6 +7,7 @@ from knot import (
     ClassKind,
     ClassRef,
     Constraint,
+    Expr,
     OntologyClass,
     Primitive,
     Severity,
@@ -16,6 +17,8 @@ from knot import (
     Spec,
     SpecError,
     VirtualClass,
+    lit,
+    raw,
 )
 
 
@@ -49,28 +52,39 @@ def test_ontology_class_string_kind_coerces_to_enum():
     assert cls.kind is ClassKind.ABSTRACT
 
 
-def test_constraint_rejects_empty_body():
+def test_constraint_rejects_non_expr_body():
     cls = OntologyClass(name="Movie")
-    with pytest.raises(ValueError, match="non-empty"):
-        Constraint(name="c", primary=cls, body="")
+    with pytest.raises(TypeError, match="must be an Expr"):
+        Constraint(name="c", primary=cls, body="year >= 1888")
 
 
 def test_constraint_rejects_bad_severity():
     cls = OntologyClass(name="Movie")
+    cls.slot("canonical_id", Primitive.TEXT, identifier=True)
+    cls.slot("year", Primitive.INTEGER)
     with pytest.raises(ValueError, match="severity"):
-        Constraint(name="c", primary=cls, body="x", severity="loud")
+        Constraint(
+            name="c",
+            primary=cls,
+            body=cls.col.year >= 1888,
+            severity="loud",
+        )
 
 
 def test_constraint_severity_default_is_enum():
     cls = OntologyClass(name="Movie")
-    c = Constraint(name="c", primary=cls, body="x")
+    cls.slot("canonical_id", Primitive.TEXT, identifier=True)
+    cls.slot("year", Primitive.INTEGER)
+    c = Constraint(name="c", primary=cls, body=cls.col.year >= 1888)
     assert c.severity is Severity.ERROR
 
 
-def test_virtual_class_rejects_empty_definition():
+def test_virtual_class_rejects_non_expr_definition():
     parent = OntologyClass(name="Movie")
-    with pytest.raises(ValueError, match="non-empty"):
-        VirtualClass(name="DirectedMovie", is_a=parent, definition="")
+    with pytest.raises(TypeError, match="must be an Expr"):
+        VirtualClass(
+            name="DirectedMovie", is_a=parent, definition="raw sql string"
+        )
 
 
 def test_source_binding_rejects_accuracy_out_of_range():
@@ -123,7 +137,7 @@ def test_duplicate_source_name_rejected():
 def test_duplicate_constraint_name_rejected(movie_spec):
     movie = next(c for c in movie_spec.classes if c.name == "Movie")
     with pytest.raises(ValueError, match="already has a constraint"):
-        movie_spec.add_constraint("year_sane", primary=movie, body="year > 0")
+        movie_spec.add_constraint("year_sane", primary=movie, body=movie.col.year > 0)
 
 
 def test_duplicate_binding_pair_rejected(movie_spec):
@@ -199,7 +213,8 @@ def test_validate_orphan_constraint_primary():
     spec = Spec(id="m", version="0.1")
     spec.add_class("Movie").slot("canonical_id", Primitive.TEXT, identifier=True)
     ghost = OntologyClass(name="Ghost")
-    spec.add_constraint("c", primary=ghost, body="x = 1")
+    # Build a body that doesn't need ghost slots — using a Raw escape.
+    spec.add_constraint("c", primary=ghost, body=raw("1 = 1"))
     errs = spec.validate()
     assert any("Ghost" in e for e in errs)
 
@@ -243,7 +258,11 @@ def test_validate_binding_to_abstract():
 
 
 def test_validate_mapping_slot_not_on_class(movie_spec):
-    movie_spec.source_bindings[0].mappings["nonexistent_slot"] = "raw_field"
+    from knot import SourceMap
+
+    movie_spec.source_bindings[0].mappings["nonexistent_slot"] = SourceMap.passthrough(
+        "raw_field"
+    )
     errs = movie_spec.validate()
     assert any("nonexistent_slot" in e for e in errs)
 
@@ -255,7 +274,7 @@ def test_validate_virtual_class_is_a_missing():
     # virtual references a class that's NOT in spec
     ghost = OntologyClass(name="Ghost")
     ghost.slot("canonical_id", Primitive.TEXT, identifier=True)
-    spec.add_virtual_class("Variant", base=ghost, where="x = 1")
+    spec.add_virtual_class("Variant", base=ghost, where=raw("1 = 1"))
     errs = spec.validate()
     assert any("virtual" in e and "Ghost" in e for e in errs)
 
@@ -263,7 +282,9 @@ def test_validate_virtual_class_is_a_missing():
 def test_validate_strict_raises_with_all_errors():
     spec = Spec(id="m", version="0.1")
     spec.add_class("Movie").slot("name", Primitive.TEXT)
-    spec.add_constraint("c", primary=OntologyClass(name="Ghost"), body="x")
+    spec.add_constraint(
+        "c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1")
+    )
     with pytest.raises(SpecError) as ei:
         spec.validate_strict()
     msg = str(ei.value)
@@ -316,85 +337,66 @@ def test_validate_no_false_positive_for_chain(movie_spec):
 
 
 # ---------------------------------------------------------------------------
-# Constraint body class-qualified slot reference checks
+# Construction-time slot-ref validation (catches typos before validate())
 # ---------------------------------------------------------------------------
 
 
-def test_validate_body_ref_rejects_unknown_slot():
+def test_col_access_rejects_unknown_slot_at_construction():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     movie.slot("year", Primitive.INTEGER)
-    spec.add_constraint("bad", primary=movie, body="Movie.nonexistent_slot >= 1888")
-    errs = spec.validate()
-    assert any("nonexistent_slot" in e for e in errs)
+    # Builder catches the typo at the point of construction — no
+    # validation pass needed, no SQL parsing involved.
+    with pytest.raises(KeyError, match="nonexistent_slot"):
+        movie.col.nonexistent_slot
 
 
-def test_validate_body_ref_accepts_existing_slot(movie_spec):
-    # Default movie_spec has constraint `year_sane: year >= 1888` (bare col,
-    # not class-qualified) and a VirtualClass with Class.slot refs that
-    # are all valid. Should validate clean.
-    assert movie_spec.validate() == []
-
-
-def test_validate_body_ref_accepts_inherited_slot():
+def test_col_access_resolves_inherited_slot():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
     title.slot("canonical_id", Primitive.TEXT, identifier=True)
     title.slot("name", Primitive.TEXT, required=True)
     movie = spec.add_class("Movie", is_a=title)
-    # Movie.name is inherited; class-qualified ref should resolve via
-    # effective_slots(), not raise.
-    spec.add_constraint("nm", primary=movie, body="Movie.name IS NOT NULL")
-    assert spec.validate() == []
+    # `name` is inherited from Title — resolves via effective_slots.
+    ref = movie.col.name
+    assert ref.class_name == "Movie"
+    assert ref.slot_name == "name"
 
 
-def test_validate_body_ref_class_unknown_not_flagged():
-    # `external.something` is not a class in the spec — leave it alone
-    # (might be a postgres builtin / external table).
-    spec = Spec(id="m", version="0.1")
-    movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    spec.add_constraint("ext", primary=movie, body="external.value > 0")
-    errs = spec.validate()
-    assert not any("nonexistent" in e or "no slot" in e for e in errs)
-
-
-def test_validate_body_alias_refs_left_alone():
+def test_has_any_unknown_slot_kwarg_raises():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", Primitive.TEXT, identifier=True)
     credit.fk("movie", to=movie)
-    spec.add_constraint(
-        "via_alias",
-        primary=movie,
-        body=(
-            "EXISTS (SELECT 1 FROM Credit c WHERE c.movie = Movie.canonical_id)"
-        ),
-    )
-    # c.movie is an alias — should NOT be checked against the spec.
-    errs = spec.validate()
-    assert errs == []
+    # `role` doesn't exist on Credit — caught at expression build.
+    with pytest.raises(KeyError, match="role"):
+        movie.has_any(credit, role="director")
 
 
-def test_validate_body_parse_failure_reported():
+def test_has_any_no_fk_back_raises():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    spec.add_constraint("bad_sql", primary=movie, body="SELECT (")  # malformed
-    errs = spec.validate()
-    assert any("fails to parse" in e for e in errs)
+    other = spec.add_class("Other")
+    other.slot("canonical_id", Primitive.TEXT, identifier=True)
+    # Other has no FK back to Movie.
+    with pytest.raises(ValueError, match="no FK back"):
+        movie.has_any(other)
 
 
-def test_validate_virtual_class_definition_ref_rejected():
+def test_has_any_ambiguous_fk_requires_via():
     spec = Spec(id="m", version="0.1")
-    movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
-    spec.add_virtual_class(
-        "OldMovie", base=movie, where="Movie.nonexistent > 0"
-    )
-    errs = spec.validate()
-    assert any("nonexistent" in e and "virtual" in e for e in errs)
+    person = spec.add_class("Person")
+    person.slot("canonical_id", Primitive.TEXT, identifier=True)
+    membership = spec.add_class("Membership")
+    membership.slot("canonical_id", Primitive.TEXT, identifier=True)
+    membership.fk("user", to=person)
+    membership.fk("friend", to=person)
+    with pytest.raises(ValueError, match="multiple FKs"):
+        person.has_any(membership)
+    # Explicit via= resolves the ambiguity.
+    via = person.has_any(membership, via="user")
+    assert via.fk_slot_name == "user"

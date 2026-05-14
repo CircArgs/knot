@@ -3,16 +3,18 @@ name = "knot"
 version = "0.1.0"
 description = "knot — reflective ontology compiler (Python prototype)"
 requires-python = ">=3.11"
-dependencies = [
-    # AST parsing + rewriting of SQL strings inside Constraint.body,
-    # VirtualClass.definition, and SourceBinding.mappings.
-    "sqlglot>=25.0",
-]
+# Zero runtime dependencies. The semantic builder (knot.expr) and
+# structured SourceMap shape mean knot no longer parses any user-input
+# SQL — everything that needed sqlglot at runtime has been replaced by
+# typed Python construction. sqlglot stays in [dev] for tests that
+# parse emitted SQL to assert it's well-formed postgres.
+dependencies = []
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
     "ruff>=0.4",
+    "sqlglot>=25.0",
 ]
 notebook = [
     "marimo>=0.23",

@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from typing import Any, Mapping, Sequence
 
+from knot.expr import Expr
 from knot.spec import (
     Array,
     ClassRef,
@@ -28,6 +29,7 @@ from knot.spec import (
     Slot,
     Source,
     SourceBinding,
+    SourceMap,
     Spec,
     TypeExpression,
     VirtualClass,
@@ -142,7 +144,9 @@ def save_spec(
                     )
                 )
 
-    # Virtual classes (reference an OntologyClass via is_a).
+    # Virtual classes (reference an OntologyClass via is_a). The
+    # definition is an Expr — serialized to a JSON string for storage
+    # in the text column.
     for cls in spec.classes:
         if isinstance(cls, VirtualClass):
             out.append(
@@ -155,7 +159,7 @@ def save_spec(
                         sver,
                         cls.name,
                         cls.is_a.name,
-                        cls.definition,
+                        json.dumps(cls.definition.to_json()),
                         cls.description,
                     ],
                 )
@@ -189,14 +193,22 @@ def save_spec(
                 ],
             )
         )
-        for slot_name, sql_expr in b.mappings.items():
+        # Each mapping is a SourceMap (uses + sql). The text
+        # ``sql_expression`` column carries a JSON-serialized
+        # ``{"uses": [...], "sql": "..."}`` envelope so the host's
+        # raw-field declarations round-trip.
+        for slot_name, source_map in b.mappings.items():
+            envelope = json.dumps({
+                "uses": list(source_map.uses),
+                "sql": source_map.sql,
+            })
             out.append(
                 (
                     f"INSERT INTO {s}.source_binding_mappings "
                     f"(spec_id, spec_version, source_name, class_name, slot_name, "
                     f"sql_expression) "
                     f"VALUES (%s, %s, %s, %s, %s, %s);",
-                    [sid, sver, b.source.name, b.class_.name, slot_name, sql_expr],
+                    [sid, sver, b.source.name, b.class_.name, slot_name, envelope],
                 )
             )
 
@@ -211,7 +223,7 @@ def save_spec(
                     sver,
                     c.name,
                     c.primary.name,
-                    c.body,
+                    json.dumps(c.body.to_json()),
                     c.severity.value,
                     c.message,
                 ],
@@ -335,11 +347,12 @@ def load_spec(
         classes_by_name[r["class_name"]].slots.append(sl)
 
     # Virtual classes — must come after concrete classes are populated.
+    # `definition` is stored as a JSON-serialized Expr tree.
     for r in rows.get("virtual_classes", []):
         vc = VirtualClass(
             name=r["name"],
             is_a=classes_by_name[r["is_a"]],
-            definition=r["definition"],
+            definition=Expr.from_json(_load_json(r["definition"])),
             description=r.get("description"),
         )
         spec.classes.append(vc)
@@ -363,21 +376,35 @@ def load_spec(
         )
         binding_by_key[(r["source_name"], r["class_name"])] = b
         spec.source_bindings.append(b)
+    # Mappings are stored as JSON envelopes {"uses": [...], "sql": "..."}
+    # in the sql_expression text column. Round-trip back into SourceMap.
     for r in rows.get("source_binding_mappings", []):
         b = binding_by_key[(r["source_name"], r["class_name"])]
-        b.mappings[r["slot_name"]] = r["sql_expression"]
+        env = _load_json(r["sql_expression"])
+        b.mappings[r["slot_name"]] = SourceMap(
+            uses=tuple(env["uses"]), sql=env["sql"]
+        )
 
+    # Constraint bodies are stored as JSON-serialized Expr trees.
     for r in rows.get("constraints", []):
         c = Constraint(
             name=r["name"],
             primary=classes_by_name[r["primary_class"]],
-            body=r["body"],
+            body=Expr.from_json(_load_json(r["body"])),
             severity=r.get("severity", "error"),
             message=r.get("message"),
         )
         spec.constraints.append(c)
 
     return spec
+
+
+def _load_json(value: Any) -> Any:
+    """Decode a JSON value that may already be a dict (from a jsonb
+    driver) or still a string (from a text column)."""
+    if isinstance(value, str):
+        return json.loads(value)
+    return value
 
 
 __all__ = [

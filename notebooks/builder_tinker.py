@@ -24,13 +24,13 @@ def _(mo):
 
 @app.cell
 def _():
-    from knot import Array, Primitive, Spec, VirtualClass
+    from knot import Array, Primitive, SourceMap, Spec, VirtualClass
 
-    return Array, Primitive, Spec, VirtualClass
+    return Array, Primitive, SourceMap, Spec, VirtualClass
 
 
 @app.cell
-def _(Array, Primitive, Spec):
+def _(Array, Primitive, SourceMap, Spec):
     spec = Spec(id="movies", version="0.1")
 
     title = spec.add_class("Title", kind="abstract")
@@ -55,17 +55,13 @@ def _(Array, Primitive, Spec):
     spec.add_virtual_class(
         "DirectedMovie",
         base=movie,
-        where=(
-            "EXISTS (SELECT 1 FROM credit "
-            "WHERE credit.movie = movie.canonical_id "
-            "AND credit.role = 'director')"
-        ),
+        where=movie.has_any(credit, role="director"),
     )
 
     spec.add_constraint(
         "year_sane",
         primary=movie,
-        body="year >= 1888",
+        body=movie.col.year >= 1888,
     )
 
     imdb = spec.add_source("imdb")
@@ -76,8 +72,11 @@ def _(Array, Primitive, Spec):
         accuracy=0.85,
     )
     binding.map(
-        year="release_year",
-        runtime_minutes="(regexp_match(runtime, '[0-9]+'))[1]::int",
+        year=SourceMap(uses=("release_year",), sql="release_year"),
+        runtime_minutes=SourceMap(
+            uses=("runtime",),
+            sql="(regexp_match(runtime, '[0-9]+'))[1]::int",
+        ),
     )
     return movie, spec
 

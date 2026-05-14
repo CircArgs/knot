@@ -1,4 +1,8 @@
-"""knot.compile.constraints — validation SELECT emission + AST rewriting."""
+"""knot.compile.constraints — validation SELECT emission via the
+semantic builder. Class-qualified slot references are produced by the
+builder directly (e.g. ``movie.col.year`` → ``Ref("Movie", "year")``);
+``Ref.to_sql`` does the schema/target-suffix qualification.
+"""
 
 import sqlglot
 
@@ -14,7 +18,6 @@ def test_uniform_column_shape(movie_spec):
 
 
 def test_message_null_when_unset(movie_spec):
-    # 'year_sane' has no message
     rewrites = dict(emit_validation(movie_spec))
     assert "NULL AS message" in rewrites["year_sane"]
 
@@ -25,7 +28,10 @@ def test_message_literal_when_set():
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     movie.slot("year", Primitive.INTEGER)
     spec.add_constraint(
-        "y", primary=movie, body="year > 0", message="must be positive"
+        "y",
+        primary=movie,
+        body=movie.col.year > 0,
+        message="must be positive",
     )
     rewrites = dict(emit_validation(spec))
     assert "'must be positive' AS message" in rewrites["y"]
@@ -37,18 +43,24 @@ def test_apostrophe_in_message_escaped():
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
     movie.slot("year", Primitive.INTEGER)
     spec.add_constraint(
-        "y", primary=movie, body="year > 0", message="director's pick"
+        "y",
+        primary=movie,
+        body=movie.col.year > 0,
+        message="director's pick",
     )
     rewrites = dict(emit_validation(spec))
     assert "'director''s pick'" in rewrites["y"]
 
 
 def test_bare_column_unchanged(movie_spec):
+    # year_sane is built as `movie.col.year >= 1888`, which renders with
+    # the full schema-qualified path; "year >= 1888" appears as a
+    # substring of the qualified form.
     rewrites = dict(emit_validation(movie_spec))
     assert "year >= 1888" in rewrites["year_sane"]
 
 
-def test_class_table_ref_qualified():
+def test_class_ref_renders_qualified():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
@@ -59,21 +71,18 @@ def test_class_table_ref_qualified():
     spec.add_constraint(
         "has_director",
         primary=movie,
-        body=(
-            "EXISTS (SELECT 1 FROM Credit "
-            "WHERE Credit.movie = Movie.canonical_id "
-            "AND Credit.role = 'director')"
-        ),
+        body=movie.has_any(credit, role="director"),
     )
+
+    # Default target_suffix='_resolved' — refs go to the resolved views.
     rewrites = dict(emit_validation(spec))
     sql = rewrites["has_director"]
-    # Default target_suffix='_resolved' — refs go to the resolved views.
     assert "knot_data.credit_resolved" in sql
     assert "knot_data.credit_resolved.movie" in sql
     assert "knot_data.credit_resolved.role" in sql
     assert "knot_data.movie_resolved.canonical_id" in sql
 
-    # And with target_suffix='' — canonical-table targeting.
+    # target_suffix='' — canonical-table targeting.
     rewrites_canonical = dict(emit_validation(spec, target_suffix=""))
     sql_c = rewrites_canonical["has_director"]
     assert "knot_data.credit.movie" in sql_c
@@ -81,7 +90,7 @@ def test_class_table_ref_qualified():
     assert "_resolved" not in sql_c
 
 
-def test_alias_preserved():
+def test_has_count_in_predicate():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", Primitive.TEXT, identifier=True)
@@ -89,27 +98,38 @@ def test_alias_preserved():
     credit.slot("canonical_id", Primitive.TEXT, identifier=True)
     credit.fk("movie", to=movie)
     spec.add_constraint(
-        "has_some_credit",
+        "min_three_credits",
         primary=movie,
-        body=(
-            "(SELECT COUNT(*) FROM Credit c "
-            "WHERE c.movie = Movie.canonical_id) >= 1"
-        ),
+        body=movie.has_count(credit) >= 3,
     )
     rewrites = dict(emit_validation(spec))
-    sql = rewrites["has_some_credit"]
-    # Table itself gets qualified...
-    assert "knot_data.credit" in sql
-    # ...but the alias 'c' is left alone; references through it survive.
-    assert "c.movie" in sql.lower()
+    sql = rewrites["min_three_credits"]
+    assert "SELECT COUNT(*) FROM knot_data.credit_resolved" in sql
+    assert ") >= 3" in sql
+
+
+def test_boolean_composition():
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("year", Primitive.INTEGER)
+    movie.slot("runtime", Primitive.INTEGER)
+    spec.add_constraint(
+        "year_and_runtime",
+        primary=movie,
+        body=(movie.col.year >= 1888) & (movie.col.runtime > 0),
+    )
+    rewrites = dict(emit_validation(spec))
+    sql = rewrites["year_and_runtime"]
+    assert " AND " in sql
+    assert "year >= 1888" in sql
+    assert "runtime > 0" in sql
 
 
 def test_emit_validation_union_for_non_empty_spec(movie_spec):
     u = emit_validation_union(movie_spec)
     assert u is not None
     sqlglot.parse_one(u, dialect="postgres")
-    assert "UNION ALL" not in u.split("UNION ALL", 1)[0]  # at least one UNION ALL boundary
-    # Actually: if there's only one constraint there's no UNION ALL. That's fine.
 
 
 def test_emit_validation_union_empty_spec():
