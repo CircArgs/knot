@@ -35,6 +35,12 @@ dependencies {
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+
+    // Postgres JDBC driver for integration tests that run against the
+    // compose-managed instance (KNOT_PG_URL, default jdbc:postgresql://
+    // localhost:5433/knot). Compile-time code never touches a driver —
+    // the compiler emits SQL strings — so this is testRuntimeOnly.
+    testRuntimeOnly("org.postgresql:postgresql:42.7.4")
 }
 
 tasks.test {

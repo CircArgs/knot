@@ -1,0 +1,35 @@
+# knot — local development + integration-test substrate.
+#
+# Spins up a postgres 16 instance bound to 5433 (host port 5432 is
+# already in use on this box). The Java integration test suite reads
+# its JDBC URL from KNOT_PG_URL with this default; override the env
+# var if you want a different target.
+#
+# Bring up:    docker compose up -d
+# Tear down:   docker compose down            (keeps the volume)
+# Wipe state:  docker compose down -v         (drops the volume)
+# Tail logs:   docker compose logs -f postgres
+# Psql in:     docker compose exec postgres psql -U knot -d knot
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: knot-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: knot
+      POSTGRES_PASSWORD: knot
+      POSTGRES_DB: knot
+    ports:
+      - "5433:5432"
+    volumes:
+      - knot_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U knot -d knot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+volumes:
+  knot_pg_data:
