@@ -107,13 +107,61 @@ def _existing_views(query: QueryFn, schema: str) -> set[str]:
     return {r[0] for r in rows}
 
 
+@dataclass(frozen=True, slots=True)
+class _ColInfo:
+    """Type + nullability for a single existing column."""
+
+    pg_type: str  # normalized to match _pg_type's output
+    nullable: bool
+
+
 def _existing_columns(query: QueryFn, schema: str, table: str) -> set[str]:
+    """Names of columns on a table — used where we only care about
+    presence. See ``_existing_column_details`` for full type info."""
+    return set(_existing_column_details(query, schema, table).keys())
+
+
+def _existing_column_details(
+    query: QueryFn,
+    schema: str,
+    table: str,
+) -> dict[str, _ColInfo]:
+    """``{column_name: _ColInfo}`` from ``information_schema.columns``,
+    with postgres types normalized so they compare cleanly against the
+    spec's ``_pg_type`` output (``timestamp with time zone`` →
+    ``timestamptz``, ``ARRAY`` + ``udt_name='_text'`` → ``text[]``,
+    etc.)."""
     rows = query(
-        "SELECT column_name FROM information_schema.columns "
+        "SELECT column_name, data_type, is_nullable, udt_name "
+        "FROM information_schema.columns "
         "WHERE table_schema = %s AND table_name = %s",
         (schema, table),
     )
-    return {r[0] for r in rows}
+    return {
+        r[0]: _ColInfo(
+            pg_type=_normalize_pg_type(r[1], r[3] if len(r) > 3 else None),
+            nullable=(r[2] == "YES"),
+        )
+        for r in rows
+    }
+
+
+_NORMALIZE_DATA_TYPE: dict[str, str] = {
+    "timestamp with time zone": "timestamptz",
+    "timestamp without time zone": "timestamp",
+    "character varying": "text",
+}
+
+
+def _normalize_pg_type(data_type: str, udt_name: str | None) -> str:
+    """Map an ``information_schema.columns.data_type`` to the same
+    string ``_pg_type`` produces. Handles arrays via ``udt_name`` (the
+    underscore-prefixed element type name)."""
+    if data_type == "ARRAY":
+        if udt_name and udt_name.startswith("_"):
+            return _normalize_pg_type(udt_name[1:], None) + "[]"
+        return "?[]"
+    return _NORMALIZE_DATA_TYPE.get(data_type, data_type)
 
 
 def _existing_indexes(query: QueryFn, schema: str, table: str) -> set[str]:
@@ -165,6 +213,7 @@ def diff_against_db(
     resolved_suffix: str = "_resolved",
     trust_table_name: str = "source_accuracy",
     allow_destructive: bool = False,
+    renames: dict[str, dict[str, str]] | None = None,
 ) -> list[MigrationOp]:
     """Walk the spec, compare against the live database via ``query``,
     return ordered migration operations.
@@ -187,8 +236,27 @@ def diff_against_db(
     columns → tables. Add sequence: schema → trust table → canonical
     tables → bindings tables (+ indexes) → ALTER ADD columns → ALTER
     ADD FK constraints → resolved views → virtual views → trust seed.
+
+    ``renames`` (optional) declares explicit ``{class_name: {old_col:
+    new_col}}`` mappings. Renames run BEFORE drops or adds so the rest
+    of the diff sees the post-rename column layout. Renames are emitted
+    as ``ALTER TABLE … RENAME COLUMN`` for both the canonical table and
+    its bindings table; non-destructive.
     """
+    renames = renames or {}
     ops: list[MigrationOp] = []
+
+    # Rename pre-pass — emit renames first so subsequent passes match
+    # what the database will look like after they run.
+    ops.extend(
+        _diff_renames(
+            renames,
+            query,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+        )
+    )
+
     ops.extend(
         _diff_drops(
             spec,
@@ -197,6 +265,7 @@ def diff_against_db(
             bindings_suffix=bindings_suffix,
             resolved_suffix=resolved_suffix,
             trust_table_name=trust_table_name,
+            renames=renames,
         )
     )
 
@@ -236,6 +305,7 @@ def diff_against_db(
                     db_tables=db_tables,
                     schema=schema,
                     bindings_suffix=bindings_suffix,
+                    renames=renames.get(cls.name, {}),
                 )
             )
 
@@ -306,6 +376,74 @@ def diff_against_db(
     return ops
 
 
+def _diff_renames(
+    renames: dict[str, dict[str, str]],
+    query: QueryFn,
+    *,
+    schema: str,
+    bindings_suffix: str,
+) -> list[MigrationOp]:
+    """Emit ``ALTER TABLE … RENAME COLUMN`` for each declared rename.
+
+    Renames are non-destructive; postgres just relabels the column.
+    We emit on both the canonical table and its bindings table when
+    each exists in the database — silently skipping when either is
+    missing so a partially-built schema still works."""
+    if not renames:
+        return []
+    db_tables = _existing_tables(query, schema)
+    ops: list[MigrationOp] = []
+    for class_name, col_map in renames.items():
+        canonical = class_name.lower()
+        bindings = f"{canonical}{bindings_suffix}"
+        for old, new in col_map.items():
+            if canonical in db_tables:
+                existing = _existing_columns(query, schema, canonical)
+                if old in existing and new not in existing:
+                    ops.append(
+                        MigrationOp(
+                            description=(
+                                f"rename_column_{canonical}_{old}_to_{new}"
+                            ),
+                            sql=(
+                                f"ALTER TABLE {schema}.{canonical} "
+                                f"RENAME COLUMN {old} TO {new};"
+                            ),
+                            target="canonical",
+                        )
+                    )
+            if bindings in db_tables:
+                existing = _existing_columns(query, schema, bindings)
+                if old in existing and new not in existing:
+                    ops.append(
+                        MigrationOp(
+                            description=(
+                                f"rename_column_{bindings}_{old}_to_{new}"
+                            ),
+                            sql=(
+                                f"ALTER TABLE {schema}.{bindings} "
+                                f"RENAME COLUMN {old} TO {new};"
+                            ),
+                            target="bindings",
+                        )
+                    )
+    return ops
+
+
+def _apply_rename_translation(
+    cols: dict[str, _ColInfo] | set[str],
+    rename_map: dict[str, str],
+):
+    """Translate column names from the pre-rename DB shape to the
+    post-rename target shape so the rest of the diff sees a consistent
+    world. Works for either dict (column details) or set (names only)."""
+    if isinstance(cols, dict):
+        return {
+            rename_map.get(name, name): info for name, info in cols.items()
+        }
+    return {rename_map.get(c, c) for c in cols}
+
+
 def _diff_drops(
     spec: Spec,
     query: QueryFn,
@@ -314,6 +452,7 @@ def _diff_drops(
     bindings_suffix: str,
     resolved_suffix: str,
     trust_table_name: str,
+    renames: dict[str, dict[str, str]] | None = None,
 ) -> list[MigrationOp]:
     """Detect everything that's in the database but no longer matches
     the spec, and emit DROP / DELETE ops.
@@ -421,7 +560,9 @@ def _diff_drops(
             )
         )
 
-    # 5. Unused columns (destructive).
+    # 5. Unused columns (destructive). Renamed columns are excluded
+    # from drop candidates — the rename pre-pass already relabeled them.
+    renames = renames or {}
     bindings_framework_cols = {
         "source_name", "source_identifier", "raw_payload",
         "valid_from", "valid_to",
@@ -432,9 +573,13 @@ def _diff_drops(
         canonical_name = cls.name.lower()
         bindings_name = f"{canonical_name}{bindings_suffix}"
         slot_cols = {slot.name for slot in cls.effective_slots()}
+        class_renames = renames.get(cls.name, {})
         if canonical_name in db_tables:
-            extras = _existing_columns(query, schema, canonical_name) - slot_cols
-            for col in sorted(extras):
+            existing = _apply_rename_translation(
+                _existing_columns(query, schema, canonical_name),
+                class_renames,
+            )
+            for col in sorted(existing - slot_cols):
                 ops.append(
                     MigrationOp(
                         description=f"drop_column_{canonical_name}_{col}",
@@ -447,12 +592,11 @@ def _diff_drops(
                     )
                 )
         if bindings_name in db_tables:
-            extras = (
-                _existing_columns(query, schema, bindings_name)
-                - slot_cols
-                - bindings_framework_cols
+            existing = _apply_rename_translation(
+                _existing_columns(query, schema, bindings_name),
+                class_renames,
             )
-            for col in sorted(extras):
+            for col in sorted(existing - slot_cols - bindings_framework_cols):
                 ops.append(
                     MigrationOp(
                         description=f"drop_column_{bindings_name}_{col}",
@@ -491,7 +635,9 @@ def _diff_concrete_class(
     db_tables: set[str],
     schema: str,
     bindings_suffix: str,
+    renames: dict[str, str] | None = None,
 ) -> list[MigrationOp]:
+    renames = renames or {}
     ops: list[MigrationOp] = []
     canonical_name = cls.name.lower()
     bindings_name = f"{canonical_name}{bindings_suffix}"
@@ -506,9 +652,12 @@ def _diff_concrete_class(
             )
         )
     else:
-        existing_cols = _existing_columns(query, schema, canonical_name)
+        existing_details = _apply_rename_translation(
+            _existing_column_details(query, schema, canonical_name),
+            renames,
+        )
         for slot in cls.effective_slots():
-            if slot.name not in existing_cols:
+            if slot.name not in existing_details:
                 ops.append(
                     MigrationOp(
                         description=(
@@ -518,6 +667,16 @@ def _diff_concrete_class(
                             schema, canonical_name, slot
                         ),
                         target="canonical",
+                    )
+                )
+            else:
+                ops.extend(
+                    _diff_column_type_and_nullability(
+                        schema=schema,
+                        table=canonical_name,
+                        slot=slot,
+                        existing=existing_details[slot.name],
+                        expected_nullable=not (slot.identifier or slot.required),
                     )
                 )
 
@@ -580,9 +739,12 @@ def _diff_concrete_class(
                 )
             )
     else:
-        existing_bcols = _existing_columns(query, schema, bindings_name)
+        existing_bdetails = _apply_rename_translation(
+            _existing_column_details(query, schema, bindings_name),
+            renames,
+        )
         for slot in cls.effective_slots():
-            if slot.name not in existing_bcols:
+            if slot.name not in existing_bdetails:
                 ops.append(
                     MigrationOp(
                         description=(
@@ -595,8 +757,21 @@ def _diff_concrete_class(
                         target="bindings",
                     )
                 )
+            else:
+                # Identifier is NOT NULL on bindings; everything else
+                # is nullable (partial claims).
+                expected_nullable = not slot.identifier
+                ops.extend(
+                    _diff_column_type_and_nullability(
+                        schema=schema,
+                        table=bindings_name,
+                        slot=slot,
+                        existing=existing_bdetails[slot.name],
+                        expected_nullable=expected_nullable,
+                    )
+                )
         # Bronze layer: ensure raw_payload exists.
-        if "raw_payload" not in existing_bcols:
+        if "raw_payload" not in existing_bdetails:
             ops.append(
                 MigrationOp(
                     description=f"add_column_{bindings_name}_raw_payload",
@@ -633,6 +808,71 @@ def _diff_concrete_class(
 # ---------------------------------------------------------------------------
 # Column-level helpers
 # ---------------------------------------------------------------------------
+
+
+def _diff_column_type_and_nullability(
+    *,
+    schema: str,
+    table: str,
+    slot,
+    existing: _ColInfo,
+    expected_nullable: bool,
+) -> list[MigrationOp]:
+    """Emit ALTER COLUMN ops when an existing column's type or nullability
+    doesn't match the spec.
+
+    Type mismatch → ``ALTER COLUMN … TYPE … USING <column>::<new_type>``
+    (destructive — the cast may fail or lose precision; host should
+    review the USING expression).
+
+    Nullability mismatch:
+      - existing nullable + spec wants NOT NULL → ``SET NOT NULL``
+        (destructive — fails if any row currently has NULL).
+      - existing NOT NULL + spec wants nullable → ``DROP NOT NULL``
+        (always safe; just widens the set of permitted values).
+    """
+    from knot.compile.ddl import _pg_type
+
+    ops: list[MigrationOp] = []
+    expected_type = _pg_type(slot.type)
+    if existing.pg_type != expected_type:
+        ops.append(
+            MigrationOp(
+                description=f"alter_column_type_{table}_{slot.name}",
+                sql=(
+                    f"ALTER TABLE {schema}.{table}\n"
+                    f"    ALTER COLUMN {slot.name} TYPE {expected_type}\n"
+                    f"    USING {slot.name}::{expected_type};"
+                ),
+                destructive=True,
+                target="canonical" if not table.endswith("_bindings") else "bindings",
+            )
+        )
+
+    if existing.nullable and not expected_nullable:
+        ops.append(
+            MigrationOp(
+                description=f"set_not_null_{table}_{slot.name}",
+                sql=(
+                    f"ALTER TABLE {schema}.{table}\n"
+                    f"    ALTER COLUMN {slot.name} SET NOT NULL;"
+                ),
+                destructive=True,
+                target="canonical" if not table.endswith("_bindings") else "bindings",
+            )
+        )
+    elif (not existing.nullable) and expected_nullable:
+        ops.append(
+            MigrationOp(
+                description=f"drop_not_null_{table}_{slot.name}",
+                sql=(
+                    f"ALTER TABLE {schema}.{table}\n"
+                    f"    ALTER COLUMN {slot.name} DROP NOT NULL;"
+                ),
+                target="canonical" if not table.endswith("_bindings") else "bindings",
+            )
+        )
+    return ops
 
 
 def _add_column_sql(

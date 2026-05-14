@@ -14,6 +14,21 @@ from knot.compile import MigrationOp, diff_against_db
 # ---------------------------------------------------------------------------
 
 
+def _split_pg_type(pg_type: str) -> tuple[str, str]:
+    """Reverse of _normalize_pg_type for MockDB convenience: emit the
+    information_schema.columns shape (data_type, udt_name) from a
+    normalized type string. Tests pin pg_type like 'integer' or
+    'text[]'; we deconstruct that into the shape postgres returns."""
+    if pg_type.endswith("[]"):
+        inner = pg_type[:-2]
+        return "ARRAY", "_" + inner
+    if pg_type == "timestamptz":
+        return "timestamp with time zone", "timestamptz"
+    if pg_type == "timestamp":
+        return "timestamp without time zone", "timestamp"
+    return pg_type, pg_type
+
+
 class MockDB:
     """Stand-in for a postgres connection's query callable. The state
     is a dict of (probe_kind, …) → list of result tuples. Unmocked
@@ -50,7 +65,23 @@ class MockDB:
             return [(v,) for v in sorted(self.views.get(schema, set()))]
         if "from information_schema.columns" in sql_lc:
             schema, table = params
-            return [(c,) for c in sorted(self.columns.get((schema, table), set()))]
+            entry = self.columns.get((schema, table), set())
+            # Two supported shapes:
+            #   set[str]                            (name-only; defaults to text+nullable)
+            #   dict[str, tuple[pg_type, nullable]] (full detail)
+            if isinstance(entry, dict):
+                items = entry.items()
+                rows: list[tuple[Any, ...]] = []
+                for name, (pg_type, nullable) in sorted(items):
+                    data_type, udt = _split_pg_type(pg_type)
+                    rows.append(
+                        (name, data_type, "YES" if nullable else "NO", udt)
+                    )
+                return rows
+            # set-only shape — defaults.
+            return [
+                (c, "text", "YES", "text") for c in sorted(entry)
+            ]
         if "from pg_indexes" in sql_lc:
             schema, table = params
             return [(i,) for i in sorted(self.indexes.get((schema, table), set()))]
@@ -614,3 +645,335 @@ def test_drop_all_sql_parses_postgres():
     )
     for op in diff_against_db(spec, db, allow_destructive=True):
         sqlglot.parse_one(op.sql, dialect="postgres")
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — type-change, nullability, rename
+# ---------------------------------------------------------------------------
+
+
+def test_type_mismatch_emits_alter_column_type():
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            # DB has `year` as text; spec says integer.
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "year": ("text", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "year": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    alter_type = [
+        op for op in ops
+        if op.description == "alter_column_type_movie_year"
+    ]
+    assert len(alter_type) == 1
+    assert alter_type[0].destructive is True
+    assert "TYPE integer" in alter_type[0].sql
+    assert "USING year::integer" in alter_type[0].sql
+
+
+def test_type_mismatch_filtered_out_when_destructive_disabled():
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "year": ("text", True),  # spec says integer
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "year": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    assert not any("alter_column_type" in op.description for op in ops)
+
+
+def test_nullable_to_not_null_is_destructive():
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            # canonical_id is nullable in DB but spec says identifier (NOT NULL)
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", True),
+                "year": ("integer", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "year": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    set_nn = [op for op in ops if op.description == "set_not_null_movie_canonical_id"]
+    assert len(set_nn) == 1
+    assert set_nn[0].destructive is True
+    assert "SET NOT NULL" in set_nn[0].sql
+
+
+def test_not_null_to_nullable_is_safe():
+    """Widening (NOT NULL → nullable) doesn't lose data; never destructive."""
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("year", Primitive.INTEGER)  # not required → nullable
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "year": ("integer", False),  # NOT NULL in DB, spec wants nullable
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "year": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=False)
+    drop_nn = [op for op in ops if op.description == "drop_not_null_movie_year"]
+    assert len(drop_nn) == 1
+    assert drop_nn[0].destructive is False
+    assert "DROP NOT NULL" in drop_nn[0].sql
+
+
+def test_array_type_matches_when_canonicalized():
+    """Postgres returns ARRAY + udt_name='_text' for text[]; the
+    normalizer must produce 'text[]' for the comparison."""
+    spec = Spec(id="m", version="0.1")
+    from knot import Array
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("genres", Array(of=Primitive.TEXT))
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "genres": ("text[]", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "genres": ("text[]", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    # No type change should be emitted — text[] matches text[].
+    assert not any("alter_column_type" in op.description for op in ops)
+
+
+def test_timestamptz_normalization():
+    """Postgres data_type='timestamp with time zone' must match
+    knot's 'timestamptz' output."""
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("released_at", Primitive.TIMESTAMP)
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "released_at": ("timestamptz", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "released_at": ("timestamptz", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(spec, db, allow_destructive=True)
+    assert not any("alter_column_type" in op.description for op in ops)
+
+
+# ---------------------------------------------------------------------------
+# Renames
+# ---------------------------------------------------------------------------
+
+
+def test_rename_emits_alter_table_rename_column_on_both_tables():
+    spec = _basic_spec()
+    # DB has `yr` from a prior version; spec calls it `year`.
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "yr": ("integer", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "yr": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(
+        spec,
+        db,
+        allow_destructive=True,
+        renames={"Movie": {"yr": "year"}},
+    )
+    rename_ops = [op for op in ops if op.description.startswith("rename_column_")]
+    descriptions = {op.description for op in rename_ops}
+    assert "rename_column_movie_yr_to_year" in descriptions
+    assert "rename_column_movie_bindings_yr_to_year" in descriptions
+    for op in rename_ops:
+        assert "ALTER TABLE" in op.sql and "RENAME COLUMN" in op.sql
+        assert op.destructive is False
+
+
+def test_rename_runs_before_drops_and_adds():
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "yr": ("integer", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "yr": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(
+        spec,
+        db,
+        allow_destructive=True,
+        renames={"Movie": {"yr": "year"}},
+    )
+    descriptions = [op.description for op in ops]
+    rename_idx = next(
+        i for i, d in enumerate(descriptions)
+        if d.startswith("rename_column_")
+    )
+    # No drops or adds before the first rename.
+    for d in descriptions[:rename_idx]:
+        assert not d.startswith("drop_")
+        assert not d.startswith("add_column_")
+
+
+def test_rename_suppresses_drop_and_add():
+    """After renaming yr→year, the column is now `year` from the
+    diff's POV — no drop_column_yr and no add_column_year."""
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "yr": ("integer", True),
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "yr": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(
+        spec,
+        db,
+        allow_destructive=True,
+        renames={"Movie": {"yr": "year"}},
+    )
+    descriptions = {op.description for op in ops}
+    assert "drop_column_movie_yr" not in descriptions
+    assert "add_column_movie_year" not in descriptions
+
+
+def test_rename_skipped_when_old_column_missing():
+    """If the old name isn't in the DB, the rename is a no-op (probably
+    already applied or never created)."""
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_accuracy", "movie", "movie_bindings"}},
+        columns={
+            ("knot_data", "movie"): {
+                "canonical_id": ("text", False),
+                "year": ("integer", True),  # already named "year"
+            },
+            ("knot_data", "movie_bindings"): {
+                "canonical_id": ("text", False),
+                "source_name": ("text", False),
+                "source_identifier": ("text", False),
+                "year": ("integer", True),
+                "raw_payload": ("jsonb", False),
+                "valid_from": ("timestamptz", False),
+                "valid_to": ("timestamptz", True),
+            },
+        },
+    )
+    ops = diff_against_db(
+        spec,
+        db,
+        renames={"Movie": {"yr": "year"}},
+    )
+    rename_ops = [op for op in ops if op.description.startswith("rename_")]
+    assert rename_ops == []
