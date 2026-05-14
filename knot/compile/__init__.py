@@ -27,6 +27,7 @@ from knot.compile.data_io import (
     emit_close_out,
 )
 from knot.compile.ddl import emit_ddl
+from knot.compile.migrate import MigrationOp, diff_against_db
 from knot.compile.resolver import emit_resolved_view, emit_resolved_views
 from knot.compile.trust import emit_trust_seed
 
@@ -41,4 +42,6 @@ __all__ = [
     "BatchWrite",
     "emit_batch_write",
     "emit_close_out",
+    "MigrationOp",
+    "diff_against_db",
 ]
