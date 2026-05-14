@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from knot.expr import CountRel, Exists, Expr, Ref
+from knot.expr import CountRel, Exists, Expr, FkRef, Ref
 from knot.select import Query
 
 # ---------------------------------------------------------------------------
@@ -164,25 +164,31 @@ class Slot:
 
 
 class _ColAccess:
-    """``cls.col.year`` returns a ``Ref`` if ``year`` is a slot on
-    ``cls`` (walking is_a + mixins). Typos raise ``KeyError``."""
+    """``cls.col.year`` returns a ``Ref`` for primitive/array slots and
+    an ``FkRef`` for FK slots — the latter is navigable for transparent
+    chained access (``Movie.col.director.name``). Typos raise
+    ``KeyError`` at attribute time (no post-hoc validation needed)."""
 
     __slots__ = ("_cls",)
 
     def __init__(self, cls: OntologyClass):
         object.__setattr__(self, "_cls", cls)
 
-    def __getattr__(self, name: str) -> Ref:
+    def __getattr__(self, name: str) -> Ref | FkRef:
         # Guard pydantic / repr internals.
         if name.startswith("_"):
             raise AttributeError(name)
-        cls = object.__getattribute__(self, "_cls")
-        cls.get_slot(name)  # raises KeyError if absent
-        return Ref(class_name=cls.name, slot_name=name)
+        return self[name]
 
-    def __getitem__(self, name: str) -> Ref:
+    def __getitem__(self, name: str) -> Ref | FkRef:
         cls = object.__getattribute__(self, "_cls")
-        cls.get_slot(name)
+        slot = cls.get_slot(name)
+        if isinstance(slot.type, ClassRef):
+            return FkRef(
+                class_name=cls.name,
+                slot_name=name,
+                target_class_name=slot.type.target.name,
+            )
         return Ref(class_name=cls.name, slot_name=name)
 
 

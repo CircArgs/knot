@@ -23,6 +23,8 @@ from knot.expr import (
     CountRel,
     Exists,
     Expr,
+    FkChainRef,
+    FkRef,
     InList,
     IsNull,
     Literal,
@@ -41,6 +43,24 @@ def compile_sql(node: Expr, *, schema: str, target_suffix: str) -> str:
 @compile_sql.register
 def _(node: Ref, *, schema: str, target_suffix: str) -> str:
     return f"{schema}.{node.class_name.lower()}{target_suffix}.{node.slot_name}"
+
+
+@compile_sql.register
+def _(node: FkRef, *, schema: str, target_suffix: str) -> str:
+    # As a value: the FK column on the source class's table.
+    return f"{schema}.{node.class_name.lower()}{target_suffix}.{node.slot_name}"
+
+
+@compile_sql.register
+def _(node: FkChainRef, *, schema: str, target_suffix: str) -> str:
+    # Renders the terminal slot reference on the chain's final class.
+    # The JOIN itself is emitted by compile_query, which walks the AST
+    # to collect chains and assemble the FROM/JOIN sequence. We pick
+    # the *target* table without an alias — assumes one chain per
+    # target class per query (the common case). Multi-hop and
+    # same-target-twice need aliasing, which is a later iteration.
+    target_class = node.chain[-1][1]
+    return f"{schema}.{target_class.lower()}{target_suffix}.{node.terminal_slot}"
 
 
 @compile_sql.register

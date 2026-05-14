@@ -109,6 +109,52 @@ class Ref(Expr, _ValueExpr):
 
 
 @dataclass(frozen=True, eq=False, slots=True)
+class FkRef(Expr, _ValueExpr):
+    """A reference to a FK slot. Used as a value, it renders as the FK
+    column on the source table (e.g., ``Movie.col.director == X``).
+    Used as a navigator, ``Movie.col.director.name`` returns a
+    ``FkChainRef`` representing the joined ref into the target class.
+
+    ``target_class_name`` is carried so navigation knows where to point
+    the chain. Validation of the target slot's existence is deferred to
+    compile time (this dataclass stays pure data, no spec access)."""
+
+    class_name: str
+    slot_name: str
+    target_class_name: str
+
+    def __getattr__(self, attr: str) -> FkChainRef:
+        # Only triggered for unknown attrs — dataclass slots short-circuit.
+        if attr.startswith("_"):
+            raise AttributeError(attr)
+        return FkChainRef(
+            source_class=self.class_name,
+            chain=((self.slot_name, self.target_class_name),),
+            terminal_slot=attr,
+        )
+
+
+@dataclass(frozen=True, eq=False, slots=True)
+class FkChainRef(Expr, _ValueExpr):
+    """A reference reached by walking one or more FK hops to a terminal
+    slot on the final class. The compiler emits the necessary JOINs at
+    query-render time; this node just records the path.
+
+    Example — ``Movie.col.director.name``::
+
+        source_class  = "Movie"
+        chain         = (("director", "Person"),)
+        terminal_slot = "name"
+
+    Multi-hop chains carry more steps in ``chain``. Validation of slot
+    existence and FK-ness happens at compile time."""
+
+    source_class: str
+    chain: tuple[tuple[str, str], ...]  # ((fk_slot_name, target_class_name), ...)
+    terminal_slot: str
+
+
+@dataclass(frozen=True, eq=False, slots=True)
 class Literal(Expr, _ValueExpr):
     """A constant Python value (str / int / float / bool / None / list / tuple)."""
 
@@ -221,6 +267,8 @@ def raw(sql: str) -> Raw:
 __all__ = [
     "Expr",
     "Ref",
+    "FkRef",
+    "FkChainRef",
     "Literal",
     "Compare",
     "BoolOp",

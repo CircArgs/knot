@@ -111,3 +111,91 @@ def test_fluent_immutability():
     with_limit = base.limit(10)
     assert base.limit_value is None
     assert with_limit.limit_value == 10
+
+
+# ---------------------------------------------------------------------------
+# FK transparent walks
+# ---------------------------------------------------------------------------
+
+
+def _make_movie_director_spec():
+    """Movie with a `director` FK pointing at Person."""
+    spec = Spec(id="test", version="0.0.1")
+    person = spec.add_class("Person")
+    person.slot("canonical_id", Primitive.TEXT, identifier=True)
+    person.slot("name", Primitive.TEXT)
+    person.slot("birth_country", Primitive.TEXT)
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("title", Primitive.TEXT)
+    movie.slot("year", Primitive.INTEGER)
+    movie.fk("director", to=person)
+    return spec, movie, person
+
+
+def test_fk_ref_as_value():
+    """Movie.col.director used standalone renders as the FK column."""
+    from knot.compile.expr_sql import compile_sql
+    from knot.expr import FkRef
+
+    spec, movie, person = _make_movie_director_spec()
+    ref = movie.col.director
+    assert isinstance(ref, FkRef)
+    assert ref.target_class_name == "Person"
+    sql = compile_sql(ref, schema="knot_data", target_suffix="_resolved")
+    assert sql == "knot_data.movie_resolved.director"
+
+
+def test_fk_walk_in_where():
+    spec, movie, person = _make_movie_director_spec()
+    q = movie.where(movie.col.director.birth_country == "USA")
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    # JOIN to Person on canonical_id = movie.director
+    assert (
+        "JOIN knot_data.person_resolved ON knot_data.person_resolved.canonical_id "
+        "= knot_data.movie_resolved.director"
+    ) in sql
+    # WHERE references the joined Person column
+    assert "knot_data.person_resolved.birth_country = 'USA'" in sql
+
+
+def test_fk_walk_in_projection():
+    spec, movie, person = _make_movie_director_spec()
+    q = movie.select(movie.col.title, movie.col.director.name)
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
+    assert "JOIN knot_data.person_resolved" in sql
+
+
+def test_fk_walk_in_order_by():
+    spec, movie, person = _make_movie_director_spec()
+    q = movie.order_by(movie.col.director.name, "desc")
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "ORDER BY knot_data.person_resolved.name DESC" in sql
+    assert "JOIN knot_data.person_resolved" in sql
+
+
+def test_fk_walk_dedupe_one_join():
+    """Two refs walking the same FK should produce a single JOIN."""
+    spec, movie, person = _make_movie_director_spec()
+    q = movie.where(movie.col.director.birth_country == "USA").select(
+        movie.col.title, movie.col.director.name
+    )
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert sql.count("JOIN knot_data.person_resolved") == 1
+
+
+def test_full_query_with_fk_walk():
+    """The example query: movies with directors, ordered, limited, projected."""
+    spec, movie, person = _make_movie_director_spec()
+    q = (
+        movie.order_by(movie.col.year, "desc")
+        .limit(10)
+        .select(movie.col.title, movie.col.director.name)
+    )
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
+    assert "FROM knot_data.movie_resolved" in sql
+    assert "JOIN knot_data.person_resolved" in sql
+    assert "ORDER BY knot_data.movie_resolved.year DESC" in sql
+    assert "LIMIT 10" in sql
