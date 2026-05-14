@@ -171,12 +171,15 @@ _PRIMITIVE_TO_PG: dict[Primitive, str] = {
 
 
 def _pg_type(t: TypeExpression) -> str:
-    if isinstance(t, Primitive):
-        return _PRIMITIVE_TO_PG[t]
-    if isinstance(t, Array):
-        return f"{_pg_type(t.of)}[]"
-    if isinstance(t, ClassRef):
-        return "text"  # canonical_id FK, stored as text; REFERENCES TBD
+    match t:
+        case Primitive():
+            return _PRIMITIVE_TO_PG[t]
+        case Array(of=inner):
+            return f"{_pg_type(inner)}[]"
+        case ClassRef():
+            # canonical_id FK, stored as text. The cross-table FK
+            # constraint is added by the second-pass ALTER TABLE.
+            return "text"
     raise TypeError(f"unhandled type expression: {type(t).__name__}")
 
 

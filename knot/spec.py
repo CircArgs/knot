@@ -12,7 +12,7 @@ The type system is structural — a ``TypeExpression`` is one of:
 
 Builder methods accept either a ``TypeExpression`` or a primitive name
 string (``"text"`` → ``Primitive.TEXT``). All entities are plain
-``@dataclass`` records so a future Java port maps 1:1 to ``record`` /
+``@dataclass(slots=True)`` records so a future Java port maps 1:1 to ``record`` /
 ``sealed interface`` / ``enum``.
 
 Validation happens at two levels:
@@ -75,7 +75,7 @@ class Severity(StrEnum):
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class Array:
     """Homogeneous array of another ``TypeExpression``."""
 
@@ -85,7 +85,7 @@ class Array:
         return f"array<{self.of}>"
 
 
-@dataclass
+@dataclass(slots=True)
 class ClassRef:
     """FK reference to another class — stored as the target's canonical_id."""
 
@@ -137,7 +137,7 @@ def _check_name(kind: str, name: str) -> None:
         )
 
 
-@dataclass
+@dataclass(slots=True)
 class Slot:
     """A property of a class — primitive, array, or FK."""
 
@@ -192,7 +192,7 @@ class _ColAccess:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class OntologyClass:
     """A typed entity class — concrete (has a table) or abstract (mixin only)."""
 
@@ -438,7 +438,7 @@ def _combine_where(
     return combined
 
 
-@dataclass
+@dataclass(slots=True)
 class VirtualClass:
     """A virtual class — materialized as a SQL view over an is_a parent
     table, rows selected by the ``definition`` predicate. The definition
@@ -464,7 +464,7 @@ class VirtualClass:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class Constraint:
     """Cross-row / cross-class invariant — body is an ``Expr`` from
     the semantic builder, not raw SQL."""
@@ -493,7 +493,7 @@ class Constraint:
                 ) from e
 
 
-@dataclass
+@dataclass(slots=True)
 class Source:
     """A named external system (imdb, tmdb)."""
 
@@ -510,7 +510,7 @@ class Source:
 BINDING_PRIOR_STRENGTH: int = 3
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SourceMap:
     """Per-slot projection from a raw source row to a class slot value.
 
@@ -550,7 +550,7 @@ def _coerce_source_map(v: Any) -> SourceMap:
     )
 
 
-@dataclass
+@dataclass(slots=True)
 class SourceBinding:
     """(Source, OntologyClass) binding with per-slot projections.
 
@@ -595,7 +595,7 @@ class SourceBinding:
 # ---------------------------------------------------------------------------
 
 
-@dataclass
+@dataclass(slots=True)
 class Spec:
     """Ontology declaration root."""
 

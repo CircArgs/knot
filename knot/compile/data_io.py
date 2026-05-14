@@ -100,24 +100,27 @@ def _sql_literal(s: str) -> str:
     return "'" + s.replace("'", "''") + "'"
 
 
+_PRIMITIVE_TO_JSONB_CAST: dict[Primitive, str] = {
+    Primitive.TEXT: "::text",
+    Primitive.INTEGER: "::integer",
+    Primitive.FLOAT: "::double precision",
+    Primitive.BOOLEAN: "::boolean",
+    Primitive.DATE: "::date",
+    Primitive.TIMESTAMP: "::timestamptz",
+}
+
+
 def _jsonb_cast(t: TypeExpression) -> str:
     """Return a postgres cast suffix that pulls a typed value out of a
     jsonb-element row. Handles primitive, array, and class-ref slots."""
-    if isinstance(t, Primitive):
-        return {
-            Primitive.TEXT: "::text",
-            Primitive.INTEGER: "::integer",
-            Primitive.FLOAT: "::double precision",
-            Primitive.BOOLEAN: "::boolean",
-            Primitive.DATE: "::date",
-            Primitive.TIMESTAMP: "::timestamptz",
-        }[t]
-    if isinstance(t, Array):
-        inner = _jsonb_cast(t.of).removeprefix("::")
-        # ARRAY-coerce a jsonb array of scalars into a postgres array.
-        return f"::{inner}[]"
-    if isinstance(t, ClassRef):
-        return "::text"
+    match t:
+        case Primitive():
+            return _PRIMITIVE_TO_JSONB_CAST[t]
+        case Array(of=inner):
+            # ARRAY-coerce a jsonb array of scalars into a postgres array.
+            return f"::{_jsonb_cast(inner).removeprefix('::')}[]"
+        case ClassRef():
+            return "::text"
     raise TypeError(f"unhandled type: {type(t).__name__}")
 
 
