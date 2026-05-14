@@ -317,7 +317,12 @@ def test_trust_row_missing_emits_upsert():
 # ---------------------------------------------------------------------------
 
 
-def test_resolved_view_always_replaced():
+def test_resolved_view_always_dropped_and_replaced():
+    """When a resolved view exists in DB and the bindings table is
+    still in spec, the diff drops the view first then recreates it
+    via CREATE OR REPLACE. The DROP lets dependent column ops (drop,
+    rename, type change) succeed; CREATE OR REPLACE always
+    reconciles the view body with the current spec."""
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
@@ -339,9 +344,13 @@ def test_resolved_view_always_replaced():
     )
     ops = diff_against_db(spec, db)
     view_ops = [op for op in ops if op.target == "resolved_view"]
-    # Always emit OR REPLACE so view body stays in sync with the spec.
-    assert len(view_ops) == 1
-    assert "CREATE OR REPLACE VIEW" in view_ops[0].sql
+    assert len(view_ops) == 2
+    drop_op = next(op for op in view_ops if "DROP VIEW" in op.sql)
+    create_op = next(op for op in view_ops if "CREATE OR REPLACE VIEW" in op.sql)
+    # Drop precedes recreate in the op list.
+    assert ops.index(drop_op) < ops.index(create_op)
+    # Drop is non-destructive (views are stateless).
+    assert drop_op.destructive is False
 
 
 # ---------------------------------------------------------------------------

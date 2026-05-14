@@ -501,7 +501,7 @@ def _diff_drops(
                 )
             )
 
-    # 2. Unused views.
+    # 2a. Unused views — drop views that aren't in spec at all.
     for view in sorted(db_views - expected_views):
         target = (
             "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
@@ -509,6 +509,23 @@ def _diff_drops(
         ops.append(
             MigrationOp(
                 description=f"drop_view_{view}",
+                sql=f"DROP VIEW IF EXISTS {schema}.{view};",
+                target=target,
+            )
+        )
+
+    # 2b. Drop currently-existing resolved + virtual views even if
+    # they ARE expected, so subsequent column drops / renames / type
+    # changes on the underlying tables don't blow up with
+    # "DependentObjectsStillExist". The additive pass recreates them
+    # via CREATE OR REPLACE VIEW. Cheap, always safe.
+    for view in sorted(db_views & expected_views):
+        target = (
+            "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
+        )
+        ops.append(
+            MigrationOp(
+                description=f"drop_view_{view}_for_rebuild",
                 sql=f"DROP VIEW IF EXISTS {schema}.{view};",
                 target=target,
             )
