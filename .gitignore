@@ -1,20 +1,20 @@
-# Python
-.venv/
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-*.egg-info/
-.pytest_cache/
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
 
-# OMC tooling state
-.omc/
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+out/
+bin/
 
-# mkdocs build output
-site/site/
-
-# Marimo session state
-__marimo__/
+# Maven (in case anyone runs mvn)
+target/
 
 # OS
 .DS_Store
@@ -24,18 +24,12 @@ Thumbs.db
 # Claude Code per-project settings
 .claude/
 
-# UI build/install artifacts
-ui/node_modules/
-ui/dist/
-ui/.vite/
-ui/.turbo/
-ui/.tsbuild-node/
-ui/*.tsbuildinfo
+# OMC tooling state
+.omc/
 
-# Sibling service install artifacts
-ai/.venv/
-ai/dist/
-ai/*.egg-info/
-er/.venv/
-er/dist/
-er/*.egg-info/
+# Stale Python prototype artifacts (library/v0 branch has the real
+# tree; on java/v0 these dirs should never exist).
+.venv/
+__pycache__/
+*.pyc
+__marimo__/
