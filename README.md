@@ -24,52 +24,43 @@ Everything else — entity-table DDL, FK constraints, indexes, batch
 INSERT performance, schema migrations, async / connection pooling — is
 delegated to jOOQ + Flyway.
 
-## Build
+## Build + test (containerized — no host JDK required)
 
-Requires JDK 21.
-
-```bash
-./gradlew build
-```
-
-Generate the wrapper for the first time (one-off, run with a
-system-installed Gradle 8.x):
+Everything runs through `docker compose`. Two services: `postgres`
+(the data plane on host port 5433) and `gradle` (JDK 21 + Gradle 8.7
+with the repo mounted at `/workspace`).
 
 ```bash
-gradle wrapper --gradle-version 8.7
-```
-
-## Local postgres
-
-Integration tests run against a postgres 16 container brought up via
-docker compose. Bound to host port **5433** (the host's 5432 is
-already in use here; adjust `compose.yml` if your environment differs).
-
-```bash
-docker compose up -d            # start postgres in the background
-docker compose logs -f postgres # tail logs
-docker compose exec postgres psql -U knot -d knot   # ad-hoc psql
-docker compose down             # stop; keep the volume
-docker compose down -v          # stop AND drop the data volume
+docker compose up -d                              # bring both up
+docker compose run --rm gradle gradle test        # run tests
+docker compose run --rm gradle gradle wrapper     # generate gradlew + jar (one-off)
+docker compose exec gradle sh                     # open a dev shell
+docker compose exec postgres psql -U knot -d knot # psql against the data plane
+docker compose down                               # stop; keep volumes
+docker compose down -v                            # stop AND wipe state
 ```
 
 Connection defaults:
 
-| Setting | Value |
+| From | JDBC URL |
 | - | - |
-| JDBC URL | `jdbc:postgresql://localhost:5433/knot` |
-| User    | `knot` |
-| Password | `knot` |
-| Database | `knot` |
+| host (IDE, ad-hoc) | `jdbc:postgresql://localhost:5433/knot` |
+| `gradle` service   | `jdbc:postgresql://postgres:5432/knot` (compose network) |
 
-## Test
+User / password / database are all `knot`. Integration tests read
+`KNOT_PG_URL` / `KNOT_PG_USER` / `KNOT_PG_PASS` from the environment;
+the `gradle` service pre-sets them to the in-network URL above.
+
+### Running on a host with JDK installed
+
+If you have OpenJDK 21 + Gradle 8 installed locally, you can skip the
+`gradle` service and run `./gradlew test` / `./gradlew build` against
+the postgres container at `localhost:5433`. Generate the wrapper first
+with a system-installed Gradle:
 
 ```bash
-./gradlew test
+gradle wrapper --gradle-version 8.7
 ```
-
-Integration tests read `KNOT_PG_URL` / `KNOT_PG_USER` / `KNOT_PG_PASS`
-from the environment; defaults match the compose service above.
 
 ## Layout
 

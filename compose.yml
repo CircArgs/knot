@@ -1,15 +1,25 @@
 # knot — local development + integration-test substrate.
 #
-# Spins up a postgres 16 instance bound to 5433 (host port 5432 is
-# already in use on this box). The Java integration test suite reads
-# its JDBC URL from KNOT_PG_URL with this default; override the env
-# var if you want a different target.
+# Two services:
+#   - postgres  knot's data plane (postgres 16, host port 5433)
+#   - gradle    JDK 21 + Gradle 8.7 dev shell. Mounts the repo at
+#               /workspace and talks to postgres over the compose
+#               network. Use it because no JDK is installed on the host.
 #
-# Bring up:    docker compose up -d
-# Tear down:   docker compose down            (keeps the volume)
-# Wipe state:  docker compose down -v         (drops the volume)
-# Tail logs:   docker compose logs -f postgres
-# Psql in:     docker compose exec postgres psql -U knot -d knot
+# Bring up everything:   docker compose up -d
+# Run tests one-shot:    docker compose run --rm gradle gradle test
+# Open a dev shell:      docker compose exec gradle sh
+# Generate wrapper jar:  docker compose run --rm gradle gradle wrapper
+# Psql in:               docker compose exec postgres psql -U knot -d knot
+# Stop, keep state:      docker compose down
+# Stop, wipe state:      docker compose down -v
+# Tail logs:             docker compose logs -f postgres
+#
+# Note on JDBC URLs:
+#   - From the host          jdbc:postgresql://localhost:5433/knot
+#   - From the gradle svc    jdbc:postgresql://postgres:5432/knot
+# The gradle service has KNOT_PG_URL pre-set for the in-network path;
+# host-side tools (an IDE, ad-hoc tooling) use the 5433 mapping.
 
 services:
   postgres:
@@ -31,5 +41,24 @@ services:
       retries: 10
       start_period: 5s
 
+  gradle:
+    image: gradle:8.7-jdk21-alpine
+    container_name: knot-gradle
+    working_dir: /workspace
+    volumes:
+      - .:/workspace
+      - knot_gradle_cache:/home/gradle/.gradle
+    environment:
+      KNOT_PG_URL: jdbc:postgresql://postgres:5432/knot
+      KNOT_PG_USER: knot
+      KNOT_PG_PASS: knot
+    depends_on:
+      postgres:
+        condition: service_healthy
+    # tail keeps the container alive so `docker compose exec gradle …`
+    # works; for one-shots prefer `docker compose run --rm gradle …`.
+    command: ["tail", "-f", "/dev/null"]
+
 volumes:
   knot_pg_data:
+  knot_gradle_cache:
