@@ -20,7 +20,12 @@ Public surface is re-exported here for convenience.
 """
 
 from knot.compile.constraints import emit_validation, emit_validation_union
-from knot.compile.data_io import BatchWrite, ClassWrites, emit_batch_write
+from knot.compile.data_io import (
+    BatchWrite,
+    ClassWrites,
+    emit_batch_write,
+    emit_close_out,
+)
 from knot.compile.ddl import emit_ddl
 from knot.compile.resolver import emit_resolved_view, emit_resolved_views
 from knot.compile.trust import emit_trust_seed
@@ -35,4 +40,5 @@ __all__ = [
     "ClassWrites",
     "BatchWrite",
     "emit_batch_write",
+    "emit_close_out",
 ]

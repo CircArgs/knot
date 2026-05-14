@@ -398,8 +398,58 @@ def emit_batch_write(
     )
 
 
+def emit_close_out(
+    spec: Spec,
+    *,
+    class_name: str,
+    source_name: str,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> str:
+    """Close out the currently-open binding for one ``(class, source,
+    source_identifier)`` pair without inserting a replacement.
+
+    Use to retract a source's claim — most commonly to withdraw a user
+    correction so the resolver falls back to the next-best source.
+    The corresponding INSERT half of the SCD2 dance is intentionally
+    omitted; this is just a one-shot ``UPDATE``.
+
+    Returns parameterized SQL with named placeholders ``%(canonical_id)s``
+    and ``%(source_identifier)s``. The host runs::
+
+        conn.execute(sql, {"canonical_id": "...", "source_identifier": "..."})
+    """
+    cls = _find_concrete(spec, class_name)
+    ident = cls.identifier_slot()
+    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(source_name)
+    return (
+        f"UPDATE {table}\n"
+        f"SET valid_to = now()\n"
+        f"WHERE {ident.name} = %(canonical_id)s\n"
+        f"  AND source_name = {source_literal}\n"
+        f"  AND source_identifier = %(source_identifier)s\n"
+        f"  AND valid_to IS NULL;"
+    )
+
+
+def _find_concrete(spec: Spec, name: str) -> OntologyClass:
+    """Look up a concrete OntologyClass by name; raise if not found or
+    not concrete."""
+    for c in spec.classes:
+        if isinstance(c, OntologyClass) and c.name == name:
+            if c.kind != ClassKind.CONCRETE:
+                raise ValueError(
+                    f"class {name!r} is {c.kind.value!r}; only concrete "
+                    f"classes have bindings tables"
+                )
+            return c
+    raise ValueError(f"no concrete class named {name!r} in spec")
+
+
 __all__ = [
     "ClassWrites",
     "BatchWrite",
     "emit_batch_write",
+    "emit_close_out",
 ]

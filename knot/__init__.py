@@ -27,6 +27,7 @@ from knot.expr import (
 )
 from knot.spec import (
     BINDING_PRIOR_STRENGTH,
+    CORRECTIONS_SOURCE_NAME,
     Array,
     ClassKind,
     ClassRef,
@@ -60,6 +61,7 @@ __all__ = [
     "SourceBinding",
     "SourceMap",
     "BINDING_PRIOR_STRENGTH",
+    "CORRECTIONS_SOURCE_NAME",
     "Spec",
     "SpecError",
     # expression builder

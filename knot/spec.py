@@ -510,6 +510,12 @@ class Source:
 BINDING_PRIOR_STRENGTH: int = 3
 
 
+# Reserved synthetic source for human-curated overrides. The resolver
+# treats this like any other source — high accuracy in source_accuracy
+# is what makes corrections "win" the per-slot argmax tie-break.
+CORRECTIONS_SOURCE_NAME: str = "_user_corrections"
+
+
 @dataclass(frozen=True, slots=True)
 class SourceMap:
     """Per-slot projection from a raw source row to a class slot value.
@@ -678,11 +684,64 @@ class Spec:
         *,
         description: str | None = None,
     ) -> Source:
+        if name == CORRECTIONS_SOURCE_NAME:
+            raise ValueError(
+                f"{name!r} is a reserved source name — use "
+                f"spec.enable_corrections() instead of add_source()"
+            )
         if any(s.name == name for s in self.sources):
             raise ValueError(f"Spec already has a source named {name!r}")
         s = Source(name=name, description=description)
         self.sources.append(s)
         return s
+
+    def enable_corrections(
+        self,
+        *,
+        accuracy: float = 0.99,
+        description: str | None = "human overrides",
+    ) -> Source:
+        """Register the ``_user_corrections`` synthetic source and bind
+        it to every concrete ``OntologyClass`` in the spec.
+
+        High default accuracy (0.99) means corrections override declared
+        sources at the resolver tie-break. Operators can tune via
+        ``UPDATE source_accuracy SET accuracy = … WHERE source_name =
+        '_user_corrections' AND class_name = '<X>'`` without touching
+        the spec.
+
+        Idempotent: calling again is a no-op if the source already
+        exists. Returns the (possibly pre-existing) ``Source`` object.
+        """
+        existing = next(
+            (s for s in self.sources if s.name == CORRECTIONS_SOURCE_NAME),
+            None,
+        )
+        if existing is not None:
+            return existing
+        source = Source(name=CORRECTIONS_SOURCE_NAME, description=description)
+        self.sources.append(source)
+        for cls in list(self.classes):
+            if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
+                self.bind(
+                    source,
+                    cls,
+                    identifier=cls.identifier_slot(),
+                    accuracy=accuracy,
+                )
+        return source
+
+    def corrections_binding_for(self, cls: OntologyClass) -> SourceBinding:
+        """The ``_user_corrections`` binding for ``cls``. Convenience
+        for the write path. Raises ``KeyError`` if corrections aren't
+        enabled or ``cls`` isn't bound."""
+        for b in self.source_bindings:
+            if b.source.name == CORRECTIONS_SOURCE_NAME and b.class_ is cls:
+                return b
+        raise KeyError(
+            f"no _user_corrections binding for class {cls.name!r} — "
+            f"call spec.enable_corrections() first"
+        )
 
     def bind(
         self,
@@ -918,6 +977,7 @@ __all__ = [
     "SourceBinding",
     "SourceMap",
     "BINDING_PRIOR_STRENGTH",
+    "CORRECTIONS_SOURCE_NAME",
     "Spec",
     "SpecError",
 ]
