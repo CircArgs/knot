@@ -156,6 +156,56 @@ def test_fk_alters_only_for_concrete_classes():
     assert "REFERENCES knot_data.title(canonical_id)" in alter
 
 
+def test_indexes_emitted_per_concrete_bindings_table(movie_spec):
+    stmts = emit_ddl(movie_spec)
+    idx_stmts = [s for s in stmts if s.startswith("CREATE INDEX")]
+    # 3 concrete classes (Movie, Person, Credit) × 2 indexes
+    assert len(idx_stmts) == 6
+    assert any("movie_bindings_current_idx" in s for s in idx_stmts)
+    assert any("movie_bindings_source_idx" in s for s in idx_stmts)
+    assert any("credit_bindings_current_idx" in s for s in idx_stmts)
+    assert any("person_bindings_current_idx" in s for s in idx_stmts)
+
+
+def test_indexes_are_partial_on_valid_to_null(movie_spec):
+    stmts = emit_ddl(movie_spec)
+    for s in stmts:
+        if s.startswith("CREATE INDEX"):
+            assert "WHERE valid_to IS NULL" in s
+
+
+def test_index_source_path_uses_composite(movie_spec):
+    stmts = emit_ddl(movie_spec)
+    src_idx = next(s for s in stmts if "movie_bindings_source_idx" in s)
+    assert "(canonical_id, source_name, source_identifier)" in src_idx
+
+
+def test_index_current_path_uses_identifier_only(movie_spec):
+    stmts = emit_ddl(movie_spec)
+    cur_idx = next(s for s in stmts if "movie_bindings_current_idx" in s)
+    assert "(canonical_id)" in cur_idx
+    # The current-idx covers only the identifier; source columns appear
+    # only in the partial-where clause, not in the index expression.
+    assert "source_name" not in cur_idx.split("WHERE")[0]
+
+
+def test_indexes_idempotent_with_if_not_exists(movie_spec):
+    stmts = emit_ddl(movie_spec, if_not_exists=True)
+    idx_stmts = [s for s in stmts if s.startswith("CREATE INDEX")]
+    assert all("CREATE INDEX IF NOT EXISTS" in s for s in idx_stmts)
+
+
+def test_indexes_can_be_disabled(movie_spec):
+    stmts = emit_ddl(movie_spec, emit_indexes=False)
+    assert not any(s.startswith("CREATE INDEX") for s in stmts)
+
+
+def test_indexes_suppressed_when_bindings_suppressed(movie_spec):
+    # No bindings tables = nothing to index.
+    stmts = emit_ddl(movie_spec, emit_bindings=False)
+    assert not any(s.startswith("CREATE INDEX") for s in stmts)
+
+
 def test_bindings_table_identifier_not_null_others_nullable(movie_spec):
     stmts = emit_ddl(movie_spec)
     bindings = next(s for s in stmts if "movie_bindings" in s)

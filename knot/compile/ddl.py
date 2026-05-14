@@ -45,6 +45,7 @@ def emit_ddl(
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
     emit_fk_references: bool = True,
+    emit_indexes: bool = True,
     emit_descriptions: bool = False,
 ) -> list[str]:
     """Return the DDL statements that materialize ``spec``.
@@ -64,7 +65,7 @@ def emit_ddl(
         When True, emit ``CREATE TABLE IF NOT EXISTS`` and ``CREATE OR
         REPLACE VIEW``. Use for re-runnable migrations. FK constraints
         are emitted as ``DROP CONSTRAINT IF EXISTS`` + ``ADD
-        CONSTRAINT`` so the alter pass is idempotent too.
+        CONSTRAINT``, and indexes use ``CREATE INDEX IF NOT EXISTS``.
     emit_bindings
         When False, skip the ``<class>_bindings`` tables entirely.
     emit_resolved_views
@@ -76,6 +77,10 @@ def emit_ddl(
         targeting the referenced class's identifier column. Bindings
         tables intentionally stay loose (a binding may claim about a
         canonical that doesn't exist yet).
+    emit_indexes
+        When True, emit partial indexes on each ``<class>_bindings``
+        table that match the resolver's per-slot lookup and the SCD2
+        close-out hot paths (both filter on ``valid_to IS NULL``).
     emit_descriptions
         When True, follow each entity with ``COMMENT ON TABLE / COLUMN /
         VIEW`` for any non-empty ``description`` fields.
@@ -103,6 +108,15 @@ def emit_ddl(
                         if_not_exists=if_not_exists,
                     )
                 )
+                if emit_indexes:
+                    stmts.extend(
+                        _emit_bindings_indexes(
+                            cls,
+                            schema=schema,
+                            bindings_suffix=bindings_suffix,
+                            if_not_exists=if_not_exists,
+                        )
+                    )
             if emit_resolved_views and emit_bindings:
                 # Resolved view depends on the bindings table existing.
                 stmts.append(
@@ -316,6 +330,45 @@ def _emit_fk_alters(
             f"REFERENCES {target_table}({target_pk});"
         )
     return out
+
+
+# ---------------------------------------------------------------------------
+# Bindings table indexes — match the two hot paths against the SCD2 layout
+# ---------------------------------------------------------------------------
+
+
+def _emit_bindings_indexes(
+    cls: OntologyClass,
+    *,
+    schema: str,
+    bindings_suffix: str,
+    if_not_exists: bool,
+) -> list[str]:
+    """Partial indexes on the bindings table sized to the two hot paths:
+
+    1. Resolver per-slot lookup: ``WHERE canonical_id = X AND valid_to
+       IS NULL`` — covered by a partial index on the identifier column.
+    2. SCD2 close-out: ``WHERE (canonical_id, source_name,
+       source_identifier) = (X, Y, Z) AND valid_to IS NULL`` — covered
+       by a composite partial index on those three columns.
+
+    Both indexes are partial (``WHERE valid_to IS NULL``) because the
+    bindings table accumulates closed-out rows forever; the index only
+    needs to be O(open rows), not O(all rows).
+    """
+    table_name = f"{cls.name.lower()}{bindings_suffix}"
+    table = f"{schema}.{table_name}"
+    ident = cls.identifier_slot()
+    maybe_if_not_exists = "IF NOT EXISTS " if if_not_exists else ""
+
+    return [
+        f"CREATE INDEX {maybe_if_not_exists}{table_name}_current_idx\n"
+        f"    ON {table} ({ident.name})\n"
+        f"    WHERE valid_to IS NULL;",
+        f"CREATE INDEX {maybe_if_not_exists}{table_name}_source_idx\n"
+        f"    ON {table} ({ident.name}, source_name, source_identifier)\n"
+        f"    WHERE valid_to IS NULL;",
+    ]
 
 
 __all__ = ["emit_ddl"]
