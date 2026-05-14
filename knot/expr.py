@@ -37,6 +37,29 @@ class Expr:
     def __invert__(self) -> Not:
         return Not(expr=self)
 
+    # Set-aggregate primitives — treat ``self`` as a predicate over an
+    # implicit row-set (the class whose slots appear in the predicate)
+    # and quantify over it. The actual primary-class inference happens
+    # at compile time.
+    def any(self) -> Aggregate:
+        """``EXISTS (SELECT 1 FROM … WHERE self)`` — at least one row."""
+        return Aggregate(kind="any", predicate=self)
+
+    def none(self) -> Aggregate:
+        """``NOT EXISTS (…)`` — no row satisfies ``self``."""
+        return Aggregate(kind="none", predicate=self)
+
+    def all(self, condition: Expr) -> Aggregate:
+        """``NOT EXISTS (… AND NOT condition)`` — every row in the
+        implicit set defined by ``self`` also satisfies ``condition``.
+        Vacuously true on the empty set (math-correct default)."""
+        return Aggregate(kind="all", predicate=self, condition=condition)
+
+    def count(self) -> Aggregate:
+        """``(SELECT COUNT(*) FROM … WHERE self)`` — value-expression,
+        comparable: ``predicate.count() > 5``."""
+        return Aggregate(kind="count", predicate=self)
+
 
 def _as_expr(v: Any) -> Expr:
     """Coerce a Python value into an Expr (wrap raw values as Literal)."""
@@ -249,6 +272,73 @@ class Raw(Expr):
     sql: str
 
 
+@dataclass(frozen=True, eq=False, slots=True)
+class This(Expr, _ValueExpr):
+    """Outer-scope binding reference. ``this.Person`` (constructed via
+    the magic ``this`` object) renders as the canonical_id of the row
+    currently being filtered in the enclosing query.
+
+    Only valid inside an Aggregate predicate; ``class_name`` must match
+    the enclosing scope's class (compile-time check)."""
+
+    class_name: str
+
+
+@dataclass(frozen=True, eq=False, slots=True)
+class Aggregate(Expr, _ValueExpr):
+    """Set-aggregate over an implicit row-set.
+
+    The "implicit row-set" is defined by ``predicate``: rows of the
+    class whose slot refs appear in the predicate. ``kind`` picks the
+    aggregation:
+
+    - ``"any"``   → ``EXISTS (SELECT 1 …)`` — boolean
+    - ``"none"``  → ``NOT EXISTS (…)`` — boolean
+    - ``"count"`` → ``(SELECT COUNT(*) …)`` — value (comparable)
+    - ``"all"``   → ``NOT EXISTS (… AND NOT condition)`` — boolean,
+      vacuously true on empty set; ``condition`` is required.
+
+    Inherits ``_ValueExpr`` so ``count()`` works in comparisons
+    (``.count() > 5``, ``.count() == 0``). Using comparison operators
+    on a boolean-kind aggregate (``.any() > 5``) is nonsense SQL —
+    not enforced at the type level; surfaces as opaque postgres."""
+
+    kind: str  # "any" | "none" | "count" | "all"
+    predicate: Expr
+    condition: Expr | None = None
+
+    def __post_init__(self) -> None:
+        if self.kind not in ("any", "none", "count", "all"):
+            raise ValueError(f"Aggregate.kind must be one of any/none/count/all, got {self.kind!r}")
+        if self.kind == "all" and self.condition is None:
+            raise ValueError("Aggregate.all requires a condition")
+        if self.kind != "all" and self.condition is not None:
+            raise ValueError(f"Aggregate.condition only used with kind='all', not {self.kind!r}")
+
+
+class _ThisAccess:
+    """Builder sugar — ``this.Person`` returns ``This(class_name="Person")``.
+
+    Disambiguates nested scopes: an outer ``Person.where(...)`` enclosing
+    a predicate over Movie writes ``this.Person`` to bind the outer row;
+    if Movie itself was the outer scope, it'd be ``this.Movie``."""
+
+    def __getattr__(self, name: str) -> This:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return This(class_name=name)
+
+
+#: Magic accessor for outer-scope row binding. See ``This``.
+this = _ThisAccess()
+
+
+# Resolve Expr's forward ref to Aggregate now that Aggregate exists.
+# (The methods ``Expr.any/none/all/count`` return Aggregate; Python
+# resolves the annotation lazily because of ``from __future__ import
+# annotations``.)
+
+
 # ---------------------------------------------------------------------------
 # Top-level factories
 # ---------------------------------------------------------------------------
@@ -279,6 +369,9 @@ __all__ = [
     "Exists",
     "CountRel",
     "Raw",
+    "This",
+    "Aggregate",
+    "this",
     "lit",
     "raw",
 ]

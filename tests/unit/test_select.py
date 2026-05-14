@@ -199,3 +199,101 @@ def test_full_query_with_fk_walk():
     assert "JOIN knot_data.person_resolved" in sql
     assert "ORDER BY knot_data.movie_resolved.year DESC" in sql
     assert "LIMIT 10" in sql
+
+
+# ---------------------------------------------------------------------------
+# Correlation (this) + Aggregates (count/any/all/none)
+# ---------------------------------------------------------------------------
+
+
+def test_this_outside_aggregate_raises():
+    """A bare this.X reference outside an Aggregate context is an error."""
+    from knot.compile.expr_sql import compile_sql
+    from knot.expr import this
+
+    with pytest.raises(ValueError, match="this.Person used outside"):
+        compile_sql(this.Person, schema="knot_data", target_suffix="_resolved")
+
+
+def test_any_existence():
+    """Persons who have directed at least one movie since 2020."""
+    from knot.expr import this
+
+    spec, movie, person = _make_movie_director_spec()
+    q = person.where((movie.col.director == this.Person).any())
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "FROM knot_data.person_resolved" in sql
+    assert "EXISTS (SELECT 1 FROM knot_data.movie_resolved WHERE" in sql
+    assert "knot_data.movie_resolved.director = knot_data.person_resolved.canonical_id" in sql
+
+
+def test_none_non_existence():
+    """Persons who have never directed a movie."""
+    from knot.expr import this
+
+    spec, movie, person = _make_movie_director_spec()
+    q = person.where((movie.col.director == this.Person).none())
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "NOT EXISTS (SELECT 1 FROM knot_data.movie_resolved WHERE" in sql
+
+
+def test_count_threshold():
+    """Directors who have directed more than 5 movies."""
+    from knot.expr import this
+
+    spec, movie, person = _make_movie_director_spec()
+    q = person.where((movie.col.director == this.Person).count() > 5)
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "(SELECT COUNT(*) FROM knot_data.movie_resolved WHERE" in sql
+    assert "> 5" in sql
+
+
+def test_count_equals_zero():
+    """Equivalent to .none() — count == 0."""
+    from knot.expr import this
+
+    spec, movie, person = _make_movie_director_spec()
+    q = person.where((movie.col.director == this.Person).count() == 0)
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "(SELECT COUNT(*) FROM knot_data.movie_resolved WHERE" in sql
+    assert "= 0" in sql
+
+
+def test_all_universal():
+    """Universal quantification via .all() — emitted as NOT EXISTS of counter-example."""
+    from knot.expr import this
+
+    spec, movie, person = _make_movie_director_spec()
+    # Hypothetical: movies whose director's birth_country == "Japan" — but
+    # in *all* form: movies where the director's country is Japan for
+    # every Movie row matching the predicate. Contrived since
+    # there's only one director per movie, but tests the compile shape.
+    q = person.where((movie.col.director == this.Person).all(movie.col.year >= 1900))
+    sql, _ = compile_query(q, spec=spec, schema="knot_data")
+    assert "NOT EXISTS (SELECT 1 FROM knot_data.movie_resolved WHERE" in sql
+    assert "AND NOT (" in sql
+    assert "knot_data.movie_resolved.year >= 1900" in sql
+
+
+def test_this_wrong_class_raises():
+    """this.Movie used inside a Person.where(...) should raise."""
+    from knot.expr import this
+
+    spec, movie, person = _make_movie_director_spec()
+    q = person.where((movie.col.director == this.Movie).any())
+    with pytest.raises(ValueError, match="doesn't match the enclosing class"):
+        compile_query(q, spec=spec, schema="knot_data")
+
+
+def test_aggregate_invalid_kind():
+    from knot.expr import Aggregate, Ref
+
+    with pytest.raises(ValueError, match="kind must be"):
+        Aggregate(kind="sum", predicate=Ref(class_name="X", slot_name="y"))
+
+
+def test_aggregate_all_requires_condition():
+    from knot.expr import Aggregate, Ref
+
+    with pytest.raises(ValueError, match="requires a condition"):
+        Aggregate(kind="all", predicate=Ref(class_name="X", slot_name="y"))

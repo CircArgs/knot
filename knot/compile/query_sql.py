@@ -25,6 +25,7 @@ from typing import Any
 
 from knot.compile.expr_sql import compile_sql
 from knot.expr import (
+    Aggregate,
     Between,
     BoolOp,
     Compare,
@@ -56,7 +57,8 @@ def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
         select_sql = "*"
     else:
         select_sql = ", ".join(
-            compile_sql(r, schema=schema, target_suffix=suffix) for r in node.projection
+            compile_sql(r, schema=schema, target_suffix=suffix, outer_class=node.class_name)
+            for r in node.projection
         )
 
     # Collect FK chains from everywhere a Ref could appear.
@@ -92,13 +94,25 @@ def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
     parts.extend(joins)
 
     if node.where_clause is not None:
-        where_sql = compile_sql(node.where_clause, schema=schema, target_suffix=suffix)
+        # outer_class is the query's primary class so Aggregate
+        # sub-predicates can resolve their ``this.X`` refs.
+        where_sql = compile_sql(
+            node.where_clause,
+            schema=schema,
+            target_suffix=suffix,
+            outer_class=node.class_name,
+        )
         parts.append(f"WHERE {where_sql}")
 
     if node.ordering:
         order_parts = []
         for ob in node.ordering:
-            ref_sql = compile_sql(ob.ref, schema=schema, target_suffix=suffix)
+            ref_sql = compile_sql(
+                ob.ref,
+                schema=schema,
+                target_suffix=suffix,
+                outer_class=node.class_name,
+            )
             order_parts.append(f"{ref_sql} {ob.direction.upper()}")
         parts.append("ORDER BY " + ", ".join(order_parts))
 
@@ -151,7 +165,12 @@ def _collect_chains(node: Expr, out: list[FkChainRef]) -> None:
         if node.where is not None:
             _collect_chains(node.where, out)
         return
-    # Ref / Literal / Raw / FkRef have no nested children with chains.
+    if isinstance(node, Aggregate):
+        # FK chains inside an Aggregate predicate are scoped to the
+        # sub-query, not the outer FROM. Skip them at the outer level;
+        # nested-JOIN-in-subquery support is a later iteration.
+        return
+    # Ref / Literal / Raw / FkRef / This have no nested chain children.
 
 
 __all__ = ["compile_query"]

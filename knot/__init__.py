@@ -10,20 +10,25 @@ or ``Spec.validate_strict()`` (raises ``SpecError``).
 """
 
 from knot.expr import (
+    Aggregate,
     Between,
     BoolOp,
     Compare,
     CountRel,
     Exists,
     Expr,
+    FkChainRef,
+    FkRef,
     InList,
     IsNull,
     Literal,
     Not,
     Raw,
     Ref,
+    This,
     lit,
     raw,
+    this,
 )
 from knot.select import OrderBy, Query
 from knot.spec import (
@@ -68,6 +73,8 @@ __all__ = [
     # expression builder
     "Expr",
     "Ref",
+    "FkRef",
+    "FkChainRef",
     "Literal",
     "Compare",
     "BoolOp",
@@ -78,6 +85,9 @@ __all__ = [
     "Exists",
     "CountRel",
     "Raw",
+    "This",
+    "Aggregate",
+    "this",
     "lit",
     "raw",
     # read substrate
