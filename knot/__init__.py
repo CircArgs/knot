@@ -25,6 +25,7 @@ from knot.expr import (
     lit,
     raw,
 )
+from knot.select import OrderBy, Query
 from knot.spec import (
     BINDING_PRIOR_STRENGTH,
     CORRECTIONS_SOURCE_NAME,
@@ -79,4 +80,7 @@ __all__ = [
     "Raw",
     "lit",
     "raw",
+    # read substrate
+    "Query",
+    "OrderBy",
 ]

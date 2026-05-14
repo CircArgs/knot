@@ -30,10 +30,12 @@ from knot.compile.ddl import emit_ddl
 from knot.compile.expr_sql import compile_sql
 from knot.compile.flyway import emit_flyway_files
 from knot.compile.migrate import MigrationOp, diff_against_db
+from knot.compile.query_sql import compile_query
 from knot.compile.resolver import emit_resolved_view, emit_resolved_views
 from knot.compile.trust import emit_trust_seed
 
 __all__ = [
+    "compile_query",
     "compile_sql",
     "emit_ddl",
     "emit_resolved_view",

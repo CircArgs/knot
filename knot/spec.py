@@ -36,6 +36,7 @@ from enum import StrEnum
 from typing import Any
 
 from knot.expr import CountRel, Exists, Expr, Ref
+from knot.select import Query
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -376,6 +377,27 @@ class OntologyClass:
             primary_identifier=ident.name,
             where=_combine_where(other, where, slot_eq),
         )
+
+    # ------------------------------------------------------------------
+    # Read substrate — query entry points. Each returns a fresh ``Query``;
+    # chain further with ``.where()`` / ``.order_by()`` / ``.limit()`` /
+    # ``.offset()`` / ``.select()`` on the returned ``Query``.
+    # ------------------------------------------------------------------
+
+    def where(self, predicate: Expr) -> Query:
+        return Query(class_name=self.name).where(predicate)
+
+    def order_by(self, ref: Expr, direction: str = "asc") -> Query:
+        return Query(class_name=self.name).order_by(ref, direction)
+
+    def limit(self, n: int) -> Query:
+        return Query(class_name=self.name).limit(n)
+
+    def offset(self, n: int) -> Query:
+        return Query(class_name=self.name).offset(n)
+
+    def select(self, *refs: Expr) -> Query:
+        return Query(class_name=self.name).select(*refs)
 
 
 def _infer_back_fk(
