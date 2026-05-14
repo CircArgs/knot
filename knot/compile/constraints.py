@@ -21,7 +21,7 @@ the resolver's per-slot argmax view. Pass ``""`` to target the canonical
 table directly — appropriate only for write-direct workflows where the
 host writes the canonical table itself.
 
-The body's ``.to_sql(schema, target_suffix)`` does the qualification —
+``compile_sql(body, schema, target_suffix)`` does the qualification —
 no AST rewriting needed here, because the builder produces references
 keyed by class name + slot name that render with the same suffix used
 in the wrapping FROM clause.
@@ -29,6 +29,7 @@ in the wrapping FROM clause.
 
 from __future__ import annotations
 
+from knot.compile.expr_sql import compile_sql
 from knot.spec import Spec
 
 
@@ -54,7 +55,7 @@ def emit_validation(
         identifier = primary.identifier_slot()
         table = f"{schema}.{primary.name.lower()}{target_suffix}"
         message_literal = f"'{_escape_literal(c.message)}'" if c.message else "NULL"
-        body_sql = c.body.to_sql(schema=schema, target_suffix=target_suffix)
+        body_sql = compile_sql(c.body, schema=schema, target_suffix=target_suffix)
         sql = (
             f"SELECT\n"
             f"    '{_escape_literal(c.name)}' AS rule_id,\n"
