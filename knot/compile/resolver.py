@@ -18,8 +18,9 @@ Resolution semantics (prototype, no observed-evidence updates yet):
 
 The accuracy table for each class is inlined as a ``CASE WHEN
 source_name = '…' THEN <accuracy> … ELSE 0`` expression so the view is
-self-contained — it doesn't depend on the meta-tables. A future
-refactor could JOIN to ``knot_meta.source_bindings(accuracy)`` instead.
+self-contained. Accuracy values come from the in-code spec at compile
+time; knot does not maintain runtime source-binding metadata in the
+database.
 
 Unknown sources (rows in the bindings table whose ``source_name`` isn't
 declared as a binding in the spec) fall to ``ELSE 0`` accuracy and lose

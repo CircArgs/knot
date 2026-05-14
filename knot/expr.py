@@ -7,9 +7,9 @@ Every Expr renders to schema-qualified SQL via ``.to_sql(schema=...,
 target_suffix=...)`` so the same body can target the canonical table,
 the resolved view, or the bindings-current view by flipping suffix.
 
-Round-trips through ``knot_meta.*`` via ``.to_json()`` /
-``Expr.from_json()`` — the body's structural form is preserved, so the
-migration emitter sees structural changes rather than text diffs.
+The spec lives in Python code, not the database — there is no JSON
+round-trip for Expr trees. Snapshot testing uses the dataclass-
+generated ``repr()`` if structural assertion is wanted.
 
 Construction-time validation: ``OntologyClass.col.year`` raises
 ``KeyError`` if the slot doesn't exist, so typos surface at spec build
@@ -18,12 +18,12 @@ rather than at SQL emission.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 
 # ---------------------------------------------------------------------------
-# Expression base + serialization registry
+# Expression base
 # ---------------------------------------------------------------------------
 
 
@@ -31,9 +31,6 @@ class Expr:
     """Base class for every node in the expression tree."""
 
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
-        raise NotImplementedError(self)
-
-    def to_json(self) -> dict[str, Any]:
         raise NotImplementedError(self)
 
     # Boolean combinators — every Expr supports these.
@@ -134,9 +131,6 @@ class Ref(Expr, _ValueExpr):
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         return f"{schema}.{self.class_name.lower()}{target_suffix}.{self.slot_name}"
 
-    def to_json(self) -> dict[str, Any]:
-        return {"kind": "ref", "class": self.class_name, "slot": self.slot_name}
-
 
 @dataclass(frozen=True, eq=False)
 class Literal(Expr, _ValueExpr):
@@ -146,9 +140,6 @@ class Literal(Expr, _ValueExpr):
 
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         return _sql_literal(self.value)
-
-    def to_json(self) -> dict[str, Any]:
-        return {"kind": "literal", "value": self.value}
 
 
 @dataclass(frozen=True)
@@ -164,14 +155,6 @@ class Compare(Expr):
         r = self.right.to_sql(schema=schema, target_suffix=target_suffix)
         return f"{l} {self.op} {r}"
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "compare",
-            "op": self.op,
-            "left": self.left.to_json(),
-            "right": self.right.to_json(),
-        }
-
 
 @dataclass(frozen=True)
 class BoolOp(Expr):
@@ -186,14 +169,6 @@ class BoolOp(Expr):
         r = self.right.to_sql(schema=schema, target_suffix=target_suffix)
         return f"({l}) {self.op} ({r})"
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "bool_op",
-            "op": self.op,
-            "left": self.left.to_json(),
-            "right": self.right.to_json(),
-        }
-
 
 @dataclass(frozen=True)
 class Not(Expr):
@@ -203,9 +178,6 @@ class Not(Expr):
 
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         return f"NOT ({self.expr.to_sql(schema=schema, target_suffix=target_suffix)})"
-
-    def to_json(self) -> dict[str, Any]:
-        return {"kind": "not", "expr": self.expr.to_json()}
 
 
 @dataclass(frozen=True)
@@ -218,13 +190,6 @@ class IsNull(Expr):
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         op = "IS NOT NULL" if self.negated else "IS NULL"
         return f"{self.expr.to_sql(schema=schema, target_suffix=target_suffix)} {op}"
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "is_null",
-            "expr": self.expr.to_json(),
-            "negated": self.negated,
-        }
 
 
 @dataclass(frozen=True)
@@ -241,14 +206,6 @@ class InList(Expr):
         op = "NOT IN" if self.negated else "IN"
         return f"{l} {op} ({vs})"
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "in_list",
-            "left": self.left.to_json(),
-            "values": list(self.values),
-            "negated": self.negated,
-        }
-
 
 @dataclass(frozen=True)
 class Between(Expr):
@@ -261,14 +218,6 @@ class Between(Expr):
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         l = self.left.to_sql(schema=schema, target_suffix=target_suffix)
         return f"{l} BETWEEN {_sql_literal(self.low)} AND {_sql_literal(self.high)}"
-
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "between",
-            "left": self.left.to_json(),
-            "low": self.low,
-            "high": self.high,
-        }
 
 
 @dataclass(frozen=True)
@@ -301,17 +250,6 @@ class Exists(Expr):
             f"WHERE {' AND '.join(clauses)})"
         )
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "exists",
-            "other": self.other_class_name,
-            "fk_slot": self.fk_slot_name,
-            "primary": self.primary_class_name,
-            "primary_identifier": self.primary_identifier,
-            "where": self.where.to_json() if self.where is not None else None,
-            "negated": self.negated,
-        }
-
 
 @dataclass(frozen=True, eq=False)
 class CountRel(Expr, _ValueExpr):
@@ -341,16 +279,6 @@ class CountRel(Expr, _ValueExpr):
             f"WHERE {' AND '.join(clauses)})"
         )
 
-    def to_json(self) -> dict[str, Any]:
-        return {
-            "kind": "count_rel",
-            "other": self.other_class_name,
-            "fk_slot": self.fk_slot_name,
-            "primary": self.primary_class_name,
-            "primary_identifier": self.primary_identifier,
-            "where": self.where.to_json() if self.where is not None else None,
-        }
-
 
 @dataclass(frozen=True)
 class Raw(Expr):
@@ -363,9 +291,6 @@ class Raw(Expr):
 
     def to_sql(self, *, schema: str, target_suffix: str) -> str:
         return self.sql
-
-    def to_json(self) -> dict[str, Any]:
-        return {"kind": "raw", "sql": self.sql}
 
 
 # ---------------------------------------------------------------------------
@@ -381,114 +306,6 @@ def lit(value: Any) -> Literal:
 def raw(sql: str) -> Raw:
     """Escape-hatch SQL fragment. Treats ``sql`` as opaque postgres."""
     return Raw(sql=sql)
-
-
-# ---------------------------------------------------------------------------
-# JSON round-trip
-# ---------------------------------------------------------------------------
-
-
-_FROM_JSON: dict[str, Any] = {}
-
-
-def _register(kind: str):
-    def decorator(fn):
-        _FROM_JSON[kind] = fn
-        return fn
-
-    return decorator
-
-
-@_register("ref")
-def _ref_from_json(d):
-    return Ref(class_name=d["class"], slot_name=d["slot"])
-
-
-@_register("literal")
-def _literal_from_json(d):
-    return Literal(value=d["value"])
-
-
-@_register("compare")
-def _compare_from_json(d):
-    return Compare(
-        op=d["op"],
-        left=Expr.from_json(d["left"]),
-        right=Expr.from_json(d["right"]),
-    )
-
-
-@_register("bool_op")
-def _bool_op_from_json(d):
-    return BoolOp(
-        op=d["op"],
-        left=Expr.from_json(d["left"]),
-        right=Expr.from_json(d["right"]),
-    )
-
-
-@_register("not")
-def _not_from_json(d):
-    return Not(expr=Expr.from_json(d["expr"]))
-
-
-@_register("is_null")
-def _is_null_from_json(d):
-    return IsNull(expr=Expr.from_json(d["expr"]), negated=d.get("negated", False))
-
-
-@_register("in_list")
-def _in_list_from_json(d):
-    return InList(
-        left=Expr.from_json(d["left"]),
-        values=tuple(d["values"]),
-        negated=d.get("negated", False),
-    )
-
-
-@_register("between")
-def _between_from_json(d):
-    return Between(left=Expr.from_json(d["left"]), low=d["low"], high=d["high"])
-
-
-@_register("exists")
-def _exists_from_json(d):
-    where = Expr.from_json(d["where"]) if d.get("where") is not None else None
-    return Exists(
-        other_class_name=d["other"],
-        fk_slot_name=d["fk_slot"],
-        primary_class_name=d["primary"],
-        primary_identifier=d["primary_identifier"],
-        where=where,
-        negated=d.get("negated", False),
-    )
-
-
-@_register("count_rel")
-def _count_rel_from_json(d):
-    where = Expr.from_json(d["where"]) if d.get("where") is not None else None
-    return CountRel(
-        other_class_name=d["other"],
-        fk_slot_name=d["fk_slot"],
-        primary_class_name=d["primary"],
-        primary_identifier=d["primary_identifier"],
-        where=where,
-    )
-
-
-@_register("raw")
-def _raw_from_json(d):
-    return Raw(sql=d["sql"])
-
-
-def _from_json(d: dict[str, Any]) -> Expr:
-    kind = d["kind"]
-    if kind not in _FROM_JSON:
-        raise ValueError(f"unknown Expr kind: {kind!r}")
-    return _FROM_JSON[kind](d)
-
-
-Expr.from_json = staticmethod(_from_json)  # type: ignore[attr-defined]
 
 
 __all__ = [
