@@ -1,151 +1,240 @@
 # CLAUDE.md — knot library
 
-**knot** is a reflective ontology compiler — a pure library that takes a
-typed Pydantic spec (classes, properties, sources, source-bindings,
-constraints) and emits the runtime artifacts (postgres DDL + GraphQL
-schema + Pydantic row validators + constraint SQL).
+**knot** is a reflective ontology compiler — a pure Python library that
+takes a typed dataclass spec (classes, slots, sources, source bindings,
+constraints) and emits the runtime artifacts (postgres DDL, resolved
+views, per-slot trust seed, batch writes, migration ops, query SQL).
 
-This branch (`library/v0`) is the focused library. Anything that talks
-to a connection, serves HTTP, or holds runtime state lives outside the
-library — in a *reference adapter* a team builds around it. The earlier
-monorepo (API service + UI + ingest + corrections + ER + AI) is in git
-history on the `draft-rfc` and `main` branches.
-
-Two ground-truth docs:
-- `RFC.md` — what knot is, framed for a consumer / new teammate.
-- `LIBRARY_DESIGN.md` — what knot is, framed for an implementer:
-  phased plan, file-by-file map, test strategy, Java port track.
+Branch `library/v0` is the focused library. Anything that talks to a
+connection, serves HTTP, holds runtime state, or assembles a GraphQL
+endpoint lives outside the library — in a *reference adapter* a team
+builds around it. The earlier monorepo (API service + UI + ingest + ER
++ AI) is in git history on `draft-rfc` and `main`.
 
 ## Posture
 
 - **Pure library.** No FastAPI, no HTTP, no `psycopg.connect`, no
-  ingest path. The library returns `sql.Composable`, `strawberry.Schema`,
-  `BaseModel` subclasses; the host runs them.
-- **No runtime config.** Names like the postgres schema (`knot_data`)
-  and the synthetic corrections source (`_user_corrections`) are
-  module-level constants in `knot.spec.compile.postgres._naming`. A host
-  that needs a non-default schema rebinds the constants before importing
-  the emitters; there is no env-var indirection.
-- **Single team posture survives.** Trusted authors of the spec, no
+  ingest path inside `knot/`. Compile functions return SQL strings (or
+  `(sql, params)` pairs); the host runs them.
+- **Postgres-only today.** All emitters target postgres. A future
+  Trino / Spark / cypher dialect lands as a sibling module
+  (`expr_sql_trino.py`, `query_sql_trino.py`, etc.) — same dispatch
+  pattern, separate file per target. Not preemptively built.
+- **Module-level constants, not env vars.** The default schema name
+  (`knot_data`), the corrections source name (`_user_corrections`),
+  the trust table name (`source_trust`) are exposed as kwargs on the
+  emitter functions; their *defaults* are constants you can rebind
+  before import. No `os.environ.get` anywhere.
+- **Single-team posture.** Trusted authors of the spec, no
   multi-tenant defenses, no sandboxing.
-- **Async-aware but not async-only.** Compiler is sync (pure transforms).
-  Resolvers emitted into the GraphQL schema are async because Strawberry
-  expects that.
+- **Sync.** The compiler is sync (pure transforms). Adapters wrap it
+  for async hosts if they want.
 
 ## Layout
 
 ```
-core/                                  # the library package
-  pyproject.toml                       # core deps only (pydantic, jcs,
-                                       # sqlglot, psycopg, strawberry)
-  knot/
-    __version__.py
-    __init__.py                        # public re-exports
-    spec/
-      metaschema.py                    # Spec + OntologyClass + DefinedClass + Slot + ...
-      canonical.py                     # canonical_dump, compute_content_hash
-      serialization.py                 # spec_to_dict / spec_from_dict
-      effective_slots.py               # effective_slots, is_stored, stored_slot_names
-      effective_constraints.py         # effective_constraints
-      errors.py                        # PublishGateError, ...
-      expressions.py                   # ExprTree + translate_expr
-      sql_validate.py                  # sqlglot-validated constraint SQL
-      primitives.py                    # STANDARD_PRIMITIVE_NAMES
-      compile/
-        postgres/                      # DDL + predicate + order-by + relation
-          __init__.py                  # public compile_* functions
-          _context.py                  # CompileContext
-          _dispatch.py                 # single-dispatch over expression tree
-          _naming.py                   # SCHEMA + USER_CORRECTIONS_SOURCE constants
-          _types.py                    # slot_pg_type
-          _queries.py                  # select_with_binding / _with_derivations
-          _predicate.py                # WHERE-fragment compiler
-          _relation.py                 # ClassRef / Array traversal SQL
-          migration.py                 # Change types + diff_specs + DDL emitters
-          lake.py                      # lake-side compile helpers
-        graphql/
-          __init__.py                  # build schema entry point
-        validators/
-          __init__.py
-          row_models.py                # Pydantic row-model factories
-  tests/
-    unit/                              # pure unit tests (no I/O)
-RFC.md                                 # consumer-facing pitch + walkthrough
-LIBRARY_DESIGN.md                      # implementer-facing handoff
-assets/                                # images referenced by RFC
+knot/
+  __init__.py          # public re-exports
+  spec.py              # Spec, OntologyClass, VirtualClass, Slot,
+                       # Source, SourceBinding, SlotMapping,
+                       # Constraint, Severity, ClassKind
+  types.py             # types.TEXT, types.INTEGER, …, types.ARRAY(…)
+                       # — THE canonical type surface
+  expr.py              # Expr AST: Ref, FkRef, FkChainRef, Compare,
+                       # BoolOp, Not, IsNull, InList, Between,
+                       # Exists, CountRel, Raw, This, Aggregate
+                       # + `this` magic accessor for outer-scope refs
+  select.py            # read substrate: Query, OrderBy
+  compile/
+    __init__.py
+    ddl.py             # canonical tables + bindings tables + indexes
+                       # + FK ALTERs + source_trust table + virtual
+                       # class views
+    resolver.py        # per-(source, class, slot) argmax resolved views
+    constraints.py     # constraint validation SELECTs
+    data_io.py         # batch SCD2 writes (close-out + insert)
+    trust.py           # source_trust INSERT-only seed
+    migrate.py         # diff_against_db (Alembic-style autogen)
+    flyway.py          # render MigrationOps into Flyway V/R files
+    expr_sql.py        # @singledispatch compile_sql over Expr nodes
+    query_sql.py       # @singledispatch compile_query over Query nodes
+tests/
+  unit/                # pure unit tests (~210 tests; no I/O)
+  integration/         # ~17 tests against live postgres on :5433
+notebooks/
+  query_playground.py  # end-to-end marimo playground (spec → DDL →
+                       # ingest → query)
+  builder_tinker.py    # spec builder tinker
 ```
+
+There is intentionally **no `RFC.md`, no `LIBRARY_DESIGN.md`** in this
+tree — they got deleted as stale. Design conversation lives in git
+history and in the auto-memory; the code is the contract.
 
 ## Workflow
 
 ```bash
-# Install in the root .venv (editable; library only — no service deps).
-.venv/bin/pip install -e ./core
+# Install editable in the root .venv.
+.venv/bin/pip install -e .
 
 # Smoke-test the public surface.
 .venv/bin/python -c "
-from knot.spec import Spec, OntologyClass, DefinedClass, Slot
-from knot.spec.compile.postgres import compile_constraint
-from knot.spec.compile.graphql import get_or_build_schema
-from knot.spec.compile.validators import build_row_model
-print('library import surface ok')
+from knot import Spec, types, this
+from knot.compile import emit_ddl, emit_trust_seed, compile_query, diff_against_db
+print('ok')
 "
 
 # Unit tests (pure, no I/O).
-.venv/bin/pytest core/tests/unit/ -q
+.venv/bin/pytest tests/unit/ -q
 
-# Lint + types.
-.venv/bin/ruff check core/knot/ core/tests/
-.venv/bin/ruff format core/knot/ core/tests/
-.venv/bin/mypy core/knot/
+# Integration tests against the live postgres compose service.
+# Brings up postgres if it's not already running on :5433.
+.venv/bin/pytest tests/integration/ -q
+
+# Lint + format.
+.venv/bin/ruff check knot/ tests/
+.venv/bin/ruff format knot/ tests/
+
+# Interactive playground (binds 0.0.0.0:2718 for Tailscale access).
+.venv/bin/marimo edit --host 0.0.0.0 --port 2718 notebooks/query_playground.py
 ```
 
-There is no docker-compose, no uvicorn, no UI on this branch. Integration
-tests that need postgres live with a reference adapter (separate repo or
-`examples/` subdir, TBD).
+## The user-facing surface (canonical patterns)
+
+**Spec construction** — dataclass builders, single-file in `knot/spec.py`:
+
+```python
+from knot import Spec, types
+
+spec = Spec(id="movies", version="0.1")
+
+person = spec.add_class("Person")
+person.slot("canonical_id", types.TEXT, identifier=True)
+person.slot("name", types.TEXT, required=True)
+person.slot("birth_country", types.TEXT)
+
+movie = spec.add_class("Movie")
+movie.slot("canonical_id", types.TEXT, identifier=True)
+movie.slot("title", types.TEXT, required=True)
+movie.slot("year", types.INTEGER)
+movie.slot("director", person)             # FK — pass the class directly
+movie.slot("genres", types.ARRAY(types.TEXT))
+```
+
+**Sources and bindings** — source-method-chained:
+
+```python
+imdb = spec.add_source("imdb")
+imdb_movie = imdb.bind(movie, base_trust=0.85)
+imdb_movie.slot(class_slot="canonical_id", source_slot="imdb_id")
+imdb_movie.slot(class_slot="year", source_slot="release_year", trust=0.9)
+imdb_movie.slot(class_slot="runtime", source_slot="runtime",
+                sql="(regexp_match(runtime, '[0-9]+'))[1]::int", trust=0.7)
+# Slots not explicitly mapped → implicit passthrough at base_trust.
+```
+
+**Read substrate** — fluent immutable queries with outer-scope
+correlation, transparent FK walks, per-slot aggregates:
+
+```python
+from knot import this
+from knot.compile import compile_query
+
+# Top 10 movies + their directors (FK walk + projection + order/limit)
+q = (movie.order_by(movie.col.year, "desc")
+          .limit(10)
+          .select(movie.col.title, movie.col.director.name))
+
+# Directors with more than 5 movies (correlation + count aggregate)
+q = person.where((movie.col.director == this.Person).count() > 5)
+
+# People who never directed (.none() aggregate)
+q = person.where((movie.col.director == this.Person).none())
+
+sql, params = compile_query(q, spec=spec, schema="knot_data")
+```
+
+**Trust runtime**:
+- Per-(source, class, slot) value lives in `<schema>.source_trust`.
+- The seed emitter is **INSERT-only** (`ON CONFLICT DO NOTHING`). Spec
+  values are *initial conditions*; once a row exists, the operator
+  owns it. Redeploying the spec never clobbers operator tuning.
 
 ## Boundary rules
 
-- **No I/O in the library.** Anything in `knot/` that calls
-  `psycopg.connect`, `await conn.execute`, or otherwise talks to a
-  resource is a bug. The library *returns* `sql.Composable` and parameter
-  lists; the host runs them.
-- **No env-var indirection.** Per-deployment knobs are
-  module-level constants (rebindable by the host before import) or
-  function parameters, never `os.environ.get`.
-- **Spec → compile direction only.** `knot/spec/compile/` may import
-  from `knot/spec/` but `knot/spec/` must not import from
-  `knot/spec/compile/`. The metaschema is upstream of every emitter.
-- **No sibling services.** `ai/` and `er/` are gone from this branch.
-  Compatible external services can be wired by a reference adapter,
-  not by the library.
+- **No I/O in `knot/`.** Anything that calls `psycopg.connect`,
+  `await conn.execute`, or otherwise talks to a resource is a bug.
+- **No env-var indirection.** Per-deployment knobs are kwargs on the
+  emit functions (defaults are module-level constants).
+- **Spec → compile direction only.** `knot/compile/*.py` imports from
+  `knot/spec.py`, `knot/expr.py`, `knot/select.py`, `knot/types.py`.
+  The spec layer must not import from `knot/compile/`. The metaschema
+  is upstream of every emitter.
+- **`knot.types` is THE type surface.** `Primitive` enum, `Array`,
+  `ClassRef` exist internally in `knot.spec` but are not in the
+  public `__init__.py` exports. Users never type
+  `Primitive.TEXT` — they type `types.TEXT`.
+- **One way to do everything.** No deprecation cruft. `spec.bind(...)`,
+  `binding.map(...)`, string shorthand `"text"`, the `.fk()` method,
+  the `Primitive`/`Array`/`ClassRef` public imports, and the
+  `accuracy` field name were all removed when their replacements
+  shipped. This is pre-release; refactor by deletion.
 
 ## Conventions (apply proactively)
 
-- **Real Pydantic types over discriminator strings.** Real enums, real
-  class-based discrimination. Strings are for data, not structural shape.
-- **Walk the typed entity tree via single-dispatch.** No parallel meta
-  structures.
-- **Interrogate every named entity.** Is this an actual thing or a label
-  for a bundle of existing things?
-- **No v0/v1/future-work framing.** Either commit to a design or
-  explicitly state the open question.
-- **Comparative anchoring when proposing architecture.** Name 2-3
-  comparators (LinkML, DataJunction, dbt, RDF+SHACL, Foundry's ontology
-  layer) and explicitly position.
-- **Cull claims that don't earn their cost.** No inertia commits.
+- **Frozen dataclasses with `slots=True` for AST nodes.** Pure data,
+  no rendering methods. Builder methods on user-facing types
+  (`OntologyClass.slot`, `Query.where`, `Source.bind`) construct
+  nodes; rendering lives in `knot/compile/`.
+- **`@functools.singledispatch` for tree compilation** (Expr, Query).
+  Adding a new node type = one register; adding a new compilation
+  target = one new module.
+- **Free functions for spec → SQL emission** (DDL, migrate, write,
+  resolver, trust, flyway). The Spec is a fixed shape, not a
+  recursive heterogeneous tree — dispatch doesn't earn its keep.
+- **`match` statements for type-discriminated dispatch** where the set
+  is closed and small.
+- **Compile-time validation over runtime checks.** Construction-time
+  raises (typos in slot refs, bad enum coercions, malformed bindings)
+  surface failures where the user can fix them; `Spec.validate()`
+  catches cross-entity issues; `compile_*` assumes the spec is valid.
+- **Match scope to what was actually requested.** Bug fixes don't get
+  surrounding cleanup; one-shot operations don't get helper
+  abstractions; three similar lines beats a premature factoring.
+- **No `v0`/`v1`/`future-work` framing in code.** Either commit to a
+  design or explicitly call it out as an open question in the PR
+  description / commit message.
 
 ## What NOT to do
 
-- Don't add a service, a router, or anything that mounts an HTTP route.
-  This branch is a library.
-- Don't reach for env-var config. Constants are rebindable; that's enough.
+- Don't add a service, a router, FastAPI, or anything that mounts an
+  HTTP route. This branch is a library.
+- Don't reach for env-var config. Constants are rebindable; kwargs
+  are kwargs.
 - Don't reintroduce `knot.db`, `knot.api`, `knot.graph`, or
   `knot.extensions` modules. Those moved to history.
-- Don't introduce new named metaschema entities without interrogating
-  whether they earn their place.
+- Don't reintroduce `Pydantic` for spec entities — dataclasses are
+  the design; the future Java port maps them to records / sealed
+  interfaces / enum.
+- Don't reintroduce `.fk()`, string-shorthand types, `Primitive.TEXT`
+  in user-facing code, `spec.bind()`, `binding.map()`, or the
+  `accuracy` field name. Those got removed deliberately.
+- Don't add GraphQL emission or Pydantic row-model emission inside
+  `knot/` yet. Those are adapter-package territory. The current
+  library compiles to SQL; the rest is downstream.
+- Don't paper over operator agency at runtime — trust seed is
+  INSERT-only, deliberately. Don't add an `--overwrite` flag.
 
 ## Auto-memory
 
-`~/.claude/projects/-mnt-main-code-knot/memory/MEMORY.md` —
-`feedback_design_thinking_style.md` condenses the patterns above for
-proactive application.
+`~/.claude/projects/-mnt-main-code-knot/memory/MEMORY.md` carries
+durable user-style cues. The most relevant for working in this tree:
+
+- `feedback_design_thinking_style.md` — Nick's recurring patterns
+  (concision, comparative anchoring, cull-claims-that-don't-earn).
+- `prerelease_no_deprecation.md` — refactor by deletion; no legacy
+  retention paths.
+- `feedback_cli_json_first.md` — programmatic introspection uses
+  `--json` or MCP, never the rendered TUI.
+- `feedback_keep_pushing.md` — mid-workflow, just continue; don't
+  ask whether to keep going.
