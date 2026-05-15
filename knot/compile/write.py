@@ -34,18 +34,9 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
 from knot.compile.constraints import emit_validation
-from knot.spec import (
-    Array,
-    ClassKind,
-    ClassRef,
-    OntologyClass,
-    Primitive,
-    Slot,
-    SourceBinding,
-    Spec,
-    TypeExpression,
-)
+from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding, Spec
 
 # ---------------------------------------------------------------------------
 # Public dataclasses
@@ -565,13 +556,3 @@ def emit_recanonicalize(
         "source_name": source_name,
         "source_identifier": source_identifier,
     }
-
-
-__all__ = [
-    "ClassWrites",
-    "BatchWrite",
-    "emit_batch_write",
-    "emit_close_out",
-    "emit_assign_canonical",
-    "emit_recanonicalize",
-]

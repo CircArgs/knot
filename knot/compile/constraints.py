@@ -85,6 +85,3 @@ def emit_validation_union(
     if not parts:
         return None
     return "\nUNION ALL\n".join(parts) + ";"
-
-
-__all__ = ["emit_validation", "emit_validation_union"]

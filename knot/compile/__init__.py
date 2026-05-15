@@ -34,22 +34,3 @@ from knot.compile.write import (
     emit_close_out,
     emit_recanonicalize,
 )
-
-__all__ = [
-    "compile_query",
-    "compile_sql",
-    "emit_ddl",
-    "emit_resolved_view",
-    "emit_resolved_views",
-    "emit_trust_seed",
-    "emit_validation",
-    "emit_validation_union",
-    "ClassWrites",
-    "BatchWrite",
-    "emit_batch_write",
-    "emit_close_out",
-    "emit_assign_canonical",
-    "emit_recanonicalize",
-    "MigrationOp",
-    "diff_against_db",
-]

@@ -41,7 +41,7 @@ from typing import Any
 
 from knot.ast.expr import CountRel, Exists, Expr, FkRef, Ref
 from knot.ast.select import Query
-from knot.ast.types import Array, ClassRef, Primitive, TypeExpression, _coerce_type
+from knot.ast.types import ClassRef, TypeExpression, _coerce_type
 
 # ---------------------------------------------------------------------------
 # Enums (class-shape + constraint-severity — the type-expression enum lives
@@ -1098,23 +1098,3 @@ def _participates_in_cycle(cls: OntologyClass) -> bool:
             queue.append(cur.is_a)
         queue.extend(cur.mixins)
     return False
-
-
-__all__ = [
-    "Primitive",
-    "ClassKind",
-    "Severity",
-    "Array",
-    "ClassRef",
-    "TypeExpression",
-    "Slot",
-    "OntologyClass",
-    "VirtualClass",
-    "Constraint",
-    "Source",
-    "SourceBinding",
-    "SlotMapping",
-    "CORRECTIONS_SOURCE_NAME",
-    "Spec",
-    "SpecError",
-]

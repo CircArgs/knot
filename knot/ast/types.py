@@ -102,18 +102,3 @@ TIMESTAMP = Primitive.TIMESTAMP
 def ARRAY(of):
     """Homogeneous array of another knot type or class."""
     return Array(of=of)
-
-
-__all__ = [
-    "TEXT",
-    "INTEGER",
-    "FLOAT",
-    "BOOLEAN",
-    "DATE",
-    "TIMESTAMP",
-    "ARRAY",
-    "Primitive",
-    "Array",
-    "ClassRef",
-    "TypeExpression",
-]

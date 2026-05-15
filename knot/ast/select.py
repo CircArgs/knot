@@ -74,6 +74,3 @@ class Query:
     def select(self, *refs: Expr) -> Query:
         """Set the projection. ``None`` (the default) means ``SELECT *``."""
         return replace(self, projection=tuple(refs))
-
-
-__all__ = ["Query", "OrderBy"]

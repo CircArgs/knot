@@ -18,15 +18,12 @@ with an extra ``(source_name, source_identifier)`` layer and SCD2
 
 from __future__ import annotations
 
+from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
 from knot.compile.expr import compile_sql
 from knot.spec import (
-    Array,
     ClassKind,
-    ClassRef,
     OntologyClass,
-    Primitive,
     Spec,
-    TypeExpression,
     VirtualClass,
 )
 
@@ -416,6 +413,3 @@ def _emit_trust_table(
         "    PRIMARY KEY (source_name, class_name, slot_name)\n"
         ");"
     )
-
-
-__all__ = ["emit_ddl"]

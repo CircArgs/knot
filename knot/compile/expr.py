@@ -302,6 +302,3 @@ def _sql_literal(v: Any) -> str:
             return "ARRAY[" + ", ".join(_sql_literal(x) for x in v) + "]"
         case _:
             raise TypeError(f"can't serialize {type(v).__name__} as SQL literal: {v!r}")
-
-
-__all__ = ["compile_sql"]

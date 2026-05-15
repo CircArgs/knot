@@ -139,6 +139,3 @@ def emit_resolved_views(
                 )
             )
     return out
-
-
-__all__ = ["emit_resolved_view", "emit_resolved_views"]

@@ -183,7 +183,7 @@ def test_fk_detection():
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("movie", movie)
     assert credit["movie"].is_fk is True
-    from knot.spec import ClassRef
+    from knot.ast.types import ClassRef
 
     assert isinstance(credit["movie"].type, ClassRef)
     assert credit["movie"].type.target is movie

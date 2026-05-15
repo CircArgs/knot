@@ -173,6 +173,3 @@ def _collect_chains(node: Expr, out: list[FkChainRef]) -> None:
         # nested-JOIN-in-subquery support is a later iteration.
         return
     # Ref / Literal / Raw / FkRef / This have no nested chain children.
-
-
-__all__ = ["compile_query"]

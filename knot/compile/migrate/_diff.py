@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from knot.ast.types import ClassRef
 from knot.compile.ddl import (
     _emit_bindings_indexes,
     _emit_bindings_table,
@@ -32,7 +33,7 @@ from knot.compile.migrate._introspect import (
     _existing_views,
 )
 from knot.compile.resolver import emit_resolved_view
-from knot.spec import ClassRef, OntologyClass, Spec
+from knot.spec import OntologyClass, Spec
 
 
 @dataclass(frozen=True, slots=True)

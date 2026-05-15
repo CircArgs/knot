@@ -14,5 +14,3 @@ the ``QueryFn`` type alias.
 
 from knot.compile.migrate._diff import MigrationOp, diff_against_db
 from knot.compile.migrate._introspect import QueryFn
-
-__all__ = ["MigrationOp", "QueryFn", "diff_against_db"]

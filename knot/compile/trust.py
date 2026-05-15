@@ -56,6 +56,3 @@ def emit_trust_seed(
             trust = b.trust_for(slot.name)
             out.append((sql, [b.source.name, cls.name, slot.name, trust]))
     return out
-
-
-__all__ = ["emit_trust_seed"]
