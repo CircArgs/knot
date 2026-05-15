@@ -20,7 +20,6 @@ top-level WHERE clause of a query that contains aggregates.
 from __future__ import annotations
 
 from functools import singledispatch
-from typing import Any
 
 from knot.expr import (
     Aggregate,
@@ -43,40 +42,34 @@ from knot.expr import (
 
 
 @singledispatch
-def compile_sql(
-    node: Expr,
-    *,
-    schema: str,
-    target_suffix: str,
-    outer_class: str | None = None,
-) -> str:
+def compile_sql(node, *, schema, target_suffix, outer_class=None):
     """Render ``node`` as a postgres SQL fragment."""
     raise NotImplementedError(f"no SQL compiler registered for {type(node).__name__}")
 
 
-@compile_sql.register
-def _(node: Ref, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Ref)
+def _(node, *, schema, target_suffix, outer_class=None):
     return f"{schema}.{node.class_name.lower()}{target_suffix}.{node.slot_name}"
 
 
-@compile_sql.register
-def _(node: FkRef, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(FkRef)
+def _(node, *, schema, target_suffix, outer_class=None):
     return f"{schema}.{node.class_name.lower()}{target_suffix}.{node.slot_name}"
 
 
-@compile_sql.register
-def _(node: FkChainRef, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(FkChainRef)
+def _(node, *, schema, target_suffix, outer_class=None):
     target_class = node.chain[-1][1]
     return f"{schema}.{target_class.lower()}{target_suffix}.{node.terminal_slot}"
 
 
-@compile_sql.register
-def _(node: Literal, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Literal)
+def _(node, *, schema, target_suffix, outer_class=None):
     return _sql_literal(node.value)
 
 
-@compile_sql.register
-def _(node: This, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(This)
+def _(node, *, schema, target_suffix, outer_class=None):
     if outer_class is None:
         raise ValueError(f"this.{node.class_name} used outside of an Aggregate context")
     if node.class_name != outer_class:
@@ -88,8 +81,8 @@ def _(node: This, *, schema: str, target_suffix: str, outer_class: str | None = 
     return f"{schema}.{outer_class.lower()}{target_suffix}.canonical_id"
 
 
-@compile_sql.register
-def _(node: Compare, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Compare)
+def _(node, *, schema, target_suffix, outer_class=None):
     lhs = compile_sql(
         node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
     )
@@ -99,8 +92,8 @@ def _(node: Compare, *, schema: str, target_suffix: str, outer_class: str | None
     return f"{lhs} {node.op} {rhs}"
 
 
-@compile_sql.register
-def _(node: BoolOp, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(BoolOp)
+def _(node, *, schema, target_suffix, outer_class=None):
     lhs = compile_sql(
         node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
     )
@@ -110,19 +103,25 @@ def _(node: BoolOp, *, schema: str, target_suffix: str, outer_class: str | None 
     return f"({lhs}) {node.op} ({rhs})"
 
 
-@compile_sql.register
-def _(node: Not, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
-    return f"NOT ({compile_sql(node.expr, schema=schema, target_suffix=target_suffix, outer_class=outer_class)})"
+@compile_sql.register(Not)
+def _(node, *, schema, target_suffix, outer_class=None):
+    inner = compile_sql(
+        node.expr, schema=schema, target_suffix=target_suffix, outer_class=outer_class
+    )
+    return f"NOT ({inner})"
 
 
-@compile_sql.register
-def _(node: IsNull, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(IsNull)
+def _(node, *, schema, target_suffix, outer_class=None):
     op = "IS NOT NULL" if node.negated else "IS NULL"
-    return f"{compile_sql(node.expr, schema=schema, target_suffix=target_suffix, outer_class=outer_class)} {op}"
+    inner = compile_sql(
+        node.expr, schema=schema, target_suffix=target_suffix, outer_class=outer_class
+    )
+    return f"{inner} {op}"
 
 
-@compile_sql.register
-def _(node: InList, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(InList)
+def _(node, *, schema, target_suffix, outer_class=None):
     lhs = compile_sql(
         node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
     )
@@ -131,16 +130,16 @@ def _(node: InList, *, schema: str, target_suffix: str, outer_class: str | None 
     return f"{lhs} {op} ({vs})"
 
 
-@compile_sql.register
-def _(node: Between, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Between)
+def _(node, *, schema, target_suffix, outer_class=None):
     lhs = compile_sql(
         node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
     )
     return f"{lhs} BETWEEN {_sql_literal(node.low)} AND {_sql_literal(node.high)}"
 
 
-@compile_sql.register
-def _(node: Exists, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Exists)
+def _(node, *, schema, target_suffix, outer_class=None):
     other_table = f"{schema}.{node.other_class_name.lower()}{target_suffix}"
     primary_table = f"{schema}.{node.primary_class_name.lower()}{target_suffix}"
     clauses = [f"{other_table}.{node.fk_slot_name} = {primary_table}.{node.primary_identifier}"]
@@ -154,8 +153,8 @@ def _(node: Exists, *, schema: str, target_suffix: str, outer_class: str | None 
     return f"{prefix} (SELECT 1 FROM {other_table} WHERE {' AND '.join(clauses)})"
 
 
-@compile_sql.register
-def _(node: CountRel, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(CountRel)
+def _(node, *, schema, target_suffix, outer_class=None):
     other_table = f"{schema}.{node.other_class_name.lower()}{target_suffix}"
     primary_table = f"{schema}.{node.primary_class_name.lower()}{target_suffix}"
     clauses = [f"{other_table}.{node.fk_slot_name} = {primary_table}.{node.primary_identifier}"]
@@ -168,8 +167,8 @@ def _(node: CountRel, *, schema: str, target_suffix: str, outer_class: str | Non
     return f"(SELECT COUNT(*) FROM {other_table} WHERE {' AND '.join(clauses)})"
 
 
-@compile_sql.register
-def _(node: Aggregate, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Aggregate)
+def _(node, *, schema, target_suffix, outer_class=None):
     # Infer the primary class — the class whose slot refs appear in the
     # predicate (ignoring This refs, which point to outer scope).
     primary = _infer_primary_class(node.predicate)
@@ -183,10 +182,7 @@ def _(node: Aggregate, *, schema: str, target_suffix: str, outer_class: str | No
     # (it propagates the enclosing scope, since This refs in the predicate
     # bind to the enclosing query, not the subquery itself).
     pred_sql = compile_sql(
-        node.predicate,
-        schema=schema,
-        target_suffix=target_suffix,
-        outer_class=outer_class,
+        node.predicate, schema=schema, target_suffix=target_suffix, outer_class=outer_class
     )
     if node.kind == "any":
         return f"EXISTS (SELECT 1 FROM {sub_table} WHERE {pred_sql})"
@@ -197,21 +193,18 @@ def _(node: Aggregate, *, schema: str, target_suffix: str, outer_class: str | No
     if node.kind == "all":
         # Universal as "no counter-example": NOT EXISTS (… AND NOT cond).
         cond_sql = compile_sql(
-            node.condition,
-            schema=schema,
-            target_suffix=target_suffix,
-            outer_class=outer_class,
+            node.condition, schema=schema, target_suffix=target_suffix, outer_class=outer_class
         )
         return f"NOT EXISTS (SELECT 1 FROM {sub_table} WHERE {pred_sql} AND NOT ({cond_sql}))"
     raise ValueError(f"unknown Aggregate.kind: {node.kind}")
 
 
-@compile_sql.register
-def _(node: Raw, *, schema: str, target_suffix: str, outer_class: str | None = None) -> str:
+@compile_sql.register(Raw)
+def _(node, *, schema, target_suffix, outer_class=None):
     return node.sql
 
 
-def _infer_primary_class(node: Expr) -> str | None:
+def _infer_primary_class(node):
     """Walk ``node`` and return the class name of the first non-``This``
     slot reference encountered. Used by ``Aggregate`` to pick its
     sub-query's FROM table.
@@ -234,15 +227,11 @@ def _infer_primary_class(node: Expr) -> str | None:
     if isinstance(node, (InList, Between)):
         return _infer_primary_class(node.left)
     if isinstance(node, Aggregate):
-        # Nested aggregate — its own primary class is what its inner
-        # predicate resolves to; but for inference at this level we
-        # peek into its predicate (the aggregate value-expr lives in
-        # an outer context).
         return _infer_primary_class(node.predicate)
     return None
 
 
-def _sql_literal(v: Any) -> str:
+def _sql_literal(v):
     """Postgres SQL literal serialization for primitive values."""
     match v:
         case None:

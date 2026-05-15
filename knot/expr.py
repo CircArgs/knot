@@ -41,21 +41,21 @@ class Expr:
     # implicit row-set (the class whose slots appear in the predicate)
     # and quantify over it. The actual primary-class inference happens
     # at compile time.
-    def any(self) -> Aggregate:
+    def any(self):
         """``EXISTS (SELECT 1 FROM … WHERE self)`` — at least one row."""
         return Aggregate(kind="any", predicate=self)
 
-    def none(self) -> Aggregate:
+    def none(self):
         """``NOT EXISTS (…)`` — no row satisfies ``self``."""
         return Aggregate(kind="none", predicate=self)
 
-    def all(self, condition: Expr) -> Aggregate:
+    def all(self, condition):
         """``NOT EXISTS (… AND NOT condition)`` — every row in the
         implicit set defined by ``self`` also satisfies ``condition``.
         Vacuously true on the empty set (math-correct default)."""
         return Aggregate(kind="all", predicate=self, condition=condition)
 
-    def count(self) -> Aggregate:
+    def count(self):
         """``(SELECT COUNT(*) FROM … WHERE self)`` — value-expression,
         comparable: ``predicate.count() > 5``."""
         return Aggregate(kind="count", predicate=self)
@@ -146,7 +146,7 @@ class FkRef(Expr, _ValueExpr):
     slot_name: str
     target_class_name: str
 
-    def __getattr__(self, attr: str) -> FkChainRef:
+    def __getattr__(self, attr):
         # Only triggered for unknown attrs — dataclass slots short-circuit.
         if attr.startswith("_"):
             raise AttributeError(attr)
@@ -307,7 +307,7 @@ class Aggregate(Expr, _ValueExpr):
     predicate: Expr
     condition: Expr | None = None
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         if self.kind not in ("any", "none", "count", "all"):
             raise ValueError(f"Aggregate.kind must be one of any/none/count/all, got {self.kind!r}")
         if self.kind == "all" and self.condition is None:
@@ -323,7 +323,7 @@ class _ThisAccess:
     a predicate over Movie writes ``this.Person`` to bind the outer row;
     if Movie itself was the outer scope, it'd be ``this.Movie``."""
 
-    def __getattr__(self, name: str) -> This:
+    def __getattr__(self, name):
         if name.startswith("_"):
             raise AttributeError(name)
         return This(class_name=name)

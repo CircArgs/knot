@@ -390,19 +390,19 @@ class OntologyClass:
     # ``.offset()`` / ``.select()`` on the returned ``Query``.
     # ------------------------------------------------------------------
 
-    def where(self, predicate: Expr) -> Query:
+    def where(self, predicate):
         return Query(class_name=self.name).where(predicate)
 
-    def order_by(self, ref: Expr, direction: str = "asc") -> Query:
+    def order_by(self, ref, direction="asc"):
         return Query(class_name=self.name).order_by(ref, direction)
 
-    def limit(self, n: int) -> Query:
+    def limit(self, n):
         return Query(class_name=self.name).limit(n)
 
-    def offset(self, n: int) -> Query:
+    def offset(self, n):
         return Query(class_name=self.name).offset(n)
 
-    def select(self, *refs: Expr) -> Query:
+    def select(self, *refs):
         return Query(class_name=self.name).select(*refs)
 
 

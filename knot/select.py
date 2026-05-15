@@ -30,7 +30,7 @@ class OrderBy:
     ref: Expr
     direction: str = "asc"
 
-    def __post_init__(self) -> None:
+    def __post_init__(self):
         if self.direction not in ("asc", "desc"):
             raise ValueError(f"OrderBy direction must be 'asc' or 'desc', got {self.direction!r}")
 
@@ -52,22 +52,22 @@ class Query:
     projection: tuple[Expr, ...] | None = None
     target_suffix: str = "_resolved"
 
-    def where(self, predicate: Expr) -> Query:
+    def where(self, predicate):
         """AND ``predicate`` into the existing WHERE clause."""
         combined = predicate if self.where_clause is None else self.where_clause & predicate
         return replace(self, where_clause=combined)
 
-    def order_by(self, ref: Expr, direction: str = "asc") -> Query:
+    def order_by(self, ref, direction="asc"):
         """Append an ORDER BY clause."""
         return replace(self, ordering=self.ordering + (OrderBy(ref, direction),))
 
-    def limit(self, n: int) -> Query:
+    def limit(self, n):
         return replace(self, limit_value=n)
 
-    def offset(self, n: int) -> Query:
+    def offset(self, n):
         return replace(self, offset_value=n)
 
-    def select(self, *refs: Expr) -> Query:
+    def select(self, *refs):
         """Set the projection. ``None`` (the default) means ``SELECT *``."""
         return replace(self, projection=tuple(refs))
 
