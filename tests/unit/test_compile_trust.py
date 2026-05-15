@@ -1,4 +1,4 @@
-"""knot.compile.trust — source_accuracy DDL + seed UPSERTs."""
+"""knot.compile.trust — source_trust DDL + INSERT-only seed."""
 
 import sqlglot
 
@@ -8,23 +8,24 @@ from knot.compile import emit_ddl, emit_trust_seed
 
 def test_trust_table_emitted_by_default(movie_spec):
     stmts = emit_ddl(movie_spec)
-    trust = next(s for s in stmts if s.startswith("CREATE TABLE") and "source_accuracy" in s)
+    trust = next(s for s in stmts if s.startswith("CREATE TABLE") and "source_trust" in s)
     assert "source_name text NOT NULL" in trust
-    assert "class_name  text NOT NULL" in trust
-    assert "accuracy    double precision NOT NULL" in trust
-    assert "CHECK (accuracy >= 0 AND accuracy <= 1)" in trust
-    assert "PRIMARY KEY (source_name, class_name)" in trust
+    assert "class_name" in trust
+    assert "slot_name" in trust
+    assert "trust" in trust and "double precision" in trust
+    assert "CHECK (trust >= 0 AND trust <= 1)" in trust
+    assert "PRIMARY KEY (source_name, class_name, slot_name)" in trust
     sqlglot.parse_one(trust, dialect="postgres")
 
 
 def test_trust_table_can_be_disabled(movie_spec):
     stmts = emit_ddl(movie_spec, emit_trust_table=False)
-    assert not any("source_accuracy" in s and s.startswith("CREATE TABLE") for s in stmts)
+    assert not any("source_trust" in s and s.startswith("CREATE TABLE") for s in stmts)
 
 
 def test_trust_table_idempotent_with_if_not_exists(movie_spec):
     stmts = emit_ddl(movie_spec, if_not_exists=True)
-    trust = next(s for s in stmts if "source_accuracy" in s and s.startswith("CREATE TABLE"))
+    trust = next(s for s in stmts if "source_trust" in s and s.startswith("CREATE TABLE"))
     assert trust.startswith("CREATE TABLE IF NOT EXISTS")
 
 
@@ -37,28 +38,41 @@ def test_trust_table_name_kwarg(movie_spec):
     assert "knot_data.custom_trust" in view
 
 
-def test_seed_emits_one_upsert_per_binding(movie_spec):
+def test_seed_emits_one_row_per_non_identifier_slot(movie_spec):
+    """movie_spec has one binding (imdb → Movie) and Movie has slots
+    canonical_id (identifier — no row), year, runtime_minutes, genres,
+    name (inherited from Title). The identifier slot is excluded.
+    """
     seeds = emit_trust_seed(movie_spec)
-    # movie_spec has one binding: imdb → Movie.
-    assert len(seeds) == 1
-    sql, params = seeds[0]
-    assert "INSERT INTO knot_data.source_accuracy" in sql
-    assert "ON CONFLICT (source_name, class_name)" in sql
-    assert "DO UPDATE SET accuracy = EXCLUDED.accuracy" in sql
-    assert params == ["imdb", "Movie", 0.85]
+    slots = sorted(p[2] for _, p in seeds)
+    assert slots == ["genres", "name", "runtime_minutes", "year"]
+    for sql, params in seeds:
+        assert "INSERT INTO knot_data.source_trust" in sql
+        assert "ON CONFLICT (source_name, class_name, slot_name) DO NOTHING" in sql
+        assert params[0] == "imdb"
+        assert params[1] == "Movie"
+
+
+def test_seed_uses_base_trust_for_unmapped_slots(movie_spec):
+    """Slots without an explicit per-slot trust inherit base_trust=0.85."""
+    seeds = emit_trust_seed(movie_spec)
+    # 'genres' isn't mapped explicitly → base_trust
+    genres = next(p for _, p in seeds if p[2] == "genres")
+    assert genres[3] == 0.85
 
 
 def test_seed_multi_source_one_class():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
-    spec.bind(tmdb, movie, identifier=movie["canonical_id"], accuracy=0.7)
+    imdb.bind(movie, base_trust=0.85)
+    tmdb.bind(movie, base_trust=0.7)
     seeds = emit_trust_seed(spec)
-    rows = sorted([(p[0], p[1], p[2]) for _, p in seeds])
-    assert rows == [("imdb", "Movie", 0.85), ("tmdb", "Movie", 0.7)]
+    rows = sorted([(p[0], p[1], p[2], p[3]) for _, p in seeds])
+    assert rows == [("imdb", "Movie", "year", 0.85), ("tmdb", "Movie", "year", 0.7)]
 
 
 def test_seed_empty_spec_no_seeds():
@@ -75,3 +89,21 @@ def test_seed_schema_kwarg(movie_spec):
     seeds = emit_trust_seed(movie_spec, schema="alt", trust_table_name="custom")
     sql = seeds[0][0]
     assert "INSERT INTO alt.custom" in sql
+
+
+def test_explicit_per_slot_trust_overrides_base():
+    """When a binding declares .slot(..., trust=X), that X is what gets
+    seeded — not base_trust."""
+    spec = Spec(id="m", version="0.1")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("title", types.TEXT)
+    imdb = spec.add_source("imdb")
+    binding = imdb.bind(movie, base_trust=0.5)
+    binding.slot(class_slot="year", trust=0.95)
+    seeds = emit_trust_seed(spec)
+    year_row = next(p for _, p in seeds if p[2] == "year")
+    title_row = next(p for _, p in seeds if p[2] == "title")
+    assert year_row[3] == 0.95  # explicit
+    assert title_row[3] == 0.5  # base_trust fallback

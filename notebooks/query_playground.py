@@ -63,9 +63,9 @@ def _():
     # Single source for simplicity. Multi-source resolution + trust
     # arbitration still happens — there's just one contributor here.
     imdb = spec.add_source("imdb", description="IMDb canonical.")
-    spec.bind(imdb, person, identifier=person["canonical_id"], accuracy=0.95)
-    spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.95)
-    spec.bind(imdb, credit, identifier=credit["canonical_id"], accuracy=0.95)
+    imdb.bind(person, base_trust=0.95)
+    imdb.bind(movie, base_trust=0.95)
+    imdb.bind(credit, base_trust=0.95)
 
     errs = spec.validate()
     assert not errs, errs
@@ -118,7 +118,7 @@ def _(mo, pg, schema, spec):
         for stmt in emit_ddl(spec, schema=schema):
             cur.execute(stmt)
 
-    # Trust seed — upsert per-(source, class) accuracy into source_accuracy.
+    # Trust seed — upsert per-(source, class) accuracy into source_trust.
     with pg.cursor() as cur:
         for sql, params in emit_trust_seed(spec, schema=schema):
             cur.execute(sql, params)

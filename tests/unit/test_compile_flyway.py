@@ -12,7 +12,7 @@ def _ops_for_empty_db() -> list[MigrationOp]:
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
-    spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
+    imdb.bind(movie, base_trust=0.85)
     return diff_against_db(spec, lambda sql, params: [])
 
 
@@ -63,11 +63,11 @@ def test_only_trust_seed_ops_no_v_file():
         MigrationOp(
             description="upsert_trust_imdb_Movie",
             sql=(
-                "INSERT INTO knot_data.source_accuracy "
+                "INSERT INTO knot_data.source_trust "
                 "(source_name, class_name, accuracy) "
                 "VALUES ('imdb', 'Movie', 0.85) "
                 "ON CONFLICT (source_name, class_name) "
-                "DO UPDATE SET accuracy = EXCLUDED.accuracy;"
+                "DO UPDATE SET base_trust= EXCLUDED.accuracy;"
             ),
             target="trust_seed",
         )
@@ -91,14 +91,14 @@ def test_v_file_contains_structural_ops_only():
     assert "CREATE TABLE" in v_body  # canonical / bindings / trust
     assert "CREATE INDEX" in v_body
     # Trust seed and views are elsewhere.
-    assert "INSERT INTO knot_data.source_accuracy" not in v_body
+    assert "INSERT INTO knot_data.source_trust" not in v_body
     assert "CREATE OR REPLACE VIEW" not in v_body
 
 
 def test_r_trust_seed_file_contains_only_upserts():
     files = emit_flyway_files(_ops_for_empty_db(), version="1", slug="initial")
     body = files["R__001_trust_seed.sql"]
-    assert "INSERT INTO knot_data.source_accuracy" in body
+    assert "INSERT INTO knot_data.source_trust" in body
     assert "ON CONFLICT" in body
     assert "CREATE TABLE" not in body
     assert "CREATE OR REPLACE VIEW" not in body
@@ -108,7 +108,7 @@ def test_r_views_file_contains_only_views():
     files = emit_flyway_files(_ops_for_empty_db(), version="1", slug="initial")
     body = files["R__002_resolved_views.sql"]
     assert "CREATE OR REPLACE VIEW" in body
-    assert "INSERT INTO knot_data.source_accuracy" not in body
+    assert "INSERT INTO knot_data.source_trust" not in body
 
 
 def test_header_summarizes_ops_per_file():

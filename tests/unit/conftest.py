@@ -2,15 +2,15 @@
 
 import pytest
 
-from knot import SourceMap, Spec, types
+from knot import Spec, types
 
 
 @pytest.fixture
 def movie_spec() -> Spec:
-    """The canonical Movie / Title / Person / Credit / DirectedMovie spec
-    used across tests. Exercises: is_a inheritance, abstract classes,
-    Array typed types, ClassRef FKs, virtual classes, constraints,
-    source bindings + per-slot mappings + accuracy.
+    """Canonical Movie / Title / Person / Credit / DirectedMovie spec.
+    Exercises: is_a inheritance, abstract classes, Array typed types,
+    ClassRef FKs, virtual classes, constraints, per-slot source mappings,
+    base + per-slot trust.
 
     Bodies authored through the semantic builder (no raw SQL)."""
     spec = Spec(id="movies", version="0.1")
@@ -43,13 +43,12 @@ def movie_spec() -> Spec:
     spec.add_constraint("year_sane", primary=movie, body=movie.col.year >= 1888)
 
     imdb = spec.add_source("imdb")
-    binding = spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
-    binding.map(
-        year=SourceMap(uses=("release_year",), sql="release_year"),
-        runtime_minutes=SourceMap(
-            uses=("runtime",),
-            sql="(regexp_match(runtime, '[0-9]+'))[1]::int",
-        ),
+    binding = imdb.bind(movie, base_trust=0.85)
+    binding.slot(class_slot="year", source_slot="release_year")
+    binding.slot(
+        class_slot="runtime_minutes",
+        source_slot="runtime",
+        sql="(regexp_match(runtime, '[0-9]+'))[1]::int",
     )
 
     return spec

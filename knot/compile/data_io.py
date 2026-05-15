@@ -56,17 +56,19 @@ from knot.spec import (
 class ClassWrites:
     """One class's contribution to a batch write.
 
-    ``binding`` carries the (source, class) identity and, when
-    ``use_mappings=True``, the per-slot SQL projections applied
-    server-side. ``rows`` is a list of dicts — keyed by **raw source
-    field names** when ``use_mappings=True``, or by **class slot names**
-    otherwise. Every dict must include the binding's identifier slot
-    and ``source_identifier``.
+    ``binding`` carries the (source, class) identity and the per-slot
+    mappings (``binding.slot_mappings``). ``rows`` is a list of dicts
+    keyed by **raw source field names** — i.e. the ``source_slot``
+    names declared in the binding. Slots without an explicit
+    ``.slot(...)`` mapping default to a same-name passthrough: row key
+    equals class slot name.
+
+    Every row must also include ``source_identifier`` (the source's
+    own opaque ID, used for SCD2 close-out).
     """
 
     binding: SourceBinding
     rows: list[dict[str, Any]]
-    use_mappings: bool = True
 
 
 @dataclass(frozen=True)
@@ -146,42 +148,51 @@ def _jsonb_extract(slot: Slot, raw_field: str | None = None) -> str:
 def _emit_raw_subquery(
     binding: SourceBinding,
     rows_param: str,
-) -> tuple[str, list[str]]:
-    """Build the ``FROM (...) AS raw`` subquery for a mapped binding.
+) -> str:
+    """Build the ``FROM (...) AS raw`` subquery for a binding.
 
-    Returns the SQL and the ordered list of raw field names the host
-    must populate in each row dict. Field names = identifier slot,
-    ``source_identifier``, plus every raw field declared in any
-    mapping's ``SourceMap.uses``.
-
-    The inner SELECT also passes the entire jsonb row through as
-    ``__raw_payload`` so the outer SELECT can populate the bindings
-    table's ``raw_payload`` column with the full ingested shape
-    (bronze layer for unmapped fields)."""
-    ident = binding.class_.identifier_slot()
-    raw_fields: list[str] = [ident.name, "source_identifier"]
+    Exposes ``source_identifier`` plus every source field referenced
+    by any effective mapping (explicit or implicit-passthrough) as a
+    text alias. ``r`` itself passes through as ``__raw_payload`` so
+    the outer SELECT can populate the bindings table's ``raw_payload``
+    column with the full ingested shape (bronze layer)."""
+    raw_fields: list[str] = ["source_identifier"]
     seen = set(raw_fields)
-    for source_map in binding.mappings.values():
-        for raw_field in source_map.uses:
-            if raw_field not in seen:
-                raw_fields.append(raw_field)
-                seen.add(raw_field)
+    for slot in binding.class_.effective_slots():
+        m = binding.effective_mapping(slot.name)
+        for src in m.source_slot:
+            if src not in seen:
+                raw_fields.append(src)
+                seen.add(src)
 
-    # The raw subquery extracts each raw field as text; mapping
-    # expressions cast where they care to. The identifier and
-    # source_identifier are always text on the bindings table.
-    # ``r`` is preserved as ``__raw_payload`` for the bronze layer.
     alias_lines = ["        r AS __raw_payload"]
     alias_lines.extend(f"        (r->>'{f}') AS {f}" for f in raw_fields)
     aliases = ",\n".join(alias_lines)
-    sql = (
+    return (
         "FROM (\n"
         "    SELECT\n"
         f"{aliases}\n"
         f"    FROM jsonb_array_elements(%({rows_param})s::jsonb) AS r\n"
         ") AS raw"
     )
-    return sql, raw_fields
+
+
+def _passthrough_value(slot: Slot, raw_field: str) -> str:
+    """Render the value for a slot in a passthrough mapping (no SQL
+    transform), using the raw subquery's text alias for ``raw_field``."""
+    if isinstance(slot.type, Primitive):
+        return f"raw.{raw_field}{_PRIMITIVE_TO_JSONB_CAST[slot.type]}"
+    if isinstance(slot.type, ClassRef):
+        return f"raw.{raw_field}::text"
+    if isinstance(slot.type, Array):
+        # Array passthrough needs the original jsonb element (text →
+        # text[] doesn't cast directly). Use the preserved ``__raw_payload``.
+        inner = _jsonb_cast(slot.type.of).removeprefix("::").removesuffix("[]")
+        return (
+            f"(SELECT ARRAY(SELECT (value #>> '{{}}')::{inner} "
+            f"FROM jsonb_array_elements(raw.__raw_payload->'{raw_field}') AS value))"
+        )
+    raise TypeError(f"unhandled slot type: {type(slot.type).__name__}")
 
 
 def _emit_class_insert(
@@ -193,7 +204,6 @@ def _emit_class_insert(
 ) -> str:
     cls = cw.binding.class_
     _check_concrete(cls)
-    ident = cls.identifier_slot()
     table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
     source_literal = _sql_literal(cw.binding.source.name)
     eff_slots = cls.effective_slots()
@@ -204,40 +214,25 @@ def _emit_class_insert(
     )
     columns_csv = ", ".join(insert_columns)
 
-    if cw.use_mappings:
-        raw_subquery, _ = _emit_raw_subquery(cw.binding, rows_param)
-        select_lines: list[str] = [
-            f"    {source_literal}",
-            "    raw.source_identifier",
-        ]
-        for slot in eff_slots:
-            if slot.name == ident.name:
-                select_lines.append(f"    raw.{ident.name}")
-            elif slot.name in cw.binding.mappings:
-                select_lines.append(f"    {cw.binding.mappings[slot.name].sql}")
-            else:
-                select_lines.append("    NULL")
-        select_lines.append("    raw.__raw_payload")
-        return (
-            f"INSERT INTO {table} ({columns_csv})\n"
-            "SELECT\n" + ",\n".join(select_lines) + "\n" + raw_subquery + ";"
-        )
-    else:
-        # Direct slot values — each row dict has keys matching slot names.
-        # raw_payload preserves the host-passed dict (which IS what was
-        # ingested in this mode, even if it's already slot-shaped).
-        select_lines = [
-            f"    {source_literal}",
-            "    (r->>'source_identifier')::text",
-        ]
-        for slot in eff_slots:
-            select_lines.append(f"    {_jsonb_extract(slot)}")
-        select_lines.append("    r")
-        return (
-            f"INSERT INTO {table} ({columns_csv})\n"
-            "SELECT\n" + ",\n".join(select_lines) + "\n"
-            f"FROM jsonb_array_elements(%({rows_param})s::jsonb) AS r;"
-        )
+    raw_subquery = _emit_raw_subquery(cw.binding, rows_param)
+    select_lines: list[str] = [
+        f"    {source_literal}",
+        "    raw.source_identifier",
+    ]
+    for slot in eff_slots:
+        m = cw.binding.effective_mapping(slot.name)
+        if m.sql is not None:
+            # Explicit SQL — user owns casting; the SQL references the
+            # raw subquery's text aliases by bare name (postgres resolves
+            # them to ``raw.<name>`` via the FROM alias).
+            select_lines.append(f"    {m.sql}")
+        else:
+            select_lines.append(f"    {_passthrough_value(slot, m.source_slot[0])}")
+    select_lines.append("    raw.__raw_payload")
+    return (
+        f"INSERT INTO {table} ({columns_csv})\n"
+        "SELECT\n" + ",\n".join(select_lines) + "\n" + raw_subquery + ";"
+    )
 
 
 def _emit_class_close_out(

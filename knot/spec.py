@@ -502,103 +502,184 @@ class Constraint:
 
 @dataclass(slots=True)
 class Source:
-    """A named external system (imdb, tmdb)."""
+    """A named external system (imdb, tmdb).
+
+    Sources are created via ``spec.add_source(...)``, which sets the
+    back-reference ``_spec`` so ``source.bind(cls, ...)`` can register
+    the resulting ``SourceBinding`` on its owning spec."""
 
     name: str
     description: str | None = None
+    _spec: Spec | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         _check_name("Source", self.name)
 
-
-# Module-level default stiffness for source priors, in evidence-units.
-# A host that needs a stiffer or more easily-budged prior rebinds this
-# before constructing bindings (no per-binding knob in the normal API).
-BINDING_PRIOR_STRENGTH: int = 3
+    def bind(
+        self,
+        cls: OntologyClass,
+        *,
+        base_trust: float = 0.67,
+        description: str | None = None,
+    ) -> SourceBinding:
+        """Create a binding from this source to ``cls`` and register it
+        on the owning spec. ``base_trust`` is the default per-slot trust
+        for any slot not explicitly overridden via ``.slot(...)``."""
+        if self._spec is None:
+            raise RuntimeError(
+                f"Source {self.name!r} not attached to a Spec — create via "
+                f"spec.add_source() rather than constructing directly"
+            )
+        if any(b.source is self and b.class_ is cls for b in self._spec.source_bindings):
+            raise ValueError(f"Spec already has a binding for {self.name!r} → {cls.name!r}")
+        b = SourceBinding(
+            source=self,
+            class_=cls,
+            base_trust=base_trust,
+            description=description,
+        )
+        self._spec.source_bindings.append(b)
+        return b
 
 
 # Reserved synthetic source for human-curated overrides. The resolver
-# treats this like any other source — high accuracy in source_accuracy
-# is what makes corrections "win" the per-slot argmax tie-break.
+# treats this like any other source — high trust in source_trust is
+# what makes corrections "win" the per-slot argmax tie-break.
 CORRECTIONS_SOURCE_NAME: str = "_user_corrections"
 
 
-@dataclass(frozen=True, slots=True)
-class SourceMap:
-    """Per-slot projection from a raw source row to a class slot value.
+@dataclass(slots=True)
+class SlotMapping:
+    """Per-slot mapping in a ``SourceBinding``.
 
-    ``uses`` declares the raw source field names the SQL expression
-    references — the batch write emitter plumbs only these fields
-    through. ``sql`` is the postgres expression evaluated server-side,
-    referencing the raw field names by bare identifier.
+    Declares how one class slot's value is computed from raw source
+    fields, plus an optional per-slot trust override:
 
-    For the common case of passing a single raw column through verbatim,
-    use ``SourceMap.passthrough("release_year")`` or pass a bare string
-    to ``binding.map(year="release_year")`` and it coerces.
+    - ``class_slot``  — the slot name on the ``OntologyClass``.
+    - ``source_slot`` — tuple of raw source field names this mapping
+      references. Coerced from a single string.
+    - ``sql``         — optional postgres expression evaluated
+      server-side over the ``source_slot`` fields. ``None`` means
+      passthrough of ``source_slot[0]``.
+    - ``trust``       — per-slot trust value. ``None`` means inherit
+      ``base_trust`` from the binding. Always ``None`` on the
+      identifier slot (identity is not argmax-resolved).
     """
 
-    uses: tuple[str, ...]
-    sql: str
+    class_slot: str
+    source_slot: tuple[str, ...]
+    sql: str | None = None
+    trust: float | None = None
 
     def __post_init__(self) -> None:
-        # Tolerate ``uses=["a", "b"]`` at construction even though the
-        # field's declared type is tuple — coerce here.
-        if not isinstance(self.uses, tuple):
-            object.__setattr__(self, "uses", tuple(self.uses))
+        if isinstance(self.source_slot, str):
+            self.source_slot = (self.source_slot,)
+        else:
+            self.source_slot = tuple(self.source_slot)
+        if not self.source_slot:
+            raise ValueError(
+                f"SlotMapping for {self.class_slot!r} requires at least one source_slot"
+            )
+        if self.trust is not None and not (0.0 <= self.trust <= 1.0):
+            raise ValueError(f"SlotMapping.trust must be in [0, 1]; got {self.trust}")
 
-    @classmethod
-    def passthrough(cls, raw_field: str) -> SourceMap:
-        """Trivial-case shorthand: ``slot = raw_field`` with no SQL transform."""
-        return cls(uses=(raw_field,), sql=raw_field)
-
-
-def _coerce_source_map(v: Any) -> SourceMap:
-    if isinstance(v, SourceMap):
-        return v
-    if isinstance(v, str):
-        return SourceMap.passthrough(v)
-    raise TypeError(
-        f"SourceBinding.map value must be a SourceMap or str (raw column "
-        f"name shorthand); got {type(v).__name__}"
-    )
+    @property
+    def effective_sql(self) -> str:
+        """Postgres expression to evaluate — explicit ``sql`` if set,
+        otherwise bare ``source_slot[0]`` passthrough."""
+        return self.sql if self.sql is not None else self.source_slot[0]
 
 
 @dataclass(slots=True)
 class SourceBinding:
-    """(Source, OntologyClass) binding with per-slot projections.
+    """(Source, OntologyClass) binding with per-slot mappings.
 
-    ``accuracy`` is the spec author's guess at the fraction of past claims
-    this source got right (0.0 - 1.0). The resolver derives a Beta prior
-    from ``accuracy`` and ``BINDING_PRIOR_STRENGTH``; see ``beta_prior``.
+    ``base_trust`` is the default per-slot trust for slots that aren't
+    explicitly overridden via ``.slot(...)``. Trust is per slot at
+    runtime: the resolver picks per-slot winners by argmax over the
+    live ``source_trust(source_name, class_name, slot_name, trust)``
+    table, which the spec seeds at deploy time (INSERT-only — once a
+    row exists, operator's runtime tuning is authoritative).
 
-    ``mappings`` maps slot names to ``SourceMap`` records that carry
-    both the raw fields used and the SQL expression evaluated.
+    ``slot_mappings`` is keyed by class slot name and carries the
+    raw-field projection + optional per-slot trust override. Unmapped
+    class slots are implicit passthroughs (same name, no SQL transform,
+    trust = ``base_trust``).
     """
 
     source: Source
     class_: OntologyClass
-    identifier_slot: Slot
-    accuracy: float = 0.67
-    mappings: dict[str, SourceMap] = field(default_factory=dict)
+    base_trust: float = 0.67
+    slot_mappings: dict[str, SlotMapping] = field(default_factory=dict)
     description: str | None = None
 
     def __post_init__(self) -> None:
-        if not (0.0 <= self.accuracy <= 1.0):
-            raise ValueError(f"SourceBinding accuracy must be in [0, 1]; got {self.accuracy}")
-
-    def map(self, **mappings: Any) -> SourceBinding:
-        """Add slot mappings. Values may be ``SourceMap`` instances or
-        bare strings (interpreted as the raw column name to pass through)."""
-        for slot_name, value in mappings.items():
-            self.mappings[slot_name] = _coerce_source_map(value)
-        return self
+        if not (0.0 <= self.base_trust <= 1.0):
+            raise ValueError(f"SourceBinding base_trust must be in [0, 1]; got {self.base_trust}")
 
     @property
-    def beta_prior(self) -> tuple[float, float]:
-        """Resolver-facing Beta(α, β) derived from ``accuracy`` and the
-        module-level ``BINDING_PRIOR_STRENGTH``."""
-        k = BINDING_PRIOR_STRENGTH
-        return (self.accuracy * k, (1.0 - self.accuracy) * k)
+    def identifier_slot(self) -> Slot:
+        """The class's identifier slot. Carried as a property (not a
+        field) because every binding for a class shares the same one."""
+        return self.class_.identifier_slot()
+
+    def slot(
+        self,
+        *,
+        class_slot: str,
+        source_slot: str | tuple[str, ...] | None = None,
+        sql: str | None = None,
+        trust: float | None = None,
+    ) -> SourceBinding:
+        """Declare an explicit mapping for one class slot.
+
+        - ``class_slot`` is required.
+        - ``source_slot`` defaults to ``class_slot`` (same name). Pass a
+          tuple of strings when ``sql`` references multiple raw fields.
+        - ``sql`` is the optional postgres expression over those fields.
+        - ``trust`` overrides ``base_trust`` for this one slot. Rejected
+          on the identifier slot (identity is not argmax-resolved).
+        """
+        slot_obj = self.class_.get_slot(class_slot)
+        is_identifier = slot_obj is self.identifier_slot
+        if is_identifier and trust is not None:
+            raise ValueError(
+                f"trust is meaningless on the identifier slot "
+                f"{class_slot!r} — identity is not argmax-resolved"
+            )
+        if source_slot is None:
+            source_slot = (class_slot,)
+        elif isinstance(source_slot, str):
+            source_slot = (source_slot,)
+        else:
+            source_slot = tuple(source_slot)
+        self.slot_mappings[class_slot] = SlotMapping(
+            class_slot=class_slot,
+            source_slot=source_slot,
+            sql=sql,
+            trust=trust,
+        )
+        return self
+
+    def effective_mapping(self, class_slot_name: str) -> SlotMapping:
+        """Return the effective ``SlotMapping`` for a class slot —
+        the explicit one if declared, otherwise an implicit passthrough
+        (same name, no SQL transform, trust=None meaning inherit
+        ``base_trust``)."""
+        if class_slot_name in self.slot_mappings:
+            return self.slot_mappings[class_slot_name]
+        return SlotMapping(
+            class_slot=class_slot_name,
+            source_slot=(class_slot_name,),
+            sql=None,
+            trust=None,
+        )
+
+    def trust_for(self, class_slot_name: str) -> float:
+        """Effective trust value for ``class_slot_name``: the slot's
+        explicit ``trust`` if set, otherwise ``base_trust``."""
+        m = self.effective_mapping(class_slot_name)
+        return m.trust if m.trust is not None else self.base_trust
 
 
 # ---------------------------------------------------------------------------
@@ -696,24 +777,24 @@ class Spec:
             )
         if any(s.name == name for s in self.sources):
             raise ValueError(f"Spec already has a source named {name!r}")
-        s = Source(name=name, description=description)
+        s = Source(name=name, description=description, _spec=self)
         self.sources.append(s)
         return s
 
     def enable_corrections(
         self,
         *,
-        accuracy: float = 0.99,
+        base_trust: float = 0.99,
         description: str | None = "human overrides",
     ) -> Source:
         """Register the ``_user_corrections`` synthetic source and bind
         it to every concrete ``OntologyClass`` in the spec.
 
-        High default accuracy (0.99) means corrections override declared
-        sources at the resolver tie-break. Operators can tune via
-        ``UPDATE source_accuracy SET accuracy = … WHERE source_name =
-        '_user_corrections' AND class_name = '<X>'`` without touching
-        the spec.
+        High default ``base_trust`` (0.99) means corrections override
+        declared sources at the resolver tie-break. Operators can tune
+        per-slot via ``UPDATE source_trust SET trust = … WHERE
+        source_name = '_user_corrections' AND class_name = '<X>' AND
+        slot_name = '<Y>'`` without touching the spec.
 
         Idempotent: calling again is a no-op if the source already
         exists. Returns the (possibly pre-existing) ``Source`` object.
@@ -724,15 +805,10 @@ class Spec:
         )
         if existing is not None:
             return existing
-        source = Source(name=CORRECTIONS_SOURCE_NAME, description=description)
+        source = Source(name=CORRECTIONS_SOURCE_NAME, description=description, _spec=self)
         self.sources.append(source)
         for cls in self.concrete_classes():
-            self.bind(
-                source,
-                cls,
-                identifier=cls.identifier_slot(),
-                accuracy=accuracy,
-            )
+            source.bind(cls, base_trust=base_trust)
         return source
 
     def corrections_binding_for(self, cls: OntologyClass) -> SourceBinding:
@@ -746,29 +822,6 @@ class Spec:
             f"no _user_corrections binding for class {cls.name!r} — "
             f"call spec.enable_corrections() first"
         )
-
-    def bind(
-        self,
-        source: Source,
-        class_: OntologyClass,
-        *,
-        identifier: Slot,
-        accuracy: float = 0.67,
-        description: str | None = None,
-    ) -> SourceBinding:
-        if any(b.source is source and b.class_ is class_ for b in self.source_bindings):
-            raise ValueError(
-                f"Spec already has a binding for source {source.name!r} → class {class_.name!r}"
-            )
-        b = SourceBinding(
-            source=source,
-            class_=class_,
-            identifier_slot=identifier,
-            accuracy=accuracy,
-            description=description,
-        )
-        self.source_bindings.append(b)
-        return b
 
     def _check_unique_class_name(self, name: str) -> None:
         if any(c.name == name for c in self.classes):
@@ -888,15 +941,10 @@ class Spec:
                     f"binding source={b.source.name!r} class={b.class_.name!r}: "
                     f"class is {cls.kind.value}, only concrete classes can bind"
                 )
-            # identifier_slot must be on the bound class's effective slots
+                continue
+            # slot_mappings keys must be slots on the bound class
             eff_names = {s.name for s in cls.effective_slots()}
-            if b.identifier_slot.name not in eff_names:
-                errs.append(
-                    f"binding source={b.source.name!r} class={b.class_.name!r}: "
-                    f"identifier_slot {b.identifier_slot.name!r} not on class"
-                )
-            # mapping keys must be slots on the bound class
-            for slot_name in b.mappings:
+            for slot_name in b.slot_mappings:
                 if slot_name not in eff_names:
                     errs.append(
                         f"binding source={b.source.name!r} "

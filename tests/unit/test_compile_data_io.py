@@ -44,7 +44,6 @@ def test_mapped_single_row_emits_close_out_and_insert(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[{"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020}],
-                use_mappings=True,
             )
         ],
         enforce=False,
@@ -63,7 +62,7 @@ def test_mapped_rows_serialized_as_jsonb_array(movie_spec):
     ]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=rows, use_mappings=True)],
+        [ClassWrites(binding=b, rows=rows)],
         enforce=False,
     )
     assert json.loads(bw.params["movie_rows"]) == rows
@@ -79,7 +78,6 @@ def test_mapped_sql_shape_independent_of_row_count(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=False,
@@ -97,7 +95,6 @@ def test_mapped_sql_shape_independent_of_row_count(movie_spec):
                     }
                     for i in range(50)
                 ],
-                use_mappings=True,
             )
         ],
         enforce=False,
@@ -116,7 +113,6 @@ def test_mapped_unmapped_slot_lands_null(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=False,
@@ -135,7 +131,6 @@ def test_mapped_insert_includes_raw_payload_column_and_projection(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=False,
@@ -169,15 +164,16 @@ def test_direct_slot_values_use_jsonb_extraction(movie_spec):
                         "runtime_minutes": 110,
                     },
                 ],
-                use_mappings=False,
             )
         ],
         enforce=False,
     )
-    # Direct values means slot names appear as jsonb extracts with casts.
-    assert "(r->>'year')::integer" in bw.sql
-    # Arrays go through unnest+ARRAY round-trip
-    assert "jsonb_array_elements(r->'genres')" in bw.sql
+    # For movie_spec, "year" is mapped to source_slot="release_year" so the
+    # row dict's "year" key isn't read directly. This test now validates the
+    # passthrough form for "name" (unmapped → implicit passthrough, same name).
+    assert "raw.name::text" in bw.sql
+    # Arrays go through unnest+ARRAY round-trip via __raw_payload.
+    assert "jsonb_array_elements(raw.__raw_payload->'genres')" in bw.sql
 
 
 def test_direct_insert_passes_full_row_as_raw_payload(movie_spec):
@@ -190,7 +186,6 @@ def test_direct_insert_passes_full_row_as_raw_payload(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "year": 2020},
                 ],
-                use_mappings=False,
             )
         ],
         enforce=False,
@@ -214,7 +209,7 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
     # Build a credit binding for the same source
     imdb = movie_spec.sources[0]
     credit = next(c for c in movie_spec.classes if c.name == "Credit")
-    credit_b = movie_spec.bind(imdb, credit, identifier=credit["canonical_id"], accuracy=0.8)
+    credit_b = imdb.bind(credit, base_trust=0.8)
 
     bw = emit_batch_write(
         movie_spec,
@@ -224,7 +219,6 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             ),
             ClassWrites(
                 binding=credit_b,
@@ -237,7 +231,6 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
                         "person": "p1",
                     },
                 ],
-                use_mappings=False,
             ),
         ],
         enforce=False,
@@ -282,7 +275,6 @@ def test_enforce_true_appends_do_block(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=True,
@@ -302,7 +294,6 @@ def test_enforce_false_omits_do_block(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=False,
@@ -325,7 +316,6 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=True,
@@ -343,7 +333,7 @@ def test_enforce_skips_warning_severity():
         "warn_only", primary=movie, body=movie.col.year > 1900, severity=Severity.WARNING
     )
     src = spec.add_source("imdb")
-    b = spec.bind(src, movie, identifier=movie["canonical_id"])
+    b = src.bind(movie)
 
     bw = emit_batch_write(
         spec,
@@ -353,7 +343,6 @@ def test_enforce_skips_warning_severity():
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "i1", "year": 2020},
                 ],
-                use_mappings=False,
             )
         ],
         enforce=True,
@@ -368,7 +357,7 @@ def test_enforce_no_constraints_at_all_no_do_block():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("imdb")
-    b = spec.bind(src, movie, identifier=movie["canonical_id"])
+    b = src.bind(movie)
     bw = emit_batch_write(
         spec,
         [
@@ -377,7 +366,6 @@ def test_enforce_no_constraints_at_all_no_do_block():
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "i1"},
                 ],
-                use_mappings=False,
             )
         ],
         enforce=True,
@@ -400,7 +388,6 @@ def test_schema_and_suffix_kwargs(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "i1", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         schema="alt",
@@ -422,7 +409,7 @@ def test_source_name_apostrophe_escaped():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("o_brien")
     src.name = "o'brien"  # simulate an unescaped apostrophe
-    b = spec.bind(src, movie, identifier=movie["canonical_id"])
+    b = src.bind(movie)
     bw = emit_batch_write(
         spec,
         [
@@ -431,7 +418,6 @@ def test_source_name_apostrophe_escaped():
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "i1"},
                 ],
-                use_mappings=False,
             )
         ],
         enforce=False,
@@ -449,7 +435,7 @@ def test_abstract_class_rejected():
     abstract = spec.add_class("A", kind="abstract")
     abstract.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("s")
-    b = SourceBinding(source=src, class_=abstract, identifier_slot=abstract["canonical_id"])
+    b = SourceBinding(source=src, class_=abstract)
     spec.source_bindings.append(b)
     with pytest.raises(ValueError, match="abstract"):
         emit_batch_write(
@@ -460,7 +446,6 @@ def test_abstract_class_rejected():
                     rows=[
                         {"canonical_id": "a1", "source_identifier": "i1"},
                     ],
-                    use_mappings=False,
                 )
             ],
             enforce=False,
@@ -482,7 +467,6 @@ def test_emitted_sql_parses_postgres(movie_spec):
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
                 ],
-                use_mappings=True,
             )
         ],
         enforce=True,

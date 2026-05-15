@@ -27,32 +27,33 @@ def test_resolved_view_targets_bindings_table_with_valid_to_null(movie_spec):
 def test_resolved_view_left_joins_trust_table(movie_spec):
     movie = next(c for c in movie_spec.classes if c.name == "Movie")
     v = emit_resolved_view(movie_spec, movie)
-    # Resolver now reads accuracy from a runtime table via LEFT JOIN,
-    # not from inlined CASE-WHEN literals. The class_name filter scopes
-    # to the per-class accuracy row.
-    assert "LEFT JOIN knot_data.source_accuracy a" in v
-    assert "a.source_name = b.source_name" in v
-    assert "a.class_name = 'Movie'" in v
-    assert "COALESCE(a.accuracy, 0) DESC" in v
-    # Accuracy literals are NOT baked into the view anymore.
+    # Resolver reads trust from a runtime table via LEFT JOIN on the
+    # (source, class, slot) triple. The class/slot filters scope to
+    # the per-slot trust row.
+    assert "LEFT JOIN knot_data.source_trust t" in v
+    assert "t.source_name = b.source_name" in v
+    assert "t.class_name = 'Movie'" in v
+    assert "t.slot_name = 'year'" in v
+    assert "COALESCE(t.trust, 0) DESC" in v
+    # Trust literals are NOT baked into the view anymore.
     assert "0.85" not in v
 
 
 def test_resolved_view_no_inline_case_when():
     """The pre-trust-table inline CASE WHEN shape is gone — refactor
-    moved accuracy values into source_accuracy at runtime."""
+    moved accuracy values into source_trust at runtime."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
-    spec.bind(tmdb, movie, identifier=movie["canonical_id"], accuracy=0.7)
+    imdb.bind(movie, base_trust=0.85)
+    tmdb.bind(movie, base_trust=0.7)
     v = emit_resolved_view(spec, movie)
     assert "WHEN b.source_name" not in v
     assert "LEFT JOIN" in v
-    assert "COALESCE(a.accuracy, 0)" in v
+    assert "COALESCE(t.trust, 0)" in v
 
 
 def test_resolved_view_one_row_per_canonical_id(movie_spec):
@@ -115,7 +116,7 @@ def test_resolved_view_rejects_abstract_class():
 
 
 def test_resolved_view_unbound_sources_fall_to_zero_via_coalesce():
-    # Sources not present in source_accuracy LEFT JOIN to NULL; the
+    # Sources not present in source_trust LEFT JOIN to NULL; the
     # COALESCE collapses them to 0 and the tie-break loses against any
     # source that DOES have a row.
     spec = Spec(id="m", version="0.1")
@@ -123,7 +124,7 @@ def test_resolved_view_unbound_sources_fall_to_zero_via_coalesce():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     v = emit_resolved_view(spec, movie)
-    assert "COALESCE(a.accuracy, 0)" in v
+    assert "COALESCE(t.trust, 0)" in v
     sqlglot.parse_one(v, dialect="postgres")
 
 

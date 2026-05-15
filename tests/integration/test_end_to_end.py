@@ -55,8 +55,8 @@ def _movies_only_spec() -> Spec:
 
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
-    spec.bind(tmdb, movie, identifier=movie["canonical_id"], accuracy=0.7)
+    imdb.bind(movie, base_trust=0.85)
+    tmdb.bind(movie, base_trust=0.7)
     return spec
 
 
@@ -71,7 +71,7 @@ def _write_claim(
 ) -> None:
     bw = emit_batch_write(
         spec,
-        [ClassWrites(binding=binding, rows=rows, use_mappings=False)],
+        [ClassWrites(binding=binding, rows=rows)],
         schema=schema,
         enforce=enforce,
     )
@@ -96,7 +96,7 @@ def test_emit_ddl_creates_real_tables(pg, schema):
         tables = [r[0] for r in cur.fetchall()]
     assert "movie" in tables
     assert "movie_bindings" in tables
-    assert "source_accuracy" in tables
+    assert "source_trust" in tables
 
 
 def test_emit_ddl_creates_resolved_view(pg, schema):
@@ -127,17 +127,24 @@ def test_emit_ddl_creates_indexes(pg, schema):
     assert "movie_bindings_source_idx" in idxs
 
 
-def test_trust_seed_populates_source_accuracy(pg, schema):
+def test_trust_seed_populates_source_trust(pg, schema):
+    """One row per (source, class, non-identifier slot)."""
     spec = _movies_only_spec()
     _deploy(pg, spec, schema)
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT source_name, class_name, accuracy "
-            f"FROM {schema}.source_accuracy ORDER BY source_name"
+            f"SELECT source_name, class_name, slot_name, trust "
+            f"FROM {schema}.source_trust ORDER BY source_name, slot_name"
         )
         rows = cur.fetchall()
-    assert rows == [("imdb", "Movie", 0.85), ("tmdb", "Movie", 0.7)]
+    # Movie has 3 non-identifier slots: name, year, runtime_minutes.
+    # Two sources (imdb, tmdb) × 3 slots = 6 rows.
+    assert len(rows) == 6
+    imdb_rows = [r for r in rows if r[0] == "imdb"]
+    tmdb_rows = [r for r in rows if r[0] == "tmdb"]
+    assert all(r[3] == 0.85 for r in imdb_rows)
+    assert all(r[3] == 0.7 for r in tmdb_rows)
 
 
 # ---------------------------------------------------------------------------
@@ -545,7 +552,11 @@ def test_evolve_add_slot_preserves_existing_data(pg, schema, query_fn):
     assert lang is None
 
 
-def test_evolve_change_accuracy_changes_winner(pg, schema, query_fn):
+def test_operator_tunes_trust_changes_winner(pg, schema, query_fn):
+    """Trust values live in postgres; operators tune them via plain
+    UPDATE statements. INSERT-only seed semantics mean the spec is
+    *not* the authoritative knob at runtime — once the table is
+    seeded, the operator owns it."""
     spec = _movies_only_spec()
     _deploy(pg, spec, schema)
 
@@ -587,23 +598,46 @@ def test_evolve_change_accuracy_changes_winner(pg, schema, query_fn):
         cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 1925
 
-    # Operator decides TMDB is more reliable than IMDB.
-    spec2 = _movies_only_spec()
-    for b in spec2.source_bindings:
-        if b.source.name == "imdb":
-            b.accuracy = 0.6
-        if b.source.name == "tmdb":
-            b.accuracy = 0.9
-
-    ops = diff_against_db(spec2, query_fn, schema=schema)
-    upserts = [op for op in ops if op.target == "trust_seed"]
-    assert len(upserts) == 2  # both bindings changed
-    exec_many(pg, [op.sql for op in ops])
+    # Operator decides TMDB's `year` is more reliable than IMDB's —
+    # plain UPDATE against the runtime table. No redeploy.
+    with pg.cursor() as cur:
+        cur.execute(
+            f"UPDATE {schema}.source_trust SET trust = 0.9 "
+            f"WHERE source_name = 'tmdb' AND class_name = 'Movie' AND slot_name = 'year'"
+        )
 
     # After: TMDB wins → year=1928.
     with pg.cursor() as cur:
         cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
         assert cur.fetchone()[0] == 1928
+
+
+def test_trust_seed_does_not_clobber_operator_tuning(pg, schema, query_fn):
+    """The migration emitter is INSERT-only: redeploying the spec must
+    leave operator-tuned trust values alone."""
+    spec = _movies_only_spec()
+    _deploy(pg, spec, schema)
+
+    # Operator tunes a trust value at runtime.
+    with pg.cursor() as cur:
+        cur.execute(
+            f"UPDATE {schema}.source_trust SET trust = 0.42 "
+            f"WHERE source_name = 'imdb' AND class_name = 'Movie' AND slot_name = 'year'"
+        )
+
+    # Redeploy (spec unchanged from initial); seed must NOT overwrite.
+    spec2 = _movies_only_spec()
+    ops = diff_against_db(spec2, query_fn, schema=schema)
+    trust_ops = [op for op in ops if op.target == "trust_seed"]
+    # No (source, class, slot) rows are new → nothing to INSERT.
+    assert trust_ops == []
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT trust FROM {schema}.source_trust "
+            f"WHERE source_name = 'imdb' AND class_name = 'Movie' AND slot_name = 'year'"
+        )
+        assert cur.fetchone()[0] == 0.42  # operator's value preserved
 
 
 def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
@@ -636,8 +670,8 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     movie.slot("length_min", types.INTEGER)  # was runtime_minutes
     imdb = spec2.add_source("imdb")
     tmdb = spec2.add_source("tmdb")
-    spec2.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
-    spec2.bind(tmdb, movie, identifier=movie["canonical_id"], accuracy=0.7)
+    imdb.bind(movie, base_trust=0.85)
+    tmdb.bind(movie, base_trust=0.7)
 
     ops = diff_against_db(
         spec2,
@@ -667,7 +701,7 @@ def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
     imdb = spec2.add_source("imdb")
-    spec2.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
+    imdb.bind(movie, base_trust=0.85)
 
     # Without destructive opt-in: no drop emitted (filtered out).
     ops = diff_against_db(spec2, query_fn, schema=schema)
@@ -716,10 +750,12 @@ def test_flyway_files_apply_in_order(pg, schema):
     for filename in applied:
         exec_script(pg, files[filename])
 
-    # Smoke check: resolver view exists, trust seeded for every binding.
+    # Smoke check: resolver view exists, trust seeded per-slot.
+    # Movie has 3 non-identifier slots (name, year, runtime_minutes).
+    # Three sources (imdb + tmdb + _user_corrections) × 3 slots = 9 rows.
     with pg.cursor() as cur:
-        cur.execute(f"SELECT count(*) FROM {schema}.source_accuracy")
-        assert cur.fetchone()[0] == 3  # imdb + tmdb + _user_corrections
+        cur.execute(f"SELECT count(*) FROM {schema}.source_trust")
+        assert cur.fetchone()[0] == 9
 
         cur.execute(
             "SELECT viewname FROM pg_views WHERE schemaname = %s",

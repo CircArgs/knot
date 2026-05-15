@@ -23,7 +23,7 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
     person = spec.add_class("Person")
     person.slot("canonical_id", types.TEXT, identifier=True)
 
-    src = spec.enable_corrections(accuracy=0.99)
+    src = spec.enable_corrections(base_trust=0.99)
     assert src.name == CORRECTIONS_SOURCE_NAME
     binding_pairs = {(b.source.name, b.class_.name) for b in spec.source_bindings}
     assert (CORRECTIONS_SOURCE_NAME, "Movie") in binding_pairs
@@ -67,16 +67,16 @@ def test_corrections_default_accuracy_is_high():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections()
     b = spec.corrections_binding_for(movie)
-    assert b.accuracy == 0.99
+    assert b.base_trust == 0.99
 
 
 def test_corrections_custom_accuracy():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    spec.enable_corrections(accuracy=0.8)
+    spec.enable_corrections(base_trust=0.8)
     b = spec.corrections_binding_for(movie)
-    assert b.accuracy == 0.8
+    assert b.base_trust == 0.8
 
 
 def test_corrections_binding_for_raises_when_disabled():
@@ -169,7 +169,6 @@ def test_corrections_write_uses_batch_write():
                 rows=[
                     {"canonical_id": "m1", "source_identifier": "curator-42", "year": 1925},
                 ],
-                use_mappings=False,
             )
         ],
         enforce=False,
@@ -184,7 +183,11 @@ def test_corrections_appear_in_trust_seed():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    spec.enable_corrections(accuracy=0.95)
+    movie.slot("year", types.INTEGER)
+    spec.enable_corrections(base_trust=0.95)
     seeds = emit_trust_seed(spec)
+    # One row per (source, class, non-identifier-slot). Corrections binds
+    # to every concrete class with the same base_trust applied to every
+    # non-identifier slot.
     correction_seed = next((sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME)
-    assert correction_seed[1] == [CORRECTIONS_SOURCE_NAME, "Movie", 0.95]
+    assert correction_seed[1] == [CORRECTIONS_SOURCE_NAME, "Movie", "year", 0.95]

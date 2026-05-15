@@ -80,12 +80,12 @@ def test_virtual_class_rejects_non_expr_definition():
         VirtualClass(name="DirectedMovie", is_a=parent, definition="raw sql string")
 
 
-def test_source_binding_rejects_accuracy_out_of_range():
+def test_source_binding_rejects_base_trust_out_of_range():
     s = Source(name="imdb")
     cls = OntologyClass(name="Movie")
     cls.slot("canonical_id", types.TEXT, identifier=True)
-    with pytest.raises(ValueError, match="accuracy"):
-        SourceBinding(source=s, class_=cls, identifier_slot=cls["canonical_id"], accuracy=1.5)
+    with pytest.raises(ValueError, match="base_trust"):
+        SourceBinding(source=s, class_=cls, base_trust=1.5)
 
 
 def test_spec_id_must_be_non_empty():
@@ -135,7 +135,7 @@ def test_duplicate_binding_pair_rejected(movie_spec):
     imdb = movie_spec.sources[0]
     movie = next(c for c in movie_spec.classes if c.name == "Movie")
     with pytest.raises(ValueError, match="already has a binding"):
-        movie_spec.bind(imdb, movie, identifier=movie["canonical_id"])
+        imdb.bind(movie)
 
 
 # ---------------------------------------------------------------------------
@@ -245,15 +245,17 @@ def test_validate_binding_to_abstract():
     title = spec.add_class("Title", kind="abstract")
     title.slot("canonical_id", types.TEXT, identifier=True)
     imdb = spec.add_source("imdb")
-    spec.bind(imdb, title, identifier=title["canonical_id"])
+    imdb.bind(title)
     errs = spec.validate()
     assert any("abstract" in e for e in errs)
 
 
 def test_validate_mapping_slot_not_on_class(movie_spec):
-    from knot import SourceMap
+    from knot import SlotMapping
 
-    movie_spec.source_bindings[0].mappings["nonexistent_slot"] = SourceMap.passthrough("raw_field")
+    movie_spec.source_bindings[0].slot_mappings["nonexistent_slot"] = SlotMapping(
+        class_slot="nonexistent_slot", source_slot=("raw_field",)
+    )
     errs = movie_spec.validate()
     assert any("nonexistent_slot" in e for e in errs)
 

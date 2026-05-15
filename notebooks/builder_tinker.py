@@ -24,13 +24,13 @@ def _(mo):
 
 @app.cell
 def _():
-    from knot import SourceMap, Spec, VirtualClass, types
+    from knot import SlotMapping, Spec, VirtualClass, types
 
-    return SourceMap, Spec, VirtualClass, types
+    return SlotMapping, Spec, VirtualClass, types
 
 
 @app.cell
-def _(SourceMap, Spec, types):
+def _(SlotMapping, Spec, types):
     spec = Spec(id="movies", version="0.1")
 
     title = spec.add_class("Title", kind="abstract")
@@ -69,11 +69,11 @@ def _(SourceMap, Spec, types):
         imdb,
         movie,
         identifier=movie["canonical_id"],
-        accuracy=0.85,
+        base_trust=0.85,
     )
     binding.map(
-        year=SourceMap(uses=("release_year",), sql="release_year"),
-        runtime_minutes=SourceMap(
+        year=SlotMapping(uses=("release_year",), sql="release_year"),
+        runtime_minutes=SlotMapping(
             uses=("runtime",),
             sql="(regexp_match(runtime, '[0-9]+'))[1]::int",
         ),
@@ -131,12 +131,12 @@ def _(mo, spec):
     for b in spec.source_bindings:
         binding_lines.append(
             f"### `{b.source.name}` → `{b.class_.name}`"
-            f" (accuracy = {b.accuracy}, derived Beta = {b.beta_prior})\n"
+            f" (base_trust= {b.base_trust}, derived Beta = {b.beta_prior})\n"
         )
         binding_lines.append(f"identifier slot: `{b.identifier_slot.name}`\n\n")
-        if b.mappings:
+        if b.slot_mappings:
             binding_lines.append("| slot | SQL projection |\n| - | - |\n")
-            for slot_name, sql in b.mappings.items():
+            for slot_name, sql in b.slot_mappings.items():
                 binding_lines.append(f"| `{slot_name}` | `{sql}` |\n")
         binding_lines.append("\n")
     mo.md("\n".join(binding_lines))
@@ -178,7 +178,7 @@ def _(mo):
 
     Things to try in the build cell above:
 
-    - Tune the binding's `accuracy=...` (0.0 - 1.0) — `b.beta_prior` re-derives.
+    - Tune the binding's `base_trust=...` (0.0 - 1.0) — `b.beta_prior` re-derives.
     - Slot types come from `knot.types`: `types.INTEGER`, `types.ARRAY(types.TEXT)`, `movie`.
     - Add another class + binding for `tmdb`.
     - Add another constraint with a SQL body of your choice.

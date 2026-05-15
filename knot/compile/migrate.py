@@ -183,16 +183,16 @@ def _existing_trust_rows(
     query: QueryFn,
     schema: str,
     trust_table_name: str,
-) -> dict[tuple[str, str], float]:
-    """Return ``{(source_name, class_name): accuracy}`` from the trust
-    table, or empty dict if the table doesn't exist."""
+) -> dict[tuple[str, str, str], float]:
+    """Return ``{(source_name, class_name, slot_name): trust}`` from the
+    trust table, or empty dict if the table doesn't exist."""
     if trust_table_name not in _existing_tables(query, schema):
         return {}
     rows = query(
-        f"SELECT source_name, class_name, accuracy FROM {schema}.{trust_table_name}",
+        f"SELECT source_name, class_name, slot_name, trust FROM {schema}.{trust_table_name}",
         (),
     )
-    return {(r[0], r[1]): float(r[2]) for r in rows}
+    return {(r[0], r[1], r[2]): float(r[3]) for r in rows}
 
 
 # ---------------------------------------------------------------------------
@@ -207,7 +207,7 @@ def diff_against_db(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
-    trust_table_name: str = "source_accuracy",
+    trust_table_name: str = "source_trust",
     allow_destructive: bool = False,
     renames: dict[str, dict[str, str]] | None = None,
 ) -> list[MigrationOp]:
@@ -334,30 +334,36 @@ def diff_against_db(
             )
         )
 
-    # 9. Trust seed — always emit; UPSERTs are idempotent. We render
-    # them inline rather than calling emit_trust_seed because we want
-    # the static SQL form here (a MigrationOp carries SQL, not params).
+    # 9. Trust seed — INSERT-only. Spec values are *initial conditions*;
+    # once a (source, class, slot) row exists, the operator's runtime
+    # tuning is authoritative and we do NOT clobber it on redeploy.
+    # Emit INSERT only for net-new (source, class, slot) triples.
     trust_rows = _existing_trust_rows(query, schema, trust_table_name)
     for b in spec.source_bindings:
-        key = (b.source.name, b.class_.name)
-        existing = trust_rows.get(key)
-        if existing is not None and abs(existing - b.accuracy) < 1e-9:
-            continue  # already at the spec'd value
-        source_lit = "'" + b.source.name.replace("'", "''") + "'"
-        class_lit = "'" + b.class_.name.replace("'", "''") + "'"
-        ops.append(
-            MigrationOp(
-                description=(f"upsert_trust_{b.source.name}_{b.class_.name}"),
-                sql=(
-                    f"INSERT INTO {schema}.{trust_table_name} "
-                    f"(source_name, class_name, accuracy) "
-                    f"VALUES ({source_lit}, {class_lit}, {b.accuracy})\n"
-                    f"ON CONFLICT (source_name, class_name) "
-                    f"DO UPDATE SET accuracy = EXCLUDED.accuracy;"
-                ),
-                target="trust_seed",
+        cls = b.class_
+        ident_name = b.identifier_slot.name
+        for slot in cls.effective_slots():
+            if slot.name == ident_name:
+                continue
+            key = (b.source.name, cls.name, slot.name)
+            if key in trust_rows:
+                continue  # row exists — leave operator's tuning alone
+            source_lit = "'" + b.source.name.replace("'", "''") + "'"
+            class_lit = "'" + cls.name.replace("'", "''") + "'"
+            slot_lit = "'" + slot.name.replace("'", "''") + "'"
+            trust = b.trust_for(slot.name)
+            ops.append(
+                MigrationOp(
+                    description=(f"seed_trust_{b.source.name}_{cls.name}_{slot.name}"),
+                    sql=(
+                        f"INSERT INTO {schema}.{trust_table_name} "
+                        f"(source_name, class_name, slot_name, trust) "
+                        f"VALUES ({source_lit}, {class_lit}, {slot_lit}, {trust})\n"
+                        f"ON CONFLICT (source_name, class_name, slot_name) DO NOTHING;"
+                    ),
+                    target="trust_seed",
+                )
             )
-        )
 
     if not allow_destructive:
         ops = [op for op in ops if not op.destructive]
@@ -515,18 +521,28 @@ def _diff_drops(
                 )
             )
 
-    # 4. Unused trust rows.
-    expected_binding_keys = {(b.source.name, b.class_.name) for b in spec.source_bindings}
+    # 4. Unused trust rows (source/class/slot triples no longer in spec).
+    expected_triples: set[tuple[str, str, str]] = set()
+    for b in spec.source_bindings:
+        cls = b.class_
+        ident_name = b.identifier_slot.name
+        for slot in cls.effective_slots():
+            if slot.name == ident_name:
+                continue
+            expected_triples.add((b.source.name, cls.name, slot.name))
     db_trust_rows = _existing_trust_rows(query, schema, trust_table_name)
-    for src, cls_name in sorted(set(db_trust_rows) - expected_binding_keys):
+    for src, cls_name, slot_name in sorted(set(db_trust_rows) - expected_triples):
         s_lit = "'" + src.replace("'", "''") + "'"
         c_lit = "'" + cls_name.replace("'", "''") + "'"
+        sl_lit = "'" + slot_name.replace("'", "''") + "'"
         ops.append(
             MigrationOp(
-                description=f"drop_trust_{src}_{cls_name}",
+                description=f"drop_trust_{src}_{cls_name}_{slot_name}",
                 sql=(
                     f"DELETE FROM {schema}.{trust_table_name} "
-                    f"WHERE source_name = {s_lit} AND class_name = {c_lit};"
+                    f"WHERE source_name = {s_lit} "
+                    f"AND class_name = {c_lit} "
+                    f"AND slot_name = {sl_lit};"
                 ),
                 target="trust_seed",
             )

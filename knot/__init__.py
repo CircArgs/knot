@@ -34,16 +34,15 @@ from knot.expr import (
 )
 from knot.select import OrderBy, Query
 from knot.spec import (
-    BINDING_PRIOR_STRENGTH,
     CORRECTIONS_SOURCE_NAME,
     ClassKind,
     Constraint,
     OntologyClass,
     Severity,
     Slot,
+    SlotMapping,
     Source,
     SourceBinding,
-    SourceMap,
     Spec,
     SpecError,
     TypeExpression,
@@ -63,8 +62,7 @@ __all__ = [
     "Constraint",
     "Source",
     "SourceBinding",
-    "SourceMap",
-    "BINDING_PRIOR_STRENGTH",
+    "SlotMapping",
     "CORRECTIONS_SOURCE_NAME",
     "Spec",
     "SpecError",

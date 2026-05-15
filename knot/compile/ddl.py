@@ -41,7 +41,7 @@ def emit_ddl(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
-    trust_table_name: str = "source_accuracy",
+    trust_table_name: str = "source_trust",
     if_not_exists: bool = False,
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
@@ -85,8 +85,8 @@ def emit_ddl(
         close-out hot paths (both filter on ``valid_to IS NULL``).
     emit_trust_table
         When True, emit the invariant ``<schema>.<trust_table_name>``
-        (default ``source_accuracy``) that carries the runtime
-        per-source accuracy. The resolver view ``LEFT JOIN``s against
+        (default ``source_trust``) that carries the runtime per-(source,
+        class, slot) trust. The resolver views ``LEFT JOIN`` against
         this table; seed its rows from the spec via
         ``knot.compile.trust.emit_trust_seed``.
     emit_descriptions
@@ -394,17 +394,18 @@ def _emit_trust_table(
     trust_table_name: str,
     if_not_exists: bool,
 ) -> str:
-    """Invariant table carrying the runtime per-source accuracy. The
-    resolver views ``LEFT JOIN`` against this table; operators tune
-    accuracy with plain ``UPDATE`` statements without redeploying."""
+    """Invariant table carrying the runtime per-(source, class, slot)
+    trust. The resolver views ``LEFT JOIN`` against this table; operators
+    tune trust with plain ``UPDATE`` statements without redeploying."""
     ct = "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
     return (
         f"{ct} {schema}.{trust_table_name} (\n"
         "    source_name text NOT NULL,\n"
         "    class_name  text NOT NULL,\n"
-        "    accuracy    double precision NOT NULL\n"
-        "                CHECK (accuracy >= 0 AND accuracy <= 1),\n"
-        "    PRIMARY KEY (source_name, class_name)\n"
+        "    slot_name   text NOT NULL,\n"
+        "    trust       double precision NOT NULL\n"
+        "                CHECK (trust >= 0 AND trust <= 1),\n"
+        "    PRIMARY KEY (source_name, class_name, slot_name)\n"
         ");"
     )
 
