@@ -49,8 +49,8 @@ def _(SourceMap, Spec, types):
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
-    credit.slot("movie", types.FK(movie))
-    credit.slot("person", types.FK(person))
+    credit.slot("movie", movie)
+    credit.slot("person", person)
 
     spec.add_virtual_class(
         "DirectedMovie",
@@ -179,7 +179,7 @@ def _(mo):
     Things to try in the build cell above:
 
     - Tune the binding's `accuracy=...` (0.0 - 1.0) — `b.beta_prior` re-derives.
-    - Slot types come from `knot.types`: `types.INTEGER`, `types.ARRAY(types.TEXT)`, `types.FK(movie)`.
+    - Slot types come from `knot.types`: `types.INTEGER`, `types.ARRAY(types.TEXT)`, `movie`.
     - Add another class + binding for `tmdb`.
     - Add another constraint with a SQL body of your choice.
     """)

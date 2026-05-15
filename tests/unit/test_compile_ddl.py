@@ -108,7 +108,7 @@ def test_fk_alters_use_target_identifier_slot_name():
     movie.slot("imdb_id", types.TEXT, identifier=True)  # non-default identifier name
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
-    credit.slot("movie", types.FK(movie))
+    credit.slot("movie", movie)
     stmts = emit_ddl(spec)
     fk = next(s for s in stmts if s.startswith("ALTER TABLE knot_data.credit"))
     assert "REFERENCES knot_data.movie(imdb_id)" in fk
@@ -148,7 +148,7 @@ def test_fk_alters_only_for_concrete_classes():
     movie = spec.add_class("Movie", is_a=title)
     other = spec.add_class("Other")
     other.slot("canonical_id", types.TEXT, identifier=True)
-    other.slot("title", types.FK(title))  # FK to abstract — questionable but allowed
+    other.slot("title", title)  # FK to abstract — questionable but allowed
     stmts = emit_ddl(spec)
     # No FK alter should reference an abstract class's nonexistent table.
     # Currently we DO emit one (FK to title) — that would fail at run time

@@ -67,7 +67,7 @@ def test_class_ref_renders_qualified():
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
-    credit.slot("movie", types.FK(movie))
+    credit.slot("movie", movie)
     spec.add_constraint(
         "has_director",
         primary=movie,
@@ -96,7 +96,7 @@ def test_has_count_in_predicate():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
-    credit.slot("movie", types.FK(movie))
+    credit.slot("movie", movie)
     spec.add_constraint(
         "min_three_credits",
         primary=movie,

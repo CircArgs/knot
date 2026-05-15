@@ -130,7 +130,7 @@ def _make_movie_director_spec():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("title", types.TEXT)
     movie.slot("year", types.INTEGER)
-    movie.slot("director", types.FK(person))
+    movie.slot("director", person)
     return spec, movie, person
 
 

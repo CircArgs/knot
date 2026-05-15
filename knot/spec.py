@@ -83,6 +83,11 @@ class Array:
 
     of: TypeExpression
 
+    def __post_init__(self):
+        # Coerce ``OntologyClass`` to ``ClassRef`` so ``types.ARRAY(person)``
+        # works the same way ``slot("director", person)`` does.
+        self.of = _coerce_type(self.of)
+
     def __str__(self) -> str:
         return f"array<{self.of}>"
 
@@ -100,15 +105,21 @@ class ClassRef:
 TypeExpression = Primitive | Array | ClassRef
 
 
-def _coerce_type(t: TypeExpression) -> TypeExpression:
-    """Validate a slot type. Canonical type API only — use the ``knot.types``
-    module (``types.TEXT``, ``types.ARRAY(types.TEXT)``, ``types.FK(cls)``).
-    No string shorthand, no enum direct access."""
+def _coerce_type(t):
+    """Validate or coerce a slot type. Canonical inputs:
+
+      - values from ``knot.types`` (``types.TEXT``, ``types.ARRAY(...)``)
+      - an ``OntologyClass`` instance (auto-wraps in ``ClassRef``)
+
+    No string shorthand, no enum direct access — those routes are gone."""
     if isinstance(t, (Primitive, Array, ClassRef)):
         return t
+    if isinstance(t, OntologyClass):
+        return ClassRef(target=t)
     raise TypeError(
         f"Slot type must be a value from knot.types (TEXT/INTEGER/FLOAT/"
-        f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)/FK(...)); got {type(t).__name__}"
+        f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)) or an OntologyClass instance; "
+        f"got {type(t).__name__}"
     )
 
 

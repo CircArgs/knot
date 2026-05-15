@@ -31,8 +31,8 @@ def movie_spec() -> Spec:
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
-    credit.slot("movie", types.FK(movie))
-    credit.slot("person", types.FK(person))
+    credit.slot("movie", movie)
+    credit.slot("person", person)
 
     spec.add_virtual_class(
         "DirectedMovie",

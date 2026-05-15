@@ -52,13 +52,13 @@ def _():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("title", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
-    movie.slot("director", types.FK(person))
+    movie.slot("director", person)
 
     credit = spec.add_class("Credit", description="A person's role in a movie.")
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
-    credit.slot("movie", types.FK(movie))
-    credit.slot("person", types.FK(person))
+    credit.slot("movie", movie)
+    credit.slot("person", person)
 
     # Single source for simplicity. Multi-source resolution + trust
     # arbitration still happens — there's just one contributor here.

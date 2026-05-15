@@ -181,7 +181,7 @@ def test_fk_detection():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
-    credit.slot("movie", types.FK(movie))
+    credit.slot("movie", movie)
     assert credit["movie"].is_fk is True
     from knot.spec import ClassRef
 
@@ -235,7 +235,7 @@ def test_validate_classref_target_missing():
     ghost = OntologyClass(name="Ghost")
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
-    credit.slot("movie", types.FK(ghost))  # Ghost is NOT in spec.classes
+    credit.slot("movie", ghost)  # Ghost is NOT in spec.classes
     errs = spec.validate()
     assert any("ClassRef" in e and "Ghost" in e for e in errs)
 
@@ -359,7 +359,7 @@ def test_has_any_unknown_slot_kwarg_raises():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
-    credit.slot("movie", types.FK(movie))
+    credit.slot("movie", movie)
     # `role` doesn't exist on Credit — caught at expression build.
     with pytest.raises(KeyError, match="role"):
         movie.has_any(credit, role="director")
@@ -382,8 +382,8 @@ def test_has_any_ambiguous_fk_requires_via():
     person.slot("canonical_id", types.TEXT, identifier=True)
     membership = spec.add_class("Membership")
     membership.slot("canonical_id", types.TEXT, identifier=True)
-    membership.slot("user", types.FK(person))
-    membership.slot("friend", types.FK(person))
+    membership.slot("user", person)
+    membership.slot("friend", person)
     with pytest.raises(ValueError, match="multiple FKs"):
         person.has_any(membership)
     # Explicit via= resolves the ambiguity.

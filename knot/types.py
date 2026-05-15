@@ -7,16 +7,21 @@ module:
     types.TEXT, types.INTEGER, types.FLOAT, types.BOOLEAN,
     types.DATE, types.TIMESTAMP             — primitive scalars
     types.ARRAY(types.TEXT)                 — homogeneous array
-    types.FK(other_class)                   — FK to another class
 
-The objects returned here are the same ``Primitive`` / ``Array`` /
-``ClassRef`` instances the compile layer dispatches on — this module
-is the user-facing surface, not a parallel representation.
+FKs are not a separate type — passing an ``OntologyClass`` directly
+to ``slot()`` (or to ``ARRAY()``) wraps it in a ``ClassRef``:
+
+    movie.slot("director", person)
+    movie.slot("authors", types.ARRAY(person))
+
+The objects returned here are the same ``Primitive`` / ``Array``
+instances the compile layer dispatches on — this module is the
+user-facing surface, not a parallel representation.
 """
 
 from __future__ import annotations
 
-from knot.spec import Array, ClassRef, Primitive
+from knot.spec import Array, Primitive
 
 TEXT = Primitive.TEXT
 INTEGER = Primitive.INTEGER
@@ -27,13 +32,8 @@ TIMESTAMP = Primitive.TIMESTAMP
 
 
 def ARRAY(of):
-    """Homogeneous array of another knot type."""
+    """Homogeneous array of another knot type or class."""
     return Array(of=of)
-
-
-def FK(target):
-    """FK reference to another class. Stored as the target's canonical_id."""
-    return ClassRef(target=target)
 
 
 __all__ = [
@@ -44,5 +44,4 @@ __all__ = [
     "DATE",
     "TIMESTAMP",
     "ARRAY",
-    "FK",
 ]
