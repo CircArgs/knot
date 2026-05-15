@@ -203,6 +203,65 @@ def test_resolved_view_picks_higher_accuracy_source(pg, schema):
     assert runtime == 75
 
 
+def test_all_sources_view_aggregates_per_source_jsonb(pg, schema):
+    """The <class>_all_sources provenance view ships one jsonb per
+    slot keyed by source name, with {value, trust} payload — so both
+    sources show up for ``year`` even though only one wins in the
+    resolved view."""
+    spec = _movies_only_spec()
+    _deploy(pg, spec, schema)
+
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+    tmdb_b = next(b for b in spec.source_bindings if b.source.name == "tmdb")
+
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "canonical_id": "potemkin",
+                "source_identifier": "tt001",
+                "name": "Battleship Potemkin",
+                "year": 1925,
+                "runtime_minutes": 75,
+            },
+        ],
+        schema=schema,
+    )
+    _write_claim(
+        pg,
+        spec,
+        tmdb_b,
+        [
+            {
+                "canonical_id": "potemkin",
+                "source_identifier": "tmdb-x",
+                "name": "Battleship Potemkin",
+                "year": 1924,
+                "runtime_minutes": None,  # partial coverage → filtered out
+            },
+        ],
+        schema=schema,
+    )
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT year, runtime_minutes "
+            f"FROM {schema}.movie_all_sources WHERE canonical_id = 'potemkin'"
+        )
+        year_jsonb, runtime_jsonb = cur.fetchone()
+
+    # Both sources present in year (both contributed non-null).
+    assert set(year_jsonb.keys()) == {"imdb", "tmdb"}
+    assert year_jsonb["imdb"] == {"value": 1925, "trust": 0.85}
+    assert year_jsonb["tmdb"] == {"value": 1924, "trust": 0.7}
+
+    # Only IMDB present in runtime_minutes (TMDB contributed NULL → filtered).
+    assert set(runtime_jsonb.keys()) == {"imdb"}
+    assert runtime_jsonb["imdb"] == {"value": 75, "trust": 0.85}
+
+
 def test_resolved_view_falls_back_per_slot(pg, schema):
     """If IMDB has a NULL for `runtime_minutes` but TMDB has a value,
     TMDB wins for that slot even though IMDB has higher overall

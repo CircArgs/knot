@@ -24,7 +24,12 @@ from knot.compile.ddl import emit_ddl
 from knot.compile.expr import compile_sql
 from knot.compile.migrate import MigrationOp, diff_against_db
 from knot.compile.query import compile_query
-from knot.compile.resolver import emit_resolved_view, emit_resolved_views
+from knot.compile.resolver import (
+    emit_all_sources_view,
+    emit_all_sources_views,
+    emit_resolved_view,
+    emit_resolved_views,
+)
 from knot.compile.trust import emit_trust_seed
 from knot.compile.write import (
     BatchWrite,

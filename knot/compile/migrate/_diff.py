@@ -32,7 +32,7 @@ from knot.compile.migrate._introspect import (
     _existing_trust_rows,
     _existing_views,
 )
-from knot.compile.resolver import emit_resolved_view
+from knot.compile.resolver import emit_all_sources_view, emit_resolved_view
 from knot.spec import OntologyClass, Spec
 
 
@@ -53,8 +53,8 @@ class MigrationOp:
     target
         Coarse classification — ``"schema"``, ``"trust_table"``,
         ``"canonical"``, ``"bindings"``, ``"index"``, ``"fk"``,
-        ``"resolved_view"``, ``"virtual_view"``, ``"trust_seed"``.
-        Useful for grouping ops in migration files.
+        ``"resolved_view"``, ``"all_sources_view"``, ``"virtual_view"``,
+        ``"trust_seed"``. Useful for grouping ops in migration files.
     """
 
     description: str
@@ -70,6 +70,7 @@ def diff_against_db(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
+    all_sources_suffix: str = "_all_sources",
     trust_table_name: str = "source_trust",
     allow_destructive: bool = False,
     renames: dict[str, dict[str, str]] | None = None,
@@ -123,6 +124,7 @@ def diff_against_db(
             schema=schema,
             bindings_suffix=bindings_suffix,
             resolved_suffix=resolved_suffix,
+            all_sources_suffix=all_sources_suffix,
             trust_table_name=trust_table_name,
             renames=renames,
         )
@@ -183,6 +185,26 @@ def diff_against_db(
                 description=f"replace_view_{view_name}",
                 sql=sql,
                 target="resolved_view",
+            )
+        )
+
+    # 7b. All-sources / provenance views (always replace, same shape).
+    for cls in spec.concrete_classes():
+        view_name = f"{cls.name.lower()}{all_sources_suffix}"
+        sql = emit_all_sources_view(
+            spec,
+            cls,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+            all_sources_suffix=all_sources_suffix,
+            trust_table_name=trust_table_name,
+            if_not_exists=True,
+        )
+        ops.append(
+            MigrationOp(
+                description=f"replace_view_{view_name}",
+                sql=sql,
+                target="all_sources_view",
             )
         )
 
@@ -300,6 +322,7 @@ def _diff_drops(
     schema: str,
     bindings_suffix: str,
     resolved_suffix: str,
+    all_sources_suffix: str,
     trust_table_name: str,
     renames: dict[str, dict[str, str]] | None = None,
 ) -> list[MigrationOp]:
@@ -317,8 +340,13 @@ def _diff_drops(
     expected_canonical = {cls.name.lower() for cls in spec.concrete_classes()}
     expected_bindings = {f"{n}{bindings_suffix}" for n in expected_canonical}
     expected_resolved_views = {f"{n}{resolved_suffix}" for n in expected_canonical}
+    expected_all_sources_views = {
+        f"{n}{all_sources_suffix}" for n in expected_canonical
+    }
     expected_virtual_views = {cls.name.lower() for cls in spec.virtual_classes()}
-    expected_views = expected_resolved_views | expected_virtual_views
+    expected_views = (
+        expected_resolved_views | expected_all_sources_views | expected_virtual_views
+    )
 
     # 1. Unused FK constraints on canonical tables that ARE still in spec.
     for cls in spec.concrete_classes():
@@ -343,29 +371,34 @@ def _diff_drops(
                 )
             )
 
+    def _view_target(view: str) -> str:
+        if view.endswith(all_sources_suffix):
+            return "all_sources_view"
+        if view.endswith(resolved_suffix):
+            return "resolved_view"
+        return "virtual_view"
+
     # 2a. Unused views — drop views that aren't in spec at all.
     for view in sorted(db_views - expected_views):
-        target = "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
         ops.append(
             MigrationOp(
                 description=f"drop_view_{view}",
                 sql=f"DROP VIEW IF EXISTS {schema}.{view};",
-                target=target,
+                target=_view_target(view),
             )
         )
 
-    # 2b. Drop currently-existing resolved + virtual views even if
-    # they ARE expected, so subsequent column drops / renames / type
-    # changes on the underlying tables don't blow up with
+    # 2b. Drop currently-existing resolved + all-sources + virtual views
+    # even if they ARE expected, so subsequent column drops / renames /
+    # type changes on the underlying tables don't blow up with
     # "DependentObjectsStillExist". The additive pass recreates them
     # via CREATE OR REPLACE VIEW. Cheap, always safe.
     for view in sorted(db_views & expected_views):
-        target = "resolved_view" if view.endswith(resolved_suffix) else "virtual_view"
         ops.append(
             MigrationOp(
                 description=f"drop_view_{view}_for_rebuild",
                 sql=f"DROP VIEW IF EXISTS {schema}.{view};",
-                target=target,
+                target=_view_target(view),
             )
         )
 

@@ -115,6 +115,7 @@ def test_empty_db_emits_full_create_sequence():
     assert "bindings" in targets
     assert "index" in targets
     assert "resolved_view" in targets
+    assert "all_sources_view" in targets
     assert "trust_seed" in targets
 
 
@@ -359,6 +360,44 @@ def test_resolved_view_always_dropped_and_replaced():
     assert drop_op.destructive is False
 
 
+def test_all_sources_view_always_dropped_and_replaced():
+    """Same drop-then-replace flow as the resolved view, on the
+    parallel <class>_all_sources provenance view."""
+    spec = _basic_spec()
+    db = MockDB(
+        schemas={"knot_data"},
+        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        views={"knot_data": {"movie_resolved", "movie_all_sources"}},
+        columns={
+            ("knot_data", "movie"): {"canonical_id", "year"},
+            ("knot_data", "movie_bindings"): {
+                "canonical_id",
+                "source_name",
+                "source_identifier",
+                "year",
+                "raw_payload",
+                "valid_from",
+                "valid_to",
+            },
+        },
+        indexes={
+            ("knot_data", "movie_bindings"): {
+                "movie_bindings_current_idx",
+                "movie_bindings_source_idx",
+            }
+        },
+        trust_rows=[("imdb", "Movie", "year", 0.85)],
+    )
+    ops = diff_against_db(spec, db)
+    view_ops = [op for op in ops if op.target == "all_sources_view"]
+    assert len(view_ops) == 2
+    drop_op = next(op for op in view_ops if "DROP VIEW" in op.sql)
+    create_op = next(op for op in view_ops if "CREATE OR REPLACE VIEW" in op.sql)
+    assert ops.index(drop_op) < ops.index(create_op)
+    assert drop_op.destructive is False
+    assert "movie_all_sources" in create_op.sql
+
+
 # ---------------------------------------------------------------------------
 # Index detection
 # ---------------------------------------------------------------------------
@@ -427,6 +466,7 @@ def test_migration_op_carries_target_and_description():
             "index",
             "fk",
             "resolved_view",
+            "all_sources_view",
             "virtual_view",
             "trust_seed",
         }

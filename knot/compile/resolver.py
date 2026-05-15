@@ -139,3 +139,110 @@ def emit_resolved_views(
                 )
             )
     return out
+
+
+# ---------------------------------------------------------------------------
+# All-sources / provenance view
+# ---------------------------------------------------------------------------
+
+
+def emit_all_sources_view(
+    spec: Spec,
+    cls: OntologyClass,
+    *,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+    all_sources_suffix: str = "_all_sources",
+    trust_table_name: str = "source_trust",
+    if_not_exists: bool = False,
+) -> str:
+    """Return ``CREATE VIEW <schema>.<class><all_sources_suffix>`` — the
+    provenance view.
+
+    Same shape as ``<class>_resolved`` (one row per ``canonical_id``)
+    but every slot column carries a ``jsonb`` object keyed by source
+    name, with ``{value, trust}`` payload per source::
+
+        {
+          "imdb": {"value": 1994, "trust": 0.85},
+          "tmdb": {"value": 1995, "trust": 0.70}
+        }
+
+    Sources contributing ``NULL`` for a slot are filtered out per slot
+    (so a partial-coverage source doesn't leave a ``{"src": {"value":
+    null, "trust": …}}`` entry). The identifier slot stays as a plain
+    column — it's the key, not a multi-source claim.
+
+    This is the substrate downstream layers (GraphQL ``SlotValue``
+    types, audit UIs, ER candidate-generation) read from when they
+    want to surface provenance alongside the resolved value.
+    """
+    if cls.kind != ClassKind.CONCRETE:
+        raise ValueError(
+            f"class {cls.name!r} is {cls.kind.value!r}; all-sources views are "
+            f"only emitted for concrete classes"
+        )
+
+    bindings_table = f"{schema}.{cls.name.lower()}{bindings_suffix}"
+    trust_table = f"{schema}.{trust_table_name}"
+    view_name = f"{schema}.{cls.name.lower()}{all_sources_suffix}"
+    ident = cls.identifier_slot()
+    create = "CREATE OR REPLACE VIEW" if if_not_exists else "CREATE VIEW"
+
+    select_lines: list[str] = [f"    b.{ident.name}"]
+    join_lines: list[str] = []
+
+    for slot in cls.effective_slots():
+        if slot.name == ident.name:
+            continue
+        alias = f"t_{slot.name}"
+        join_lines.append(
+            f"LEFT JOIN {trust_table} {alias}\n"
+            f"  ON {alias}.source_name = b.source_name "
+            f"AND {alias}.class_name = '{cls.name}' "
+            f"AND {alias}.slot_name = '{slot.name}'"
+        )
+        select_lines.append(
+            f"    jsonb_object_agg(\n"
+            f"      b.source_name,\n"
+            f"      jsonb_build_object('value', b.{slot.name}, "
+            f"'trust', COALESCE({alias}.trust, 0))\n"
+            f"    ) FILTER (WHERE b.{slot.name} IS NOT NULL) AS {slot.name}"
+        )
+
+    joins = "\n".join(join_lines)
+    return (
+        f"{create} {view_name} AS\n"
+        "SELECT\n" + ",\n".join(select_lines) + "\n"
+        f"FROM {bindings_table} b\n"
+        f"{joins}\n"
+        f"WHERE b.valid_to IS NULL AND b.{ident.name} IS NOT NULL\n"
+        f"GROUP BY b.{ident.name};"
+    )
+
+
+def emit_all_sources_views(
+    spec: Spec,
+    *,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+    all_sources_suffix: str = "_all_sources",
+    trust_table_name: str = "source_trust",
+    if_not_exists: bool = False,
+) -> list[str]:
+    """Return one ``CREATE VIEW <class>_all_sources`` per concrete class."""
+    out: list[str] = []
+    for cls in spec.classes:
+        if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
+            out.append(
+                emit_all_sources_view(
+                    spec,
+                    cls,
+                    schema=schema,
+                    bindings_suffix=bindings_suffix,
+                    all_sources_suffix=all_sources_suffix,
+                    trust_table_name=trust_table_name,
+                    if_not_exists=if_not_exists,
+                )
+            )
+    return out

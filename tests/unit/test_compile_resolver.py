@@ -141,3 +141,106 @@ def test_emit_ddl_can_disable_resolved_views(movie_spec):
 
     stmts = emit_ddl(movie_spec, emit_resolved_views=False)
     assert not any("_resolved AS" in s for s in stmts)
+
+
+# ---------------------------------------------------------------------------
+# All-sources / provenance view
+# ---------------------------------------------------------------------------
+
+
+def test_all_sources_view_per_concrete_class(movie_spec):
+    from knot.compile import emit_all_sources_views
+
+    views = emit_all_sources_views(movie_spec)
+    assert len(views) == 3  # Movie, Person, Credit
+    for v in views:
+        assert "CREATE VIEW knot_data." in v
+        assert "_all_sources AS" in v
+
+
+def test_all_sources_view_uses_jsonb_object_agg(movie_spec):
+    from knot.compile import emit_all_sources_view
+
+    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    v = emit_all_sources_view(movie_spec, movie)
+    assert "jsonb_object_agg" in v
+    assert "jsonb_build_object('value', b.year, 'trust'," in v
+    # Per-slot filter excludes sources contributing NULL.
+    assert "FILTER (WHERE b.year IS NOT NULL) AS year" in v
+
+
+def test_all_sources_view_per_slot_trust_join(movie_spec):
+    from knot.compile import emit_all_sources_view
+
+    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    v = emit_all_sources_view(movie_spec, movie)
+    # Each non-identifier slot gets its own LEFT JOIN aliased t_<slot>.
+    assert "LEFT JOIN knot_data.source_trust t_year" in v
+    assert "t_year.source_name = b.source_name" in v
+    assert "t_year.class_name = 'Movie'" in v
+    assert "t_year.slot_name = 'year'" in v
+    assert "COALESCE(t_year.trust, 0)" in v
+
+
+def test_all_sources_view_groups_by_identifier(movie_spec):
+    from knot.compile import emit_all_sources_view
+
+    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    v = emit_all_sources_view(movie_spec, movie)
+    assert "GROUP BY b.canonical_id" in v
+    assert "WHERE b.valid_to IS NULL AND b.canonical_id IS NOT NULL" in v
+
+
+def test_all_sources_view_parses_postgres(movie_spec):
+    from knot.compile import emit_all_sources_views
+
+    for v in emit_all_sources_views(movie_spec):
+        sqlglot.parse_one(v, dialect="postgres")
+
+
+def test_all_sources_view_if_not_exists_swaps_create(movie_spec):
+    from knot.compile import emit_all_sources_view
+
+    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    v = emit_all_sources_view(movie_spec, movie, if_not_exists=True)
+    assert v.startswith("CREATE OR REPLACE VIEW")
+
+
+def test_all_sources_view_kwargs_threading(movie_spec):
+    from knot.compile import emit_all_sources_view
+
+    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    v = emit_all_sources_view(
+        movie_spec,
+        movie,
+        schema="alt",
+        bindings_suffix="__s",
+        all_sources_suffix="__p",
+    )
+    assert v.startswith("CREATE VIEW alt.movie__p AS")
+    assert "FROM alt.movie__s b" in v
+
+
+def test_all_sources_view_rejects_abstract_class():
+    from knot.compile import emit_all_sources_view
+
+    spec = Spec(id="m", version="0.1")
+    title = spec.add_class("Title", kind="abstract")
+    title.slot("canonical_id", types.TEXT, identifier=True)
+    with pytest.raises(ValueError, match="concrete classes"):
+        emit_all_sources_view(spec, title)
+
+
+def test_emit_ddl_appends_all_sources_views(movie_spec):
+    from knot.compile import emit_ddl
+
+    stmts = emit_ddl(movie_spec)
+    all_sources = [s for s in stmts if "_all_sources AS" in s]
+    assert len(all_sources) == 3  # Movie, Person, Credit
+
+
+def test_emit_ddl_can_disable_all_sources_views(movie_spec):
+    from knot.compile import emit_ddl
+
+    stmts = emit_ddl(movie_spec, emit_all_sources_views=False)
+    assert not any("_all_sources AS" in s for s in stmts)

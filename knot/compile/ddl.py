@@ -38,10 +38,12 @@ def emit_ddl(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
+    all_sources_suffix: str = "_all_sources",
     trust_table_name: str = "source_trust",
     if_not_exists: bool = False,
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
+    emit_all_sources_views: bool = True,
     emit_fk_references: bool = True,
     emit_indexes: bool = True,
     emit_trust_table: bool = True,
@@ -60,6 +62,10 @@ def emit_ddl(
     resolved_suffix
         Suffix appended to the class name for the resolved-view that
         argmaxes across currently-open bindings.
+    all_sources_suffix
+        Suffix appended to the class name for the all-sources /
+        provenance view that emits one ``jsonb`` per slot keyed by
+        source name.
     if_not_exists
         When True, emit ``CREATE TABLE IF NOT EXISTS`` and ``CREATE OR
         REPLACE VIEW``. Use for re-runnable migrations. FK constraints
@@ -70,6 +76,10 @@ def emit_ddl(
     emit_resolved_views
         When False, skip the ``<class>_resolved`` views. Set to False
         for write-direct workflows that hit the canonical table.
+    emit_all_sources_views
+        When False, skip the ``<class>_all_sources`` provenance views.
+        Set to False for deployments that only need the resolved
+        layer.
     emit_fk_references
         When True, emit ``ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY``
         for every ``ClassRef`` slot on every concrete canonical table,
@@ -92,7 +102,7 @@ def emit_ddl(
     """
     # Local import — resolver imports from knot.spec, ddl imports from
     # knot.spec; resolver doesn't import from ddl, so no cycle.
-    from knot.compile.resolver import emit_resolved_view
+    from knot.compile.resolver import emit_all_sources_view, emit_resolved_view
 
     stmts: list[str] = [f"CREATE SCHEMA IF NOT EXISTS {schema};"]
 
@@ -142,6 +152,19 @@ def emit_ddl(
                             schema=schema,
                             bindings_suffix=bindings_suffix,
                             resolved_suffix=resolved_suffix,
+                            trust_table_name=trust_table_name,
+                            if_not_exists=if_not_exists,
+                        )
+                    )
+                if emit_all_sources_views and emit_bindings:
+                    # Provenance view — same bindings + trust dependency.
+                    stmts.append(
+                        emit_all_sources_view(
+                            spec,
+                            cls,
+                            schema=schema,
+                            bindings_suffix=bindings_suffix,
+                            all_sources_suffix=all_sources_suffix,
                             trust_table_name=trust_table_name,
                             if_not_exists=if_not_exists,
                         )
