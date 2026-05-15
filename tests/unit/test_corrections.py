@@ -174,9 +174,11 @@ def test_corrections_write_uses_batch_write():
         enforce=False,
     )
     # Same SCD2 machinery as any other binding write.
-    assert "source_name = '_user_corrections'" in bw.sql
-    assert "UPDATE knot_data.movie_bindings" in bw.sql  # close-out
-    assert "INSERT INTO knot_data.movie_bindings" in bw.sql
+    assert "source_name = '_user_corrections'" in "\n\n".join(s for s, _ in bw.statements)
+    assert "UPDATE knot_data.movie_bindings" in "\n\n".join(
+        s for s, _ in bw.statements
+    )  # close-out
+    assert "INSERT INTO knot_data.movie_bindings" in "\n\n".join(s for s, _ in bw.statements)
 
 
 def test_corrections_appear_in_trust_seed():

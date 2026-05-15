@@ -74,7 +74,9 @@ def _write_claim(
         schema=schema,
         enforce=enforce,
     )
-    exec_script(pg, bw.sql, bw.params)
+    with pg.cursor() as cur:
+        for sql, params in bw.statements:
+            cur.execute(sql, params)
 
 
 # ---------------------------------------------------------------------------

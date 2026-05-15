@@ -351,15 +351,11 @@ def _(
         enforce=False,
     )
 
-    # emit_batch_write returns a multi-statement transactional script;
-    # psycopg's prepared-statement path rejects multi-statement with
-    # params, so split on the blank-line separator knot uses between
-    # statements and execute each with the same params dict.
+    # BatchWrite.statements is a list of (sql, params) tuples — each is
+    # one already-parameterized statement. Run them in order.
     with pg.cursor() as cur:
-        for stmt in bw.sql.split("\n\n"):
-            s = stmt.strip()
-            if s:
-                cur.execute(s, bw.params)
+        for sql, params in bw.statements:
+            cur.execute(sql, params)
 
     counts = {}
     with pg.cursor() as cur:

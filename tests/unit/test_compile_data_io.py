@@ -8,6 +8,22 @@ import sqlglot
 from knot import Severity, SourceBinding, Spec, types
 from knot.compile import BatchWrite, ClassWrites, emit_batch_write
 
+
+def _all_sql(bw: BatchWrite) -> str:
+    """Concatenate every statement's SQL — convenience for assertions
+    that want to check 'is this fragment anywhere in the batch.'"""
+    return "\n\n".join(sql for sql, _ in bw.statements)
+
+
+def _all_params(bw: BatchWrite) -> dict:
+    """Merge every statement's params into one dict — convenience for
+    assertions that want to inspect the full param surface."""
+    merged: dict = {}
+    for _, p in bw.statements:
+        merged.update(p)
+    return merged
+
+
 # ---------------------------------------------------------------------------
 # Public dataclass shape
 # ---------------------------------------------------------------------------
@@ -48,10 +64,10 @@ def test_mapped_single_row_emits_close_out_and_insert(movie_spec):
         ],
         enforce=False,
     )
-    assert "UPDATE knot_data.movie_bindings" in bw.sql
-    assert "INSERT INTO knot_data.movie_bindings" in bw.sql
-    assert "source_name = 'imdb'" in bw.sql  # baked-in literal
-    assert "jsonb_array_elements(%(movie_rows)s::jsonb)" in bw.sql
+    assert "UPDATE knot_data.movie_bindings" in _all_sql(bw)
+    assert "INSERT INTO knot_data.movie_bindings" in _all_sql(bw)
+    assert "source_name = 'imdb'" in _all_sql(bw)  # baked-in literal
+    assert "jsonb_array_elements(%(movie_rows)s::jsonb)" in _all_sql(bw)
 
 
 def test_mapped_rows_serialized_as_jsonb_array(movie_spec):
@@ -65,7 +81,7 @@ def test_mapped_rows_serialized_as_jsonb_array(movie_spec):
         [ClassWrites(binding=b, rows=rows)],
         enforce=False,
     )
-    assert json.loads(bw.params["movie_rows"]) == rows
+    assert json.loads(_all_params(bw)["movie_rows"]) == rows
 
 
 def test_mapped_sql_shape_independent_of_row_count(movie_spec):
@@ -100,7 +116,7 @@ def test_mapped_sql_shape_independent_of_row_count(movie_spec):
         enforce=False,
     )
     # Constant SQL size, just the jsonb param payload grows.
-    assert one.sql == many.sql
+    assert _all_sql(one) == _all_sql(many)
 
 
 def test_mapped_unmapped_slot_lands_null(movie_spec):
@@ -118,7 +134,7 @@ def test_mapped_unmapped_slot_lands_null(movie_spec):
         enforce=False,
     )
     # `genres` and `name` aren't mapped — should be NULL in the SELECT projection
-    assert "NULL" in bw.sql
+    assert "NULL" in _all_sql(bw)
 
 
 def test_mapped_insert_includes_raw_payload_column_and_projection(movie_spec):
@@ -137,9 +153,9 @@ def test_mapped_insert_includes_raw_payload_column_and_projection(movie_spec):
     )
     # raw_payload is the last column in the INSERT and is sourced from
     # the inner subquery's r passthrough.
-    assert "raw_payload)" in bw.sql
-    assert "r AS __raw_payload" in bw.sql
-    assert "raw.__raw_payload" in bw.sql
+    assert "raw_payload)" in _all_sql(bw)
+    assert "r AS __raw_payload" in _all_sql(bw)
+    assert "raw.__raw_payload" in _all_sql(bw)
 
 
 # ---------------------------------------------------------------------------
@@ -171,12 +187,12 @@ def test_direct_slot_values_use_jsonb_extraction(movie_spec):
     # For movie_spec, "year" is mapped to source_slot="release_year" so the
     # row dict's "year" key isn't read directly. This test now validates the
     # passthrough form for "name" (unmapped → implicit passthrough, same name).
-    assert "raw.name::text" in bw.sql
+    assert "raw.name::text" in _all_sql(bw)
     # Arrays go through unnest+ARRAY round-trip via __raw_payload.
-    assert "jsonb_array_elements(raw.__raw_payload->'genres')" in bw.sql
+    assert "jsonb_array_elements(raw.__raw_payload->'genres')" in _all_sql(bw)
 
 
-def test_direct_insert_passes_full_row_as_raw_payload(movie_spec):
+def test_full_row_lands_in_raw_payload_column(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
@@ -191,12 +207,10 @@ def test_direct_insert_passes_full_row_as_raw_payload(movie_spec):
         enforce=False,
     )
     # raw_payload is the last column in the INSERT and is sourced from
-    # r directly (the jsonb element from jsonb_array_elements).
-    assert "raw_payload)" in bw.sql
-    # In direct mode the outer SELECT references `r` (no `__raw_payload`
-    # alias because there's no inner subquery wrapping).
-    select_section = bw.sql.split("FROM jsonb_array_elements")[0]
-    assert select_section.rstrip().endswith("r")
+    # the preserved jsonb element via the raw subquery's __raw_payload
+    # alias.
+    assert "raw_payload)" in _all_sql(bw)
+    assert "raw.__raw_payload" in _all_sql(bw)
 
 
 # ---------------------------------------------------------------------------
@@ -235,10 +249,10 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
         ],
         enforce=False,
     )
-    assert "knot_data.movie_bindings" in bw.sql
-    assert "knot_data.credit_bindings" in bw.sql
+    assert "knot_data.movie_bindings" in _all_sql(bw)
+    assert "knot_data.credit_bindings" in _all_sql(bw)
     assert bw.affected_classes == ("Credit", "Movie")  # sorted
-    assert set(bw.params.keys()) == {"movie_rows", "credit_rows"}
+    assert set(_all_params(bw).keys()) == {"movie_rows", "credit_rows"}
 
 
 def test_duplicate_class_in_batch_rejected(movie_spec):
@@ -279,9 +293,9 @@ def test_enforce_true_appends_do_block(movie_spec):
         ],
         enforce=True,
     )
-    assert "DO $$" in bw.sql
-    assert "RAISE EXCEPTION" in bw.sql
-    assert "year_sane" in bw.sql
+    assert "DO $$" in _all_sql(bw)
+    assert "RAISE EXCEPTION" in _all_sql(bw)
+    assert "year_sane" in _all_sql(bw)
 
 
 def test_enforce_false_omits_do_block(movie_spec):
@@ -298,7 +312,7 @@ def test_enforce_false_omits_do_block(movie_spec):
         ],
         enforce=False,
     )
-    assert "DO $$" not in bw.sql
+    assert "DO $$" not in _all_sql(bw)
 
 
 def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
@@ -320,8 +334,8 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
         ],
         enforce=True,
     )
-    assert "year_sane" in bw.sql
-    assert "role_present" not in bw.sql
+    assert "year_sane" in _all_sql(bw)
+    assert "role_present" not in _all_sql(bw)
 
 
 def test_enforce_skips_warning_severity():
@@ -348,8 +362,8 @@ def test_enforce_skips_warning_severity():
         enforce=True,
     )
     # No error-severity constraint affects this batch → no DO block.
-    assert "DO $$" not in bw.sql
-    assert "warn_only" not in bw.sql
+    assert "DO $$" not in _all_sql(bw)
+    assert "warn_only" not in _all_sql(bw)
 
 
 def test_enforce_no_constraints_at_all_no_do_block():
@@ -370,7 +384,7 @@ def test_enforce_no_constraints_at_all_no_do_block():
         ],
         enforce=True,
     )
-    assert "DO $$" not in bw.sql
+    assert "DO $$" not in _all_sql(bw)
 
 
 # ---------------------------------------------------------------------------
@@ -394,8 +408,8 @@ def test_schema_and_suffix_kwargs(movie_spec):
         bindings_suffix="__s",
         enforce=False,
     )
-    assert "alt.movie__s" in bw.sql
-    assert "knot_data.movie_bindings" not in bw.sql
+    assert "alt.movie__s" in _all_sql(bw)
+    assert "knot_data.movie_bindings" not in _all_sql(bw)
 
 
 # ---------------------------------------------------------------------------
@@ -422,7 +436,7 @@ def test_source_name_apostrophe_escaped():
         ],
         enforce=False,
     )
-    assert "'o''brien'" in bw.sql
+    assert "'o''brien'" in _all_sql(bw)
 
 
 # ---------------------------------------------------------------------------
@@ -473,7 +487,7 @@ def test_emitted_sql_parses_postgres(movie_spec):
     )
     # Multi-statement script — parse each separately (skip DO block,
     # which sqlglot can't fully parse).
-    parts = [p.strip() for p in bw.sql.split("\n\n") if p.strip()]
+    parts = [p.strip() for p in _all_sql(bw).split("\n\n") if p.strip()]
     for p in parts:
         if p.startswith("DO $$"):
             continue

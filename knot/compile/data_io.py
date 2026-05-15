@@ -73,10 +73,24 @@ class ClassWrites:
 
 @dataclass(frozen=True)
 class BatchWrite:
-    """The transactional SQL script + jsonb-array params for a batch."""
+    """A multi-class batch write as a list of single-statement
+    ``(sql, params)`` tuples.
 
-    sql: str
-    params: dict[str, Any]
+    Each tuple is one already-parameterized statement the host runs
+    via ``cursor.execute(sql, params)``. Multi-statement scripts +
+    params don't mix with postgres' prepared-statement protocol, so
+    the emitter splits at compile time — the host doesn't need to
+    know about any blank-line convention.
+
+    Run them in order inside a transaction:
+
+        with pg.transaction():
+            with pg.cursor() as cur:
+                for sql, params in bw.statements:
+                    cur.execute(sql, params)
+    """
+
+    statements: list[tuple[str, dict[str, Any]]]
     affected_classes: tuple[str, ...]
 
 
@@ -338,12 +352,18 @@ def emit_batch_write(
     bindings_suffix: str = "_bindings",
     enforce: bool = True,
 ) -> BatchWrite:
-    """Return one transactional SQL script for a multi-class batch write."""
+    """Return a multi-class batch write as a list of per-statement
+    ``(sql, params)`` tuples. The host runs them in a transaction.
+
+    Each class contributes two statements (close-out + insert) that
+    share one jsonb param. The optional enforcement DO block has no
+    params and is appended last when ``enforce=True``.
+    """
     if not writes:
         raise ValueError("emit_batch_write: writes list is empty")
 
-    stmts: list[str] = []
-    params: dict[str, Any] = {}
+    statements: list[tuple[str, dict[str, Any]]] = []
+    used_param_keys: set[str] = set()
     affected: set[str] = set()
 
     for cw in writes:
@@ -353,34 +373,40 @@ def emit_batch_write(
         # Each class gets a stable param key — collisions across classes
         # would mean duplicate writes; reject explicitly.
         rows_param = f"{cls.name.lower()}_rows"
-        if rows_param in params:
+        if rows_param in used_param_keys:
             raise ValueError(f"duplicate ClassWrites for class {cls.name!r} in batch")
-        params[rows_param] = json.dumps(cw.rows)
-        stmts.append(
-            _emit_class_close_out(
-                cw,
-                schema=schema,
-                bindings_suffix=bindings_suffix,
-                rows_param=rows_param,
+        used_param_keys.add(rows_param)
+        class_params = {rows_param: json.dumps(cw.rows)}
+        statements.append(
+            (
+                _emit_class_close_out(
+                    cw,
+                    schema=schema,
+                    bindings_suffix=bindings_suffix,
+                    rows_param=rows_param,
+                ),
+                class_params,
             )
         )
-        stmts.append(
-            _emit_class_insert(
-                cw,
-                schema=schema,
-                bindings_suffix=bindings_suffix,
-                rows_param=rows_param,
+        statements.append(
+            (
+                _emit_class_insert(
+                    cw,
+                    schema=schema,
+                    bindings_suffix=bindings_suffix,
+                    rows_param=rows_param,
+                ),
+                class_params,
             )
         )
 
     if enforce:
         block = _emit_enforcement_block(spec, affected, schema=schema)
         if block is not None:
-            stmts.append(block)
+            statements.append((block, {}))
 
     return BatchWrite(
-        sql="\n\n".join(stmts),
-        params=params,
+        statements=statements,
         affected_classes=tuple(sorted(affected)),
     )
 
