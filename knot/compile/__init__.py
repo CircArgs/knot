@@ -7,7 +7,7 @@ Each emitter is a free function on the corresponding module:
   - ``knot.compile.resolver.emit_resolved_views`` all concrete classes' resolved views
   - ``knot.compile.constraints.emit_validation``  per-constraint validation SELECTs
   - ``knot.compile.constraints.emit_validation_union``  single-query UNION ALL form
-  - ``knot.compile.data_io.emit_batch_write``     batched SCD2 binding writes,
+  - ``knot.compile.write.emit_batch_write``     batched SCD2 binding writes,
                                                   optionally with in-transaction
                                                   constraint enforcement
 
@@ -20,18 +20,18 @@ Public surface is re-exported here for convenience.
 """
 
 from knot.compile.constraints import emit_validation, emit_validation_union
-from knot.compile.data_io import (
+from knot.compile.ddl import emit_ddl
+from knot.compile.expr import compile_sql
+from knot.compile.migrate import MigrationOp, diff_against_db
+from knot.compile.query import compile_query
+from knot.compile.resolver import emit_resolved_view, emit_resolved_views
+from knot.compile.trust import emit_trust_seed
+from knot.compile.write import (
     BatchWrite,
     ClassWrites,
     emit_batch_write,
     emit_close_out,
 )
-from knot.compile.ddl import emit_ddl
-from knot.compile.expr_sql import compile_sql
-from knot.compile.migrate import MigrationOp, diff_against_db
-from knot.compile.query_sql import compile_query
-from knot.compile.resolver import emit_resolved_view, emit_resolved_views
-from knot.compile.trust import emit_trust_seed
 
 __all__ = [
     "compile_query",

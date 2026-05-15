@@ -1,37 +1,13 @@
-"""Migration emitter — Alembic-autogenerate equivalent for knot.
+"""Diff driver — walks the spec, compares against the live DB via the
+introspection helpers, returns ordered ``MigrationOp`` records.
 
-Introspects a live postgres database and diffs against the in-memory
-``Spec`` to produce a list of ``MigrationOp`` records that will bring
-the database into alignment with the spec.
-
-Phase 1 (this module): **additive-only**. Detects what's missing in
-the database and emits ``ALTER`` / ``CREATE`` / ``UPSERT`` to add it.
-Destructive operations (dropping tables, columns, indexes, etc.) and
-type-change reconciliation are deferred — calls intentionally do NOT
-emit ``DROP`` statements even when a database object exists in the DB
-but not in the spec. Operators handle those manually until Phase 2.
-
-Idempotent views: ``CREATE OR REPLACE VIEW`` is always emitted for
-resolved views and virtual classes, so re-running the migration
-reconciles view bodies even if no other change is detected.
-
-Usage::
-
-    ops = diff_against_db(spec, query)
-    for op in ops:
-        print(op.description, "destructive=", op.destructive)
-        print(op.sql)
-        if not op.destructive:
-            host.execute(op.sql)
-
-The ``query`` argument is a callable ``(sql: str, params: tuple) ->
-list[tuple]`` — easy to plug a real psycopg cursor into, equally easy
-to mock in unit tests.
+Phases: rename pre-pass → drops → adds. ``allow_destructive=False``
+(the default) filters out DROP TABLE / DROP COLUMN at the end; other
+drops (DROP VIEW, DROP INDEX, DELETE FROM trust) are always emitted.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
 
@@ -43,11 +19,20 @@ from knot.compile.ddl import (
     _emit_trust_table,
     _emit_view,
 )
+from knot.compile.migrate._introspect import (
+    QueryFn,
+    _ColInfo,
+    _existing_column_details,
+    _existing_columns,
+    _existing_fk_constraints,
+    _existing_indexes,
+    _existing_schemas,
+    _existing_tables,
+    _existing_trust_rows,
+    _existing_views,
+)
 from knot.compile.resolver import emit_resolved_view
 from knot.spec import ClassRef, OntologyClass, Spec
-
-# Query callable: takes (sql, params) and returns row tuples.
-QueryFn = Callable[[str, tuple[Any, ...]], list[tuple[Any, ...]]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,129 +60,6 @@ class MigrationOp:
     sql: str
     destructive: bool = False
     target: str = ""
-
-
-# ---------------------------------------------------------------------------
-# Introspection helpers
-# ---------------------------------------------------------------------------
-
-
-def _existing_schemas(query: QueryFn) -> set[str]:
-    rows = query("SELECT schema_name FROM information_schema.schemata", ())
-    return {r[0] for r in rows}
-
-
-def _existing_tables(query: QueryFn, schema: str) -> set[str]:
-    rows = query(
-        "SELECT table_name FROM information_schema.tables "
-        "WHERE table_schema = %s AND table_type = 'BASE TABLE'",
-        (schema,),
-    )
-    return {r[0] for r in rows}
-
-
-def _existing_views(query: QueryFn, schema: str) -> set[str]:
-    rows = query(
-        "SELECT table_name FROM information_schema.views WHERE table_schema = %s",
-        (schema,),
-    )
-    return {r[0] for r in rows}
-
-
-@dataclass(frozen=True, slots=True)
-class _ColInfo:
-    """Type + nullability for a single existing column."""
-
-    pg_type: str  # normalized to match _pg_type's output
-    nullable: bool
-
-
-def _existing_columns(query: QueryFn, schema: str, table: str) -> set[str]:
-    """Names of columns on a table — used where we only care about
-    presence. See ``_existing_column_details`` for full type info."""
-    return set(_existing_column_details(query, schema, table).keys())
-
-
-def _existing_column_details(
-    query: QueryFn,
-    schema: str,
-    table: str,
-) -> dict[str, _ColInfo]:
-    """``{column_name: _ColInfo}`` from ``information_schema.columns``,
-    with postgres types normalized so they compare cleanly against the
-    spec's ``_pg_type`` output (``timestamp with time zone`` →
-    ``timestamptz``, ``ARRAY`` + ``udt_name='_text'`` → ``text[]``,
-    etc.)."""
-    rows = query(
-        "SELECT column_name, data_type, is_nullable, udt_name "
-        "FROM information_schema.columns "
-        "WHERE table_schema = %s AND table_name = %s",
-        (schema, table),
-    )
-    return {
-        r[0]: _ColInfo(
-            pg_type=_normalize_pg_type(r[1], r[3] if len(r) > 3 else None),
-            nullable=(r[2] == "YES"),
-        )
-        for r in rows
-    }
-
-
-_NORMALIZE_DATA_TYPE: dict[str, str] = {
-    "timestamp with time zone": "timestamptz",
-    "timestamp without time zone": "timestamp",
-    "character varying": "text",
-}
-
-
-def _normalize_pg_type(data_type: str, udt_name: str | None) -> str:
-    """Map an ``information_schema.columns.data_type`` to the same
-    string ``_pg_type`` produces. Handles arrays via ``udt_name`` (the
-    underscore-prefixed element type name)."""
-    if data_type == "ARRAY":
-        if udt_name and udt_name.startswith("_"):
-            return _normalize_pg_type(udt_name[1:], None) + "[]"
-        return "?[]"
-    return _NORMALIZE_DATA_TYPE.get(data_type, data_type)
-
-
-def _existing_indexes(query: QueryFn, schema: str, table: str) -> set[str]:
-    rows = query(
-        "SELECT indexname FROM pg_indexes WHERE schemaname = %s AND tablename = %s",
-        (schema, table),
-    )
-    return {r[0] for r in rows}
-
-
-def _existing_fk_constraints(query: QueryFn, schema: str, table: str) -> set[str]:
-    rows = query(
-        "SELECT constraint_name FROM information_schema.table_constraints "
-        "WHERE table_schema = %s AND table_name = %s "
-        "AND constraint_type = 'FOREIGN KEY'",
-        (schema, table),
-    )
-    return {r[0] for r in rows}
-
-
-def _existing_trust_rows(
-    query: QueryFn,
-    schema: str,
-    trust_table_name: str,
-) -> dict[tuple[str, str, str], float]:
-    """Return ``{(source_name, class_name, slot_name): trust}`` from the
-    trust table, or empty dict if the table doesn't exist."""
-    if trust_table_name not in _existing_tables(query, schema):
-        return {}
-    rows = query(
-        f"SELECT source_name, class_name, slot_name, trust FROM {schema}.{trust_table_name}",
-        (),
-    )
-    return {(r[0], r[1], r[2]): float(r[3]) for r in rows}
-
-
-# ---------------------------------------------------------------------------
-# Diff driver
-# ---------------------------------------------------------------------------
 
 
 def diff_against_db(
@@ -901,6 +763,3 @@ def _extract_index_name(idx_sql: str) -> str | None:
     head = head.replace("IF NOT EXISTS", "")
     parts = head.replace("CREATE INDEX", "").strip().split()
     return parts[0] if parts else None
-
-
-__all__ = ["MigrationOp", "QueryFn", "diff_against_db"]

@@ -41,21 +41,12 @@ from typing import Any
 
 from knot.ast.expr import CountRel, Exists, Expr, FkRef, Ref
 from knot.ast.select import Query
+from knot.ast.types import Array, ClassRef, Primitive, TypeExpression, _coerce_type
 
 # ---------------------------------------------------------------------------
-# Enums
+# Enums (class-shape + constraint-severity — the type-expression enum lives
+# in ``knot.ast.types`` since it's part of the AST primitives)
 # ---------------------------------------------------------------------------
-
-
-class Primitive(StrEnum):
-    """The closed set of primitive scalar types."""
-
-    TEXT = "text"
-    INTEGER = "integer"
-    FLOAT = "float"
-    BOOLEAN = "boolean"
-    DATE = "date"
-    TIMESTAMP = "timestamp"
 
 
 class ClassKind(StrEnum):
@@ -72,57 +63,6 @@ class Severity(StrEnum):
 
     ERROR = "error"
     WARNING = "warning"
-
-
-# ---------------------------------------------------------------------------
-# Type expressions
-# ---------------------------------------------------------------------------
-
-
-@dataclass(slots=True)
-class Array:
-    """Homogeneous array of another ``TypeExpression``."""
-
-    of: TypeExpression
-
-    def __post_init__(self):
-        # Coerce ``OntologyClass`` to ``ClassRef`` so ``types.ARRAY(person)``
-        # works the same way ``slot("director", person)`` does.
-        self.of = _coerce_type(self.of)
-
-    def __str__(self) -> str:
-        return f"array<{self.of}>"
-
-
-@dataclass(slots=True)
-class ClassRef:
-    """FK reference to another class — stored as the target's canonical_id."""
-
-    target: OntologyClass
-
-    def __str__(self) -> str:
-        return self.target.name
-
-
-TypeExpression = Primitive | Array | ClassRef
-
-
-def _coerce_type(t):
-    """Validate or coerce a slot type. Canonical inputs:
-
-      - values from ``knot.types`` (``types.TEXT``, ``types.ARRAY(...)``)
-      - an ``OntologyClass`` instance (auto-wraps in ``ClassRef``)
-
-    No string shorthand, no enum direct access — those routes are gone."""
-    if isinstance(t, (Primitive, Array, ClassRef)):
-        return t
-    if isinstance(t, OntologyClass):
-        return ClassRef(target=t)
-    raise TypeError(
-        f"Slot type must be a value from knot.ast.types (TEXT/INTEGER/FLOAT/"
-        f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)) or an OntologyClass instance; "
-        f"got {type(t).__name__}"
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -1056,9 +996,9 @@ class Spec:
 
     def emit_batch_write(self, writes: Any, **kwargs: Any) -> Any:
         """Transactional SCD2 batch write. Validates the spec first.
-        See ``knot.compile.data_io.emit_batch_write``."""
+        See ``knot.compile.write.emit_batch_write``."""
         self.validate()
-        from knot.compile.data_io import emit_batch_write
+        from knot.compile.write import emit_batch_write
 
         return emit_batch_write(self, writes, **kwargs)
 
@@ -1072,9 +1012,9 @@ class Spec:
 
     def compile_query(self, query_node: Any, **kwargs: Any) -> Any:
         """Compile a ``Query`` AST to ``(sql, params)``. Validates the
-        spec first. See ``knot.compile.query_sql.compile_query``."""
+        spec first. See ``knot.compile.query.compile_query``."""
         self.validate()
-        from knot.compile.query_sql import compile_query
+        from knot.compile.query import compile_query
 
         return compile_query(query_node, spec=self, **kwargs)
 

@@ -8,7 +8,7 @@ import pytest
 
 from knot import types
 from knot.ast.select import OrderBy, Query
-from knot.compile.query_sql import compile_query
+from knot.compile.query import compile_query
 from knot.spec import Spec
 
 
@@ -137,7 +137,7 @@ def _make_movie_director_spec():
 def test_fk_ref_as_value():
     """Movie.col.director used standalone renders as the FK column."""
     from knot.ast.expr import FkRef
-    from knot.compile.expr_sql import compile_sql
+    from knot.compile.expr import compile_sql
 
     spec, movie, person = _make_movie_director_spec()
     ref = movie.col.director
@@ -214,7 +214,7 @@ def test_full_query_with_fk_walk():
 def test_this_outside_aggregate_raises():
     """A bare this.X reference outside an Aggregate context is an error."""
     from knot.ast.expr import this
-    from knot.compile.expr_sql import compile_sql
+    from knot.compile.expr import compile_sql
 
     with pytest.raises(ValueError, match="this.Person used outside"):
         compile_sql(this.Person, schema="knot_data", target_suffix="_resolved")

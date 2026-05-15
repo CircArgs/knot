@@ -18,7 +18,7 @@ with an extra ``(source_name, source_identifier)`` layer and SCD2
 
 from __future__ import annotations
 
-from knot.compile.expr_sql import compile_sql
+from knot.compile.expr import compile_sql
 from knot.spec import (
     Array,
     ClassKind,

@@ -126,7 +126,7 @@ class _ValueExpr:
 
 
 # ---------------------------------------------------------------------------
-# Concrete Expr types — pure data; rendering lives in knot.compile.expr_sql
+# Concrete Expr types — pure data; rendering lives in knot.compile.expr
 # ---------------------------------------------------------------------------
 
 

@@ -1,4 +1,4 @@
-"""knot.compile.data_io — batched SCD2 binding write emission."""
+"""knot.compile.write — batched SCD2 binding write emission."""
 
 import json
 

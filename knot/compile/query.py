@@ -37,7 +37,7 @@ from knot.ast.expr import (
     Not,
 )
 from knot.ast.select import Query
-from knot.compile.expr_sql import compile_sql
+from knot.compile.expr import compile_sql
 from knot.spec import Spec
 
 
