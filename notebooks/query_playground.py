@@ -31,30 +31,32 @@ def _(mo):
 
 @app.cell
 def _(mo):
-    mo.md(r"## 1. Spec")
+    mo.md(r"""
+    ## 1. Spec
+    """)
     return
 
 
 @app.cell
 def _():
-    from knot import Primitive, Spec, this
+    from knot import Spec, this
 
     spec = Spec(id="movies_play", version="0.1")
 
     person = spec.add_class("Person", description="A real human.")
-    person.slot("canonical_id", Primitive.TEXT, identifier=True)
-    person.slot("name", Primitive.TEXT, required=True)
-    person.slot("birth_country", Primitive.TEXT)
+    person.slot("canonical_id", "text", identifier=True)
+    person.slot("name", "text", required=True)
+    person.slot("birth_country", "text")
 
     movie = spec.add_class("Movie", description="A theatrical release.")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("title", Primitive.TEXT, required=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", "text", identifier=True)
+    movie.slot("title", "text", required=True)
+    movie.slot("year", "integer")
     movie.fk("director", to=person)
 
     credit = spec.add_class("Credit", description="A person's role in a movie.")
-    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
-    credit.slot("role", Primitive.TEXT, required=True)
+    credit.slot("canonical_id", "text", identifier=True)
+    credit.slot("role", "text", required=True)
     credit.fk("movie", to=movie)
     credit.fk("person", to=person)
 
@@ -67,24 +69,24 @@ def _():
 
     errs = spec.validate()
     assert not errs, errs
-    return Primitive, Spec, credit, imdb, movie, person, spec, this
+    return credit, movie, person, spec, this
 
 
 @app.cell
 def _(mo, spec):
-    mo.md(
-        f"""
+    mo.md(f"""
     **Classes:** {", ".join(c.name for c in spec.classes)}
 
     **Source bindings:** {len(spec.source_bindings)} — {", ".join(f"{b.source.name}→{b.class_.name}" for b in spec.source_bindings)}
-    """
-    )
+    """)
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(r"## 2. Deploy DDL to postgres")
+    mo.md(r"""
+    ## 2. Deploy DDL to postgres
+    """)
     return
 
 
@@ -104,7 +106,7 @@ def _():
     )
     schema = f"knot_play_{uuid.uuid4().hex[:8]}"
     pg.execute(f"CREATE SCHEMA {schema}")
-    return pg, psycopg, schema, uuid
+    return pg, schema
 
 
 @app.cell
@@ -122,12 +124,14 @@ def _(mo, pg, schema, spec):
             cur.execute(sql, params)
 
     mo.md(f"Schema **`{schema}`** deployed.")
-    return emit_ddl, emit_trust_seed
+    return
 
 
 @app.cell
 def _(mo):
-    mo.md(r"## 3. Ingest sample data")
+    mo.md(r"""
+    ## 3. Ingest sample data
+    """)
     return
 
 
@@ -252,15 +256,7 @@ def _(
             cur.execute(f"SELECT COUNT(*) FROM {schema}.{c.name.lower()}_resolved")
             counts[c.name] = cur.fetchone()[0]
     counts
-    return (
-        ClassWrites,
-        bw,
-        counts,
-        emit_batch_write,
-        imdb_credit_b,
-        imdb_movie_b,
-        imdb_person_b,
-    )
+    return
 
 
 @app.cell
@@ -301,12 +297,14 @@ def _(pg, schema, spec):
         s, _ = compile_query(q, spec=spec, schema=schema)
         return s
 
-    return compile_query, qf, qsql
+    return qf, qsql
 
 
 @app.cell
 def _(mo):
-    mo.md(r"### Example queries (edit cells and re-run)")
+    mo.md(r"""
+    ### Example queries (edit cells and re-run)
+    """)
     return
 
 
@@ -376,7 +374,9 @@ def _(movie, qf):
 
 @app.cell
 def _(mo):
-    mo.md(r"### Inspect the compiled SQL")
+    mo.md(r"""
+    ### Inspect the compiled SQL
+    """)
     return
 
 
@@ -405,7 +405,7 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema):
+def _(schema):
     # pg.execute(f"DROP SCHEMA {schema} CASCADE")
     # pg.close()
     f"To clean up: uncomment the lines above and re-run. Schema is `{schema}`."

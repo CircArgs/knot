@@ -21,6 +21,7 @@ open/closed flip as ``compile_sql``.
 from __future__ import annotations
 
 from functools import singledispatch
+from typing import Any
 
 from knot.compile.expr_sql import compile_sql
 from knot.expr import (
@@ -30,22 +31,24 @@ from knot.expr import (
     Compare,
     CountRel,
     Exists,
+    Expr,
     FkChainRef,
     InList,
     IsNull,
     Not,
 )
 from knot.select import Query
+from knot.spec import Spec
 
 
 @singledispatch
-def compile_query(node, *, spec, schema):
+def compile_query(node, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
     """Render ``node`` as a full postgres SQL statement + parameter list."""
     raise NotImplementedError(f"no query compiler registered for {type(node).__name__}")
 
 
-@compile_query.register(Query)
-def _(node, *, spec, schema):
+@compile_query.register
+def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
     suffix = node.target_suffix
     table = f"{schema}.{node.class_name.lower()}{suffix}"
 
@@ -59,7 +62,7 @@ def _(node, *, spec, schema):
         )
 
     # Collect FK chains from everywhere a Ref could appear.
-    chains = []
+    chains: list[FkChainRef] = []
     if node.where_clause is not None:
         _collect_chains(node.where_clause, chains)
     for ob in node.ordering:
@@ -70,8 +73,8 @@ def _(node, *, spec, schema):
 
     # Build JOIN clauses. Each step gets one JOIN, deduplicated by the
     # ``(source_class, fk_slot, target_class)`` triple.
-    seen = set()
-    joins = []
+    seen: set[tuple[str, str, str]] = set()
+    joins: list[str] = []
     for chain_ref in chains:
         source_class = chain_ref.source_class
         for fk_slot, target_class in chain_ref.chain:
@@ -105,7 +108,10 @@ def _(node, *, spec, schema):
         order_parts = []
         for ob in node.ordering:
             ref_sql = compile_sql(
-                ob.ref, schema=schema, target_suffix=suffix, outer_class=node.class_name
+                ob.ref,
+                schema=schema,
+                target_suffix=suffix,
+                outer_class=node.class_name,
             )
             order_parts.append(f"{ref_sql} {ob.direction.upper()}")
         parts.append("ORDER BY " + ", ".join(order_parts))
@@ -119,7 +125,7 @@ def _(node, *, spec, schema):
     return "\n".join(parts) + ";", []
 
 
-def _lookup_class(spec, name):
+def _lookup_class(spec: Spec, name: str):
     """Resolve a class name in ``spec``. Raises if missing."""
     for c in spec.classes:
         if c.name == name:
@@ -127,7 +133,7 @@ def _lookup_class(spec, name):
     raise KeyError(f"class {name!r} not found in spec")
 
 
-def _collect_chains(node, out):
+def _collect_chains(node: Expr, out: list[FkChainRef]) -> None:
     """Walk an Expr tree collecting every ``FkChainRef`` reached.
     Deduplication happens at JOIN-emit time on the (source, fk, target)
     triple — not on the FkChainRef itself, so multiple chains that
