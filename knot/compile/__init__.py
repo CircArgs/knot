@@ -28,7 +28,6 @@ from knot.compile.data_io import (
 )
 from knot.compile.ddl import emit_ddl
 from knot.compile.expr_sql import compile_sql
-from knot.compile.flyway import emit_flyway_files
 from knot.compile.migrate import MigrationOp, diff_against_db
 from knot.compile.query_sql import compile_query
 from knot.compile.resolver import emit_resolved_view, emit_resolved_views
@@ -49,5 +48,4 @@ __all__ = [
     "emit_close_out",
     "MigrationOp",
     "diff_against_db",
-    "emit_flyway_files",
 ]

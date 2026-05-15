@@ -20,11 +20,12 @@ constructing them directly. All entities are plain
 Validation happens at two levels:
 
   - Entity-local: ``__post_init__`` rejects empty names, out-of-range
-    accuracy, and (via ``StrEnum`` coercion) unknown ``ClassKind`` /
+    base_trust, and (via ``StrEnum`` coercion) unknown ``ClassKind`` /
     ``Severity`` values.
-  - Cross-entity: ``Spec.validate()`` returns a list of well-formedness
-    errors (orphan references, missing identifier slots, duplicate
-    names, etc.). Empty list = valid.
+  - Cross-entity: ``Spec.validate()`` raises ``SpecError`` if the spec
+    has any well-formedness errors (orphan references, missing
+    identifier slots, duplicate names, etc.). The façade methods
+    (``init_sql``, ``compile_query`` etc.) call it automatically.
 
 Body validation (typos in slot references) is caught at construction
 time by the builder: ``movie.col.nonexistent`` raises ``KeyError``
@@ -847,12 +848,11 @@ class Spec:
                 return c
         raise KeyError(f"Spec has no class named {name!r}")
 
-    def validate(self) -> list[str]:
-        """Cross-entity well-formedness checks.
+    def _validation_errors(self) -> list[str]:
+        """Internal: list cross-entity well-formedness errors.
 
-        Returns a list of error messages; empty list means the spec is
-        valid. Local entity checks (name shape, accuracy bounds, enum
-        values, body Expr typing) have already run in each entity's
+        Local entity checks (name shape, base_trust bounds, enum values,
+        body Expr typing) have already run in each entity's
         ``__post_init__``. Body slot-ref typos are caught at expression
         construction time by ``movie.col.<slot>`` raising ``KeyError``.
         """
@@ -959,102 +959,90 @@ class Spec:
 
         return errs
 
-    def validate_strict(self) -> None:
-        """Like ``validate`` but raises ``SpecError`` on any failure."""
-        errs = self.validate()
+    def validate(self) -> None:
+        """Cross-entity well-formedness check. Raises ``SpecError`` if
+        the spec is malformed; returns ``None`` otherwise.
+
+        Use ``pytest.raises(SpecError, match=…)`` to assert on specific
+        errors in tests. For programmatic inspection of all errors,
+        call ``self._validation_errors()`` directly."""
+        errs = self._validation_errors()
         if errs:
             raise SpecError("Spec failed validation:\n  - " + "\n  - ".join(errs))
 
     # ------------------------------------------------------------------
     # Compile façade — ergonomic methods that delegate to ``knot.compile``.
-    # The free functions in ``knot.compile.*`` remain the implementations;
-    # these shims are the recommended user-facing surface.
+    # Lazy imports preserve the spec → compile direction (compile modules
+    # aren't loaded until a method fires).
     #
-    # Façade contract:
-    #   * Every method calls ``validate_strict()`` first — façade-mode
-    #     never compiles a known-invalid spec.
-    #   * DDL-shaped methods (``emit_ddl``, ``emit_resolved_views``) return
-    #     a single ``;``-terminated SQL script, blank-line separated.
-    #     Use the free function for the per-statement list shape.
-    #   * Parameterized / per-element methods (``emit_trust_seed``,
-    #     ``emit_validation``, ``diff_against_db``) keep their list
-    #     shapes — each element carries metadata or per-row params that
-    #     doesn't concatenate.
+    # Every façade method calls ``validate()`` first; façade-mode never
+    # compiles a known-invalid spec. The free functions in
+    # ``knot.compile.*`` are validation-free — they're the back door for
+    # adapters and tests that want to compile arbitrary inputs.
     #
-    # Lazy imports preserve the spec → compile direction (compile
-    # modules aren't loaded until a method fires).
+    # Five methods, five concerns:
+    #   - validate        — well-formedness check
+    #   - init_sql        — schema deploy / migrate (one SQL script)
+    #   - emit_batch_write— runtime ingest (transactional, parameterized)
+    #   - emit_validation — runtime constraint checks (per-rule SELECTs)
+    #   - compile_query   — runtime read (one SQL + params)
     # ------------------------------------------------------------------
 
-    def emit_ddl(self, **kwargs) -> str:
-        """Compile this spec to a single postgres DDL script.
-        Validates the spec first. See ``knot.compile.ddl.emit_ddl``."""
-        self.validate_strict()
-        from knot.compile.ddl import emit_ddl
+    def init_sql(
+        self,
+        query_fn=None,
+        *,
+        schema: str = "knot_data",
+        allow_destructive: bool = False,
+    ) -> str:
+        """Return a single SQL script that brings the target schema
+        into alignment with this spec.
 
-        return "\n\n".join(emit_ddl(self, **kwargs))
+        - ``query_fn=None`` → full from-scratch DDL (assumes empty schema).
+        - ``query_fn=callable`` → introspect the live DB; emit only
+          the migration ops needed. ``callable`` matches the
+          ``diff_against_db`` query interface:
+          ``(sql, params) -> list[tuple]``.
 
-    def emit_resolved_views(self, **kwargs) -> str:
-        """One concatenated script of ``CREATE VIEW`` statements (one per
-        concrete class). Validates the spec first.
-        See ``knot.compile.resolver.emit_resolved_views``."""
-        self.validate_strict()
-        from knot.compile.resolver import emit_resolved_views
+        Validates the spec first. Statements are blank-line separated
+        and ``;``-terminated; the host runs the whole thing as one
+        multi-statement script.
+        """
+        self.validate()
+        if query_fn is None:
+            query_fn = lambda _sql, _params: []  # empty DB
+        from knot.compile.migrate import diff_against_db
 
-        return "\n\n".join(emit_resolved_views(self, **kwargs))
-
-    def emit_trust_seed(self, **kwargs):
-        """List of ``(sql, params)`` INSERT-only seed pairs for
-        ``source_trust``. Validates the spec first.
-        See ``knot.compile.trust.emit_trust_seed``."""
-        self.validate_strict()
-        from knot.compile.trust import emit_trust_seed
-
-        return emit_trust_seed(self, **kwargs)
-
-    def emit_validation(self, **kwargs):
-        """List of ``(constraint_name, validation_sql)`` pairs. Validates
-        the spec first. See ``knot.compile.constraints.emit_validation``."""
-        self.validate_strict()
-        from knot.compile.constraints import emit_validation
-
-        return emit_validation(self, **kwargs)
+        ops = diff_against_db(self, query_fn, schema=schema, allow_destructive=allow_destructive)
+        return "\n\n".join(op.sql for op in ops)
 
     def emit_batch_write(self, writes, **kwargs):
         """Transactional SCD2 batch write. Validates the spec first.
         See ``knot.compile.data_io.emit_batch_write``."""
-        self.validate_strict()
+        self.validate()
         from knot.compile.data_io import emit_batch_write
 
         return emit_batch_write(self, writes, **kwargs)
 
-    def diff_against_db(self, query, **kwargs):
-        """Diff this spec against a live postgres database; return the
-        ``MigrationOp`` sequence to bring it into alignment. Validates
-        the spec first. See ``knot.compile.migrate.diff_against_db``."""
-        self.validate_strict()
-        from knot.compile.migrate import diff_against_db
+    def emit_validation(self, **kwargs):
+        """List of ``(constraint_name, validation_sql)`` pairs. Validates
+        the spec first. See ``knot.compile.constraints.emit_validation``."""
+        self.validate()
+        from knot.compile.constraints import emit_validation
 
-        return diff_against_db(self, query, **kwargs)
-
-    def emit_flyway_files(self, ops, **kwargs):
-        """Render a list of ``MigrationOp`` into ``{filename: body}``
-        Flyway files. No spec validation — operates on already-emitted
-        ops. See ``knot.compile.flyway.emit_flyway_files``."""
-        from knot.compile.flyway import emit_flyway_files
-
-        return emit_flyway_files(ops, **kwargs)
+        return emit_validation(self, **kwargs)
 
     def compile_query(self, query_node, **kwargs):
         """Compile a ``Query`` AST to ``(sql, params)``. Validates the
         spec first. See ``knot.compile.query_sql.compile_query``."""
-        self.validate_strict()
+        self.validate()
         from knot.compile.query_sql import compile_query
 
         return compile_query(query_node, spec=self, **kwargs)
 
 
 class SpecError(ValueError):
-    """Raised by ``Spec.validate_strict`` when well-formedness fails."""
+    """Raised by ``Spec.validate`` when well-formedness fails."""
 
 
 # ---------------------------------------------------------------------------

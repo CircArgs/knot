@@ -111,16 +111,12 @@ def _():
 
 @app.cell
 def _(mo, pg, schema, spec):
-    # DDL — single postgres script with canonical tables, bindings,
-    # indexes, FKs, resolved views, and the source_trust table.
-    pg.execute(spec.emit_ddl(schema=schema))
-
-    # Trust seed — INSERT-only seed of source_trust at (source, class, slot).
-    # Parameterized, so one row per statement.
-    with pg.cursor() as cur:
-        for sql, params in spec.emit_trust_seed(schema=schema):
-            cur.execute(sql, params)
-
+    # One call. ``init_sql`` validates the spec, then emits a single SQL
+    # script — DDL + bindings + indexes + FKs + resolved views + trust
+    # seed — that brings the schema into alignment. With no query_fn it
+    # assumes an empty schema (full create); pass a query_fn to introspect
+    # a live DB and emit only the migration delta.
+    pg.execute(spec.init_sql(schema=schema))
     mo.md(f"Schema **`{schema}`** deployed.")
     return
 

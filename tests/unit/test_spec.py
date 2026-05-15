@@ -195,11 +195,11 @@ def test_fk_detection():
 
 
 def test_validate_clean_spec(movie_spec):
-    assert movie_spec.validate() == []
+    movie_spec.validate()  # raises if invalid
 
 
 def test_validate_strict_no_raise(movie_spec):
-    movie_spec.validate_strict()  # should not raise
+    movie_spec.validate()  # should not raise
 
 
 def test_validate_orphan_constraint_primary():
@@ -208,14 +208,14 @@ def test_validate_orphan_constraint_primary():
     ghost = OntologyClass(name="Ghost")
     # Build a body that doesn't need ghost slots — using a Raw escape.
     spec.add_constraint("c", primary=ghost, body=raw("1 = 1"))
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("Ghost" in e for e in errs)
 
 
 def test_validate_concrete_missing_identifier():
     spec = Spec(id="m", version="0.1")
     spec.add_class("Movie").slot("name", types.TEXT)  # no identifier
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("no identifier" in e for e in errs)
 
 
@@ -224,7 +224,7 @@ def test_validate_concrete_multiple_identifiers():
     movie = spec.add_class("Movie")
     movie.slot("a", types.TEXT, identifier=True)
     movie.slot("b", types.TEXT, identifier=True)
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("multiple" in e for e in errs)
 
 
@@ -236,7 +236,7 @@ def test_validate_classref_target_missing():
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("movie", ghost)  # Ghost is NOT in spec.classes
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("ClassRef" in e and "Ghost" in e for e in errs)
 
 
@@ -246,7 +246,7 @@ def test_validate_binding_to_abstract():
     title.slot("canonical_id", types.TEXT, identifier=True)
     imdb = spec.add_source("imdb")
     imdb.bind(title)
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("abstract" in e for e in errs)
 
 
@@ -256,7 +256,7 @@ def test_validate_mapping_slot_not_on_class(movie_spec):
     movie_spec.source_bindings[0].slot_mappings["nonexistent_slot"] = SlotMapping(
         class_slot="nonexistent_slot", source_slot=("raw_field",)
     )
-    errs = movie_spec.validate()
+    errs = movie_spec._validation_errors()
     assert any("nonexistent_slot" in e for e in errs)
 
 
@@ -268,7 +268,7 @@ def test_validate_virtual_class_is_a_missing():
     ghost = OntologyClass(name="Ghost")
     ghost.slot("canonical_id", types.TEXT, identifier=True)
     spec.add_virtual_class("Variant", base=ghost, where=raw("1 = 1"))
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("virtual" in e and "Ghost" in e for e in errs)
 
 
@@ -277,7 +277,7 @@ def test_validate_strict_raises_with_all_errors():
     spec.add_class("Movie").slot("name", types.TEXT)
     spec.add_constraint("c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1"))
     with pytest.raises(SpecError) as ei:
-        spec.validate_strict()
+        spec.validate()
     msg = str(ei.value)
     assert "no identifier" in msg
     assert "Ghost" in msg
@@ -293,7 +293,7 @@ def test_validate_self_is_a_cycle():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.is_a = movie  # direct self-reference
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("cycle" in e for e in errs)
 
 
@@ -305,7 +305,7 @@ def test_validate_mutual_is_a_cycle():
     b.slot("canonical_id", types.TEXT, identifier=True)
     a.is_a = b
     b.is_a = a
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert sum(1 for e in errs if "cycle" in e) == 2
 
 
@@ -317,13 +317,13 @@ def test_validate_mixin_cycle():
     b.slot("canonical_id", types.TEXT, identifier=True)
     a.mixins.append(b)
     b.mixins.append(a)
-    errs = spec.validate()
+    errs = spec._validation_errors()
     assert any("cycle" in e for e in errs)
 
 
 def test_validate_no_false_positive_for_chain(movie_spec):
     # Title <- Movie is a legit linear chain — should NOT be flagged
-    errs = movie_spec.validate()
+    errs = movie_spec._validation_errors()
     assert not any("cycle" in e for e in errs)
 
 

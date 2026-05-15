@@ -24,7 +24,6 @@ from knot.compile import (
     emit_batch_write,
     emit_close_out,
     emit_ddl,
-    emit_flyway_files,
     emit_trust_seed,
     emit_validation,
 )
@@ -727,32 +726,21 @@ def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
 
 
 # ---------------------------------------------------------------------------
-# Full Flyway shape applied in order
+# init_sql — unified one-string deploy / migrate
 # ---------------------------------------------------------------------------
 
 
-def test_flyway_files_apply_in_order(pg, schema):
-    """Render the initial deploy as Flyway-shaped files, then apply
-    each file in name-sorted order — same order Flyway would run them.
-    """
+def test_init_sql_from_scratch_creates_everything(pg, schema):
+    """Single-call deploy from an empty schema: ``spec.init_sql()`` with
+    no query_fn emits one SQL script that creates everything."""
     spec = _movies_only_spec()
     spec.enable_corrections()
 
-    ops = diff_against_db(
-        spec,
-        lambda sql, params: [],
-        schema=schema,
-    )
-    files = emit_flyway_files(ops, version="20260514_001", slug="initial")
+    sql = spec.init_sql(schema=schema)
+    pg.execute(sql)
 
-    # Flyway runs V first, then R files in filename order.
-    applied = sorted(files.keys(), key=lambda n: (not n.startswith("V"), n))
-    for filename in applied:
-        exec_script(pg, files[filename])
-
-    # Smoke check: resolver view exists, trust seeded per-slot.
-    # Movie has 3 non-identifier slots (name, year, runtime_minutes).
-    # Three sources (imdb + tmdb + _user_corrections) × 3 slots = 9 rows.
+    # Trust seeded per (source, class, slot).
+    # Movie has 3 non-identifier slots; 3 sources × 3 slots = 9 rows.
     with pg.cursor() as cur:
         cur.execute(f"SELECT count(*) FROM {schema}.source_trust")
         assert cur.fetchone()[0] == 9
@@ -763,3 +751,18 @@ def test_flyway_files_apply_in_order(pg, schema):
         )
         views = {r[0] for r in cur.fetchall()}
     assert "movie_resolved" in views
+
+
+def test_init_sql_diff_mode_emits_only_changes(pg, schema, query_fn):
+    """``spec.init_sql(query_fn=…)`` introspects the live DB and emits
+    just the migration delta — no churn for a fully-deployed spec."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    # Same spec again, this time diffed against the live DB.
+    delta = spec.init_sql(query_fn=query_fn, schema=schema)
+    # The only ops should be CREATE OR REPLACE VIEW for the resolved
+    # views (the migration emitter always re-emits views idempotently
+    # so they reflect the current spec body).
+    assert "CREATE TABLE" not in delta
+    assert "ALTER TABLE" not in delta

@@ -6,8 +6,8 @@ types come from ``knot.types`` (the canonical surface); no raw SQL
 strings cross knot's user surface (see ``knot.expr``).
 
 Entity-local validation runs in each dataclass's ``__post_init__``;
-cross-entity well-formedness via ``Spec.validate()`` (returns errors)
-or ``Spec.validate_strict()`` (raises ``SpecError``).
+cross-entity well-formedness via ``Spec.validate()`` (raises
+``SpecError``).
 """
 
 from knot import types

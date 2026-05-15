@@ -54,8 +54,9 @@ knot/
     constraints.py     # constraint validation SELECTs
     data_io.py         # batch SCD2 writes (close-out + insert)
     trust.py           # source_trust INSERT-only seed
-    migrate.py         # diff_against_db (Alembic-style autogen)
-    flyway.py          # render MigrationOps into Flyway V/R files
+    migrate.py         # diff_against_db (Alembic-style autogen) — the
+                       # single source of truth for "what SQL to run";
+                       # ``Spec.init_sql`` is a one-line façade over it
     expr_sql.py        # @singledispatch compile_sql over Expr nodes
     query_sql.py       # @singledispatch compile_query over Query nodes
 tests/
@@ -152,36 +153,39 @@ q = person.where((movie.col.director == this.Person).none())
 sql, params = spec.compile_query(q, schema="knot_data")
 ```
 
-**Compile façade** — every emitter has an ergonomic method on `Spec`
-that delegates to the corresponding `knot.compile.*` free function.
-Use the methods in user code; the free functions stay as the
-underlying implementations (adapters and tests call them directly).
+**Five-method façade on `Spec`** — one method per distinct concern.
+The free functions in `knot.compile.*` stay as the implementations
+(adapters and tests call them directly when they need
+per-statement / per-op shapes).
 
 ```python
-ddl_script       = spec.emit_ddl(schema="knot_data")            # → str
-views_script     = spec.emit_resolved_views(schema="knot_data") # → str
-trust_seed       = spec.emit_trust_seed(schema="knot_data")     # → [(sql, params), …]
-validations      = spec.emit_validation(schema="knot_data")     # → [(name, sql), …]
-batch_write      = spec.emit_batch_write(writes, schema="knot_data")  # → BatchWrite
-migration_ops    = spec.diff_against_db(query_fn, schema="knot_data") # → [MigrationOp, …]
-flyway_files     = spec.emit_flyway_files(migration_ops, version="v1", slug="init")
-sql, params      = spec.compile_query(query_node, schema="knot_data")  # → (sql, params)
+spec.validate()                                # raises SpecError if malformed
+
+# Schema deploy or migrate — one SQL script, ready to execute.
+sql = spec.init_sql(schema="knot_data")        # query_fn=None → full create
+sql = spec.init_sql(query_fn=q, schema="knot_data")  # introspect → diff only
+pg.execute(sql)
+
+# Runtime workflows (kept separate; distinct shapes):
+bw     = spec.emit_batch_write(writes, schema="knot_data")     # BatchWrite (sql+params)
+checks = spec.emit_validation(schema="knot_data")              # [(name, sql), …]
+sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)
 ```
 
-**Façade contract** (vs free functions):
+**Façade contract.**
 
-- **Always validates first.** Every method calls
-  ``Spec.validate_strict()`` before delegating; an invalid spec
-  raises ``SpecError`` instead of compiling. The free functions in
-  ``knot.compile.*`` do NOT validate — they're the back door for "show
-  me what this broken spec would emit" cases (mostly tests).
-- **DDL-shaped methods return a single SQL script**, blank-line
-  separated, each statement ``;``-terminated. The free function
-  returns ``list[str]`` for per-statement addressability; the façade
-  joins for the common "just run it" call site.
-- **Parameterized / per-element methods keep their list shape** —
-  each element carries metadata (constraint name, op target) or
-  per-row params that doesn't concatenate cleanly.
+- Every method calls ``Spec.validate()`` first; an invalid spec
+  raises ``SpecError`` instead of compiling. Free functions in
+  ``knot.compile.*`` do not validate — they're the back door for
+  "compile this known-broken spec anyway" cases (mostly tests).
+- ``init_sql`` is a thin shim over ``diff_against_db``:
+  ``query_fn=None`` substitutes an empty-DB callable, so an empty
+  schema gets the full create sequence and a populated schema gets
+  only the delta. One code path, two modes.
+- Parameterized / per-element methods (``emit_batch_write``,
+  ``emit_validation``, ``compile_query``) keep their distinct return
+  shapes — each carries metadata or per-row params that doesn't
+  concatenate cleanly.
 
 **Trust runtime**:
 - Per-(source, class, slot) value lives in `<schema>.source_trust`.
