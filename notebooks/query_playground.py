@@ -58,7 +58,7 @@ def _():
     )
     schema = f"knot_play_{uuid.uuid4().hex[:8]}"
     pg.execute(f"CREATE SCHEMA {schema}")
-    return DATA, load, pg, schema
+    return DATA, load, pg, psycopg, schema
 
 
 @app.cell
@@ -108,6 +108,17 @@ def _():
     movie_v1.slot("year", types.INTEGER)
     movie_v1.slot("runtime_minutes", types.INTEGER)
     movie_v1.slot("director", person_v1)  # FK to Person
+
+    # A constraint isn't a postgres CHECK — it's a rule the spec
+    # compiles to a validation SELECT (and optionally an in-transaction
+    # DO block via ``enforce=True``). The first non-trivial domain rule
+    # on Movie: no film predates the Lumière screenings of 1888.
+    spec_v1.add_constraint(
+        "year_sane",
+        primary=movie_v1,
+        body=movie_v1.col.year >= 1888,
+        message="Movie.year predates the invention of film.",
+    )
 
     imdb_v1 = spec_v1.add_source("imdb")
     imdb_v1.bind(person_v1, base_trust=0.85)
@@ -204,6 +215,13 @@ def _(Spec, movie_v1, person_v1, spec_v1, types):
     movie_v2.slot("year", types.INTEGER)
     movie_v2.slot("runtime_minutes", types.INTEGER)
     movie_v2.slot("director", person_v2)
+
+    spec_v2.add_constraint(
+        "year_sane",
+        primary=movie_v2,
+        body=movie_v2.col.year >= 1888,
+        message="Movie.year predates the invention of film.",
+    )
 
     # imdb already deployed and seeded; tmdb is new.
     imdb_v2 = spec_v2.add_source("imdb")
@@ -368,6 +386,101 @@ def _(pg, schema):
 @app.cell
 def _(mo):
     mo.md(r"""
+    ### Provenance — every source's claim, side-by-side
+
+    The resolved view picks one winner per slot; ``movie_all_sources``
+    keeps the rest of the receipts. Same shape, one row per
+    canonical_id, but each slot column is a jsonb keyed by
+    source_name with ``{value, trust}`` payload. Audit UIs and
+    GraphQL ``SlotValue`` projections read from this view; the
+    resolved view stays cheap and skinny.
+    """)
+    return
+
+
+@app.cell
+def _(pg, schema):
+    # Same canonical_id, both source perspectives in one row.
+    with pg.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT canonical_id, year, runtime_minutes
+            FROM {schema}.movie_all_sources
+            WHERE canonical_id IN (
+                SELECT i.canonical_id
+                FROM {schema}.movie_bindings i
+                JOIN {schema}.movie_bindings t USING (canonical_id)
+                WHERE i.source_name = 'imdb' AND t.source_name = 'tmdb'
+                  AND i.year <> t.year
+                  AND i.valid_to IS NULL AND t.valid_to IS NULL
+                LIMIT 5
+            )
+            ORDER BY canonical_id
+            """
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### SCD2 history — see a closed-out row
+
+    Sources update; the bindings table never overwrites. A re-ingest
+    with a new value for the same ``(source_name, source_identifier)``
+    closes the previous row (``valid_to`` set to ``now()``) and inserts
+    a new one. Below: pick a movie, "correct" imdb's runtime, query
+    the bindings to see both rows for that source_identifier.
+    """)
+    return
+
+
+@app.cell
+def _(ClassWrites, pg, schema, spec_v2):
+    movie_b = next(
+        b
+        for b in spec_v2.source_bindings
+        if b.source.name == "imdb" and b.class_.name == "Movie"
+    )
+    # Re-ingest one imdb row with a deliberately-different runtime.
+    correction = [
+        {
+            "canonical_id": "m_killbill1",
+            "source_identifier": "tt2878306",
+            "title": "Kill Bill: Vol. 1",
+            "year": 2003,
+            "runtime_minutes": 111,  # was 112 in the original ingest
+            "director": "p_tarantino",
+        }
+    ]
+    bw = spec_v2.emit_batch_write(
+        [ClassWrites(binding=movie_b, rows=correction)],
+        schema=schema,
+        enforce=False,
+    )
+    with pg.cursor() as cur:
+        for sql, params in bw.statements:
+            cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT source_identifier, runtime_minutes,
+                   valid_from, valid_to
+            FROM {schema}.movie_bindings
+            WHERE source_name = 'imdb'
+              AND source_identifier = 'tt2878306'
+            ORDER BY valid_from
+            """
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
     ## Stage 3 — evolve the spec: add Credit + rottentomatoes
 
     The spec gains a reified relation: ``Credit`` records (movie, person,
@@ -405,6 +518,35 @@ def _(Spec, types):
     credit_v3.slot("movie", movie_v3)
     credit_v3.slot("person", person_v3)
 
+    # Virtual class — derived membership, no table of its own. A movie
+    # IS a DirectedMovie iff some Credit row exists with role='director'
+    # pointing at it. The view sits on top of movie_resolved + the
+    # has_any predicate, so it stays current with whatever the resolver
+    # currently believes about each movie.
+    directed_movie_v3 = spec_v3.add_virtual_class(
+        "DirectedMovie",
+        base=movie_v3,
+        where=movie_v3.has_any(credit_v3, role="director"),
+    )
+
+    spec_v3.add_constraint(
+        "year_sane",
+        primary=movie_v3,
+        body=movie_v3.col.year >= 1888,
+        message="Movie.year predates the invention of film.",
+    )
+    # Credit.role is a free-text slot in the spec; lock the vocabulary
+    # at the constraint layer instead of in DDL so the operator can
+    # tweak the set without a schema migration.
+    spec_v3.add_constraint(
+        "role_in_vocabulary",
+        primary=credit_v3,
+        body=credit_v3.col.role.in_(
+            ["director", "writer", "actor", "producer", "composer"]
+        ),
+        message="Credit.role outside the curated vocabulary.",
+    )
+
     imdb_v3 = spec_v3.add_source("imdb")
     imdb_v3.bind(person_v3, base_trust=0.85)
     imdb_v3.bind(movie_v3, base_trust=0.85)
@@ -421,7 +563,7 @@ def _(Spec, types):
     rt_v3.bind(credit_v3, base_trust=0.70)
 
     spec_v3.validate()
-    return credit_v3, movie_v3, person_v3, spec_v3
+    return credit_v3, directed_movie_v3, movie_v3, person_v3, spec_v3
 
 
 @app.cell
@@ -473,6 +615,111 @@ def _(ClassWrites, load, pg, schema, spec_v3):
             counts[cls] = cur.fetchone()[0]
     counts
     return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Constraints — validation SELECTs against the resolved view
+
+    Each constraint compiles to one SELECT that returns zero rows when
+    the rule holds and one row per violating canonical_id otherwise.
+    The host runs whichever schedule it wants — periodic batch, after
+    every ingest, on-demand from an audit UI — knot just emits the SQL.
+    """)
+    return
+
+
+@app.cell
+def _(pg, schema, spec_v3):
+    # emit_validation -> [(rule_id, sql), ...]
+    violations = {}
+    with pg.cursor() as cur:
+        for rule, sql in spec_v3.emit_validation(schema=schema):
+            cur.execute(sql)
+            violations[rule] = cur.fetchall()
+    {rule: len(rows) for rule, rows in violations.items()}
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Reject bad writes at ingest time with ``enforce=True``
+
+    Same validation SQLs, wrapped in a PL/pgSQL ``DO`` block appended
+    to the batch write. Postgres runs the inserts and the checks in
+    one transaction; any constraint violation ``RAISE``s and the
+    whole batch rolls back. Below: try to ingest a fake "Le Voyage
+    dans la Lune from 1850" — predates film, so ``year_sane`` fires
+    and nothing is written.
+    """)
+    return
+
+
+@app.cell
+def _(ClassWrites, pg, psycopg, schema, spec_v3):
+    imdb_movie_b = next(
+        b
+        for b in spec_v3.source_bindings
+        if b.source.name == "imdb" and b.class_.name == "Movie"
+    )
+    bad_batch = [
+        {
+            "canonical_id": "m_anachronism",
+            "source_identifier": "tt-fake-0001",
+            "title": "Le Voyage dans la Lune (anachronism)",
+            "year": 1850,
+            "runtime_minutes": 14,
+            "director": "p_melies",
+        }
+    ]
+    bw = spec_v3.emit_batch_write(
+        [ClassWrites(binding=imdb_movie_b, rows=bad_batch)],
+        schema=schema,
+        enforce=True,
+    )
+    error = None
+    try:
+        with pg.transaction():
+            with pg.cursor() as cur:
+                for sql, params in bw.statements:
+                    cur.execute(sql, params)
+    except psycopg.errors.RaiseException as e:
+        error = str(e).splitlines()[0]
+
+    # Confirm nothing landed despite the attempt.
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT count(*) FROM {schema}.movie_bindings "
+            f"WHERE canonical_id = 'm_anachronism'"
+        )
+        leaked = cur.fetchone()[0]
+    {"raised": error, "rows_leaked_into_bindings": leaked}
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Virtual class — DirectedMovie
+
+    A ``VirtualClass`` is a view derived from its base class plus a
+    membership predicate. ``DirectedMovie = Movie WHERE
+    movie.has_any(credit, role='director')``. ``init_sql`` materialized
+    it as ``directedmovie`` during Stage 3. The view is read-only and
+    always reflects the current state of the resolved layer.
+    """)
+    return
+
+
+@app.cell
+def _(pg, schema):
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT canonical_id, title, year FROM {schema}.directedmovie "
+            f"ORDER BY year DESC LIMIT 10"
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
 
 
 @app.cell

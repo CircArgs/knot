@@ -62,12 +62,11 @@ knot/
     expr_sql.py        # @singledispatch compile_sql over Expr nodes
     query_sql.py       # @singledispatch compile_query over Query nodes
 tests/
-  unit/                # pure unit tests (~210 tests; no I/O)
-  integration/         # ~17 tests against live postgres on :5433
+  unit/                # pure unit tests (~211 tests; no I/O)
+  integration/         # ~22 tests against live postgres on :5433
 notebooks/
   query_playground.py  # end-to-end marimo playground (spec → DDL →
                        # ingest → query)
-  builder_tinker.py    # spec builder tinker
 ```
 
 There is intentionally **no `RFC.md`, no `LIBRARY_DESIGN.md`** in this
