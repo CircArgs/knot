@@ -229,18 +229,21 @@ def test_indexes_suppressed_when_bindings_suppressed(movie_spec):
     assert not any(s.startswith("CREATE INDEX") for s in stmts)
 
 
-def test_bindings_table_identifier_not_null_others_nullable(movie_spec):
+def test_bindings_table_slots_nullable_pk_drops_canonical(movie_spec):
+    """Bindings allow NULL on every slot, including the identifier —
+    bronze-layer ingest writes source rows before ER assigns a
+    canonical_id. The resolved view filters NULL identifier rows out.
+    PK is (source_name, source_identifier, valid_from)."""
     stmts = emit_ddl(movie_spec)
     bindings = next(s for s in stmts if "movie_bindings" in s)
-    # canonical_id is the identifier — must be NOT NULL
-    assert "canonical_id text NOT NULL" in bindings
-    # source_name, source_identifier always NOT NULL
+    # canonical_id is the identifier — NULLABLE in bindings (no NOT NULL)
+    assert "canonical_id text NOT NULL" not in bindings
+    assert "canonical_id text" in bindings
+    # source_name, source_identifier always NOT NULL — they're the bronze-
+    # layer identity (which source published which natural id).
     assert "source_name text NOT NULL" in bindings
     assert "source_identifier text NOT NULL" in bindings
-    # year is a regular slot — NULLABLE in bindings (partial claim allowed)
+    # year is a regular slot — NULLABLE (partial claim allowed)
     assert "year integer," in bindings or "year integer\n" in bindings
-    # Composite PK with valid_from
-    assert (
-        "PRIMARY KEY (canonical_id, source_name, source_identifier, valid_from)"
-        in bindings
-    )
+    # PK excludes canonical_id so it can start NULL
+    assert "PRIMARY KEY (source_name, source_identifier, valid_from)" in bindings

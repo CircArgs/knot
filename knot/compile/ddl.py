@@ -257,15 +257,14 @@ def _emit_bindings_table(
         "    source_name text NOT NULL",
         "    source_identifier text NOT NULL",
     ]
-    identifier_name: str | None = None
     for slot in cls.effective_slots():
-        # Identifier is NOT NULL in bindings (every claim references a
-        # canonical row); other slots are nullable since a source may
-        # only project some of them.
+        # All slots are nullable in bindings — including the identifier.
+        # Bronze-layer ingest writes source rows BEFORE ER assigns a
+        # canonical_id; the resolved view filters those rows out via
+        # ``WHERE <ident> IS NOT NULL`` until ER claims them. A source
+        # may also only project some non-identifier slots; those are
+        # nullable for the same reason.
         col = f"    {slot.name} {_pg_type(slot.type)}"
-        if slot.identifier:
-            col += " NOT NULL"
-            identifier_name = slot.name
         columns.append(col)
     # Bronze-layer raw payload — the full row as ingested, preserved
     # for backfilling new slots later without re-ingesting from the
@@ -274,10 +273,11 @@ def _emit_bindings_table(
     columns.append("    raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb")
     columns.append("    valid_from timestamptz NOT NULL DEFAULT now()")
     columns.append("    valid_to timestamptz")
-    if identifier_name is not None:
-        columns.append(
-            f"    PRIMARY KEY ({identifier_name}, source_name, source_identifier, valid_from)"
-        )
+    # PK is (source_name, source_identifier, valid_from) — one open row
+    # per source/source_identifier at any moment, and history tracked
+    # via SCD2 valid_from/valid_to. canonical_id is NOT part of the PK
+    # so it can start NULL and be assigned later by an async ER worker.
+    columns.append("    PRIMARY KEY (source_name, source_identifier, valid_from)")
     body = ",\n".join(columns)
     return (
         f"{_create_table(if_not_exists=if_not_exists)} "
