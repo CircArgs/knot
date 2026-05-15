@@ -111,16 +111,15 @@ def _():
 
 @app.cell
 def _(mo, pg, schema, spec):
-    from knot.compile import emit_ddl, emit_trust_seed
-
     # DDL — canonical + bindings tables, indexes, FKs, resolved views.
+    # The Spec exposes ergonomic methods that delegate to knot.compile.*.
     with pg.cursor() as cur:
-        for stmt in emit_ddl(spec, schema=schema):
+        for stmt in spec.emit_ddl(schema=schema):
             cur.execute(stmt)
 
-    # Trust seed — upsert per-(source, class) accuracy into source_trust.
+    # Trust seed — INSERT-only seed of source_trust at (source, class, slot).
     with pg.cursor() as cur:
-        for sql, params in emit_trust_seed(spec, schema=schema):
+        for sql, params in spec.emit_trust_seed(schema=schema):
             cur.execute(sql, params)
 
     mo.md(f"Schema **`{schema}`** deployed.")
@@ -335,7 +334,6 @@ def _(
     schema,
     spec,
 ):
-    from knot.compile import emit_batch_write
     from knot.compile.data_io import ClassWrites
 
     imdb_person_b = next(
@@ -348,12 +346,11 @@ def _(
         b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is credit
     )
 
-    bw = emit_batch_write(
-        spec,
+    bw = spec.emit_batch_write(
         [
-            ClassWrites(binding=imdb_person_b, rows=person_rows, use_mappings=False),
-            ClassWrites(binding=imdb_movie_b, rows=movie_rows, use_mappings=False),
-            ClassWrites(binding=imdb_credit_b, rows=credit_rows, use_mappings=False),
+            ClassWrites(binding=imdb_person_b, rows=person_rows),
+            ClassWrites(binding=imdb_movie_b, rows=movie_rows),
+            ClassWrites(binding=imdb_credit_b, rows=credit_rows),
         ],
         schema=schema,
         enforce=False,
@@ -401,11 +398,9 @@ def _(mo):
 
 @app.cell
 def _(pg, schema, spec):
-    from knot.compile import compile_query
-
     def qf(q):
         """Compile + run a knot Query; return list of dict rows."""
-        sql, params = compile_query(q, spec=spec, schema=schema)
+        sql, params = spec.compile_query(q, schema=schema)
         with pg.cursor() as cur:
             cur.execute(sql, params or None)
             cols = [d.name for d in cur.description]
@@ -413,7 +408,7 @@ def _(pg, schema, spec):
 
     def qsql(q):
         """Just show the compiled SQL without executing."""
-        s, _ = compile_query(q, spec=spec, schema=schema)
+        s, _ = spec.compile_query(q, schema=schema)
         return s
 
     return qf, qsql

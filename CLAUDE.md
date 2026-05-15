@@ -80,7 +80,6 @@ history and in the auto-memory; the code is the contract.
 # Smoke-test the public surface.
 .venv/bin/python -c "
 from knot import Spec, types, this
-from knot.compile import emit_ddl, emit_trust_seed, compile_query, diff_against_db
 print('ok')
 "
 
@@ -138,7 +137,6 @@ correlation, transparent FK walks, per-slot aggregates:
 
 ```python
 from knot import this
-from knot.compile import compile_query
 
 # Top 10 movies + their directors (FK walk + projection + order/limit)
 q = (movie.order_by(movie.col.year, "desc")
@@ -151,7 +149,23 @@ q = person.where((movie.col.director == this.Person).count() > 5)
 # People who never directed (.none() aggregate)
 q = person.where((movie.col.director == this.Person).none())
 
-sql, params = compile_query(q, spec=spec, schema="knot_data")
+sql, params = spec.compile_query(q, schema="knot_data")
+```
+
+**Compile façade** — every emitter has an ergonomic method on `Spec`
+that delegates to the corresponding `knot.compile.*` free function.
+Use the methods in user code; the free functions stay as the
+underlying implementations (adapters and tests call them directly).
+
+```python
+ddl_stmts        = spec.emit_ddl(schema="knot_data")
+resolved_views   = spec.emit_resolved_views(schema="knot_data")
+trust_seed       = spec.emit_trust_seed(schema="knot_data")
+validations      = spec.emit_validation(schema="knot_data")
+batch_write      = spec.emit_batch_write(writes, schema="knot_data")
+migration_ops    = spec.diff_against_db(query_fn, schema="knot_data")
+flyway_files     = spec.emit_flyway_files(migration_ops, version="v1", slug="init")
+sql, params      = spec.compile_query(query_node, schema="knot_data")
 ```
 
 **Trust runtime**:

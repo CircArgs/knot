@@ -965,6 +965,71 @@ class Spec:
         if errs:
             raise SpecError("Spec failed validation:\n  - " + "\n  - ".join(errs))
 
+    # ------------------------------------------------------------------
+    # Compile façade — ergonomic methods that delegate to ``knot.compile``.
+    # The free functions in ``knot.compile.*`` remain the implementations;
+    # these are thin shims so users don't have to ``from knot.compile
+    # import …`` every time. Lazy imports preserve the spec → compile
+    # direction (compile modules aren't loaded until a method fires).
+    # ------------------------------------------------------------------
+
+    def emit_ddl(self, **kwargs):
+        """Compile this spec to a list of postgres DDL statements.
+        See ``knot.compile.ddl.emit_ddl`` for parameters."""
+        from knot.compile.ddl import emit_ddl
+
+        return emit_ddl(self, **kwargs)
+
+    def emit_resolved_views(self, **kwargs):
+        """One ``CREATE VIEW`` per concrete class, resolving per-slot
+        winners. See ``knot.compile.resolver.emit_resolved_views``."""
+        from knot.compile.resolver import emit_resolved_views
+
+        return emit_resolved_views(self, **kwargs)
+
+    def emit_trust_seed(self, **kwargs):
+        """INSERT-only seed for ``source_trust``. See
+        ``knot.compile.trust.emit_trust_seed``."""
+        from knot.compile.trust import emit_trust_seed
+
+        return emit_trust_seed(self, **kwargs)
+
+    def emit_validation(self, **kwargs):
+        """One ``(name, sql)`` pair per constraint. See
+        ``knot.compile.constraints.emit_validation``."""
+        from knot.compile.constraints import emit_validation
+
+        return emit_validation(self, **kwargs)
+
+    def emit_batch_write(self, writes, **kwargs):
+        """Compile a transactional SCD2 batch write. See
+        ``knot.compile.data_io.emit_batch_write``."""
+        from knot.compile.data_io import emit_batch_write
+
+        return emit_batch_write(self, writes, **kwargs)
+
+    def diff_against_db(self, query, **kwargs):
+        """Diff this spec against a live postgres database; return the
+        ``MigrationOp`` sequence to bring it into alignment. See
+        ``knot.compile.migrate.diff_against_db``."""
+        from knot.compile.migrate import diff_against_db
+
+        return diff_against_db(self, query, **kwargs)
+
+    def emit_flyway_files(self, ops, **kwargs):
+        """Render a list of ``MigrationOp`` into ``{filename: body}``
+        Flyway-shaped files. See ``knot.compile.flyway.emit_flyway_files``."""
+        from knot.compile.flyway import emit_flyway_files
+
+        return emit_flyway_files(ops, **kwargs)
+
+    def compile_query(self, query_node, **kwargs):
+        """Compile a ``Query`` AST to ``(sql, params)``. See
+        ``knot.compile.query_sql.compile_query``."""
+        from knot.compile.query_sql import compile_query
+
+        return compile_query(query_node, spec=self, **kwargs)
+
 
 class SpecError(ValueError):
     """Raised by ``Spec.validate_strict`` when well-formedness fails."""
