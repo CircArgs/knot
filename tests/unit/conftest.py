@@ -34,16 +34,16 @@ def movie_spec() -> Spec:
     credit.slot("movie", movie)
     credit.slot("person", person)
 
-    spec.add_virtual_class(
+    movie.add_virtual(
         "DirectedMovie",
-        base=movie,
         where=movie.has_any(credit, role="director"),
     )
 
-    spec.add_constraint("year_sane", primary=movie, body=movie.col.year >= 1888)
+    movie.add_constraint("year_sane", body=movie.col.year >= 1888)
 
     imdb = spec.add_source("imdb")
-    binding = imdb.bind(movie, base_trust=0.85)
+    binding = imdb.bind(movie)
+    binding.set_default_trust(0.85)
     binding.slot(class_slot="year", source_slot="release_year")
     binding.slot(
         class_slot="runtime_minutes",

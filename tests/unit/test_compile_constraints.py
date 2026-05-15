@@ -27,9 +27,8 @@ def test_message_literal_when_set():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
-    spec.add_constraint(
+    movie.add_constraint(
         "y",
-        primary=movie,
         body=movie.col.year > 0,
         message="must be positive",
     )
@@ -42,9 +41,8 @@ def test_apostrophe_in_message_escaped():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
-    spec.add_constraint(
+    movie.add_constraint(
         "y",
-        primary=movie,
         body=movie.col.year > 0,
         message="director's pick",
     )
@@ -68,9 +66,8 @@ def test_class_ref_renders_qualified():
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
     credit.slot("movie", movie)
-    spec.add_constraint(
+    movie.add_constraint(
         "has_director",
-        primary=movie,
         body=movie.has_any(credit, role="director"),
     )
 
@@ -97,9 +94,8 @@ def test_has_count_in_predicate():
     credit = spec.add_class("Credit")
     credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("movie", movie)
-    spec.add_constraint(
+    movie.add_constraint(
         "min_three_credits",
-        primary=movie,
         body=movie.has_count(credit) >= 3,
     )
     rewrites = dict(emit_validation(spec))
@@ -114,9 +110,8 @@ def test_boolean_composition():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     movie.slot("runtime", types.INTEGER)
-    spec.add_constraint(
+    movie.add_constraint(
         "year_and_runtime",
-        primary=movie,
         body=(movie.col.year >= 1888) & (movie.col.runtime > 0),
     )
     rewrites = dict(emit_validation(spec))

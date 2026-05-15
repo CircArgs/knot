@@ -113,16 +113,15 @@ def _():
     # compiles to a validation SELECT (and optionally an in-transaction
     # DO block via ``enforce=True``). The first non-trivial domain rule
     # on Movie: no film predates the Lumière screenings of 1888.
-    spec_v1.add_constraint(
+    movie_v1.add_constraint(
         "year_sane",
-        primary=movie_v1,
         body=movie_v1.col.year >= 1888,
         message="Movie.year predates the invention of film.",
     )
 
     imdb_v1 = spec_v1.add_source("imdb")
-    imdb_v1.bind(person_v1, base_trust=0.85)
-    imdb_v1.bind(movie_v1, base_trust=0.85)
+    imdb_v1.bind(person_v1).set_default_trust(0.85)
+    imdb_v1.bind(movie_v1).set_default_trust(0.85)
 
     spec_v1.validate()
     return Spec, imdb_v1, movie_v1, person_v1, spec_v1, types
@@ -216,21 +215,20 @@ def _(Spec, movie_v1, person_v1, spec_v1, types):
     movie_v2.slot("runtime_minutes", types.INTEGER)
     movie_v2.slot("director", person_v2)
 
-    spec_v2.add_constraint(
+    movie_v2.add_constraint(
         "year_sane",
-        primary=movie_v2,
         body=movie_v2.col.year >= 1888,
         message="Movie.year predates the invention of film.",
     )
 
     # imdb already deployed and seeded; tmdb is new.
     imdb_v2 = spec_v2.add_source("imdb")
-    imdb_v2.bind(person_v2, base_trust=0.85)
-    imdb_v2.bind(movie_v2, base_trust=0.85)
+    imdb_v2.bind(person_v2).set_default_trust(0.85)
+    imdb_v2.bind(movie_v2).set_default_trust(0.85)
 
     tmdb_v2 = spec_v2.add_source("tmdb")
-    tmdb_v2.bind(person_v2, base_trust=0.75)
-    tmdb_v2.bind(movie_v2, base_trust=0.75)
+    tmdb_v2.bind(person_v2).set_default_trust(0.75)
+    tmdb_v2.bind(movie_v2).set_default_trust(0.75)
 
     spec_v2.validate()
     return movie_v2, person_v2, spec_v2, tmdb_v2
@@ -523,24 +521,21 @@ def _(Spec, types):
     # pointing at it. The view sits on top of movie_resolved + the
     # has_any predicate, so it stays current with whatever the resolver
     # currently believes about each movie.
-    directed_movie_v3 = spec_v3.add_virtual_class(
+    directed_movie_v3 = movie_v3.add_virtual(
         "DirectedMovie",
-        base=movie_v3,
         where=movie_v3.has_any(credit_v3, role="director"),
     )
 
-    spec_v3.add_constraint(
+    movie_v3.add_constraint(
         "year_sane",
-        primary=movie_v3,
         body=movie_v3.col.year >= 1888,
         message="Movie.year predates the invention of film.",
     )
     # Credit.role is a free-text slot in the spec; lock the vocabulary
     # at the constraint layer instead of in DDL so the operator can
     # tweak the set without a schema migration.
-    spec_v3.add_constraint(
+    credit_v3.add_constraint(
         "role_in_vocabulary",
-        primary=credit_v3,
         body=credit_v3.col.role.in_(
             ["director", "writer", "actor", "producer", "composer"]
         ),
@@ -548,19 +543,19 @@ def _(Spec, types):
     )
 
     imdb_v3 = spec_v3.add_source("imdb")
-    imdb_v3.bind(person_v3, base_trust=0.85)
-    imdb_v3.bind(movie_v3, base_trust=0.85)
-    imdb_v3.bind(credit_v3, base_trust=0.85)
+    imdb_v3.bind(person_v3).set_default_trust(0.85)
+    imdb_v3.bind(movie_v3).set_default_trust(0.85)
+    imdb_v3.bind(credit_v3).set_default_trust(0.85)
 
     tmdb_v3 = spec_v3.add_source("tmdb")
-    tmdb_v3.bind(person_v3, base_trust=0.75)
-    tmdb_v3.bind(movie_v3, base_trust=0.75)
-    tmdb_v3.bind(credit_v3, base_trust=0.75)
+    tmdb_v3.bind(person_v3).set_default_trust(0.75)
+    tmdb_v3.bind(movie_v3).set_default_trust(0.75)
+    tmdb_v3.bind(credit_v3).set_default_trust(0.75)
 
     rt_v3 = spec_v3.add_source("rottentomatoes")
-    rt_v3.bind(person_v3, base_trust=0.70)
-    rt_v3.bind(movie_v3, base_trust=0.70)
-    rt_v3.bind(credit_v3, base_trust=0.70)
+    rt_v3.bind(person_v3).set_default_trust(0.70)
+    rt_v3.bind(movie_v3).set_default_trust(0.70)
+    rt_v3.bind(credit_v3).set_default_trust(0.70)
 
     spec_v3.validate()
     return credit_v3, directed_movie_v3, movie_v3, person_v3, spec_v3

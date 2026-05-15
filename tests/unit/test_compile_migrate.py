@@ -96,7 +96,7 @@ def _basic_spec() -> Spec:
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
-    imdb.bind(movie, base_trust=0.85)
+    imdb.bind(movie).set_default_trust(0.85)
     return spec
 
 

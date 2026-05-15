@@ -54,8 +54,8 @@ def _movies_only_spec() -> Spec:
 
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    imdb.bind(movie, base_trust=0.85)
-    tmdb.bind(movie, base_trust=0.7)
+    imdb.bind(movie).set_default_trust(0.85)
+    tmdb.bind(movie).set_default_trust(0.7)
     return spec
 
 
@@ -415,9 +415,8 @@ def test_user_correction_wins_over_declared_sources(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    corr_b = spec.corrections_binding_for(
-        next(c for c in spec.classes if c.name == "Movie")
-    )
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    corr_b = movie.corrections_binding()
 
     _write_claim(
         pg,
@@ -467,7 +466,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
     movie = next(c for c in spec.classes if c.name == "Movie")
-    corr_b = spec.corrections_binding_for(movie)
+    corr_b = movie.corrections_binding()
 
     _write_claim(
         pg,
@@ -531,11 +530,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
 def test_constraint_validation_finds_violations(pg, schema):
     spec = _movies_only_spec()
     movie = next(c for c in spec.classes if c.name == "Movie")
-    spec.add_constraint(
-        "year_sane",
-        primary=movie,
-        body=movie.col.year >= 1888,
-    )
+    movie.add_constraint("year_sane", body=movie.col.year >= 1888)
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -739,8 +734,8 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     movie.slot("length_min", types.INTEGER)  # was runtime_minutes
     imdb = spec2.add_source("imdb")
     tmdb = spec2.add_source("tmdb")
-    imdb.bind(movie, base_trust=0.85)
-    tmdb.bind(movie, base_trust=0.7)
+    imdb.bind(movie).set_default_trust(0.85)
+    tmdb.bind(movie).set_default_trust(0.7)
 
     ops = diff_against_db(
         spec2,
@@ -772,7 +767,7 @@ def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
     imdb = spec2.add_source("imdb")
-    imdb.bind(movie, base_trust=0.85)
+    imdb.bind(movie).set_default_trust(0.85)
 
     # Without destructive opt-in: no drop emitted (filtered out).
     ops = diff_against_db(spec2, query_fn, schema=schema)
@@ -851,7 +846,6 @@ def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
     spec = _movies_only_spec()
     pg.execute(spec.init_sql(schema=schema))
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
     # No canonical_id yet — ER hasn't claimed it.
@@ -878,11 +872,9 @@ def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
         assert cur.fetchone()[0] == 0  # invisible until ER claims it
 
     # ER assigns canonical_id.
-    sql, params = spec.assign_canonical(
-        movie,
-        "m_pulp",
-        source_name="imdb",
+    sql, params = imdb_b.assign_canonical(
         source_identifier="tt001",
+        canonical_id="m_pulp",
         schema=schema,
     )
     with pg.cursor() as cur:
@@ -898,7 +890,6 @@ def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
     spec = _movies_only_spec()
     pg.execute(spec.init_sql(schema=schema))
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
     _write_claim(
@@ -916,11 +907,9 @@ def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
         ],
         schema=schema,
     )
-    sql, params = spec.assign_canonical(
-        movie,
-        "m_first",
-        source_name="imdb",
+    sql, params = imdb_b.assign_canonical(
         source_identifier="tt001",
+        canonical_id="m_first",
         schema=schema,
     )
     with pg.cursor() as cur:
@@ -928,11 +917,9 @@ def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
 
     # Try to assign a DIFFERENT id — the WHERE clause's IS NULL check
     # means nothing happens.
-    sql, params = spec.assign_canonical(
-        movie,
-        "m_second",
-        source_name="imdb",
+    sql, params = imdb_b.assign_canonical(
         source_identifier="tt001",
+        canonical_id="m_second",
         schema=schema,
     )
     with pg.cursor() as cur:
@@ -949,7 +936,6 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
     spec = _movies_only_spec()
     pg.execute(spec.init_sql(schema=schema))
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
     _write_claim(
@@ -969,11 +955,9 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
     )
 
     # ER decided m_wrong should actually be m_correct.
-    sql, params = spec.recanonicalize(
-        movie,
-        "m_correct",
-        source_name="imdb",
+    sql, params = imdb_b.recanonicalize(
         source_identifier="tt001",
+        new_canonical_id="m_correct",
         schema=schema,
     )
     with pg.cursor() as cur:
@@ -1000,7 +984,6 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
     spec = _movies_only_spec()
     pg.execute(spec.init_sql(schema=schema))
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
     _write_claim(
@@ -1019,11 +1002,9 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
         schema=schema,
     )
 
-    sql, params = spec.assign_canonical(
-        movie,
-        "m_reservoirdogs",
-        source_name="imdb",
+    sql, params = imdb_b.assign_canonical(
         source_identifier="tt001",
+        canonical_id="m_reservoirdogs",
         er_metadata={
             "run_id": "r42",
             "method": "exact_title_year",
@@ -1054,7 +1035,6 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
     spec = _movies_only_spec()
     pg.execute(spec.init_sql(schema=schema))
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
     _write_claim(
@@ -1074,11 +1054,9 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
     )
 
     # First stamp: ER assigns + writes metadata
-    sql, params = spec.assign_canonical(
-        movie,
-        "m_wrong",
-        source_name="imdb",
+    sql, params = imdb_b.assign_canonical(
         source_identifier="tt001",
+        canonical_id="m_wrong",
         er_metadata={"run_id": "r1", "method": "exact_title_year"},
         schema=schema,
     )
@@ -1086,11 +1064,9 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
         cur.execute(sql, params)
 
     # Recanonicalize without er_metadata kwarg — new row inherits.
-    sql, params = spec.recanonicalize(
-        movie,
-        "m_correct",
-        source_name="imdb",
+    sql, params = imdb_b.recanonicalize(
         source_identifier="tt001",
+        new_canonical_id="m_correct",
         schema=schema,
     )
     with pg.cursor() as cur:
@@ -1115,7 +1091,6 @@ def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
     spec = _movies_only_spec()
     pg.execute(spec.init_sql(schema=schema))
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
     _write_claim(
@@ -1132,22 +1107,18 @@ def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
         ],
         schema=schema,
     )
-    sql, params = spec.assign_canonical(
-        movie,
-        "m_wrong",
-        source_name="imdb",
+    sql, params = imdb_b.assign_canonical(
         source_identifier="tt001",
+        canonical_id="m_wrong",
         er_metadata={"run_id": "r1", "method": "exact"},
         schema=schema,
     )
     with pg.cursor() as cur:
         cur.execute(sql, params)
 
-    sql, params = spec.recanonicalize(
-        movie,
-        "m_correct",
-        source_name="imdb",
+    sql, params = imdb_b.recanonicalize(
         source_identifier="tt001",
+        new_canonical_id="m_correct",
         er_metadata={"run_id": "r2", "method": "human_review"},
         schema=schema,
     )

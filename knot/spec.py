@@ -21,8 +21,8 @@ constructing them directly. All entities are plain
 Validation happens at two levels:
 
   - Entity-local: ``__post_init__`` rejects empty names, out-of-range
-    base_trust, and (via ``StrEnum`` coercion) unknown ``ClassKind`` /
-    ``Severity`` values.
+    trust values, and (via ``StrEnum`` coercion) unknown ``ClassKind``
+    / ``Severity`` values.
   - Cross-entity: ``Spec.validate()`` raises ``SpecError`` if the spec
     has any well-formedness errors (orphan references, missing
     identifier slots, duplicate names, etc.). The façade methods
@@ -156,6 +156,7 @@ class OntologyClass:
     mixins: list[OntologyClass] = field(default_factory=list)
     slots: list[Slot] = field(default_factory=list)
     description: str | None = None
+    _spec: Spec | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self) -> None:
         _check_name("OntologyClass", self.name)
@@ -337,6 +338,74 @@ class OntologyClass:
     def select(self, *refs: Expr) -> Query:
         return Query(class_name=self.name).select(*refs)
 
+    # ------------------------------------------------------------------
+    # Class-anchored builder methods — constraints, virtuals, corrections.
+    # Spec is the registrar (add_class, add_source); per-entity facts live
+    # on the entity they describe.
+    # ------------------------------------------------------------------
+
+    def add_constraint(
+        self,
+        name: str,
+        body: Expr,
+        *,
+        severity: Severity | str = Severity.ERROR,
+        message: str | None = None,
+    ) -> Constraint:
+        """Attach a constraint whose primary class is this one. The
+        constraint body is evaluated against this class's resolved view
+        at validation time."""
+        if self._spec is None:
+            raise RuntimeError(
+                f"OntologyClass {self.name!r} not attached to a Spec — "
+                f"create via spec.add_class() rather than constructing directly"
+            )
+        if any(c.name == name for c in self._spec.constraints):
+            raise ValueError(f"Spec already has a constraint named {name!r}")
+        c = Constraint(
+            name=name,
+            primary=self,
+            body=body,
+            severity=Severity(severity) if isinstance(severity, str) else severity,
+            message=message,
+        )
+        self._spec.constraints.append(c)
+        return c
+
+    def add_virtual(
+        self,
+        name: str,
+        *,
+        where: Expr,
+        description: str | None = None,
+    ) -> VirtualClass:
+        """Define a virtual subclass — rows of this class that satisfy
+        ``where``. Materialized as a SQL view at deploy time."""
+        if self._spec is None:
+            raise RuntimeError(
+                f"OntologyClass {self.name!r} not attached to a Spec — "
+                f"create via spec.add_class() rather than constructing directly"
+            )
+        self._spec._check_unique_class_name(name)
+        vc = VirtualClass(
+            name=name, is_a=self, definition=where, description=description
+        )
+        self._spec.classes.append(vc)
+        return vc
+
+    def corrections_binding(self) -> SourceBinding:
+        """Return the ``_user_corrections`` binding for this class.
+        Raises ``KeyError`` if corrections aren't enabled."""
+        if self._spec is None:
+            raise RuntimeError(f"OntologyClass {self.name!r} not attached to a Spec")
+        for b in self._spec.source_bindings:
+            if b.source.name == CORRECTIONS_SOURCE_NAME and b.class_ is self:
+                return b
+        raise KeyError(
+            f"no _user_corrections binding for class {self.name!r} — "
+            f"call spec.enable_corrections() first"
+        )
+
 
 def _infer_back_fk(
     other: OntologyClass,
@@ -463,12 +532,15 @@ class Source:
         self,
         cls: OntologyClass,
         *,
-        base_trust: float = 0.67,
         description: str | None = None,
     ) -> SourceBinding:
         """Create a binding from this source to ``cls`` and register it
-        on the owning spec. ``base_trust`` is the default per-slot trust
-        for any slot not explicitly overridden via ``.slot(...)``."""
+        on the owning spec.
+
+        Trust starts at ``DEFAULT_TRUST`` for every slot. To set it, call
+        ``binding.set_default_trust(...)`` or ``binding.set_trust(slot,
+        value)`` on the returned binding — trust is its own concern,
+        declared separately from "what this source publishes"."""
         if self._spec is None:
             raise RuntimeError(
                 f"Source {self.name!r} not attached to a Spec — create via "
@@ -480,12 +552,7 @@ class Source:
             raise ValueError(
                 f"Spec already has a binding for {self.name!r} → {cls.name!r}"
             )
-        b = SourceBinding(
-            source=self,
-            class_=cls,
-            base_trust=base_trust,
-            description=description,
-        )
+        b = SourceBinding(source=self, class_=cls, description=description)
         self._spec.source_bindings.append(b)
         return b
 
@@ -495,13 +562,19 @@ class Source:
 # what makes corrections "win" the per-slot argmax tie-break.
 CORRECTIONS_SOURCE_NAME: str = "_user_corrections"
 
+# Default per-slot trust applied to a fresh binding. Operators tune by
+# calling ``binding.set_default_trust(...)`` / ``binding.set_trust(slot,
+# value)`` at spec build time, or by ``UPDATE`` on ``source_trust`` at
+# runtime. Module constant so adapters can rebind it before import.
+DEFAULT_TRUST: float = 0.67
+
 
 @dataclass(slots=True)
 class SlotMapping:
     """Per-slot mapping in a ``SourceBinding``.
 
     Declares how one class slot's value is computed from raw source
-    fields, plus an optional per-slot trust override:
+    fields:
 
     - ``class_slot``  — the slot name on the ``OntologyClass``.
     - ``source_slot`` — tuple of raw source field names this mapping
@@ -509,15 +582,15 @@ class SlotMapping:
     - ``sql``         — optional postgres expression evaluated
       server-side over the ``source_slot`` fields. ``None`` means
       passthrough of ``source_slot[0]``.
-    - ``trust``       — per-slot trust value. ``None`` means inherit
-      ``base_trust`` from the binding. Always ``None`` on the
-      identifier slot (identity is not argmax-resolved).
+
+    Trust is declared separately on the owning ``SourceBinding`` via
+    ``set_default_trust`` / ``set_trust``; it's not part of the
+    ingest-mapping shape.
     """
 
     class_slot: str
     source_slot: tuple[str, ...]
     sql: str | None = None
-    trust: float | None = None
 
     def __post_init__(self) -> None:
         # Tolerate ``source_slot=`` passed as bare string or any iterable
@@ -534,8 +607,6 @@ class SlotMapping:
             raise ValueError(
                 f"SlotMapping for {self.class_slot!r} requires at least one source_slot"
             )
-        if self.trust is not None and not (0.0 <= self.trust <= 1.0):
-            raise ValueError(f"SlotMapping.trust must be in [0, 1]; got {self.trust}")
 
     @property
     def effective_sql(self) -> str:
@@ -546,31 +617,33 @@ class SlotMapping:
 
 @dataclass(slots=True)
 class SourceBinding:
-    """(Source, OntologyClass) binding with per-slot mappings.
+    """(Source, OntologyClass) binding — what one source publishes
+    about one class, and how its raw fields map onto the class's slots.
 
-    ``base_trust`` is the default per-slot trust for slots that aren't
-    explicitly overridden via ``.slot(...)``. Trust is per slot at
-    runtime: the resolver picks per-slot winners by argmax over the
-    live ``source_trust(source_name, class_name, slot_name, trust)``
-    table, which the spec seeds at deploy time (INSERT-only — once a
-    row exists, operator's runtime tuning is authoritative).
+    Trust is a separate concern, carried on this same binding but set
+    via ``set_default_trust`` / ``set_trust`` (not via ``bind()`` /
+    ``slot()`` kwargs). The runtime resolver picks per-slot winners
+    by argmax over the live ``source_trust`` table, which the spec
+    seeds at deploy time from these values (INSERT-only — once a row
+    exists, operator's runtime tuning is authoritative).
 
-    ``slot_mappings`` is keyed by class slot name and carries the
-    raw-field projection + optional per-slot trust override. Unmapped
-    class slots are implicit passthroughs (same name, no SQL transform,
-    trust = ``base_trust``).
+    ``slot_mappings`` describes ingest mechanics (which source field
+    feeds which class slot, optional SQL transform). Unmapped class
+    slots are implicit passthroughs of the same name with no SQL.
     """
 
     source: Source
     class_: OntologyClass
-    base_trust: float = 0.67
+    default_trust: float = DEFAULT_TRUST
     slot_mappings: dict[str, SlotMapping] = field(default_factory=dict)
+    slot_trusts: dict[str, float] = field(default_factory=dict)
     description: str | None = None
 
     def __post_init__(self) -> None:
-        if not (0.0 <= self.base_trust <= 1.0):
+        if not (0.0 <= self.default_trust <= 1.0):
             raise ValueError(
-                f"SourceBinding base_trust must be in [0, 1]; got {self.base_trust}"
+                f"SourceBinding default_trust must be in [0, 1]; "
+                f"got {self.default_trust}"
             )
 
     @property
@@ -579,13 +652,16 @@ class SourceBinding:
         field) because every binding for a class shares the same one."""
         return self.class_.identifier_slot()
 
+    # ------------------------------------------------------------------
+    # Ingest-mapping declaration (no trust here — see set_trust below).
+    # ------------------------------------------------------------------
+
     def slot(
         self,
         *,
         class_slot: str,
         source_slot: str | tuple[str, ...] | None = None,
         sql: str | None = None,
-        trust: float | None = None,
     ) -> SourceBinding:
         """Declare an explicit mapping for one class slot.
 
@@ -593,16 +669,12 @@ class SourceBinding:
         - ``source_slot`` defaults to ``class_slot`` (same name). Pass a
           tuple of strings when ``sql`` references multiple raw fields.
         - ``sql`` is the optional postgres expression over those fields.
-        - ``trust`` overrides ``base_trust`` for this one slot. Rejected
-          on the identifier slot (identity is not argmax-resolved).
+
+        Trust is set separately via ``set_default_trust`` /
+        ``set_trust`` — those are the only knobs that touch trust.
         """
-        slot_obj = self.class_.get_slot(class_slot)
-        is_identifier = slot_obj is self.identifier_slot
-        if is_identifier and trust is not None:
-            raise ValueError(
-                f"trust is meaningless on the identifier slot "
-                f"{class_slot!r} — identity is not argmax-resolved"
-            )
+        # Validate the class slot exists (raises KeyError on typo).
+        self.class_.get_slot(class_slot)
         if source_slot is None:
             source_slot = (class_slot,)
         elif isinstance(source_slot, str):
@@ -610,32 +682,140 @@ class SourceBinding:
         else:
             source_slot = tuple(source_slot)
         self.slot_mappings[class_slot] = SlotMapping(
-            class_slot=class_slot,
-            source_slot=source_slot,
-            sql=sql,
-            trust=trust,
+            class_slot=class_slot, source_slot=source_slot, sql=sql
         )
         return self
 
     def effective_mapping(self, class_slot_name: str) -> SlotMapping:
         """Return the effective ``SlotMapping`` for a class slot —
         the explicit one if declared, otherwise an implicit passthrough
-        (same name, no SQL transform, trust=None meaning inherit
-        ``base_trust``)."""
+        (same name, no SQL transform)."""
         if class_slot_name in self.slot_mappings:
             return self.slot_mappings[class_slot_name]
         return SlotMapping(
-            class_slot=class_slot_name,
-            source_slot=(class_slot_name,),
-            sql=None,
-            trust=None,
+            class_slot=class_slot_name, source_slot=(class_slot_name,), sql=None
         )
+
+    # ------------------------------------------------------------------
+    # Trust API — separate concern from ingest mapping. Trust is the
+    # resolver's argmax weight; mapping is "how to project the row".
+    # ------------------------------------------------------------------
+
+    def set_default_trust(self, value: float) -> SourceBinding:
+        """Default trust for any non-identifier slot that doesn't have
+        a per-slot override. Applies to every slot of this binding
+        unless overridden via ``set_trust(slot, value)``."""
+        if not (0.0 <= value <= 1.0):
+            raise ValueError(f"default_trust must be in [0, 1]; got {value}")
+        self.default_trust = value
+        return self
+
+    def set_trust(self, slot: str, value: float) -> SourceBinding:
+        """Per-slot trust override for one non-identifier slot.
+        Replaces the default for this slot only. Rejected on the
+        identifier slot (identity is not argmax-resolved)."""
+        slot_obj = self.class_.get_slot(slot)
+        if slot_obj is self.identifier_slot:
+            raise ValueError(
+                f"trust is meaningless on the identifier slot "
+                f"{slot!r} — identity is not argmax-resolved"
+            )
+        if not (0.0 <= value <= 1.0):
+            raise ValueError(f"trust must be in [0, 1]; got {value}")
+        self.slot_trusts[slot] = value
+        return self
 
     def trust_for(self, class_slot_name: str) -> float:
         """Effective trust value for ``class_slot_name``: the slot's
-        explicit ``trust`` if set, otherwise ``base_trust``."""
-        m = self.effective_mapping(class_slot_name)
-        return m.trust if m.trust is not None else self.base_trust
+        explicit value (from ``set_trust``) if set, otherwise the
+        binding's ``default_trust``."""
+        if class_slot_name in self.slot_trusts:
+            return self.slot_trusts[class_slot_name]
+        return self.default_trust
+
+    # ------------------------------------------------------------------
+    # Runtime helpers — ingest, ER. Methods on the binding because the
+    # binding pins (source, class); the user shouldn't have to repeat
+    # those at the call site.
+    # ------------------------------------------------------------------
+
+    def write(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        schema: str = "knot_data",
+        enforce: bool = False,
+        **kwargs: Any,
+    ) -> Any:
+        """Single-binding batch write. Returns a ``BatchWrite``.
+
+        For multi-binding atomic writes (multiple sources or multiple
+        classes in one transaction) call ``spec.emit_batch_write([...])``
+        directly with multiple ``ClassWrites`` entries."""
+        if self.source._spec is None:
+            raise RuntimeError(
+                f"binding {self.source.name!r} → {self.class_.name!r} "
+                f"is not attached to a Spec"
+            )
+        spec = self.source._spec
+        spec.validate()
+        from knot.compile.write import ClassWrites, emit_batch_write
+
+        return emit_batch_write(
+            spec,
+            [ClassWrites(binding=self, rows=rows)],
+            schema=schema,
+            enforce=enforce,
+            **kwargs,
+        )
+
+    def assign_canonical(
+        self,
+        *,
+        source_identifier: str,
+        canonical_id: str,
+        er_metadata: dict[str, Any] | None = None,
+        schema: str = "knot_data",
+        **kwargs: Any,
+    ) -> tuple[str, dict[str, Any]]:
+        """SQL to assign a ``canonical_id`` to one previously-unresolved
+        binding row identified by ``source_identifier``. The (source,
+        class) is pinned by this binding. See
+        ``knot.compile.write.emit_assign_canonical``."""
+        from knot.compile.write import emit_assign_canonical
+
+        return emit_assign_canonical(
+            self.class_,
+            canonical_id,
+            source_name=self.source.name,
+            source_identifier=source_identifier,
+            er_metadata=er_metadata,
+            schema=schema,
+            **kwargs,
+        )
+
+    def recanonicalize(
+        self,
+        *,
+        source_identifier: str,
+        new_canonical_id: str,
+        er_metadata: dict[str, Any] | None = None,
+        schema: str = "knot_data",
+        **kwargs: Any,
+    ) -> tuple[str, dict[str, Any]]:
+        """SCD2-aware reassignment of one binding row's canonical_id.
+        See ``knot.compile.write.emit_recanonicalize``."""
+        from knot.compile.write import emit_recanonicalize
+
+        return emit_recanonicalize(
+            self.class_,
+            new_canonical_id,
+            source_name=self.source.name,
+            source_identifier=source_identifier,
+            er_metadata=er_metadata,
+            schema=schema,
+            **kwargs,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -677,48 +857,10 @@ class Spec:
             is_a=is_a,
             mixins=list(mixins) if mixins else [],
             description=description,
+            _spec=self,
         )
         self.classes.append(cls)
         return cls
-
-    def add_virtual_class(
-        self,
-        name: str,
-        *,
-        base: OntologyClass,
-        where: Expr,
-        description: str | None = None,
-    ) -> VirtualClass:
-        self._check_unique_class_name(name)
-        vc = VirtualClass(
-            name=name,
-            is_a=base,
-            definition=where,
-            description=description,
-        )
-        self.classes.append(vc)
-        return vc
-
-    def add_constraint(
-        self,
-        name: str,
-        *,
-        primary: OntologyClass,
-        body: Expr,
-        severity: Severity | str = Severity.ERROR,
-        message: str | None = None,
-    ) -> Constraint:
-        if any(c.name == name for c in self.constraints):
-            raise ValueError(f"Spec already has a constraint named {name!r}")
-        c = Constraint(
-            name=name,
-            primary=primary,
-            body=body,
-            severity=severity if isinstance(severity, Severity) else Severity(severity),
-            message=message,
-        )
-        self.constraints.append(c)
-        return c
 
     def add_source(
         self,
@@ -740,17 +882,19 @@ class Spec:
     def enable_corrections(
         self,
         *,
-        base_trust: float = 0.99,
+        default_trust: float = 0.99,
         description: str | None = "human overrides",
     ) -> Source:
         """Register the ``_user_corrections`` synthetic source and bind
         it to every concrete ``OntologyClass`` in the spec.
 
-        High default ``base_trust`` (0.99) means corrections override
+        High ``default_trust`` (0.99) means corrections override
         declared sources at the resolver tie-break. Operators can tune
         per-slot via ``UPDATE source_trust SET trust = … WHERE
         source_name = '_user_corrections' AND class_name = '<X>' AND
-        slot_name = '<Y>'`` without touching the spec.
+        slot_name = '<Y>'`` without touching the spec, or call
+        ``cls.corrections_binding().set_trust(slot, value)`` to set
+        per-slot values at spec build time.
 
         Idempotent: calling again is a no-op if the source already
         exists. Returns the (possibly pre-existing) ``Source`` object.
@@ -766,20 +910,9 @@ class Spec:
         )
         self.sources.append(source)
         for cls in self.concrete_classes():
-            source.bind(cls, base_trust=base_trust)
+            binding = source.bind(cls)
+            binding.set_default_trust(default_trust)
         return source
-
-    def corrections_binding_for(self, cls: OntologyClass) -> SourceBinding:
-        """The ``_user_corrections`` binding for ``cls``. Convenience
-        for the write path. Raises ``KeyError`` if corrections aren't
-        enabled or ``cls`` isn't bound."""
-        for b in self.source_bindings:
-            if b.source.name == CORRECTIONS_SOURCE_NAME and b.class_ is cls:
-                return b
-        raise KeyError(
-            f"no _user_corrections binding for class {cls.name!r} — "
-            f"call spec.enable_corrections() first"
-        )
 
     def _check_unique_class_name(self, name: str) -> None:
         if any(c.name == name for c in self.classes):
@@ -810,7 +943,7 @@ class Spec:
     def _validation_errors(self) -> list[str]:
         """Internal: list cross-entity well-formedness errors.
 
-        Local entity checks (name shape, base_trust bounds, enum values,
+        Local entity checks (name shape, trust bounds, enum values,
         body Expr typing) have already run in each entity's
         ``__post_init__``. Body slot-ref typos are caught at expression
         construction time by ``movie.col.<slot>`` raising ``KeyError``.
@@ -1017,53 +1150,6 @@ class Spec:
         from knot.compile.query import compile_query
 
         return compile_query(query_node, spec=self, **kwargs)
-
-    def assign_canonical(
-        self,
-        cls: Any,
-        canonical_id: str,
-        *,
-        source_name: str,
-        source_identifier: str,
-        **kwargs: Any,
-    ) -> Any:
-        """SQL to assign a ``canonical_id`` to one previously-unresolved
-        binding row. Refuses to clobber existing assignments. See
-        ``knot.compile.write.emit_assign_canonical``."""
-        self.validate()
-        from knot.compile.write import emit_assign_canonical
-
-        return emit_assign_canonical(
-            cls,
-            canonical_id,
-            source_name=source_name,
-            source_identifier=source_identifier,
-            **kwargs,
-        )
-
-    def recanonicalize(
-        self,
-        cls: Any,
-        new_canonical_id: str,
-        *,
-        source_name: str,
-        source_identifier: str,
-        **kwargs: Any,
-    ) -> Any:
-        """SCD2-aware reassignment of one binding row's ``canonical_id``.
-        Closes the old binding, inserts a new one with the corrected id
-        — re-ER history stays queryable. See
-        ``knot.compile.write.emit_recanonicalize``."""
-        self.validate()
-        from knot.compile.write import emit_recanonicalize
-
-        return emit_recanonicalize(
-            cls,
-            new_canonical_id,
-            source_name=source_name,
-            source_identifier=source_identifier,
-            **kwargs,
-        )
 
 
 class SpecError(ValueError):

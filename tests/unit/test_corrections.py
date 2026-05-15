@@ -23,7 +23,7 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
     person = spec.add_class("Person")
     person.slot("canonical_id", types.TEXT, identifier=True)
 
-    src = spec.enable_corrections(base_trust=0.99)
+    src = spec.enable_corrections(default_trust=0.99)
     assert src.name == CORRECTIONS_SOURCE_NAME
     binding_pairs = {(b.source.name, b.class_.name) for b in spec.source_bindings}
     assert (CORRECTIONS_SOURCE_NAME, "Movie") in binding_pairs
@@ -35,9 +35,7 @@ def test_enable_corrections_skips_abstract_and_virtual_classes():
     title = spec.add_class("Title", kind="abstract")
     title.slot("canonical_id", types.TEXT, identifier=True)
     movie = spec.add_class("Movie", is_a=title)
-    spec.add_virtual_class(
-        "DirectedMovie", base=movie, where=movie.col.canonical_id.is_not_null()
-    )
+    movie.add_virtual("DirectedMovie", where=movie.col.canonical_id.is_not_null())
 
     spec.enable_corrections()
     binding_classes = {b.class_.name for b in spec.source_bindings}
@@ -71,25 +69,25 @@ def test_corrections_default_accuracy_is_high():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections()
-    b = spec.corrections_binding_for(movie)
-    assert b.base_trust == 0.99
+    b = movie.corrections_binding()
+    assert b.default_trust == 0.99
 
 
 def test_corrections_custom_accuracy():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    spec.enable_corrections(base_trust=0.8)
-    b = spec.corrections_binding_for(movie)
-    assert b.base_trust == 0.8
+    spec.enable_corrections(default_trust=0.8)
+    b = movie.corrections_binding()
+    assert b.default_trust == 0.8
 
 
-def test_corrections_binding_for_raises_when_disabled():
+def test_corrections_binding_raises_when_disabled():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(KeyError, match="enable_corrections"):
-        spec.corrections_binding_for(movie)
+        movie.corrections_binding()
 
 
 # ---------------------------------------------------------------------------
@@ -165,7 +163,7 @@ def test_corrections_write_uses_batch_write():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     spec.enable_corrections()
-    b = spec.corrections_binding_for(movie)
+    b = movie.corrections_binding()
     bw = emit_batch_write(
         spec,
         [
@@ -199,11 +197,11 @@ def test_corrections_appear_in_trust_seed():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
-    spec.enable_corrections(base_trust=0.95)
+    spec.enable_corrections(default_trust=0.95)
     seeds = emit_trust_seed(spec)
     # One row per (source, class, non-identifier-slot). Corrections binds
-    # to every concrete class with the same base_trust applied to every
-    # non-identifier slot.
+    # to every concrete class with the same default_trust applied to
+    # every non-identifier slot.
     correction_seed = next(
         (sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME
     )

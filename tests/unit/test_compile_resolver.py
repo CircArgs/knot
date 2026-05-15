@@ -48,8 +48,8 @@ def test_resolved_view_no_inline_case_when():
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    imdb.bind(movie, base_trust=0.85)
-    tmdb.bind(movie, base_trust=0.7)
+    imdb.bind(movie).set_default_trust(0.85)
+    tmdb.bind(movie).set_default_trust(0.7)
     v = emit_resolved_view(spec, movie)
     assert "WHEN b.source_name" not in v
     assert "LEFT JOIN" in v

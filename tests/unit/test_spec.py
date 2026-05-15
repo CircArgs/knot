@@ -80,12 +80,12 @@ def test_virtual_class_rejects_non_expr_definition():
         VirtualClass(name="DirectedMovie", is_a=parent, definition="raw sql string")
 
 
-def test_source_binding_rejects_base_trust_out_of_range():
+def test_source_binding_rejects_default_trust_out_of_range():
     s = Source(name="imdb")
     cls = OntologyClass(name="Movie")
     cls.slot("canonical_id", types.TEXT, identifier=True)
-    with pytest.raises(ValueError, match="base_trust"):
-        SourceBinding(source=s, class_=cls, base_trust=1.5)
+    with pytest.raises(ValueError, match="default_trust"):
+        SourceBinding(source=s, class_=cls, default_trust=1.5)
 
 
 def test_spec_id_must_be_non_empty():
@@ -128,7 +128,7 @@ def test_duplicate_source_name_rejected():
 def test_duplicate_constraint_name_rejected(movie_spec):
     movie = next(c for c in movie_spec.classes if c.name == "Movie")
     with pytest.raises(ValueError, match="already has a constraint"):
-        movie_spec.add_constraint("year_sane", primary=movie, body=movie.col.year > 0)
+        movie.add_constraint("year_sane", body=movie.col.year > 0)
 
 
 def test_duplicate_binding_pair_rejected(movie_spec):
@@ -206,8 +206,10 @@ def test_validate_orphan_constraint_primary():
     spec = Spec(id="m", version="0.1")
     spec.add_class("Movie").slot("canonical_id", types.TEXT, identifier=True)
     ghost = OntologyClass(name="Ghost")
-    # Build a body that doesn't need ghost slots — using a Raw escape.
-    spec.add_constraint("c", primary=ghost, body=raw("1 = 1"))
+    # Construct an orphan-primary constraint directly (bypassing the
+    # builder method, which would refuse) so the validator sees the
+    # invalid state.
+    spec.constraints.append(Constraint(name="c", primary=ghost, body=raw("1 = 1")))
     errs = spec._validation_errors()
     assert any("Ghost" in e for e in errs)
 
@@ -267,7 +269,9 @@ def test_validate_virtual_class_is_a_missing():
     # virtual references a class that's NOT in spec
     ghost = OntologyClass(name="Ghost")
     ghost.slot("canonical_id", types.TEXT, identifier=True)
-    spec.add_virtual_class("Variant", base=ghost, where=raw("1 = 1"))
+    spec.classes.append(
+        VirtualClass(name="Variant", is_a=ghost, definition=raw("1 = 1"))
+    )
     errs = spec._validation_errors()
     assert any("virtual" in e and "Ghost" in e for e in errs)
 
@@ -275,7 +279,9 @@ def test_validate_virtual_class_is_a_missing():
 def test_validate_strict_raises_with_all_errors():
     spec = Spec(id="m", version="0.1")
     spec.add_class("Movie").slot("name", types.TEXT)
-    spec.add_constraint("c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1"))
+    spec.constraints.append(
+        Constraint(name="c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1"))
+    )
     with pytest.raises(SpecError) as ei:
         spec.validate()
     msg = str(ei.value)

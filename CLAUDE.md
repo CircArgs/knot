@@ -122,16 +122,48 @@ movie.slot("director", person)             # FK — pass the class directly
 movie.slot("genres", types.ARRAY(types.TEXT))
 ```
 
-**Sources and bindings** — source-method-chained:
+**Sources and bindings** — source-method-chained. Trust is its
+own concern, set separately via `set_default_trust` / `set_trust`
+(declared after the mapping, not woven into the mapping kwargs):
 
 ```python
 imdb = spec.add_source("imdb")
-imdb_movie = imdb.bind(movie, base_trust=0.85)
+imdb_movie = imdb.bind(movie)
 imdb_movie.slot(class_slot="canonical_id", source_slot="imdb_id")
-imdb_movie.slot(class_slot="year", source_slot="release_year", trust=0.9)
+imdb_movie.slot(class_slot="year", source_slot="release_year")
 imdb_movie.slot(class_slot="runtime", source_slot="runtime",
-                sql="(regexp_match(runtime, '[0-9]+'))[1]::int", trust=0.7)
-# Slots not explicitly mapped → implicit passthrough at base_trust.
+                sql="(regexp_match(runtime, '[0-9]+'))[1]::int")
+# Trust — separate API on the binding:
+imdb_movie.set_default_trust(0.85)       # applies to every slot
+imdb_movie.set_trust("year", 0.9)        # per-slot override
+imdb_movie.set_trust("runtime", 0.7)
+# Slots not explicitly mapped → implicit passthrough at default_trust.
+```
+
+**Ingest, ER, and corrections live on the entities they describe**
+— not on `Spec`:
+
+```python
+# Single-binding write
+bw = imdb_movie.write(rows, schema="knot_data")
+
+# ER decisions on a specific binding row
+sql, p = imdb_movie.assign_canonical(
+    source_identifier="tt001", canonical_id="m_x",
+    er_metadata={"run_id": "r42", "method": "exact_title_year"},
+)
+sql, p = imdb_movie.recanonicalize(
+    source_identifier="tt001", new_canonical_id="m_y",
+)
+
+# Class-level constraints + virtual subclasses
+movie.add_constraint("year_sane", body=movie.col.year >= 1888)
+movie.add_virtual("DirectedMovie",
+                  where=movie.has_any(credit, role="director"))
+
+# Corrections binding lookup
+spec.enable_corrections(default_trust=0.99)
+corr_b = movie.corrections_binding()
 ```
 
 **Read substrate** — fluent immutable queries with outer-scope
@@ -154,10 +186,9 @@ q = person.where((movie.col.director == this.Person).none())
 sql, params = spec.compile_query(q, schema="knot_data")
 ```
 
-**Five-method façade on `Spec`** — one method per distinct concern.
-The free functions in `knot.compile.*` stay as the implementations
-(adapters and tests call them directly when they need
-per-statement / per-op shapes).
+**Spec keeps only whole-graph methods.** Per-entity facts live on
+the entity they describe (see above); Spec is the registrar and
+holds operations that genuinely span the whole graph:
 
 ```python
 spec.validate()                                # raises SpecError if malformed
@@ -167,7 +198,7 @@ sql = spec.init_sql(schema="knot_data")        # query_fn=None → full create
 sql = spec.init_sql(query_fn=q, schema="knot_data")  # introspect → diff only
 pg.execute(sql)
 
-# Runtime workflows (kept separate; distinct shapes):
+# Multi-binding atomic batch (one binding → use binding.write(rows))
 bw     = spec.emit_batch_write(writes, schema="knot_data")     # BatchWrite (sql+params)
 checks = spec.emit_validation(schema="knot_data")              # [(name, sql), …]
 sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)

@@ -249,7 +249,7 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
     # Build a credit binding for the same source
     imdb = movie_spec.sources[0]
     credit = next(c for c in movie_spec.classes if c.name == "Credit")
-    credit_b = imdb.bind(credit, base_trust=0.8)
+    credit_b = imdb.bind(credit).set_default_trust(0.8)
 
     bw = emit_batch_write(
         movie_spec,
@@ -361,9 +361,7 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
     # Add a constraint on Credit; batch only writes Movie; Credit constraint
     # should NOT appear in the DO block.
     credit = next(c for c in movie_spec.classes if c.name == "Credit")
-    movie_spec.add_constraint(
-        "role_present", primary=credit, body=credit.col.role.is_not_null()
-    )
+    credit.add_constraint("role_present", body=credit.col.role.is_not_null())
 
     movie_b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
@@ -391,9 +389,8 @@ def test_enforce_skips_warning_severity():
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
-    spec.add_constraint(
+    movie.add_constraint(
         "warn_only",
-        primary=movie,
         body=movie.col.year > 1900,
         severity=Severity.WARNING,
     )
