@@ -779,3 +779,157 @@ def test_init_sql_diff_mode_emits_only_changes(pg, schema, query_fn):
     # so they reflect the current spec body).
     assert "CREATE TABLE" not in delta
     assert "ALTER TABLE" not in delta
+
+
+# ---------------------------------------------------------------------------
+# Bronze → silver async ER flow
+# ---------------------------------------------------------------------------
+
+
+def test_bronze_ingest_invisible_until_canonical_assigned(pg, schema):
+    """Ingest a binding row with canonical_id=NULL; resolved view skips
+    it; assign_canonical makes it visible."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+
+    # Land in bronze — no canonical_id yet.
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "source_identifier": "tt001",
+                "canonical_id": None,
+                "name": "Pulp Fiction",
+                "year": 1994,
+                "runtime_minutes": 154,
+            }
+        ],
+        schema=schema,
+    )
+
+    with pg.cursor() as cur:
+        cur.execute(f"SELECT COUNT(*) FROM {schema}.movie_bindings")
+        assert cur.fetchone()[0] == 1
+        cur.execute(f"SELECT COUNT(*) FROM {schema}.movie_resolved")
+        assert cur.fetchone()[0] == 0  # invisible until ER claims it
+
+    # ER assigns canonical_id.
+    sql, params = spec.assign_canonical(
+        movie,
+        "m_pulp",
+        source_name="imdb",
+        source_identifier="tt001",
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(f"SELECT canonical_id, name FROM {schema}.movie_resolved")
+        assert cur.fetchall() == [("m_pulp", "Pulp Fiction")]
+
+
+def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
+    """Re-running assign_canonical on an already-assigned row is a no-op."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "source_identifier": "tt001",
+                "canonical_id": None,
+                "name": "X",
+                "year": 2000,
+                "runtime_minutes": 90,
+            }
+        ],
+        schema=schema,
+    )
+    sql, params = spec.assign_canonical(
+        movie,
+        "m_first",
+        source_name="imdb",
+        source_identifier="tt001",
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    # Try to assign a DIFFERENT id — the WHERE clause's IS NULL check
+    # means nothing happens.
+    sql, params = spec.assign_canonical(
+        movie,
+        "m_second",
+        source_name="imdb",
+        source_identifier="tt001",
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(f"SELECT canonical_id FROM {schema}.movie_resolved")
+        assert cur.fetchone()[0] == "m_first"  # untouched
+
+
+def test_recanonicalize_preserves_scd2_history(pg, schema):
+    """Reassigning canonical_id keeps the old binding row (closed) plus
+    a new open binding row with the corrected id."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "source_identifier": "tt001",
+                "canonical_id": "m_wrong",
+                "name": "X",
+                "year": 2000,
+                "runtime_minutes": 90,
+            }
+        ],
+        schema=schema,
+    )
+
+    # ER decided m_wrong should actually be m_correct.
+    sql, params = spec.recanonicalize(
+        movie,
+        "m_correct",
+        source_name="imdb",
+        source_identifier="tt001",
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT canonical_id, valid_to IS NULL FROM {schema}.movie_bindings "
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001' "
+            f"ORDER BY valid_from"
+        )
+        rows = cur.fetchall()
+    assert rows == [("m_wrong", False), ("m_correct", True)]
+
+    # Resolved view shows the corrected canonical_id only.
+    with pg.cursor() as cur:
+        cur.execute(f"SELECT canonical_id, name FROM {schema}.movie_resolved")
+        assert cur.fetchall() == [("m_correct", "X")]

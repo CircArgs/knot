@@ -1018,6 +1018,54 @@ class Spec:
 
         return compile_query(query_node, spec=self, **kwargs)
 
+    def assign_canonical(
+        self,
+        cls: Any,
+        canonical_id: str,
+        *,
+        source_name: str,
+        source_identifier: str,
+        **kwargs: Any,
+    ) -> Any:
+        """SQL to assign a ``canonical_id`` to one previously-unresolved
+        binding row. First half of the bronze→silver flow. Refuses to
+        clobber existing assignments. See
+        ``knot.compile.write.emit_assign_canonical``."""
+        self.validate()
+        from knot.compile.write import emit_assign_canonical
+
+        return emit_assign_canonical(
+            cls,
+            canonical_id,
+            source_name=source_name,
+            source_identifier=source_identifier,
+            **kwargs,
+        )
+
+    def recanonicalize(
+        self,
+        cls: Any,
+        new_canonical_id: str,
+        *,
+        source_name: str,
+        source_identifier: str,
+        **kwargs: Any,
+    ) -> Any:
+        """SCD2-aware reassignment of one binding row's ``canonical_id``.
+        Closes the old binding, inserts a new one with the corrected id
+        — re-ER history stays queryable. See
+        ``knot.compile.write.emit_recanonicalize``."""
+        self.validate()
+        from knot.compile.write import emit_recanonicalize
+
+        return emit_recanonicalize(
+            cls,
+            new_canonical_id,
+            source_name=source_name,
+            source_identifier=source_identifier,
+            **kwargs,
+        )
+
 
 class SpecError(ValueError):
     """Raised by ``Spec.validate`` when well-formedness fails."""

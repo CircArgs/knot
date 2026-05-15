@@ -466,9 +466,112 @@ def _find_concrete(spec: Spec, name: str) -> OntologyClass:
     raise ValueError(f"no concrete class named {name!r} in spec")
 
 
+# ---------------------------------------------------------------------------
+# Async ER helpers — bronze→silver canonical_id assignment
+# ---------------------------------------------------------------------------
+
+
+def emit_assign_canonical(
+    cls: OntologyClass,
+    canonical_id: str,
+    *,
+    source_name: str,
+    source_identifier: str,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> tuple[str, dict[str, Any]]:
+    """SQL that assigns a ``canonical_id`` to one previously-unresolved
+    binding row identified by ``(source_name, source_identifier)``.
+
+    Refuses to clobber an existing assignment: the ``WHERE`` clause
+    includes ``<ident> IS NULL``, so re-running is a no-op. To change
+    an already-assigned canonical_id, call ``emit_recanonicalize``.
+
+    Returns ``(sql, params)`` with named ``%(...)s`` placeholders.
+    """
+    _check_concrete(cls)
+    ident_name = cls.identifier_slot().name
+    bindings_table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    sql = (
+        f"UPDATE {bindings_table}\n"
+        f"SET {ident_name} = %(canonical_id)s\n"
+        f"WHERE source_name = %(source_name)s\n"
+        f"  AND source_identifier = %(source_identifier)s\n"
+        f"  AND {ident_name} IS NULL\n"
+        f"  AND valid_to IS NULL;"
+    )
+    return sql, {
+        "canonical_id": canonical_id,
+        "source_name": source_name,
+        "source_identifier": source_identifier,
+    }
+
+
+def emit_recanonicalize(
+    cls: OntologyClass,
+    new_canonical_id: str,
+    *,
+    source_name: str,
+    source_identifier: str,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> tuple[str, dict[str, Any]]:
+    """SQL that reassigns a binding row's ``canonical_id``, preserving
+    history via SCD2.
+
+    Closes the currently-open binding (``valid_to = now()``) and
+    inserts a new row with the corrected ``canonical_id`` and
+    otherwise-identical state (same source, same slot values, same
+    raw_payload). Old row stays addressable for history; the resolved
+    view sees only the new one.
+
+    One atomic statement via a writable CTE — ``now()`` is the same
+    instant on both halves of the close-out / re-insert.
+
+    Returns ``(sql, params)`` with named ``%(...)s`` placeholders.
+    """
+    _check_concrete(cls)
+    ident_name = cls.identifier_slot().name
+    bindings_table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    eff_slots = cls.effective_slots()
+
+    insert_cols = (
+        ["source_name", "source_identifier"]
+        + [s.name for s in eff_slots]
+        + ["raw_payload", "valid_from"]
+    )
+    select_cols: list[str] = ["source_name", "source_identifier"]
+    for slot in eff_slots:
+        if slot.name == ident_name:
+            select_cols.append(f"%(new_canonical_id)s AS {ident_name}")
+        else:
+            select_cols.append(slot.name)
+    select_cols.extend(["raw_payload", "now() AS valid_from"])
+
+    sql = (
+        f"WITH closed AS (\n"
+        f"    UPDATE {bindings_table} SET valid_to = now()\n"
+        f"    WHERE source_name = %(source_name)s\n"
+        f"      AND source_identifier = %(source_identifier)s\n"
+        f"      AND valid_to IS NULL\n"
+        f"    RETURNING *\n"
+        f")\n"
+        f"INSERT INTO {bindings_table} ({', '.join(insert_cols)})\n"
+        f"SELECT {', '.join(select_cols)}\n"
+        f"FROM closed;"
+    )
+    return sql, {
+        "new_canonical_id": new_canonical_id,
+        "source_name": source_name,
+        "source_identifier": source_identifier,
+    }
+
+
 __all__ = [
     "ClassWrites",
     "BatchWrite",
     "emit_batch_write",
     "emit_close_out",
+    "emit_assign_canonical",
+    "emit_recanonicalize",
 ]

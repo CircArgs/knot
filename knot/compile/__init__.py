@@ -29,8 +29,10 @@ from knot.compile.trust import emit_trust_seed
 from knot.compile.write import (
     BatchWrite,
     ClassWrites,
+    emit_assign_canonical,
     emit_batch_write,
     emit_close_out,
+    emit_recanonicalize,
 )
 
 __all__ = [
@@ -46,6 +48,8 @@ __all__ = [
     "BatchWrite",
     "emit_batch_write",
     "emit_close_out",
+    "emit_assign_canonical",
+    "emit_recanonicalize",
     "MigrationOp",
     "diff_against_db",
 ]
