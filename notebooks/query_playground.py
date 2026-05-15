@@ -111,13 +111,12 @@ def _():
 
 @app.cell
 def _(mo, pg, schema, spec):
-    # DDL — canonical + bindings tables, indexes, FKs, resolved views.
-    # The Spec exposes ergonomic methods that delegate to knot.compile.*.
-    with pg.cursor() as cur:
-        for stmt in spec.emit_ddl(schema=schema):
-            cur.execute(stmt)
+    # DDL — single postgres script with canonical tables, bindings,
+    # indexes, FKs, resolved views, and the source_trust table.
+    pg.execute(spec.emit_ddl(schema=schema))
 
     # Trust seed — INSERT-only seed of source_trust at (source, class, slot).
+    # Parameterized, so one row per statement.
     with pg.cursor() as cur:
         for sql, params in spec.emit_trust_seed(schema=schema):
             cur.execute(sql, params)

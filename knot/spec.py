@@ -968,64 +968,86 @@ class Spec:
     # ------------------------------------------------------------------
     # Compile façade — ergonomic methods that delegate to ``knot.compile``.
     # The free functions in ``knot.compile.*`` remain the implementations;
-    # these are thin shims so users don't have to ``from knot.compile
-    # import …`` every time. Lazy imports preserve the spec → compile
-    # direction (compile modules aren't loaded until a method fires).
+    # these shims are the recommended user-facing surface.
+    #
+    # Façade contract:
+    #   * Every method calls ``validate_strict()`` first — façade-mode
+    #     never compiles a known-invalid spec.
+    #   * DDL-shaped methods (``emit_ddl``, ``emit_resolved_views``) return
+    #     a single ``;``-terminated SQL script, blank-line separated.
+    #     Use the free function for the per-statement list shape.
+    #   * Parameterized / per-element methods (``emit_trust_seed``,
+    #     ``emit_validation``, ``diff_against_db``) keep their list
+    #     shapes — each element carries metadata or per-row params that
+    #     doesn't concatenate.
+    #
+    # Lazy imports preserve the spec → compile direction (compile
+    # modules aren't loaded until a method fires).
     # ------------------------------------------------------------------
 
-    def emit_ddl(self, **kwargs):
-        """Compile this spec to a list of postgres DDL statements.
-        See ``knot.compile.ddl.emit_ddl`` for parameters."""
+    def emit_ddl(self, **kwargs) -> str:
+        """Compile this spec to a single postgres DDL script.
+        Validates the spec first. See ``knot.compile.ddl.emit_ddl``."""
+        self.validate_strict()
         from knot.compile.ddl import emit_ddl
 
-        return emit_ddl(self, **kwargs)
+        return "\n\n".join(emit_ddl(self, **kwargs))
 
-    def emit_resolved_views(self, **kwargs):
-        """One ``CREATE VIEW`` per concrete class, resolving per-slot
-        winners. See ``knot.compile.resolver.emit_resolved_views``."""
+    def emit_resolved_views(self, **kwargs) -> str:
+        """One concatenated script of ``CREATE VIEW`` statements (one per
+        concrete class). Validates the spec first.
+        See ``knot.compile.resolver.emit_resolved_views``."""
+        self.validate_strict()
         from knot.compile.resolver import emit_resolved_views
 
-        return emit_resolved_views(self, **kwargs)
+        return "\n\n".join(emit_resolved_views(self, **kwargs))
 
     def emit_trust_seed(self, **kwargs):
-        """INSERT-only seed for ``source_trust``. See
-        ``knot.compile.trust.emit_trust_seed``."""
+        """List of ``(sql, params)`` INSERT-only seed pairs for
+        ``source_trust``. Validates the spec first.
+        See ``knot.compile.trust.emit_trust_seed``."""
+        self.validate_strict()
         from knot.compile.trust import emit_trust_seed
 
         return emit_trust_seed(self, **kwargs)
 
     def emit_validation(self, **kwargs):
-        """One ``(name, sql)`` pair per constraint. See
-        ``knot.compile.constraints.emit_validation``."""
+        """List of ``(constraint_name, validation_sql)`` pairs. Validates
+        the spec first. See ``knot.compile.constraints.emit_validation``."""
+        self.validate_strict()
         from knot.compile.constraints import emit_validation
 
         return emit_validation(self, **kwargs)
 
     def emit_batch_write(self, writes, **kwargs):
-        """Compile a transactional SCD2 batch write. See
-        ``knot.compile.data_io.emit_batch_write``."""
+        """Transactional SCD2 batch write. Validates the spec first.
+        See ``knot.compile.data_io.emit_batch_write``."""
+        self.validate_strict()
         from knot.compile.data_io import emit_batch_write
 
         return emit_batch_write(self, writes, **kwargs)
 
     def diff_against_db(self, query, **kwargs):
         """Diff this spec against a live postgres database; return the
-        ``MigrationOp`` sequence to bring it into alignment. See
-        ``knot.compile.migrate.diff_against_db``."""
+        ``MigrationOp`` sequence to bring it into alignment. Validates
+        the spec first. See ``knot.compile.migrate.diff_against_db``."""
+        self.validate_strict()
         from knot.compile.migrate import diff_against_db
 
         return diff_against_db(self, query, **kwargs)
 
     def emit_flyway_files(self, ops, **kwargs):
         """Render a list of ``MigrationOp`` into ``{filename: body}``
-        Flyway-shaped files. See ``knot.compile.flyway.emit_flyway_files``."""
+        Flyway files. No spec validation — operates on already-emitted
+        ops. See ``knot.compile.flyway.emit_flyway_files``."""
         from knot.compile.flyway import emit_flyway_files
 
         return emit_flyway_files(ops, **kwargs)
 
     def compile_query(self, query_node, **kwargs):
-        """Compile a ``Query`` AST to ``(sql, params)``. See
-        ``knot.compile.query_sql.compile_query``."""
+        """Compile a ``Query`` AST to ``(sql, params)``. Validates the
+        spec first. See ``knot.compile.query_sql.compile_query``."""
+        self.validate_strict()
         from knot.compile.query_sql import compile_query
 
         return compile_query(query_node, spec=self, **kwargs)

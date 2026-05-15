@@ -158,15 +158,30 @@ Use the methods in user code; the free functions stay as the
 underlying implementations (adapters and tests call them directly).
 
 ```python
-ddl_stmts        = spec.emit_ddl(schema="knot_data")
-resolved_views   = spec.emit_resolved_views(schema="knot_data")
-trust_seed       = spec.emit_trust_seed(schema="knot_data")
-validations      = spec.emit_validation(schema="knot_data")
-batch_write      = spec.emit_batch_write(writes, schema="knot_data")
-migration_ops    = spec.diff_against_db(query_fn, schema="knot_data")
+ddl_script       = spec.emit_ddl(schema="knot_data")            # → str
+views_script     = spec.emit_resolved_views(schema="knot_data") # → str
+trust_seed       = spec.emit_trust_seed(schema="knot_data")     # → [(sql, params), …]
+validations      = spec.emit_validation(schema="knot_data")     # → [(name, sql), …]
+batch_write      = spec.emit_batch_write(writes, schema="knot_data")  # → BatchWrite
+migration_ops    = spec.diff_against_db(query_fn, schema="knot_data") # → [MigrationOp, …]
 flyway_files     = spec.emit_flyway_files(migration_ops, version="v1", slug="init")
-sql, params      = spec.compile_query(query_node, schema="knot_data")
+sql, params      = spec.compile_query(query_node, schema="knot_data")  # → (sql, params)
 ```
+
+**Façade contract** (vs free functions):
+
+- **Always validates first.** Every method calls
+  ``Spec.validate_strict()`` before delegating; an invalid spec
+  raises ``SpecError`` instead of compiling. The free functions in
+  ``knot.compile.*`` do NOT validate — they're the back door for "show
+  me what this broken spec would emit" cases (mostly tests).
+- **DDL-shaped methods return a single SQL script**, blank-line
+  separated, each statement ``;``-terminated. The free function
+  returns ``list[str]`` for per-statement addressability; the façade
+  joins for the common "just run it" call site.
+- **Parameterized / per-element methods keep their list shape** —
+  each element carries metadata (constraint name, op target) or
+  per-row params that doesn't concatenate cleanly.
 
 **Trust runtime**:
 - Per-(source, class, slot) value lives in `<schema>.source_trust`.
