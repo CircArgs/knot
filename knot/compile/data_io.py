@@ -372,11 +372,15 @@ def emit_batch_write(
         cls = cw.binding.class_
         _check_concrete(cls)
         affected.add(cls.name)
-        # Each class gets a stable param key — collisions across classes
-        # would mean duplicate writes; reject explicitly.
-        rows_param = f"{cls.name.lower()}_rows"
+        # Param key per (source, class). Same source + same class twice
+        # in one batch is a duplicate (rejected); different sources writing
+        # the same class is fine — they go to different param slots.
+        rows_param = f"{cw.binding.source.name.lower()}_{cls.name.lower()}_rows"
         if rows_param in used_param_keys:
-            raise ValueError(f"duplicate ClassWrites for class {cls.name!r} in batch")
+            raise ValueError(
+                f"duplicate ClassWrites for ({cw.binding.source.name!r}, "
+                f"{cls.name!r}) in batch"
+            )
         used_param_keys.add(rows_param)
         class_params = {rows_param: json.dumps(cw.rows)}
         statements.append(

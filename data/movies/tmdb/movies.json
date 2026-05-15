@@ -1,0 +1,1347 @@
+[
+  {
+    "canonical_id": "m_pulpfiction",
+    "source_identifier": "822588",
+    "title": "Pulp Fiction",
+    "year": 1994,
+    "runtime_minutes": 155,
+    "director": "p_tarantino",
+    "tmdb_id": 822588,
+    "popularity": 41.81,
+    "vote_average": 8.1,
+    "vote_count": 21281,
+    "original_language": "ko",
+    "tagline": "The legend begins.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_killbill1",
+    "source_identifier": "323006",
+    "title": "Kill Bill: Volume 1",
+    "year": 2003,
+    "runtime_minutes": 112,
+    "director": "p_tarantino",
+    "tmdb_id": 323006,
+    "popularity": 85.98,
+    "vote_average": 7.8,
+    "vote_count": 17198,
+    "original_language": "en",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_inglourious",
+    "source_identifier": "705177",
+    "title": "Inglourious Basterds",
+    "year": 2009,
+    "runtime_minutes": 152,
+    "director": "p_tarantino",
+    "tmdb_id": 705177,
+    "popularity": 14.07,
+    "vote_average": 6.7,
+    "vote_count": 13507,
+    "original_language": "ko",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_djangounchained",
+    "source_identifier": "413638",
+    "title": "Django Unchained",
+    "year": 2012,
+    "runtime_minutes": 165,
+    "director": "p_tarantino",
+    "tmdb_id": 413638,
+    "popularity": 49.46,
+    "vote_average": 8.6,
+    "vote_count": 5046,
+    "original_language": "de",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_oncehollywood",
+    "source_identifier": "492532",
+    "title": "Once Upon a Time... in Hollywood",
+    "year": 2019,
+    "runtime_minutes": 162,
+    "director": "p_tarantino",
+    "tmdb_id": 492532,
+    "popularity": 32.0,
+    "vote_average": 8.0,
+    "vote_count": 15800,
+    "original_language": "en",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Action",
+      "Thriller"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_yojimbo",
+    "source_identifier": "205699",
+    "title": "Yojimbo",
+    "year": 1961,
+    "runtime_minutes": 109,
+    "director": "p_kurosawa",
+    "tmdb_id": 205699,
+    "popularity": 55.33,
+    "vote_average": 7.3,
+    "vote_count": 2633,
+    "original_language": "fr",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_ikiru",
+    "source_identifier": "400814",
+    "title": "Ikiru",
+    "year": 1952,
+    "runtime_minutes": 143,
+    "director": "p_kurosawa",
+    "tmdb_id": 400814,
+    "popularity": 45.35,
+    "vote_average": 7.5,
+    "vote_count": 17635,
+    "original_language": "es",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_spiritedaway",
+    "source_identifier": "897238",
+    "title": "Spirited Away",
+    "year": 2001,
+    "runtime_minutes": 124,
+    "director": "p_miyazaki",
+    "tmdb_id": 897238,
+    "popularity": 94.94,
+    "vote_average": 9.4,
+    "vote_count": 11094,
+    "original_language": "es",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Animation",
+      "Family"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_howlsmoving",
+    "source_identifier": "369157",
+    "title": "Howl's Moving Castle",
+    "year": 2004,
+    "runtime_minutes": 119,
+    "director": "p_miyazaki",
+    "tmdb_id": 369157,
+    "popularity": 5.61,
+    "vote_average": 8.1,
+    "vote_count": 9161,
+    "original_language": "ru",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_boyandheron",
+    "source_identifier": "661535",
+    "title": "The Boy and the Heron",
+    "year": 2023,
+    "runtime_minutes": 124,
+    "director": "p_miyazaki",
+    "tmdb_id": 661535,
+    "popularity": 37.42,
+    "vote_average": 8.2,
+    "vote_count": 12842,
+    "original_language": "ja",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_taxidriver",
+    "source_identifier": "464270",
+    "title": "Taxi Driver",
+    "year": 1976,
+    "runtime_minutes": 114,
+    "director": "p_scorsese",
+    "tmdb_id": 464270,
+    "popularity": 58.63,
+    "vote_average": 8.3,
+    "vote_count": 12963,
+    "original_language": "ja",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_departed",
+    "source_identifier": "365590",
+    "title": "The Departed",
+    "year": 2006,
+    "runtime_minutes": 152,
+    "director": "p_scorsese",
+    "tmdb_id": 365590,
+    "popularity": 42.97,
+    "vote_average": 9.7,
+    "vote_count": 16897,
+    "original_language": "fr",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Crime",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_killersmoon",
+    "source_identifier": "769296",
+    "title": "Killers of the Flower Moon",
+    "year": 2023,
+    "runtime_minutes": 207,
+    "director": "p_scorsese",
+    "tmdb_id": 769296,
+    "popularity": 15.99,
+    "vote_average": 9.9,
+    "vote_count": 15699,
+    "original_language": "es",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_2001",
+    "source_identifier": "836592",
+    "title": "2001: A Space Odyssey",
+    "year": 1968,
+    "runtime_minutes": 149,
+    "director": "p_kubrick",
+    "tmdb_id": 836592,
+    "popularity": 67.99,
+    "vote_average": 9.9,
+    "vote_count": 12899,
+    "original_language": "fa",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Action",
+      "Thriller"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_clockworkorange",
+    "source_identifier": "617235",
+    "title": "A Clockwork Orange",
+    "year": 1971,
+    "runtime_minutes": 137,
+    "director": "p_kubrick",
+    "tmdb_id": 617235,
+    "popularity": 81.86,
+    "vote_average": 6.6,
+    "vote_count": 24786,
+    "original_language": "fr",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_fullmetal",
+    "source_identifier": "566218",
+    "title": "Full Metal Jacket",
+    "year": 1987,
+    "runtime_minutes": 115,
+    "director": "p_kubrick",
+    "tmdb_id": 566218,
+    "popularity": 38.11,
+    "vote_average": 7.1,
+    "vote_count": 14911,
+    "original_language": "es",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_drstrangelove",
+    "source_identifier": "572819",
+    "title": "Dr. Strangelove",
+    "year": 1964,
+    "runtime_minutes": 94,
+    "director": "p_kubrick",
+    "tmdb_id": 572819,
+    "popularity": 30.26,
+    "vote_average": 8.6,
+    "vote_count": 24126,
+    "original_language": "ru",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Animation",
+      "Family"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_jaws",
+    "source_identifier": "560763",
+    "title": "Jaws",
+    "year": 1975,
+    "runtime_minutes": 123,
+    "director": "p_spielberg",
+    "tmdb_id": 560763,
+    "popularity": 33.21,
+    "vote_average": 8.1,
+    "vote_count": 7921,
+    "original_language": "ko",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Crime",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_savingprivate",
+    "source_identifier": "588557",
+    "title": "Saving Private Ryan",
+    "year": 1998,
+    "runtime_minutes": 169,
+    "director": "p_spielberg",
+    "tmdb_id": 588557,
+    "popularity": 26.5,
+    "vote_average": 9.0,
+    "vote_count": 12250,
+    "original_language": "ru",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_godfather",
+    "source_identifier": "654537",
+    "title": "The Godfather",
+    "year": 1972,
+    "runtime_minutes": 177,
+    "director": "p_coppola",
+    "tmdb_id": 654537,
+    "popularity": 20.47,
+    "vote_average": 6.7,
+    "vote_count": 14147,
+    "original_language": "fa",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_godfatherii",
+    "source_identifier": "457803",
+    "title": "The Godfather Part II",
+    "year": 1974,
+    "runtime_minutes": 203,
+    "director": "p_coppola",
+    "tmdb_id": 457803,
+    "popularity": 13.35,
+    "vote_average": 9.5,
+    "vote_count": 15935,
+    "original_language": "it",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_inception",
+    "source_identifier": "240031",
+    "title": "Inception",
+    "year": 2010,
+    "runtime_minutes": 147,
+    "director": "p_nolan",
+    "tmdb_id": 240031,
+    "popularity": 21.1,
+    "vote_average": 9.0,
+    "vote_count": 23210,
+    "original_language": "ja",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_interstellar",
+    "source_identifier": "228912",
+    "title": "Interstellar",
+    "year": 2014,
+    "runtime_minutes": 170,
+    "director": "p_nolan",
+    "tmdb_id": 228912,
+    "popularity": 20.05,
+    "vote_average": 8.5,
+    "vote_count": 2605,
+    "original_language": "ko",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Action",
+      "Thriller"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_dunkirk",
+    "source_identifier": "234618",
+    "title": "Dunkirk",
+    "year": 2017,
+    "runtime_minutes": 105,
+    "director": "p_nolan",
+    "tmdb_id": 234618,
+    "popularity": 91.5,
+    "vote_average": 7.0,
+    "vote_count": 17750,
+    "original_language": "ko",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Documentary"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_oppenheimer",
+    "source_identifier": "745052",
+    "title": "Oppenheimer",
+    "year": 2023,
+    "runtime_minutes": 180,
+    "director": "p_nolan",
+    "tmdb_id": 745052,
+    "popularity": 16.8,
+    "vote_average": 8.0,
+    "vote_count": 13280,
+    "original_language": "ko",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Action",
+      "Thriller"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_arrival",
+    "source_identifier": "353840",
+    "title": "Arrival",
+    "year": 2016,
+    "runtime_minutes": 117,
+    "director": "p_villeneuve",
+    "tmdb_id": 353840,
+    "popularity": 81.08,
+    "vote_average": 6.8,
+    "vote_count": 20708,
+    "original_language": "ru",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_bladerunner2049",
+    "source_identifier": "221699",
+    "title": "Blade Runner 2049",
+    "year": 2017,
+    "runtime_minutes": 164,
+    "director": "p_villeneuve",
+    "tmdb_id": 221699,
+    "popularity": 25.33,
+    "vote_average": 7.3,
+    "vote_count": 11633,
+    "original_language": "it",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_thereblood",
+    "source_identifier": "756115",
+    "title": "There Will Be Blood",
+    "year": 2007,
+    "runtime_minutes": 157,
+    "director": "p_anderson_pt",
+    "tmdb_id": 756115,
+    "popularity": 93.83,
+    "vote_average": 6.3,
+    "vote_count": 22983,
+    "original_language": "en",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_themaster",
+    "source_identifier": "44287",
+    "title": "The Master",
+    "year": 2012,
+    "runtime_minutes": 143,
+    "director": "p_anderson_pt",
+    "tmdb_id": 44287,
+    "popularity": 79.45,
+    "vote_average": 8.5,
+    "vote_count": 14045,
+    "original_language": "en",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_phantomthread",
+    "source_identifier": "338164",
+    "title": "Phantom Thread",
+    "year": 2017,
+    "runtime_minutes": 130,
+    "director": "p_anderson_pt",
+    "tmdb_id": 338164,
+    "popularity": 54.2,
+    "vote_average": 8.0,
+    "vote_count": 5520,
+    "original_language": "de",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_moonrise",
+    "source_identifier": "152292",
+    "title": "Moonrise Kingdom",
+    "year": 2012,
+    "runtime_minutes": 94,
+    "director": "p_anderson_wes",
+    "tmdb_id": 152292,
+    "popularity": 99.4,
+    "vote_average": 8.0,
+    "vote_count": 6040,
+    "original_language": "de",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Documentary"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_fightclub",
+    "source_identifier": "586684",
+    "title": "Fight Club",
+    "year": 1999,
+    "runtime_minutes": 138,
+    "director": "p_finch",
+    "tmdb_id": 586684,
+    "popularity": 59.05,
+    "vote_average": 6.5,
+    "vote_count": 3505,
+    "original_language": "fa",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_sevenfilm",
+    "source_identifier": "474042",
+    "title": "Se7en",
+    "year": 1995,
+    "runtime_minutes": 128,
+    "director": "p_finch",
+    "tmdb_id": 474042,
+    "popularity": 23.79,
+    "vote_average": 9.9,
+    "vote_count": 17979,
+    "original_language": "es",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_socialnetwork",
+    "source_identifier": "163906",
+    "title": "The Social Network",
+    "year": 2010,
+    "runtime_minutes": 119,
+    "director": "p_finch",
+    "tmdb_id": 163906,
+    "popularity": 24.99,
+    "vote_average": 7.9,
+    "vote_count": 12599,
+    "original_language": "fr",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_zodiac",
+    "source_identifier": "654807",
+    "title": "Zodiac",
+    "year": 2007,
+    "runtime_minutes": 156,
+    "director": "p_finch",
+    "tmdb_id": 654807,
+    "popularity": 87.77,
+    "vote_average": 7.7,
+    "vote_count": 13877,
+    "original_language": "fa",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_mulhollanddrive",
+    "source_identifier": "402867",
+    "title": "Mulholland Drive",
+    "year": 2001,
+    "runtime_minutes": 147,
+    "director": "p_lynch",
+    "tmdb_id": 402867,
+    "popularity": 32.63,
+    "vote_average": 6.3,
+    "vote_count": 12863,
+    "original_language": "de",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_blueVelvet",
+    "source_identifier": "71117",
+    "title": "Blue Velvet",
+    "year": 1986,
+    "runtime_minutes": 120,
+    "director": "p_lynch",
+    "tmdb_id": 71117,
+    "popularity": 98.85,
+    "vote_average": 6.5,
+    "vote_count": 12985,
+    "original_language": "ja",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_paterson",
+    "source_identifier": "591520",
+    "title": "Paterson",
+    "year": 2016,
+    "runtime_minutes": 117,
+    "director": "p_jarmusch",
+    "tmdb_id": 591520,
+    "popularity": 47.73,
+    "vote_average": 9.3,
+    "vote_count": 7373,
+    "original_language": "fr",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_deadman",
+    "source_identifier": "218922",
+    "title": "Dead Man",
+    "year": 1995,
+    "runtime_minutes": 122,
+    "director": "p_jarmusch",
+    "tmdb_id": 218922,
+    "popularity": 23.26,
+    "vote_average": 8.6,
+    "vote_count": 8926,
+    "original_language": "en",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_memoriesmurder",
+    "source_identifier": "231587",
+    "title": "Memories of Murder",
+    "year": 2003,
+    "runtime_minutes": 130,
+    "director": "p_bong",
+    "tmdb_id": 231587,
+    "popularity": 24.97,
+    "vote_average": 9.7,
+    "vote_count": 12097,
+    "original_language": "fr",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_thehost",
+    "source_identifier": "2869",
+    "title": "The Host",
+    "year": 2006,
+    "runtime_minutes": 120,
+    "director": "p_bong",
+    "tmdb_id": 2869,
+    "popularity": 27.73,
+    "vote_average": 7.3,
+    "vote_count": 17873,
+    "original_language": "ja",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Documentary"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_oldboy",
+    "source_identifier": "93995",
+    "title": "Oldboy",
+    "year": 2003,
+    "runtime_minutes": 120,
+    "director": "p_park",
+    "tmdb_id": 93995,
+    "popularity": 9.26,
+    "vote_average": 6.6,
+    "vote_count": 23026,
+    "original_language": "ja",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_decisiontoleave",
+    "source_identifier": "337323",
+    "title": "Decision to Leave",
+    "year": 2022,
+    "runtime_minutes": 140,
+    "director": "p_park",
+    "tmdb_id": 337323,
+    "popularity": 75.3,
+    "vote_average": 7.0,
+    "vote_count": 13630,
+    "original_language": "it",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_allaboutmother",
+    "source_identifier": "192219",
+    "title": "All About My Mother",
+    "year": 1999,
+    "runtime_minutes": 102,
+    "director": "p_almodovar",
+    "tmdb_id": 192219,
+    "popularity": 79.4,
+    "vote_average": 8.0,
+    "vote_count": 9040,
+    "original_language": "de",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_paindglory",
+    "source_identifier": "536995",
+    "title": "Pain and Glory",
+    "year": 2019,
+    "runtime_minutes": 113,
+    "director": "p_almodovar",
+    "tmdb_id": 536995,
+    "popularity": 63.99,
+    "vote_average": 7.9,
+    "vote_count": 1999,
+    "original_language": "de",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_amour",
+    "source_identifier": "634319",
+    "title": "Amour",
+    "year": 2012,
+    "runtime_minutes": 127,
+    "director": "p_haneke",
+    "tmdb_id": 634319,
+    "popularity": 42.23,
+    "vote_average": 8.3,
+    "vote_count": 24323,
+    "original_language": "ko",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_whiteribbon",
+    "source_identifier": "545454",
+    "title": "The White Ribbon",
+    "year": 2009,
+    "runtime_minutes": 145,
+    "director": "p_haneke",
+    "tmdb_id": 545454,
+    "popularity": 31.3,
+    "vote_average": 7.0,
+    "vote_count": 23230,
+    "original_language": "ko",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_ladybird",
+    "source_identifier": "448459",
+    "title": "Lady Bird",
+    "year": 2017,
+    "runtime_minutes": 95,
+    "director": "p_gerwig",
+    "tmdb_id": 448459,
+    "popularity": 7.27,
+    "vote_average": 8.7,
+    "vote_count": 15327,
+    "original_language": "en",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_moonlight",
+    "source_identifier": "563793",
+    "title": "Moonlight",
+    "year": 2016,
+    "runtime_minutes": 110,
+    "director": "p_jenkins",
+    "tmdb_id": 563793,
+    "popularity": 40.61,
+    "vote_average": 6.1,
+    "vote_count": 5661,
+    "original_language": "fa",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_ifbeale",
+    "source_identifier": "28231",
+    "title": "If Beale Street Could Talk",
+    "year": 2018,
+    "runtime_minutes": 118,
+    "director": "p_jenkins",
+    "tmdb_id": 28231,
+    "popularity": 9.38,
+    "vote_average": 9.8,
+    "vote_count": 4538,
+    "original_language": "en",
+    "tagline": "Nothing is as it seems.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_getout",
+    "source_identifier": "149025",
+    "title": "Get Out",
+    "year": 2017,
+    "runtime_minutes": 103,
+    "director": "p_peele",
+    "tmdb_id": 149025,
+    "popularity": 92.07,
+    "vote_average": 6.7,
+    "vote_count": 9307,
+    "original_language": "de",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_lighthouse",
+    "source_identifier": "733477",
+    "title": "The Lighthouse",
+    "year": 2019,
+    "runtime_minutes": 108,
+    "director": "p_eggers",
+    "tmdb_id": 733477,
+    "popularity": 42.55,
+    "vote_average": 9.5,
+    "vote_count": 24855,
+    "original_language": "fr",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Animation",
+      "Family"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_northman",
+    "source_identifier": "189212",
+    "title": "The Northman",
+    "year": 2022,
+    "runtime_minutes": 137,
+    "director": "p_eggers",
+    "tmdb_id": 189212,
+    "popularity": 67.09,
+    "vote_average": 8.9,
+    "vote_count": 2809,
+    "original_language": "de",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_hereditary",
+    "source_identifier": "543164",
+    "title": "Hereditary",
+    "year": 2018,
+    "runtime_minutes": 126,
+    "director": "p_aster",
+    "tmdb_id": 543164,
+    "popularity": 33.71,
+    "vote_average": 7.1,
+    "vote_count": 19471,
+    "original_language": "ru",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_favourite",
+    "source_identifier": "167060",
+    "title": "The Favourite",
+    "year": 2018,
+    "runtime_minutes": 118,
+    "director": "p_lanthimos",
+    "tmdb_id": 167060,
+    "popularity": 16.72,
+    "vote_average": 7.2,
+    "vote_count": 16272,
+    "original_language": "it",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_closeup",
+    "source_identifier": "504782",
+    "title": "Close-Up",
+    "year": 1990,
+    "runtime_minutes": 99,
+    "director": "p_kiarostami",
+    "tmdb_id": 504782,
+    "popularity": 42.41,
+    "vote_average": 6.1,
+    "vote_count": 23341,
+    "original_language": "fr",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Animation",
+      "Family"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_generalkeaton",
+    "source_identifier": "365812",
+    "title": "The General",
+    "year": 1927,
+    "runtime_minutes": 78,
+    "director": "p_keaton",
+    "tmdb_id": 365812,
+    "popularity": 77.11,
+    "vote_average": 7.1,
+    "vote_count": 12311,
+    "original_language": "de",
+    "tagline": "Every story has a beginning.",
+    "genres": [
+      "War",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_metropolis",
+    "source_identifier": "831642",
+    "title": "Metropolis",
+    "year": 1927,
+    "runtime_minutes": 154,
+    "director": "p_lang",
+    "tmdb_id": 831642,
+    "popularity": 27.53,
+    "vote_average": 7.3,
+    "vote_count": 3353,
+    "original_language": "fr",
+    "tagline": "Some heroes are born. Others are made.",
+    "genres": [
+      "Crime",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_citizenkane",
+    "source_identifier": "717468",
+    "title": "Citizen Kane",
+    "year": 1941,
+    "runtime_minutes": 118,
+    "director": "p_welles",
+    "tmdb_id": 717468,
+    "popularity": 65.61,
+    "vote_average": 8.1,
+    "vote_count": 16161,
+    "original_language": "ko",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Horror",
+      "Mystery"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_vertigo",
+    "source_identifier": "310696",
+    "title": "Vertigo",
+    "year": 1958,
+    "runtime_minutes": 127,
+    "director": "p_hitchcock",
+    "tmdb_id": 310696,
+    "popularity": 57.89,
+    "vote_average": 6.9,
+    "vote_count": 9389,
+    "original_language": "fr",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Crime",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_psycho",
+    "source_identifier": "120573",
+    "title": "Psycho",
+    "year": 1960,
+    "runtime_minutes": 108,
+    "director": "p_hitchcock",
+    "tmdb_id": 120573,
+    "popularity": 26.66,
+    "vote_average": 6.6,
+    "vote_count": 19266,
+    "original_language": "it",
+    "tagline": "You won't believe your eyes.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_breathless",
+    "source_identifier": "635069",
+    "title": "A bout de souffle",
+    "year": 1960,
+    "runtime_minutes": 90,
+    "director": "p_godard",
+    "tmdb_id": 635069,
+    "popularity": 74.73,
+    "vote_average": 7.3,
+    "vote_count": 25073,
+    "original_language": "it",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_seventhseal",
+    "source_identifier": "599805",
+    "title": "The Seventh Seal",
+    "year": 1957,
+    "runtime_minutes": 97,
+    "director": "p_bergman",
+    "tmdb_id": 599805,
+    "popularity": 20.26,
+    "vote_average": 6.6,
+    "vote_count": 16626,
+    "original_language": "ru",
+    "tagline": "The legend begins.",
+    "genres": [
+      "Action",
+      "Thriller"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_personabergman",
+    "source_identifier": "128926",
+    "title": "Persona",
+    "year": 1966,
+    "runtime_minutes": 85,
+    "director": "p_bergman",
+    "tmdb_id": 128926,
+    "popularity": 24.58,
+    "vote_average": 9.8,
+    "vote_count": 12058,
+    "original_language": "es",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Comedy",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_eightandahalf",
+    "source_identifier": "21347",
+    "title": "8 1/2",
+    "year": 1963,
+    "runtime_minutes": 138,
+    "director": "p_fellini",
+    "tmdb_id": 21347,
+    "popularity": 14.26,
+    "vote_average": 8.6,
+    "vote_count": 4526,
+    "original_language": "fa",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Romance",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_ladolce",
+    "source_identifier": "686512",
+    "title": "La Dolce Vita",
+    "year": 1960,
+    "runtime_minutes": 174,
+    "director": "p_fellini",
+    "tmdb_id": 686512,
+    "popularity": 75.72,
+    "vote_average": 9.2,
+    "vote_count": 7172,
+    "original_language": "ja",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Science Fiction",
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_mirror",
+    "source_identifier": "136783",
+    "title": "Mirror",
+    "year": 1975,
+    "runtime_minutes": 106,
+    "director": "p_tarkovsky",
+    "tmdb_id": 136783,
+    "popularity": 13.62,
+    "vote_average": 8.2,
+    "vote_count": 19962,
+    "original_language": "ja",
+    "tagline": "Where dreams meet reality.",
+    "genres": [
+      "Western"
+    ],
+    "adult": false,
+    "status": "Released"
+  },
+  {
+    "canonical_id": "m_tokyostory",
+    "source_identifier": "694525",
+    "title": "Tokyo Story",
+    "year": 1953,
+    "runtime_minutes": 135,
+    "director": "p_ozu",
+    "tmdb_id": 694525,
+    "popularity": 72.93,
+    "vote_average": 7.3,
+    "vote_count": 11393,
+    "original_language": "es",
+    "tagline": "A story about everything.",
+    "genres": [
+      "Drama"
+    ],
+    "adult": false,
+    "status": "Released"
+  }
+]

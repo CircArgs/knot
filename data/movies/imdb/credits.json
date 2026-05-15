@@ -1,0 +1,1190 @@
+[
+  {
+    "canonical_id": "c_reservoirdogs_d_tarantino",
+    "source_identifier": "tt1838941::nm3029921::director",
+    "role": "director",
+    "movie": "m_reservoirdogs",
+    "person": "p_tarantino",
+    "imdb_credit_category": "director",
+    "ordering": 12
+  },
+  {
+    "canonical_id": "c_reservoirdogs_a_keitel",
+    "source_identifier": "tt1838941::nm6008212::actor",
+    "role": "actor",
+    "movie": "m_reservoirdogs",
+    "person": "p_keitel",
+    "imdb_credit_category": "cast",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_reservoirdogs_w_tarantino",
+    "source_identifier": "tt1838941::nm3029921::writer",
+    "role": "writer",
+    "movie": "m_reservoirdogs",
+    "person": "p_tarantino",
+    "imdb_credit_category": "writer",
+    "ordering": 25
+  },
+  {
+    "canonical_id": "c_killbill1_d_tarantino",
+    "source_identifier": "tt2878306::nm3029921::director",
+    "role": "director",
+    "movie": "m_killbill1",
+    "person": "p_tarantino",
+    "imdb_credit_category": "director",
+    "ordering": 27
+  },
+  {
+    "canonical_id": "c_killbill1_a_thurman",
+    "source_identifier": "tt2878306::nm6347196::actor",
+    "role": "actor",
+    "movie": "m_killbill1",
+    "person": "p_thurman",
+    "imdb_credit_category": "cast",
+    "ordering": 11
+  },
+  {
+    "canonical_id": "c_inglourious_d_tarantino",
+    "source_identifier": "tt5322801::nm3029921::director",
+    "role": "director",
+    "movie": "m_inglourious",
+    "person": "p_tarantino",
+    "imdb_credit_category": "director",
+    "ordering": 20
+  },
+  {
+    "canonical_id": "c_inglourious_a_pitt",
+    "source_identifier": "tt5322801::nm2735992::actor",
+    "role": "actor",
+    "movie": "m_inglourious",
+    "person": "p_pitt",
+    "imdb_credit_category": "cast",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_djangounchained_d_tarantino",
+    "source_identifier": "tt0768738::nm3029921::director",
+    "role": "director",
+    "movie": "m_djangounchained",
+    "person": "p_tarantino",
+    "imdb_credit_category": "director",
+    "ordering": 3
+  },
+  {
+    "canonical_id": "c_djangounchained_a_dicaprio",
+    "source_identifier": "tt0768738::nm3310085::actor",
+    "role": "actor",
+    "movie": "m_djangounchained",
+    "person": "p_dicaprio",
+    "imdb_credit_category": "cast",
+    "ordering": 9
+  },
+  {
+    "canonical_id": "c_djangounchained_a_jackson",
+    "source_identifier": "tt0768738::nm2841350::actor",
+    "role": "actor",
+    "movie": "m_djangounchained",
+    "person": "p_jackson_sl",
+    "imdb_credit_category": "cast",
+    "ordering": 13
+  },
+  {
+    "canonical_id": "c_sevensamurai_d_kurosawa",
+    "source_identifier": "tt9462920::nm1482525::director",
+    "role": "director",
+    "movie": "m_sevensamurai",
+    "person": "p_kurosawa",
+    "imdb_credit_category": "director",
+    "ordering": 2
+  },
+  {
+    "canonical_id": "c_sevensamurai_a_mifune",
+    "source_identifier": "tt9462920::nm6002653::actor",
+    "role": "actor",
+    "movie": "m_sevensamurai",
+    "person": "p_mifune",
+    "imdb_credit_category": "cast",
+    "ordering": 2
+  },
+  {
+    "canonical_id": "c_yojimbo_d_kurosawa",
+    "source_identifier": "tt0887875::nm1482525::director",
+    "role": "director",
+    "movie": "m_yojimbo",
+    "person": "p_kurosawa",
+    "imdb_credit_category": "director",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_yojimbo_a_mifune",
+    "source_identifier": "tt0887875::nm6002653::actor",
+    "role": "actor",
+    "movie": "m_yojimbo",
+    "person": "p_mifune",
+    "imdb_credit_category": "cast",
+    "ordering": 25
+  },
+  {
+    "canonical_id": "c_ikiru_d_kurosawa",
+    "source_identifier": "tt2956327::nm1482525::director",
+    "role": "director",
+    "movie": "m_ikiru",
+    "person": "p_kurosawa",
+    "imdb_credit_category": "director",
+    "ordering": 26
+  },
+  {
+    "canonical_id": "c_spiritedaway_d_miyazaki",
+    "source_identifier": "tt9672202::nm3050865::director",
+    "role": "director",
+    "movie": "m_spiritedaway",
+    "person": "p_miyazaki",
+    "imdb_credit_category": "director",
+    "ordering": 30
+  },
+  {
+    "canonical_id": "c_spiritedaway_w_miyazaki",
+    "source_identifier": "tt9672202::nm3050865::writer",
+    "role": "writer",
+    "movie": "m_spiritedaway",
+    "person": "p_miyazaki",
+    "imdb_credit_category": "writer",
+    "ordering": 16
+  },
+  {
+    "canonical_id": "c_spiritedaway_co_hisaishi",
+    "source_identifier": "tt9672202::nm6607982::composer",
+    "role": "composer",
+    "movie": "m_spiritedaway",
+    "person": "p_hisaishi",
+    "imdb_credit_category": "composer",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_totoro_d_miyazaki",
+    "source_identifier": "tt3580156::nm3050865::director",
+    "role": "director",
+    "movie": "m_totoro",
+    "person": "p_miyazaki",
+    "imdb_credit_category": "director",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_totoro_co_hisaishi",
+    "source_identifier": "tt3580156::nm6607982::composer",
+    "role": "composer",
+    "movie": "m_totoro",
+    "person": "p_hisaishi",
+    "imdb_credit_category": "composer",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_princessmononoke_d_miyazaki",
+    "source_identifier": "tt5869102::nm3050865::director",
+    "role": "director",
+    "movie": "m_princessmononoke",
+    "person": "p_miyazaki",
+    "imdb_credit_category": "director",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_princessmononoke_co_hisaishi",
+    "source_identifier": "tt5869102::nm6607982::composer",
+    "role": "composer",
+    "movie": "m_princessmononoke",
+    "person": "p_hisaishi",
+    "imdb_credit_category": "composer",
+    "ordering": 30
+  },
+  {
+    "canonical_id": "c_howlsmoving_d_miyazaki",
+    "source_identifier": "tt0681347::nm3050865::director",
+    "role": "director",
+    "movie": "m_howlsmoving",
+    "person": "p_miyazaki",
+    "imdb_credit_category": "director",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_goodfellas_d_scorsese",
+    "source_identifier": "tt3990830::nm8150931::director",
+    "role": "director",
+    "movie": "m_goodfellas",
+    "person": "p_scorsese",
+    "imdb_credit_category": "director",
+    "ordering": 25
+  },
+  {
+    "canonical_id": "c_goodfellas_a_deniro",
+    "source_identifier": "tt3990830::nm8081636::actor",
+    "role": "actor",
+    "movie": "m_goodfellas",
+    "person": "p_deniro",
+    "imdb_credit_category": "cast",
+    "ordering": 26
+  },
+  {
+    "canonical_id": "c_taxidriver_d_scorsese",
+    "source_identifier": "tt0451655::nm8150931::director",
+    "role": "director",
+    "movie": "m_taxidriver",
+    "person": "p_scorsese",
+    "imdb_credit_category": "director",
+    "ordering": 15
+  },
+  {
+    "canonical_id": "c_taxidriver_a_deniro",
+    "source_identifier": "tt0451655::nm8081636::actor",
+    "role": "actor",
+    "movie": "m_taxidriver",
+    "person": "p_deniro",
+    "imdb_credit_category": "cast",
+    "ordering": 30
+  },
+  {
+    "canonical_id": "c_taxidriver_a_foster",
+    "source_identifier": "tt0451655::nm0536595::actor",
+    "role": "actor",
+    "movie": "m_taxidriver",
+    "person": "p_foster_jd",
+    "imdb_credit_category": "cast",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_taxidriver_a_keitel",
+    "source_identifier": "tt0451655::nm6008212::actor",
+    "role": "actor",
+    "movie": "m_taxidriver",
+    "person": "p_keitel",
+    "imdb_credit_category": "cast",
+    "ordering": 26
+  },
+  {
+    "canonical_id": "c_raginbull_d_scorsese",
+    "source_identifier": "tt5429701::nm8150931::director",
+    "role": "director",
+    "movie": "m_raginbull",
+    "person": "p_scorsese",
+    "imdb_credit_category": "director",
+    "ordering": 12
+  },
+  {
+    "canonical_id": "c_raginbull_a_deniro",
+    "source_identifier": "tt5429701::nm8081636::actor",
+    "role": "actor",
+    "movie": "m_raginbull",
+    "person": "p_deniro",
+    "imdb_credit_category": "cast",
+    "ordering": 25
+  },
+  {
+    "canonical_id": "c_departed_d_scorsese",
+    "source_identifier": "tt4478005::nm8150931::director",
+    "role": "director",
+    "movie": "m_departed",
+    "person": "p_scorsese",
+    "imdb_credit_category": "director",
+    "ordering": 23
+  },
+  {
+    "canonical_id": "c_departed_a_dicaprio",
+    "source_identifier": "tt4478005::nm3310085::actor",
+    "role": "actor",
+    "movie": "m_departed",
+    "person": "p_dicaprio",
+    "imdb_credit_category": "cast",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_departed_a_jackson",
+    "source_identifier": "tt4478005::nm2841350::actor",
+    "role": "actor",
+    "movie": "m_departed",
+    "person": "p_jackson_sl",
+    "imdb_credit_category": "cast",
+    "ordering": 16
+  },
+  {
+    "canonical_id": "c_jaws_d_spielberg",
+    "source_identifier": "tt8421613::nm7546264::director",
+    "role": "director",
+    "movie": "m_jaws",
+    "person": "p_spielberg",
+    "imdb_credit_category": "director",
+    "ordering": 26
+  },
+  {
+    "canonical_id": "c_jaws_co_williams",
+    "source_identifier": "tt8421613::nm4497256::composer",
+    "role": "composer",
+    "movie": "m_jaws",
+    "person": "p_williams_jh",
+    "imdb_credit_category": "composer",
+    "ordering": 14
+  },
+  {
+    "canonical_id": "c_et_d_spielberg",
+    "source_identifier": "tt8382007::nm7546264::director",
+    "role": "director",
+    "movie": "m_et",
+    "person": "p_spielberg",
+    "imdb_credit_category": "director",
+    "ordering": 23
+  },
+  {
+    "canonical_id": "c_et_co_williams",
+    "source_identifier": "tt8382007::nm4497256::composer",
+    "role": "composer",
+    "movie": "m_et",
+    "person": "p_williams_jh",
+    "imdb_credit_category": "composer",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_savingprivate_d_spielberg",
+    "source_identifier": "tt4180883::nm7546264::director",
+    "role": "director",
+    "movie": "m_savingprivate",
+    "person": "p_spielberg",
+    "imdb_credit_category": "director",
+    "ordering": 30
+  },
+  {
+    "canonical_id": "c_godfather_d_coppola",
+    "source_identifier": "tt6027839::nm4939212::director",
+    "role": "director",
+    "movie": "m_godfather",
+    "person": "p_coppola",
+    "imdb_credit_category": "director",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_godfather_a_brando",
+    "source_identifier": "tt6027839::nm1088913::actor",
+    "role": "actor",
+    "movie": "m_godfather",
+    "person": "p_brando",
+    "imdb_credit_category": "cast",
+    "ordering": 3
+  },
+  {
+    "canonical_id": "c_godfather_a_pacino",
+    "source_identifier": "tt6027839::nm6877855::actor",
+    "role": "actor",
+    "movie": "m_godfather",
+    "person": "p_pacino",
+    "imdb_credit_category": "cast",
+    "ordering": 8
+  },
+  {
+    "canonical_id": "c_apocalypsenow_d_coppola",
+    "source_identifier": "tt0606743::nm4939212::director",
+    "role": "director",
+    "movie": "m_apocalypsenow",
+    "person": "p_coppola",
+    "imdb_credit_category": "director",
+    "ordering": 2
+  },
+  {
+    "canonical_id": "c_apocalypsenow_a_brando",
+    "source_identifier": "tt0606743::nm1088913::actor",
+    "role": "actor",
+    "movie": "m_apocalypsenow",
+    "person": "p_brando",
+    "imdb_credit_category": "cast",
+    "ordering": 15
+  },
+  {
+    "canonical_id": "c_apocalypsenow_dp_storaro",
+    "source_identifier": "tt0606743::nm4534113::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_apocalypsenow",
+    "person": "p_storaro",
+    "imdb_credit_category": "cinematographer",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_inception_d_nolan",
+    "source_identifier": "tt0384318::nm7801353::director",
+    "role": "director",
+    "movie": "m_inception",
+    "person": "p_nolan",
+    "imdb_credit_category": "director",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_inception_a_dicaprio",
+    "source_identifier": "tt0384318::nm3310085::actor",
+    "role": "actor",
+    "movie": "m_inception",
+    "person": "p_dicaprio",
+    "imdb_credit_category": "cast",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_inception_co_zimmer",
+    "source_identifier": "tt0384318::nm9406451::composer",
+    "role": "composer",
+    "movie": "m_inception",
+    "person": "p_zimmer",
+    "imdb_credit_category": "composer",
+    "ordering": 15
+  },
+  {
+    "canonical_id": "c_inception_dp_pfister",
+    "source_identifier": "tt0384318::nm6738817::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_inception",
+    "person": "p_pfister",
+    "imdb_credit_category": "cinematographer",
+    "ordering": 20
+  },
+  {
+    "canonical_id": "c_dunkirk_d_nolan",
+    "source_identifier": "tt9347758::nm7801353::director",
+    "role": "director",
+    "movie": "m_dunkirk",
+    "person": "p_nolan",
+    "imdb_credit_category": "director",
+    "ordering": 16
+  },
+  {
+    "canonical_id": "c_dunkirk_co_zimmer",
+    "source_identifier": "tt9347758::nm9406451::composer",
+    "role": "composer",
+    "movie": "m_dunkirk",
+    "person": "p_zimmer",
+    "imdb_credit_category": "composer",
+    "ordering": 9
+  },
+  {
+    "canonical_id": "c_oppenheimer_d_nolan",
+    "source_identifier": "tt0824388::nm7801353::director",
+    "role": "director",
+    "movie": "m_oppenheimer",
+    "person": "p_nolan",
+    "imdb_credit_category": "director",
+    "ordering": 13
+  },
+  {
+    "canonical_id": "c_oppenheimer_a_pugh",
+    "source_identifier": "tt0824388::nm6186566::actor",
+    "role": "actor",
+    "movie": "m_oppenheimer",
+    "person": "p_pugh",
+    "imdb_credit_category": "cast",
+    "ordering": 11
+  },
+  {
+    "canonical_id": "c_oppenheimer_dp_hoytema",
+    "source_identifier": "tt0824388::nm0677582::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_oppenheimer",
+    "person": "p_deakins",
+    "imdb_credit_category": "cinematographer",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_arrival_d_villeneuve",
+    "source_identifier": "tt3015600::nm1015343::director",
+    "role": "director",
+    "movie": "m_arrival",
+    "person": "p_villeneuve",
+    "imdb_credit_category": "director",
+    "ordering": 16
+  },
+  {
+    "canonical_id": "c_bladerunner2049_d_villeneuve",
+    "source_identifier": "tt1347741::nm1015343::director",
+    "role": "director",
+    "movie": "m_bladerunner2049",
+    "person": "p_villeneuve",
+    "imdb_credit_category": "director",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_bladerunner2049_a_gosling",
+    "source_identifier": "tt1347741::nm1059367::actor",
+    "role": "actor",
+    "movie": "m_bladerunner2049",
+    "person": "p_gosling",
+    "imdb_credit_category": "cast",
+    "ordering": 8
+  },
+  {
+    "canonical_id": "c_bladerunner2049_dp_deakins",
+    "source_identifier": "tt1347741::nm0677582::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_bladerunner2049",
+    "person": "p_deakins",
+    "imdb_credit_category": "cinematographer",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_dune_d_villeneuve",
+    "source_identifier": "tt0260967::nm1015343::director",
+    "role": "director",
+    "movie": "m_dune",
+    "person": "p_villeneuve",
+    "imdb_credit_category": "director",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_dune_a_chalamet",
+    "source_identifier": "tt0260967::nm6962463::actor",
+    "role": "actor",
+    "movie": "m_dune",
+    "person": "p_chalamet",
+    "imdb_credit_category": "cast",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_dune_a_zendaya",
+    "source_identifier": "tt0260967::nm0710394::actor",
+    "role": "actor",
+    "movie": "m_dune",
+    "person": "p_zendaya",
+    "imdb_credit_category": "cast",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_dune_a_isaac",
+    "source_identifier": "tt0260967::nm4800693::actor",
+    "role": "actor",
+    "movie": "m_dune",
+    "person": "p_isaac",
+    "imdb_credit_category": "cast",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_dunept2_d_villeneuve",
+    "source_identifier": "tt5979305::nm1015343::director",
+    "role": "director",
+    "movie": "m_dunept2",
+    "person": "p_villeneuve",
+    "imdb_credit_category": "director",
+    "ordering": 17
+  },
+  {
+    "canonical_id": "c_dunept2_a_chalamet",
+    "source_identifier": "tt5979305::nm6962463::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_chalamet",
+    "imdb_credit_category": "cast",
+    "ordering": 21
+  },
+  {
+    "canonical_id": "c_dunept2_a_zendaya",
+    "source_identifier": "tt5979305::nm0710394::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_zendaya",
+    "imdb_credit_category": "cast",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_dunept2_a_butler",
+    "source_identifier": "tt5979305::nm6476183::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_butler",
+    "imdb_credit_category": "cast",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_dunept2_a_pugh",
+    "source_identifier": "tt5979305::nm6186566::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_pugh",
+    "imdb_credit_category": "cast",
+    "ordering": 6
+  },
+  {
+    "canonical_id": "c_thereblood_d_anderson",
+    "source_identifier": "tt4113325::nm4585079::director",
+    "role": "director",
+    "movie": "m_thereblood",
+    "person": "p_anderson_pt",
+    "imdb_credit_category": "director",
+    "ordering": 23
+  },
+  {
+    "canonical_id": "c_thereblood_a_dayl",
+    "source_identifier": "tt4113325::nm7220552::actor",
+    "role": "actor",
+    "movie": "m_thereblood",
+    "person": "p_phoenix",
+    "imdb_credit_category": "cast",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_thereblood_co_greenwood",
+    "source_identifier": "tt4113325::nm8497187::composer",
+    "role": "composer",
+    "movie": "m_thereblood",
+    "person": "p_greenwood",
+    "imdb_credit_category": "composer",
+    "ordering": 13
+  },
+  {
+    "canonical_id": "c_themaster_d_anderson",
+    "source_identifier": "tt3425153::nm4585079::director",
+    "role": "director",
+    "movie": "m_themaster",
+    "person": "p_anderson_pt",
+    "imdb_credit_category": "director",
+    "ordering": 6
+  },
+  {
+    "canonical_id": "c_themaster_a_phoenix",
+    "source_identifier": "tt3425153::nm7220552::actor",
+    "role": "actor",
+    "movie": "m_themaster",
+    "person": "p_phoenix",
+    "imdb_credit_category": "cast",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_phantomthread_d_anderson",
+    "source_identifier": "tt1255788::nm4585079::director",
+    "role": "director",
+    "movie": "m_phantomthread",
+    "person": "p_anderson_pt",
+    "imdb_credit_category": "director",
+    "ordering": 27
+  },
+  {
+    "canonical_id": "c_phantomthread_co_greenwood",
+    "source_identifier": "tt1255788::nm8497187::composer",
+    "role": "composer",
+    "movie": "m_phantomthread",
+    "person": "p_greenwood",
+    "imdb_credit_category": "composer",
+    "ordering": 13
+  },
+  {
+    "canonical_id": "c_grandbudapest_d_anderson",
+    "source_identifier": "tt7070737::nm3390069::director",
+    "role": "director",
+    "movie": "m_grandbudapest",
+    "person": "p_anderson_wes",
+    "imdb_credit_category": "director",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_moonrise_d_anderson",
+    "source_identifier": "tt8534468::nm3390069::director",
+    "role": "director",
+    "movie": "m_moonrise",
+    "person": "p_anderson_wes",
+    "imdb_credit_category": "director",
+    "ordering": 6
+  },
+  {
+    "canonical_id": "c_fightclub_d_finch",
+    "source_identifier": "tt1042197::nm3759722::director",
+    "role": "director",
+    "movie": "m_fightclub",
+    "person": "p_finch",
+    "imdb_credit_category": "director",
+    "ordering": 20
+  },
+  {
+    "canonical_id": "c_fightclub_a_pitt",
+    "source_identifier": "tt1042197::nm2735992::actor",
+    "role": "actor",
+    "movie": "m_fightclub",
+    "person": "p_pitt",
+    "imdb_credit_category": "cast",
+    "ordering": 3
+  },
+  {
+    "canonical_id": "c_socialnetwork_d_finch",
+    "source_identifier": "tt8848709::nm3759722::director",
+    "role": "director",
+    "movie": "m_socialnetwork",
+    "person": "p_finch",
+    "imdb_credit_category": "director",
+    "ordering": 16
+  },
+  {
+    "canonical_id": "c_socialnetwork_a_garfield",
+    "source_identifier": "tt8848709::nm1690832::actor",
+    "role": "actor",
+    "movie": "m_socialnetwork",
+    "person": "p_garfield",
+    "imdb_credit_category": "cast",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_socialnetwork_w_sorkin",
+    "source_identifier": "tt8848709::nm1233697::writer",
+    "role": "writer",
+    "movie": "m_socialnetwork",
+    "person": "p_sorkin",
+    "imdb_credit_category": "writer",
+    "ordering": 13
+  },
+  {
+    "canonical_id": "c_zodiac_d_finch",
+    "source_identifier": "tt1327569::nm3759722::director",
+    "role": "director",
+    "movie": "m_zodiac",
+    "person": "p_finch",
+    "imdb_credit_category": "director",
+    "ordering": 3
+  },
+  {
+    "canonical_id": "c_mulhollanddrive_d_lynch",
+    "source_identifier": "tt2398445::nm7674260::director",
+    "role": "director",
+    "movie": "m_mulhollanddrive",
+    "person": "p_lynch",
+    "imdb_credit_category": "director",
+    "ordering": 24
+  },
+  {
+    "canonical_id": "c_blueVelvet_d_lynch",
+    "source_identifier": "tt5998323::nm7674260::director",
+    "role": "director",
+    "movie": "m_blueVelvet",
+    "person": "p_lynch",
+    "imdb_credit_category": "director",
+    "ordering": 23
+  },
+  {
+    "canonical_id": "c_blueVelvet_a_dafoe",
+    "source_identifier": "tt5998323::nm1582696::actor",
+    "role": "actor",
+    "movie": "m_blueVelvet",
+    "person": "p_dafoe",
+    "imdb_credit_category": "cast",
+    "ordering": 12
+  },
+  {
+    "canonical_id": "c_paterson_d_jarmusch",
+    "source_identifier": "tt8603935::nm8207718::director",
+    "role": "director",
+    "movie": "m_paterson",
+    "person": "p_jarmusch",
+    "imdb_credit_category": "director",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_paterson_a_driver",
+    "source_identifier": "tt8603935::nm5944785::actor",
+    "role": "actor",
+    "movie": "m_paterson",
+    "person": "p_driver",
+    "imdb_credit_category": "cast",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_memoriesmurder_d_bong",
+    "source_identifier": "tt3118917::nm5394935::director",
+    "role": "director",
+    "movie": "m_memoriesmurder",
+    "person": "p_bong",
+    "imdb_credit_category": "director",
+    "ordering": 26
+  },
+  {
+    "canonical_id": "c_memoriesmurder_a_song",
+    "source_identifier": "tt3118917::nm9663496::actor",
+    "role": "actor",
+    "movie": "m_memoriesmurder",
+    "person": "p_song_kh",
+    "imdb_credit_category": "cast",
+    "ordering": 26
+  },
+  {
+    "canonical_id": "c_allaboutmother_d_almodovar",
+    "source_identifier": "tt7447732::nm8592597::director",
+    "role": "director",
+    "movie": "m_allaboutmother",
+    "person": "p_almodovar",
+    "imdb_credit_category": "director",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_allaboutmother_a_cruz",
+    "source_identifier": "tt7447732::nm0759774::actor",
+    "role": "actor",
+    "movie": "m_allaboutmother",
+    "person": "p_cruz",
+    "imdb_credit_category": "cast",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_paindglory_d_almodovar",
+    "source_identifier": "tt9013509::nm8592597::director",
+    "role": "director",
+    "movie": "m_paindglory",
+    "person": "p_almodovar",
+    "imdb_credit_category": "director",
+    "ordering": 27
+  },
+  {
+    "canonical_id": "c_paindglory_a_bardem",
+    "source_identifier": "tt9013509::nm1977683::actor",
+    "role": "actor",
+    "movie": "m_paindglory",
+    "person": "p_bardem",
+    "imdb_credit_category": "cast",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_paindglory_a_cruz",
+    "source_identifier": "tt9013509::nm0759774::actor",
+    "role": "actor",
+    "movie": "m_paindglory",
+    "person": "p_cruz",
+    "imdb_credit_category": "cast",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_amour_d_haneke",
+    "source_identifier": "tt9835431::nm8302542::director",
+    "role": "director",
+    "movie": "m_amour",
+    "person": "p_haneke",
+    "imdb_credit_category": "director",
+    "ordering": 24
+  },
+  {
+    "canonical_id": "c_amour_a_huppert",
+    "source_identifier": "tt9835431::nm5313815::actor",
+    "role": "actor",
+    "movie": "m_amour",
+    "person": "p_huppert",
+    "imdb_credit_category": "cast",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_ladybird_d_gerwig",
+    "source_identifier": "tt2120981::nm2369824::director",
+    "role": "director",
+    "movie": "m_ladybird",
+    "person": "p_gerwig",
+    "imdb_credit_category": "director",
+    "ordering": 30
+  },
+  {
+    "canonical_id": "c_littlewomen_d_gerwig",
+    "source_identifier": "tt1256930::nm2369824::director",
+    "role": "director",
+    "movie": "m_littlewomen",
+    "person": "p_gerwig",
+    "imdb_credit_category": "director",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_littlewomen_a_pugh",
+    "source_identifier": "tt1256930::nm6186566::actor",
+    "role": "actor",
+    "movie": "m_littlewomen",
+    "person": "p_pugh",
+    "imdb_credit_category": "cast",
+    "ordering": 14
+  },
+  {
+    "canonical_id": "c_littlewomen_a_chalamet",
+    "source_identifier": "tt1256930::nm6962463::actor",
+    "role": "actor",
+    "movie": "m_littlewomen",
+    "person": "p_chalamet",
+    "imdb_credit_category": "cast",
+    "ordering": 25
+  },
+  {
+    "canonical_id": "c_barbie_d_gerwig",
+    "source_identifier": "tt3552223::nm2369824::director",
+    "role": "director",
+    "movie": "m_barbie",
+    "person": "p_gerwig",
+    "imdb_credit_category": "director",
+    "ordering": 15
+  },
+  {
+    "canonical_id": "c_barbie_a_robbie",
+    "source_identifier": "tt3552223::nm4153946::actor",
+    "role": "actor",
+    "movie": "m_barbie",
+    "person": "p_robbie",
+    "imdb_credit_category": "cast",
+    "ordering": 27
+  },
+  {
+    "canonical_id": "c_barbie_a_gosling",
+    "source_identifier": "tt3552223::nm1059367::actor",
+    "role": "actor",
+    "movie": "m_barbie",
+    "person": "p_gosling",
+    "imdb_credit_category": "cast",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_getout_d_peele",
+    "source_identifier": "tt1420415::nm3686395::director",
+    "role": "director",
+    "movie": "m_getout",
+    "person": "p_peele",
+    "imdb_credit_category": "director",
+    "ordering": 4
+  },
+  {
+    "canonical_id": "c_lighthouse_d_eggers",
+    "source_identifier": "tt5235963::nm8456496::director",
+    "role": "director",
+    "movie": "m_lighthouse",
+    "person": "p_eggers",
+    "imdb_credit_category": "director",
+    "ordering": 15
+  },
+  {
+    "canonical_id": "c_lighthouse_a_pattinson",
+    "source_identifier": "tt5235963::nm4605390::actor",
+    "role": "actor",
+    "movie": "m_lighthouse",
+    "person": "p_pattinson",
+    "imdb_credit_category": "cast",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_lighthouse_a_dafoe",
+    "source_identifier": "tt5235963::nm1582696::actor",
+    "role": "actor",
+    "movie": "m_lighthouse",
+    "person": "p_dafoe",
+    "imdb_credit_category": "cast",
+    "ordering": 15
+  },
+  {
+    "canonical_id": "c_northman_d_eggers",
+    "source_identifier": "tt0633499::nm8456496::director",
+    "role": "director",
+    "movie": "m_northman",
+    "person": "p_eggers",
+    "imdb_credit_category": "director",
+    "ordering": 27
+  },
+  {
+    "canonical_id": "c_hereditary_d_aster",
+    "source_identifier": "tt7960788::nm2254104::director",
+    "role": "director",
+    "movie": "m_hereditary",
+    "person": "p_aster",
+    "imdb_credit_category": "director",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_midsommar_d_aster",
+    "source_identifier": "tt5939016::nm2254104::director",
+    "role": "director",
+    "movie": "m_midsommar",
+    "person": "p_aster",
+    "imdb_credit_category": "director",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_midsommar_a_pugh",
+    "source_identifier": "tt5939016::nm6186566::actor",
+    "role": "actor",
+    "movie": "m_midsommar",
+    "person": "p_pugh",
+    "imdb_credit_category": "cast",
+    "ordering": 1
+  },
+  {
+    "canonical_id": "c_poorthings_d_lanthimos",
+    "source_identifier": "tt0572684::nm4321819::director",
+    "role": "director",
+    "movie": "m_poorthings",
+    "person": "p_lanthimos",
+    "imdb_credit_category": "director",
+    "ordering": 13
+  },
+  {
+    "canonical_id": "c_poorthings_a_stone",
+    "source_identifier": "tt0572684::nm8470535::actor",
+    "role": "actor",
+    "movie": "m_poorthings",
+    "person": "p_stone_em",
+    "imdb_credit_category": "cast",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_poorthings_a_dafoe",
+    "source_identifier": "tt0572684::nm1582696::actor",
+    "role": "actor",
+    "movie": "m_poorthings",
+    "person": "p_dafoe",
+    "imdb_credit_category": "cast",
+    "ordering": 28
+  },
+  {
+    "canonical_id": "c_taxi_d_panahi",
+    "source_identifier": "tt2238516::nm0743662::director",
+    "role": "director",
+    "movie": "m_taxi",
+    "person": "p_panahi",
+    "imdb_credit_category": "director",
+    "ordering": 24
+  },
+  {
+    "canonical_id": "c_closeup_d_kiarostami",
+    "source_identifier": "tt9292167::nm4256165::director",
+    "role": "director",
+    "movie": "m_closeup",
+    "person": "p_kiarostami",
+    "imdb_credit_category": "director",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_goldrush_d_chaplin",
+    "source_identifier": "tt1217180::nm1067089::director",
+    "role": "director",
+    "movie": "m_goldrush",
+    "person": "p_chaplin",
+    "imdb_credit_category": "director",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_goldrush_a_chaplin",
+    "source_identifier": "tt1217180::nm1067089::actor",
+    "role": "actor",
+    "movie": "m_goldrush",
+    "person": "p_chaplin",
+    "imdb_credit_category": "cast",
+    "ordering": 5
+  },
+  {
+    "canonical_id": "c_generalkeaton_d_keaton",
+    "source_identifier": "tt0453197::nm8840895::director",
+    "role": "director",
+    "movie": "m_generalkeaton",
+    "person": "p_keaton",
+    "imdb_credit_category": "director",
+    "ordering": 23
+  },
+  {
+    "canonical_id": "c_generalkeaton_a_keaton",
+    "source_identifier": "tt0453197::nm8840895::actor",
+    "role": "actor",
+    "movie": "m_generalkeaton",
+    "person": "p_keaton",
+    "imdb_credit_category": "cast",
+    "ordering": 16
+  },
+  {
+    "canonical_id": "c_metropolis_d_lang",
+    "source_identifier": "tt6387155::nm9487956::director",
+    "role": "director",
+    "movie": "m_metropolis",
+    "person": "p_lang",
+    "imdb_credit_category": "director",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_citizenkane_d_welles",
+    "source_identifier": "tt0951972::nm8385541::director",
+    "role": "director",
+    "movie": "m_citizenkane",
+    "person": "p_welles",
+    "imdb_credit_category": "director",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_citizenkane_a_welles",
+    "source_identifier": "tt0951972::nm8385541::actor",
+    "role": "actor",
+    "movie": "m_citizenkane",
+    "person": "p_welles",
+    "imdb_credit_category": "cast",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_vertigo_d_hitchcock",
+    "source_identifier": "tt0498081::nm3290576::director",
+    "role": "director",
+    "movie": "m_vertigo",
+    "person": "p_hitchcock",
+    "imdb_credit_category": "director",
+    "ordering": 4
+  },
+  {
+    "canonical_id": "c_psycho_d_hitchcock",
+    "source_identifier": "tt5092042::nm3290576::director",
+    "role": "director",
+    "movie": "m_psycho",
+    "person": "p_hitchcock",
+    "imdb_credit_category": "director",
+    "ordering": 29
+  },
+  {
+    "canonical_id": "c_breathless_d_godard",
+    "source_identifier": "tt8936181::nm9637026::director",
+    "role": "director",
+    "movie": "m_breathless",
+    "person": "p_godard",
+    "imdb_credit_category": "director",
+    "ordering": 8
+  },
+  {
+    "canonical_id": "c_400blows_d_truffaut",
+    "source_identifier": "tt0809592::nm0917895::director",
+    "role": "director",
+    "movie": "m_400blows",
+    "person": "p_truffaut",
+    "imdb_credit_category": "director",
+    "ordering": 17
+  },
+  {
+    "canonical_id": "c_seventhseal_d_bergman",
+    "source_identifier": "tt5155318::nm9508020::director",
+    "role": "director",
+    "movie": "m_seventhseal",
+    "person": "p_bergman",
+    "imdb_credit_category": "director",
+    "ordering": 7
+  },
+  {
+    "canonical_id": "c_personabergman_d_bergman",
+    "source_identifier": "tt3553450::nm9508020::director",
+    "role": "director",
+    "movie": "m_personabergman",
+    "person": "p_bergman",
+    "imdb_credit_category": "director",
+    "ordering": 18
+  },
+  {
+    "canonical_id": "c_stalker_d_tarkovsky",
+    "source_identifier": "tt0535302::nm7055573::director",
+    "role": "director",
+    "movie": "m_stalker",
+    "person": "p_tarkovsky",
+    "imdb_credit_category": "director",
+    "ordering": 22
+  },
+  {
+    "canonical_id": "c_mirror_d_tarkovsky",
+    "source_identifier": "tt2281070::nm7055573::director",
+    "role": "director",
+    "movie": "m_mirror",
+    "person": "p_tarkovsky",
+    "imdb_credit_category": "director",
+    "ordering": 10
+  },
+  {
+    "canonical_id": "c_tokyostory_d_ozu",
+    "source_identifier": "tt5674915::nm7440220::director",
+    "role": "director",
+    "movie": "m_tokyostory",
+    "person": "p_ozu",
+    "imdb_credit_category": "director",
+    "ordering": 21
+  }
+]

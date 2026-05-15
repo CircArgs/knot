@@ -1,0 +1,2834 @@
+[
+  {
+    "canonical_id": "cr_jre_host_rogan",
+    "source_identifier": "apple:credit:3657332069",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_jre",
+    "person": "per_rogan",
+    "apple_id": 3657332069,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_host_rogan",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_host_rogan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_tal_host_glass",
+    "source_identifier": "apple:credit:4390122237",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_tal",
+    "person": "per_glass",
+    "apple_id": 4390122237,
+    "feed_url": "https://feeds.example.com/credits/cr_tal_host_glass",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_tal_host_glass/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_serial_host_koenig",
+    "source_identifier": "apple:credit:4140628963",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_serial",
+    "person": "per_koenig",
+    "apple_id": 4140628963,
+    "feed_url": "https://feeds.example.com/credits/cr_serial_host_koenig",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_serial_host_koenig/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_host_abumrad",
+    "source_identifier": "apple:credit:3287055924",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_radiolab",
+    "person": "per_abumrad",
+    "apple_id": 3287055924,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_host_abumrad",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_host_abumrad/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_host_krulwich",
+    "source_identifier": "apple:credit:3877148289",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_radiolab",
+    "person": "per_krulwich",
+    "apple_id": 3877148289,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_host_krulwich",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_host_krulwich/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_host_barbaro",
+    "source_identifier": "apple:credit:1656797083",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_daily",
+    "person": "per_barbaro",
+    "apple_id": 1656797083,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_host_barbaro",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_host_barbaro/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_host_arnett",
+    "source_identifier": "apple:credit:2932646154",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_smartless",
+    "person": "per_arnett",
+    "apple_id": 2932646154,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_host_arnett",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_host_arnett/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_host_bateman",
+    "source_identifier": "apple:credit:1790574925",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_smartless",
+    "person": "per_bateman",
+    "apple_id": 1790574925,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_host_bateman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_host_bateman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_host_hayes",
+    "source_identifier": "apple:credit:2853163665",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_smartless",
+    "person": "per_hayes",
+    "apple_id": 2853163665,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_host_hayes",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_host_hayes/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_host_gross",
+    "source_identifier": "apple:credit:2552521287",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_freshair",
+    "person": "per_gross",
+    "apple_id": 2552521287,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_host_gross",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_host_gross/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_hardcore_host_carlin",
+    "source_identifier": "apple:credit:3653762408",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_hardcore",
+    "person": "per_carlin",
+    "apple_id": 3653762408,
+    "feed_url": "https://feeds.example.com/credits/cr_hardcore_host_carlin",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_hardcore_host_carlin/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_host_fridman",
+    "source_identifier": "apple:credit:1327968662",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_lex",
+    "person": "per_fridman",
+    "apple_id": 1327968662,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_host_fridman",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_host_fridman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_host_gilbert",
+    "source_identifier": "apple:credit:4056578660",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_acquired",
+    "person": "per_gilbert",
+    "apple_id": 4056578660,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_host_gilbert",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_host_gilbert/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_host_rosenthal",
+    "source_identifier": "apple:credit:2238106274",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_acquired",
+    "person": "per_rosenthal",
+    "apple_id": 2238106274,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_host_rosenthal",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_host_rosenthal/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ezra_host_klein",
+    "source_identifier": "apple:credit:2611406065",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_ezra",
+    "person": "per_klein",
+    "apple_id": 2611406065,
+    "feed_url": "https://feeds.example.com/credits/cr_ezra_host_klein",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ezra_host_klein/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_99pi_host_mars",
+    "source_identifier": "apple:credit:2365499575",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_99pi",
+    "person": "per_mars",
+    "apple_id": 2365499575,
+    "feed_url": "https://feeds.example.com/credits/cr_99pi_host_mars",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_99pi_host_mars/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_replyall_host_vogt",
+    "source_identifier": "apple:credit:1352167399",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_replyall",
+    "person": "per_vogt",
+    "apple_id": 1352167399,
+    "feed_url": "https://feeds.example.com/credits/cr_replyall_host_vogt",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_replyall_host_vogt/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_replyall_host_goldman",
+    "source_identifier": "apple:credit:783595493",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_replyall",
+    "person": "per_goldman",
+    "apple_id": 783595493,
+    "feed_url": "https://feeds.example.com/credits/cr_replyall_host_goldman",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_replyall_host_goldman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_stown_host_reed",
+    "source_identifier": "apple:credit:2391255869",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_stown",
+    "person": "per_reed",
+    "apple_id": 2391255869,
+    "feed_url": "https://feeds.example.com/credits/cr_stown_host_reed",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_stown_host_reed/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_inthedark_host_baran",
+    "source_identifier": "apple:credit:1071417695",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_inthedark",
+    "person": "per_baran",
+    "apple_id": 1071417695,
+    "feed_url": "https://feeds.example.com/credits/cr_inthedark_host_baran",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_inthedark_host_baran/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_bearbrook_host_carrigan",
+    "source_identifier": "apple:credit:1401659096",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_bearbrook",
+    "person": "per_carrigan",
+    "apple_id": 1401659096,
+    "feed_url": "https://feeds.example.com/credits/cr_bearbrook_host_carrigan",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_bearbrook_host_carrigan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_vergecast_host_patel",
+    "source_identifier": "apple:credit:2943661015",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_vergecast",
+    "person": "per_patel",
+    "apple_id": 2943661015,
+    "feed_url": "https://feeds.example.com/credits/cr_vergecast_host_patel",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_vergecast_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_vergecast_host_bohn",
+    "source_identifier": "apple:credit:4567616538",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_vergecast",
+    "person": "per_bohn",
+    "apple_id": 4567616538,
+    "feed_url": "https://feeds.example.com/credits/cr_vergecast_host_bohn",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_vergecast_host_bohn/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_vergecast_host_warren",
+    "source_identifier": "apple:credit:1200401076",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_vergecast",
+    "person": "per_warren",
+    "apple_id": 1200401076,
+    "feed_url": "https://feeds.example.com/credits/cr_vergecast_host_warren",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_vergecast_host_warren/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_host_patel",
+    "source_identifier": "apple:credit:460438849",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_decoder",
+    "person": "per_patel",
+    "apple_id": 460438849,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_host_patel",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_host_shepard",
+    "source_identifier": "apple:credit:1153317609",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_armchair",
+    "person": "per_shepard",
+    "apple_id": 1153317609,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_host_shepard",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_host_shepard/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_host_padman",
+    "source_identifier": "apple:credit:2445095005",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_armchair",
+    "person": "per_padman",
+    "apple_id": 2445095005,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_host_padman",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_host_padman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_host_huberman",
+    "source_identifier": "apple:credit:1716347960",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_huberman",
+    "person": "per_huberman",
+    "apple_id": 1716347960,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_host_huberman",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_host_huberman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_host_swisher",
+    "source_identifier": "apple:credit:3096470297",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_pivot",
+    "person": "per_swisher",
+    "apple_id": 3096470297,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_host_swisher",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_host_swisher/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_host_galloway",
+    "source_identifier": "apple:credit:3788172459",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_pivot",
+    "person": "per_galloway",
+    "apple_id": 3788172459,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_host_galloway",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_host_galloway/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_normgossip_host_marchetti",
+    "source_identifier": "apple:credit:3407717991",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_normgossip",
+    "person": "per_marchetti",
+    "apple_id": 3407717991,
+    "feed_url": "https://feeds.example.com/credits/cr_normgossip_host_marchetti",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_normgossip_host_marchetti/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_maintenance_host_gordon",
+    "source_identifier": "apple:credit:2927148956",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_maintenance",
+    "person": "per_gordon",
+    "apple_id": 2927148956,
+    "feed_url": "https://feeds.example.com/credits/cr_maintenance_host_gordon",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_maintenance_host_gordon/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_maintenance_host_hobbes",
+    "source_identifier": "apple:credit:4429876780",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_maintenance",
+    "person": "per_hobbes",
+    "apple_id": 4429876780,
+    "feed_url": "https://feeds.example.com/credits/cr_maintenance_host_hobbes",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_maintenance_host_hobbes/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ifbooks_host_hobbes",
+    "source_identifier": "apple:credit:573092313",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_ifbookspod",
+    "person": "per_hobbes",
+    "apple_id": 573092313,
+    "feed_url": "https://feeds.example.com/credits/cr_ifbooks_host_hobbes",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ifbooks_host_hobbes/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ifbooks_host_shamshiri",
+    "source_identifier": "apple:credit:1538685232",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_ifbookspod",
+    "person": "per_shamshiri",
+    "apple_id": 1538685232,
+    "feed_url": "https://feeds.example.com/credits/cr_ifbooks_host_shamshiri",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ifbooks_host_shamshiri/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_search_host_maron",
+    "source_identifier": "apple:credit:3795731108",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_search",
+    "person": "per_maron",
+    "apple_id": 3795731108,
+    "feed_url": "https://feeds.example.com/credits/cr_search_host_maron",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_search_host_maron/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_revisionist_host_gladwell",
+    "source_identifier": "apple:credit:1105320820",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_revisionist",
+    "person": "per_gladwell",
+    "apple_id": 1105320820,
+    "feed_url": "https://feeds.example.com/credits/cr_revisionist_host_gladwell",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_revisionist_host_gladwell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_kara_host_swisher",
+    "source_identifier": "apple:credit:943214729",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_kara",
+    "person": "per_swisher",
+    "apple_id": 943214729,
+    "feed_url": "https://feeds.example.com/credits/cr_kara_host_swisher",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_kara_host_swisher/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_planetmoney_host_klein",
+    "source_identifier": "apple:credit:3686119809",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_planetmoney",
+    "person": "per_klein",
+    "apple_id": 3686119809,
+    "feed_url": "https://feeds.example.com/credits/cr_planetmoney_host_klein",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_planetmoney_host_klein/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2120_huberman",
+    "source_identifier": "apple:credit:2675709554",
+    "role": "guest",
+    "episode": "ep_jre_2120",
+    "podcast": null,
+    "person": "per_huberman",
+    "apple_id": 2675709554,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2120_huberman",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2120_huberman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2099_musk",
+    "source_identifier": "apple:credit:3674217262",
+    "role": "guest",
+    "episode": "ep_jre_2099",
+    "podcast": null,
+    "person": "per_musk",
+    "apple_id": 3674217262,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2099_musk",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2099_musk/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2050_tyson",
+    "source_identifier": "apple:credit:4412578478",
+    "role": "guest",
+    "episode": "ep_jre_2050",
+    "podcast": null,
+    "person": "per_tyson",
+    "apple_id": 4412578478,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2050_tyson",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2050_tyson/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_405_lecun",
+    "source_identifier": "apple:credit:4180000082",
+    "role": "guest",
+    "episode": "ep_lex_405",
+    "podcast": null,
+    "person": "per_lecun",
+    "apple_id": 4180000082,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_405_lecun",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_405_lecun/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_398_karpathy",
+    "source_identifier": "apple:credit:1134421349",
+    "role": "guest",
+    "episode": "ep_lex_398",
+    "podcast": null,
+    "person": "per_karpathy",
+    "apple_id": 1134421349,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_398_karpathy",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_398_karpathy/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_372_zuck",
+    "source_identifier": "apple:credit:1000072616",
+    "role": "guest",
+    "episode": "ep_lex_372",
+    "podcast": null,
+    "person": "per_zuckerberg",
+    "apple_id": 1000072616,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_372_zuck",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_372_zuck/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_selena",
+    "source_identifier": "apple:credit:1784923446",
+    "role": "guest",
+    "episode": "ep_smartless_selena",
+    "podcast": null,
+    "person": "per_blair",
+    "apple_id": 1784923446,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_selena",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_selena/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_hader",
+    "source_identifier": "apple:credit:4106211896",
+    "role": "guest",
+    "episode": "ep_smartless_hader",
+    "podcast": null,
+    "person": "per_blair2",
+    "apple_id": 4106211896,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_hader",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_hader/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ezra_klein_ai",
+    "source_identifier": "apple:credit:377056521",
+    "role": "host",
+    "episode": "ep_ezra_klein_ai",
+    "podcast": null,
+    "person": "per_klein",
+    "apple_id": 377056521,
+    "feed_url": "https://feeds.example.com/credits/cr_ezra_klein_ai",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ezra_klein_ai/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_attia",
+    "source_identifier": "apple:credit:4233768427",
+    "role": "guest",
+    "episode": "ep_huberman_attia",
+    "podcast": null,
+    "person": "per_attia",
+    "apple_id": 4233768427,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_attia",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_attia/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_huang",
+    "source_identifier": "apple:credit:1650492933",
+    "role": "guest",
+    "episode": "ep_decoder_huang",
+    "podcast": null,
+    "person": "per_huang",
+    "apple_id": 1650492933,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_huang",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_huang/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_chesky",
+    "source_identifier": "apple:credit:2269024601",
+    "role": "guest",
+    "episode": "ep_decoder_chesky",
+    "podcast": null,
+    "person": "per_chesky",
+    "apple_id": 2269024601,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_chesky",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_chesky/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_pinker",
+    "source_identifier": "apple:credit:3255798406",
+    "role": "guest",
+    "episode": "ep_freshair_pinker",
+    "podcast": null,
+    "person": "per_pinker",
+    "apple_id": 3255798406,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_pinker",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_pinker/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_dawkins",
+    "source_identifier": "apple:credit:1807623702",
+    "role": "guest",
+    "episode": "ep_freshair_dawkins",
+    "podcast": null,
+    "person": "per_dawkins",
+    "apple_id": 1807623702,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_dawkins",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_dawkins/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_nvidia_huang",
+    "source_identifier": "apple:credit:1823338608",
+    "role": "guest",
+    "episode": "ep_acquired_nvidia",
+    "podcast": null,
+    "person": "per_huang",
+    "apple_id": 1823338608,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_nvidia_huang",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_nvidia_huang/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_serial_prod_reiman",
+    "source_identifier": "apple:credit:4561119286",
+    "role": "producer",
+    "episode": "ep_serial_s4e2",
+    "podcast": null,
+    "person": "per_prod2",
+    "apple_id": 4561119286,
+    "feed_url": "https://feeds.example.com/credits/cr_serial_prod_reiman",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_serial_prod_reiman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_prod_wheeler",
+    "source_identifier": "apple:credit:981795385",
+    "role": "producer",
+    "episode": null,
+    "podcast": "pod_radiolab",
+    "person": "per_prod3",
+    "apple_id": 981795385,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_prod_wheeler",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_prod_wheeler/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_prod_miller",
+    "source_identifier": "apple:credit:1795839464",
+    "role": "producer",
+    "episode": null,
+    "podcast": "pod_radiolab",
+    "person": "per_prod4",
+    "apple_id": 1795839464,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_prod_miller",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_prod_miller/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_prod_nasser",
+    "source_identifier": "apple:credit:4036368752",
+    "role": "producer",
+    "episode": null,
+    "podcast": "pod_radiolab",
+    "person": "per_prod5",
+    "apple_id": 4036368752,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_prod_nasser",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_prod_nasser/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_tal_prod_misitzis",
+    "source_identifier": "apple:credit:510519151",
+    "role": "producer",
+    "episode": null,
+    "podcast": "pod_tal",
+    "person": "per_prod6",
+    "apple_id": 510519151,
+    "feed_url": "https://feeds.example.com/credits/cr_tal_prod_misitzis",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_tal_prod_misitzis/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_prod_nelson",
+    "source_identifier": "apple:credit:2962498359",
+    "role": "producer",
+    "episode": null,
+    "podcast": "pod_daily",
+    "person": "per_prod7",
+    "apple_id": 2962498359,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_prod_nelson",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_prod_nelson/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_serial_music_thorburn",
+    "source_identifier": "apple:credit:334759770",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_serial",
+    "person": "per_music1",
+    "apple_id": 334759770,
+    "feed_url": "https://feeds.example.com/credits/cr_serial_music_thorburn",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_serial_music_thorburn/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_stown_music_hart",
+    "source_identifier": "apple:credit:4103421145",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_stown",
+    "person": "per_music3",
+    "apple_id": 4103421145,
+    "feed_url": "https://feeds.example.com/credits/cr_stown_music_hart",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_stown_music_hart/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_inthedark_music_dorn",
+    "source_identifier": "apple:credit:4193740294",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_inthedark",
+    "person": "per_music2",
+    "apple_id": 4193740294,
+    "feed_url": "https://feeds.example.com/credits/cr_inthedark_music_dorn",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_inthedark_music_dorn/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2200_huberman",
+    "source_identifier": "apple:credit:1677634681",
+    "role": "guest",
+    "episode": "ep_jre_2200",
+    "podcast": null,
+    "person": "per_huberman",
+    "apple_id": 1677634681,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2200_huberman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2200_huberman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2080_harris",
+    "source_identifier": "apple:credit:3701133297",
+    "role": "guest",
+    "episode": "ep_jre_2080",
+    "podcast": null,
+    "person": "per_harris",
+    "apple_id": 3701133297,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2080_harris",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2080_harris/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_1965_buterin",
+    "source_identifier": "apple:credit:2875411219",
+    "role": "guest",
+    "episode": "ep_jre_1965",
+    "podcast": null,
+    "person": "per_buterin",
+    "apple_id": 2875411219,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_1965_buterin",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_1965_buterin/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_1900_zuck",
+    "source_identifier": "apple:credit:3315745685",
+    "role": "guest",
+    "episode": "ep_jre_1900",
+    "podcast": null,
+    "person": "per_zuckerberg",
+    "apple_id": 3315745685,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_1900_zuck",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_1900_zuck/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_415_cook",
+    "source_identifier": "apple:credit:4173450919",
+    "role": "guest",
+    "episode": "ep_lex_415",
+    "podcast": null,
+    "person": "per_cook",
+    "apple_id": 4173450919,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_415_cook",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_415_cook/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_355_musk",
+    "source_identifier": "apple:credit:1141538632",
+    "role": "guest",
+    "episode": "ep_lex_355",
+    "podcast": null,
+    "person": "per_musk",
+    "apple_id": 1141538632,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_355_musk",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_355_musk/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_330_lecun",
+    "source_identifier": "apple:credit:2506158359",
+    "role": "guest",
+    "episode": "ep_lex_330",
+    "podcast": null,
+    "person": "per_lecun",
+    "apple_id": 2506158359,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_330_lecun",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_330_lecun/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_obrien",
+    "source_identifier": "apple:credit:3846772471",
+    "role": "guest",
+    "episode": "ep_smartless_obrien",
+    "podcast": null,
+    "person": "per_blair3",
+    "apple_id": 3846772471,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_obrien",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_obrien/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_ferrell",
+    "source_identifier": "apple:credit:1545191023",
+    "role": "guest",
+    "episode": "ep_smartless_ferrell",
+    "podcast": null,
+    "person": "per_blair4",
+    "apple_id": 1545191023,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_ferrell",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_ferrell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_grant",
+    "source_identifier": "apple:credit:2350501430",
+    "role": "guest",
+    "episode": "ep_freshair_grant",
+    "podcast": null,
+    "person": "per_grant",
+    "apple_id": 2350501430,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_grant",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_grant/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_brown",
+    "source_identifier": "apple:credit:2817702432",
+    "role": "guest",
+    "episode": "ep_freshair_brown",
+    "podcast": null,
+    "person": "per_brown",
+    "apple_id": 2817702432,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_brown",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_brown/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ezra_lewis",
+    "source_identifier": "apple:credit:3871353989",
+    "role": "guest",
+    "episode": "ep_ezra_lewis",
+    "podcast": null,
+    "person": "per_lewis",
+    "apple_id": 3871353989,
+    "feed_url": "https://feeds.example.com/credits/cr_ezra_lewis",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ezra_lewis/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_grant",
+    "source_identifier": "apple:credit:4003868136",
+    "role": "guest",
+    "episode": "ep_armchair_grant",
+    "podcast": null,
+    "person": "per_grant",
+    "apple_id": 4003868136,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_grant",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_grant/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_wtf_obrien",
+    "source_identifier": "apple:credit:2921921217",
+    "role": "guest",
+    "episode": "ep_wtf_obrien",
+    "podcast": null,
+    "person": "per_blair3",
+    "apple_id": 2921921217,
+    "feed_url": "https://feeds.example.com/credits/cr_wtf_obrien",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_wtf_obrien/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_kara_musk",
+    "source_identifier": "apple:credit:2888342237",
+    "role": "guest",
+    "episode": "ep_kara_musk",
+    "podcast": null,
+    "person": "per_musk",
+    "apple_id": 2888342237,
+    "feed_url": "https://feeds.example.com/credits/cr_kara_musk",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_kara_musk/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_dust_miller",
+    "source_identifier": "apple:credit:1363825957",
+    "role": "host",
+    "episode": "ep_radiolab_dust",
+    "podcast": null,
+    "person": "per_prod4",
+    "apple_id": 1363825957,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_dust_miller",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_dust_miller/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_smarty_nasser",
+    "source_identifier": "apple:credit:2628820521",
+    "role": "host",
+    "episode": "ep_radiolab_smarty",
+    "podcast": null,
+    "person": "per_prod5",
+    "apple_id": 2628820521,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_smarty_nasser",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_smarty_nasser/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_tal_812_glass",
+    "source_identifier": "apple:credit:1639776940",
+    "role": "host",
+    "episode": "ep_tal_812",
+    "podcast": null,
+    "person": "per_glass",
+    "apple_id": 1639776940,
+    "feed_url": "https://feeds.example.com/credits/cr_tal_812_glass",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_tal_812_glass/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_tal_805_glass",
+    "source_identifier": "apple:credit:3603711566",
+    "role": "host",
+    "episode": "ep_tal_805",
+    "podcast": null,
+    "person": "per_glass",
+    "apple_id": 3603711566,
+    "feed_url": "https://feeds.example.com/credits/cr_tal_805_glass",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_tal_805_glass/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_240115_barbaro",
+    "source_identifier": "apple:credit:1105844835",
+    "role": "host",
+    "episode": "ep_daily_240115",
+    "podcast": null,
+    "person": "per_barbaro",
+    "apple_id": 1105844835,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_240115_barbaro",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_240115_barbaro/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_240201_barbaro",
+    "source_identifier": "apple:credit:1473239524",
+    "role": "host",
+    "episode": "ep_daily_240201",
+    "podcast": null,
+    "person": "per_barbaro",
+    "apple_id": 1473239524,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_240201_barbaro",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_240201_barbaro/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_inthedark_s3e1_prod",
+    "source_identifier": "apple:credit:516644234",
+    "role": "producer",
+    "episode": "ep_inthedark_s3e1",
+    "podcast": null,
+    "person": "per_prod7",
+    "apple_id": 516644234,
+    "feed_url": "https://feeds.example.com/credits/cr_inthedark_s3e1_prod",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_inthedark_s3e1_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_uptofirst_host_dummy",
+    "source_identifier": "apple:credit:2226140883",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_uptofirst",
+    "person": "per_barbaro",
+    "apple_id": 2226140883,
+    "feed_url": "https://feeds.example.com/credits/cr_uptofirst_host_dummy",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_uptofirst_host_dummy/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_codeswitch_host_dummy",
+    "source_identifier": "apple:credit:3286939028",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_codeswitch",
+    "person": "per_vedantam",
+    "apple_id": 3286939028,
+    "feed_url": "https://feeds.example.com/credits/cr_codeswitch_host_dummy",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_codeswitch_host_dummy/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_planetmoney_host_alt",
+    "source_identifier": "apple:credit:3215859987",
+    "role": "host",
+    "episode": null,
+    "podcast": "pod_planetmoney",
+    "person": "per_klein",
+    "apple_id": 3215859987,
+    "feed_url": "https://feeds.example.com/credits/cr_planetmoney_host_alt",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_planetmoney_host_alt/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2120_host_rogan",
+    "source_identifier": "apple:credit:2173391396",
+    "role": "host",
+    "episode": "ep_jre_2120",
+    "podcast": null,
+    "person": "per_rogan",
+    "apple_id": 2173391396,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2120_host_rogan",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2120_host_rogan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2099_host_rogan",
+    "source_identifier": "apple:credit:410214237",
+    "role": "host",
+    "episode": "ep_jre_2099",
+    "podcast": null,
+    "person": "per_rogan",
+    "apple_id": 410214237,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2099_host_rogan",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2099_host_rogan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2050_host_rogan",
+    "source_identifier": "apple:credit:4123109704",
+    "role": "host",
+    "episode": "ep_jre_2050",
+    "podcast": null,
+    "person": "per_rogan",
+    "apple_id": 4123109704,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2050_host_rogan",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2050_host_rogan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_2008_host_rogan",
+    "source_identifier": "apple:credit:3992224947",
+    "role": "host",
+    "episode": "ep_jre_2008",
+    "podcast": null,
+    "person": "per_rogan",
+    "apple_id": 3992224947,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_2008_host_rogan",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_2008_host_rogan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_1999_host_rogan",
+    "source_identifier": "apple:credit:973982529",
+    "role": "host",
+    "episode": "ep_jre_1999",
+    "podcast": null,
+    "person": "per_rogan",
+    "apple_id": 973982529,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_1999_host_rogan",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_1999_host_rogan/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_410_host_fridman",
+    "source_identifier": "apple:credit:820864160",
+    "role": "host",
+    "episode": "ep_lex_410",
+    "podcast": null,
+    "person": "per_fridman",
+    "apple_id": 820864160,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_410_host_fridman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_410_host_fridman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_405_host_fridman",
+    "source_identifier": "apple:credit:4542433734",
+    "role": "host",
+    "episode": "ep_lex_405",
+    "podcast": null,
+    "person": "per_fridman",
+    "apple_id": 4542433734,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_405_host_fridman",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_405_host_fridman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_398_host_fridman",
+    "source_identifier": "apple:credit:1303708091",
+    "role": "host",
+    "episode": "ep_lex_398",
+    "podcast": null,
+    "person": "per_fridman",
+    "apple_id": 1303708091,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_398_host_fridman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_398_host_fridman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_388_host_fridman",
+    "source_identifier": "apple:credit:944842295",
+    "role": "host",
+    "episode": "ep_lex_388",
+    "podcast": null,
+    "person": "per_fridman",
+    "apple_id": 944842295,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_388_host_fridman",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_388_host_fridman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_lex_372_host_fridman",
+    "source_identifier": "apple:credit:2661171214",
+    "role": "host",
+    "episode": "ep_lex_372",
+    "podcast": null,
+    "person": "per_fridman",
+    "apple_id": 2661171214,
+    "feed_url": "https://feeds.example.com/credits/cr_lex_372_host_fridman",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_lex_372_host_fridman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_serial_s4e1_host_koenig",
+    "source_identifier": "apple:credit:3114987907",
+    "role": "host",
+    "episode": "ep_serial_s4e1",
+    "podcast": null,
+    "person": "per_koenig",
+    "apple_id": 3114987907,
+    "feed_url": "https://feeds.example.com/credits/cr_serial_s4e1_host_koenig",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_serial_s4e1_host_koenig/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_serial_s4e2_host_koenig",
+    "source_identifier": "apple:credit:1421304012",
+    "role": "host",
+    "episode": "ep_serial_s4e2",
+    "podcast": null,
+    "person": "per_koenig",
+    "apple_id": 1421304012,
+    "feed_url": "https://feeds.example.com/credits/cr_serial_s4e2_host_koenig",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_serial_s4e2_host_koenig/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_99pi_504_host_mars",
+    "source_identifier": "apple:credit:2130560044",
+    "role": "host",
+    "episode": "ep_99pi_504",
+    "podcast": null,
+    "person": "per_mars",
+    "apple_id": 2130560044,
+    "feed_url": "https://feeds.example.com/credits/cr_99pi_504_host_mars",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_99pi_504_host_mars/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_99pi_510_host_mars",
+    "source_identifier": "apple:credit:1902323722",
+    "role": "host",
+    "episode": "ep_99pi_510",
+    "podcast": null,
+    "person": "per_mars",
+    "apple_id": 1902323722,
+    "feed_url": "https://feeds.example.com/credits/cr_99pi_510_host_mars",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_99pi_510_host_mars/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_hardcore_60_host_carlin",
+    "source_identifier": "apple:credit:4164052278",
+    "role": "host",
+    "episode": "ep_hardcore_60",
+    "podcast": null,
+    "person": "per_carlin",
+    "apple_id": 4164052278,
+    "feed_url": "https://feeds.example.com/credits/cr_hardcore_60_host_carlin",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_hardcore_60_host_carlin/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_hardcore_59_host_carlin",
+    "source_identifier": "apple:credit:1816654388",
+    "role": "host",
+    "episode": "ep_hardcore_59",
+    "podcast": null,
+    "person": "per_carlin",
+    "apple_id": 1816654388,
+    "feed_url": "https://feeds.example.com/credits/cr_hardcore_59_host_carlin",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_hardcore_59_host_carlin/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_nvidia_gilbert",
+    "source_identifier": "apple:credit:4354430531",
+    "role": "host",
+    "episode": "ep_acquired_nvidia",
+    "podcast": null,
+    "person": "per_gilbert",
+    "apple_id": 4354430531,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_nvidia_gilbert",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_nvidia_gilbert/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_nvidia_rosenthal",
+    "source_identifier": "apple:credit:1336871889",
+    "role": "host",
+    "episode": "ep_acquired_nvidia",
+    "podcast": null,
+    "person": "per_rosenthal",
+    "apple_id": 1336871889,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_nvidia_rosenthal",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_nvidia_rosenthal/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_lvmh_gilbert",
+    "source_identifier": "apple:credit:1268033346",
+    "role": "host",
+    "episode": "ep_acquired_lvmh",
+    "podcast": null,
+    "person": "per_gilbert",
+    "apple_id": 1268033346,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_lvmh_gilbert",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_lvmh_gilbert/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_lvmh_rosenthal",
+    "source_identifier": "apple:credit:3803992600",
+    "role": "host",
+    "episode": "ep_acquired_lvmh",
+    "podcast": null,
+    "person": "per_rosenthal",
+    "apple_id": 3803992600,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_lvmh_rosenthal",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_lvmh_rosenthal/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_costco_gilbert",
+    "source_identifier": "apple:credit:795286513",
+    "role": "host",
+    "episode": "ep_acquired_costco",
+    "podcast": null,
+    "person": "per_gilbert",
+    "apple_id": 795286513,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_costco_gilbert",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_costco_gilbert/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_microsoft_gilbert",
+    "source_identifier": "apple:credit:2647318432",
+    "role": "host",
+    "episode": "ep_acquired_microsoft",
+    "podcast": null,
+    "person": "per_gilbert",
+    "apple_id": 2647318432,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_microsoft_gilbert",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_microsoft_gilbert/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_acquired_visa_gilbert",
+    "source_identifier": "apple:credit:2794586911",
+    "role": "host",
+    "episode": "ep_acquired_visa",
+    "podcast": null,
+    "person": "per_gilbert",
+    "apple_id": 2794586911,
+    "feed_url": "https://feeds.example.com/credits/cr_acquired_visa_gilbert",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_acquired_visa_gilbert/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ezra_thiel_host",
+    "source_identifier": "apple:credit:1146138353",
+    "role": "host",
+    "episode": "ep_ezra_klein_thiel",
+    "podcast": null,
+    "person": "per_klein",
+    "apple_id": 1146138353,
+    "feed_url": "https://feeds.example.com/credits/cr_ezra_thiel_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ezra_thiel_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ezra_haidt_host",
+    "source_identifier": "apple:credit:899049632",
+    "role": "host",
+    "episode": "ep_ezra_haidt",
+    "podcast": null,
+    "person": "per_klein",
+    "apple_id": 899049632,
+    "feed_url": "https://feeds.example.com/credits/cr_ezra_haidt_host",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ezra_haidt_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ezra_lewis_host",
+    "source_identifier": "apple:credit:1277800034",
+    "role": "host",
+    "episode": "ep_ezra_lewis",
+    "podcast": null,
+    "person": "per_klein",
+    "apple_id": 1277800034,
+    "feed_url": "https://feeds.example.com/credits/cr_ezra_lewis_host",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ezra_lewis_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_obama_host_arnett",
+    "source_identifier": "apple:credit:1254782626",
+    "role": "host",
+    "episode": "ep_smartless_obama",
+    "podcast": null,
+    "person": "per_arnett",
+    "apple_id": 1254782626,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_obama_host_arnett",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_obama_host_arnett/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_obama_host_bateman",
+    "source_identifier": "apple:credit:3014432930",
+    "role": "host",
+    "episode": "ep_smartless_obama",
+    "podcast": null,
+    "person": "per_bateman",
+    "apple_id": 3014432930,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_obama_host_bateman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_obama_host_bateman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_obama_host_hayes",
+    "source_identifier": "apple:credit:917502464",
+    "role": "host",
+    "episode": "ep_smartless_obama",
+    "podcast": null,
+    "person": "per_hayes",
+    "apple_id": 917502464,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_obama_host_hayes",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_obama_host_hayes/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_selena_host_arnett",
+    "source_identifier": "apple:credit:522947728",
+    "role": "host",
+    "episode": "ep_smartless_selena",
+    "podcast": null,
+    "person": "per_arnett",
+    "apple_id": 522947728,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_selena_host_arnett",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_selena_host_arnett/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_smartless_chappelle_host_bateman",
+    "source_identifier": "apple:credit:2405300722",
+    "role": "host",
+    "episode": "ep_smartless_chappelle",
+    "podcast": null,
+    "person": "per_bateman",
+    "apple_id": 2405300722,
+    "feed_url": "https://feeds.example.com/credits/cr_smartless_chappelle_host_bateman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_smartless_chappelle_host_bateman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_obama_host_shepard",
+    "source_identifier": "apple:credit:1816874012",
+    "role": "host",
+    "episode": "ep_armchair_obama",
+    "podcast": null,
+    "person": "per_shepard",
+    "apple_id": 1816874012,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_obama_host_shepard",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_obama_host_shepard/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_obama_host_padman",
+    "source_identifier": "apple:credit:2024924115",
+    "role": "host",
+    "episode": "ep_armchair_obama",
+    "podcast": null,
+    "person": "per_padman",
+    "apple_id": 2024924115,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_obama_host_padman",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_obama_host_padman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_reynolds_host_shepard",
+    "source_identifier": "apple:credit:1187151197",
+    "role": "host",
+    "episode": "ep_armchair_reynolds",
+    "podcast": null,
+    "person": "per_shepard",
+    "apple_id": 1187151197,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_reynolds_host_shepard",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_reynolds_host_shepard/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_attia_host",
+    "source_identifier": "apple:credit:2485214524",
+    "role": "host",
+    "episode": "ep_huberman_attia",
+    "podcast": null,
+    "person": "per_huberman",
+    "apple_id": 2485214524,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_attia_host",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_attia_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_sleep_host",
+    "source_identifier": "apple:credit:3985042910",
+    "role": "host",
+    "episode": "ep_huberman_sleep",
+    "podcast": null,
+    "person": "per_huberman",
+    "apple_id": 3985042910,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_sleep_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_sleep_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_dopamine_host",
+    "source_identifier": "apple:credit:3236550080",
+    "role": "host",
+    "episode": "ep_huberman_dopamine",
+    "podcast": null,
+    "person": "per_huberman",
+    "apple_id": 3236550080,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_dopamine_host",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_dopamine_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_focus_host",
+    "source_identifier": "apple:credit:1006533320",
+    "role": "host",
+    "episode": "ep_huberman_focus",
+    "podcast": null,
+    "person": "per_huberman",
+    "apple_id": 1006533320,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_focus_host",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_focus_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_huang_host_patel",
+    "source_identifier": "apple:credit:1810992277",
+    "role": "host",
+    "episode": "ep_decoder_huang",
+    "podcast": null,
+    "person": "per_patel",
+    "apple_id": 1810992277,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_huang_host_patel",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_huang_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_chesky_host_patel",
+    "source_identifier": "apple:credit:390359757",
+    "role": "host",
+    "episode": "ep_decoder_chesky",
+    "podcast": null,
+    "person": "per_patel",
+    "apple_id": 390359757,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_chesky_host_patel",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_chesky_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_pichai_host_patel",
+    "source_identifier": "apple:credit:548527333",
+    "role": "host",
+    "episode": "ep_decoder_pichai",
+    "podcast": null,
+    "person": "per_patel",
+    "apple_id": 548527333,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_pichai_host_patel",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_pichai_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_decoder_fadell_host_patel",
+    "source_identifier": "apple:credit:2345222682",
+    "role": "host",
+    "episode": "ep_decoder_fadell",
+    "podcast": null,
+    "person": "per_patel",
+    "apple_id": 2345222682,
+    "feed_url": "https://feeds.example.com/credits/cr_decoder_fadell_host_patel",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_decoder_fadell_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_pinker_host",
+    "source_identifier": "apple:credit:3792639762",
+    "role": "host",
+    "episode": "ep_freshair_pinker",
+    "podcast": null,
+    "person": "per_gross",
+    "apple_id": 3792639762,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_pinker_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_pinker_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_dawkins_host",
+    "source_identifier": "apple:credit:4581062774",
+    "role": "host",
+    "episode": "ep_freshair_dawkins",
+    "podcast": null,
+    "person": "per_gross",
+    "apple_id": 4581062774,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_dawkins_host",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_dawkins_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_grant_host",
+    "source_identifier": "apple:credit:1492517047",
+    "role": "host",
+    "episode": "ep_freshair_grant",
+    "podcast": null,
+    "person": "per_gross",
+    "apple_id": 1492517047,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_grant_host",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_grant_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_brown_host",
+    "source_identifier": "apple:credit:1137859615",
+    "role": "host",
+    "episode": "ep_freshair_brown",
+    "podcast": null,
+    "person": "per_gross",
+    "apple_id": 1137859615,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_brown_host",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_brown_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_freshair_iger_host",
+    "source_identifier": "apple:credit:1427341080",
+    "role": "host",
+    "episode": "ep_freshair_iger",
+    "podcast": null,
+    "person": "per_gross",
+    "apple_id": 1427341080,
+    "feed_url": "https://feeds.example.com/credits/cr_freshair_iger_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_freshair_iger_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_240301_host_swisher",
+    "source_identifier": "apple:credit:3780795075",
+    "role": "host",
+    "episode": "ep_pivot_240301",
+    "podcast": null,
+    "person": "per_swisher",
+    "apple_id": 3780795075,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_240301_host_swisher",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_240301_host_swisher/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_240301_host_galloway",
+    "source_identifier": "apple:credit:901818781",
+    "role": "host",
+    "episode": "ep_pivot_240301",
+    "podcast": null,
+    "person": "per_galloway",
+    "apple_id": 901818781,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_240301_host_galloway",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_240301_host_galloway/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_240315_host_swisher",
+    "source_identifier": "apple:credit:3733388486",
+    "role": "host",
+    "episode": "ep_pivot_240315",
+    "podcast": null,
+    "person": "per_swisher",
+    "apple_id": 3733388486,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_240315_host_swisher",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_240315_host_swisher/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_240412_host_galloway",
+    "source_identifier": "apple:credit:1858038282",
+    "role": "host",
+    "episode": "ep_pivot_240412",
+    "podcast": null,
+    "person": "per_galloway",
+    "apple_id": 1858038282,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_240412_host_galloway",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_240412_host_galloway/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_pivot_240501_host_swisher",
+    "source_identifier": "apple:credit:599967488",
+    "role": "host",
+    "episode": "ep_pivot_240501",
+    "podcast": null,
+    "person": "per_swisher",
+    "apple_id": 599967488,
+    "feed_url": "https://feeds.example.com/credits/cr_pivot_240501_host_swisher",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_pivot_240501_host_swisher/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_planetmoney_1700_host",
+    "source_identifier": "apple:credit:2273828594",
+    "role": "host",
+    "episode": "ep_planetmoney_1700",
+    "podcast": null,
+    "person": "per_klein",
+    "apple_id": 2273828594,
+    "feed_url": "https://feeds.example.com/credits/cr_planetmoney_1700_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_planetmoney_1700_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_planetmoney_1689_host",
+    "source_identifier": "apple:credit:4473139943",
+    "role": "host",
+    "episode": "ep_planetmoney_1689",
+    "podcast": null,
+    "person": "per_klein",
+    "apple_id": 4473139943,
+    "feed_url": "https://feeds.example.com/credits/cr_planetmoney_1689_host",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_planetmoney_1689_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_kara_musk_host",
+    "source_identifier": "apple:credit:3924407617",
+    "role": "host",
+    "episode": "ep_kara_musk",
+    "podcast": null,
+    "person": "per_swisher",
+    "apple_id": 3924407617,
+    "feed_url": "https://feeds.example.com/credits/cr_kara_musk_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_kara_musk_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_kara_altman_host",
+    "source_identifier": "apple:credit:4057578199",
+    "role": "host",
+    "episode": "ep_kara_altman",
+    "podcast": null,
+    "person": "per_swisher",
+    "apple_id": 4057578199,
+    "feed_url": "https://feeds.example.com/credits/cr_kara_altman_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_kara_altman_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_brain_host_abumrad",
+    "source_identifier": "apple:credit:2452926625",
+    "role": "host",
+    "episode": "ep_radiolab_brain",
+    "podcast": null,
+    "person": "per_abumrad",
+    "apple_id": 2452926625,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_brain_host_abumrad",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_brain_host_abumrad/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_color_host_krulwich",
+    "source_identifier": "apple:credit:3757022541",
+    "role": "host",
+    "episode": "ep_radiolab_color",
+    "podcast": null,
+    "person": "per_krulwich",
+    "apple_id": 3757022541,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_color_host_krulwich",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_color_host_krulwich/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_oceans_host_miller",
+    "source_identifier": "apple:credit:2034601519",
+    "role": "host",
+    "episode": "ep_radiolab_oceans",
+    "podcast": null,
+    "person": "per_prod4",
+    "apple_id": 2034601519,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_oceans_host_miller",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_oceans_host_miller/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_revisionist_s8e1_host_gladwell",
+    "source_identifier": "apple:credit:4164516811",
+    "role": "host",
+    "episode": "ep_revisionist_s8e1",
+    "podcast": null,
+    "person": "per_gladwell",
+    "apple_id": 4164516811,
+    "feed_url": "https://feeds.example.com/credits/cr_revisionist_s8e1_host_gladwell",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_revisionist_s8e1_host_gladwell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_revisionist_s8e3_host_gladwell",
+    "source_identifier": "apple:credit:1718043393",
+    "role": "host",
+    "episode": "ep_revisionist_s8e3",
+    "podcast": null,
+    "person": "per_gladwell",
+    "apple_id": 1718043393,
+    "feed_url": "https://feeds.example.com/credits/cr_revisionist_s8e3_host_gladwell",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_revisionist_s8e3_host_gladwell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ifbooks_secret_host_hobbes",
+    "source_identifier": "apple:credit:3333342820",
+    "role": "host",
+    "episode": "ep_ifbooks_secret",
+    "podcast": null,
+    "person": "per_hobbes",
+    "apple_id": 3333342820,
+    "feed_url": "https://feeds.example.com/credits/cr_ifbooks_secret_host_hobbes",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ifbooks_secret_host_hobbes/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_ifbooks_men_host_shamshiri",
+    "source_identifier": "apple:credit:4476808913",
+    "role": "host",
+    "episode": "ep_ifbooks_men",
+    "podcast": null,
+    "person": "per_shamshiri",
+    "apple_id": 4476808913,
+    "feed_url": "https://feeds.example.com/credits/cr_ifbooks_men_host_shamshiri",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_ifbooks_men_host_shamshiri/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_maintenance_bmi_host_gordon",
+    "source_identifier": "apple:credit:420180455",
+    "role": "host",
+    "episode": "ep_maintenance_bmi",
+    "podcast": null,
+    "person": "per_gordon",
+    "apple_id": 420180455,
+    "feed_url": "https://feeds.example.com/credits/cr_maintenance_bmi_host_gordon",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_maintenance_bmi_host_gordon/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_maintenance_keto_host_hobbes",
+    "source_identifier": "apple:credit:468522768",
+    "role": "host",
+    "episode": "ep_maintenance_keto",
+    "podcast": null,
+    "person": "per_hobbes",
+    "apple_id": 468522768,
+    "feed_url": "https://feeds.example.com/credits/cr_maintenance_keto_host_hobbes",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_maintenance_keto_host_hobbes/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_normgossip_office_host",
+    "source_identifier": "apple:credit:3676891607",
+    "role": "host",
+    "episode": "ep_normgossip_office",
+    "podcast": null,
+    "person": "per_marchetti",
+    "apple_id": 3676891607,
+    "feed_url": "https://feeds.example.com/credits/cr_normgossip_office_host",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_normgossip_office_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_normgossip_party_host",
+    "source_identifier": "apple:credit:647924775",
+    "role": "host",
+    "episode": "ep_normgossip_party",
+    "podcast": null,
+    "person": "per_marchetti",
+    "apple_id": 647924775,
+    "feed_url": "https://feeds.example.com/credits/cr_normgossip_party_host",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_normgossip_party_host/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_vergecast_240315_host_patel",
+    "source_identifier": "apple:credit:570015065",
+    "role": "host",
+    "episode": "ep_vergecast_240315",
+    "podcast": null,
+    "person": "per_patel",
+    "apple_id": 570015065,
+    "feed_url": "https://feeds.example.com/credits/cr_vergecast_240315_host_patel",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_vergecast_240315_host_patel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_vergecast_240208_host_bohn",
+    "source_identifier": "apple:credit:1834579965",
+    "role": "host",
+    "episode": "ep_vergecast_240208",
+    "podcast": null,
+    "person": "per_bohn",
+    "apple_id": 1834579965,
+    "feed_url": "https://feeds.example.com/credits/cr_vergecast_240208_host_bohn",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_vergecast_240208_host_bohn/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_vergecast_240501_host_warren",
+    "source_identifier": "apple:credit:3021901072",
+    "role": "host",
+    "episode": "ep_vergecast_240501",
+    "podcast": null,
+    "person": "per_warren",
+    "apple_id": 3021901072,
+    "feed_url": "https://feeds.example.com/credits/cr_vergecast_240501_host_warren",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_vergecast_240501_host_warren/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_dust_prod",
+    "source_identifier": "apple:credit:3949087865",
+    "role": "producer",
+    "episode": "ep_radiolab_dust",
+    "podcast": null,
+    "person": "per_prod3",
+    "apple_id": 3949087865,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_dust_prod",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_dust_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_smarty_prod",
+    "source_identifier": "apple:credit:1239884727",
+    "role": "producer",
+    "episode": "ep_radiolab_smarty",
+    "podcast": null,
+    "person": "per_prod5",
+    "apple_id": 1239884727,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_smarty_prod",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_smarty_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_swimmer_prod",
+    "source_identifier": "apple:credit:3591762130",
+    "role": "producer",
+    "episode": "ep_radiolab_swimmer",
+    "podcast": null,
+    "person": "per_prod4",
+    "apple_id": 3591762130,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_swimmer_prod",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_swimmer_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_240115_prod",
+    "source_identifier": "apple:credit:3139283046",
+    "role": "producer",
+    "episode": "ep_daily_240115",
+    "podcast": null,
+    "person": "per_prod7",
+    "apple_id": 3139283046,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_240115_prod",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_240115_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_240201_prod",
+    "source_identifier": "apple:credit:2202079935",
+    "role": "producer",
+    "episode": "ep_daily_240201",
+    "podcast": null,
+    "person": "per_prod7",
+    "apple_id": 2202079935,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_240201_prod",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_240201_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_daily_240220_prod",
+    "source_identifier": "apple:credit:677276118",
+    "role": "producer",
+    "episode": "ep_daily_240220",
+    "podcast": null,
+    "person": "per_prod7",
+    "apple_id": 677276118,
+    "feed_url": "https://feeds.example.com/credits/cr_daily_240220_prod",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_daily_240220_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_tal_812_prod",
+    "source_identifier": "apple:credit:4274603026",
+    "role": "producer",
+    "episode": "ep_tal_812",
+    "podcast": null,
+    "person": "per_prod6",
+    "apple_id": 4274603026,
+    "feed_url": "https://feeds.example.com/credits/cr_tal_812_prod",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_tal_812_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_tal_805_prod",
+    "source_identifier": "apple:credit:654373790",
+    "role": "producer",
+    "episode": "ep_tal_805",
+    "podcast": null,
+    "person": "per_prod6",
+    "apple_id": 654373790,
+    "feed_url": "https://feeds.example.com/credits/cr_tal_805_prod",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_tal_805_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_inthedark_s3e2_prod",
+    "source_identifier": "apple:credit:370462081",
+    "role": "producer",
+    "episode": "ep_inthedark_s3e2",
+    "podcast": null,
+    "person": "per_prod7",
+    "apple_id": 370462081,
+    "feed_url": "https://feeds.example.com/credits/cr_inthedark_s3e2_prod",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_inthedark_s3e2_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_inthedark_s3e3_prod",
+    "source_identifier": "apple:credit:1614972881",
+    "role": "producer",
+    "episode": "ep_inthedark_s3e3",
+    "podcast": null,
+    "person": "per_prod7",
+    "apple_id": 1614972881,
+    "feed_url": "https://feeds.example.com/credits/cr_inthedark_s3e3_prod",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_inthedark_s3e3_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_bearbrook_prod",
+    "source_identifier": "apple:credit:4105778440",
+    "role": "producer",
+    "episode": "ep_bearbrook_s2e1",
+    "podcast": null,
+    "person": "per_prod2",
+    "apple_id": 4105778440,
+    "feed_url": "https://feeds.example.com/credits/cr_bearbrook_prod",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_bearbrook_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_bearbrook_2_prod",
+    "source_identifier": "apple:credit:4262066395",
+    "role": "producer",
+    "episode": "ep_bearbrook_s2e2",
+    "podcast": null,
+    "person": "per_prod2",
+    "apple_id": 4262066395,
+    "feed_url": "https://feeds.example.com/credits/cr_bearbrook_2_prod",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_bearbrook_2_prod/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_radiolab_music",
+    "source_identifier": "apple:credit:1483808084",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_radiolab",
+    "person": "per_music2",
+    "apple_id": 1483808084,
+    "feed_url": "https://feeds.example.com/credits/cr_radiolab_music",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_radiolab_music/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_99pi_music",
+    "source_identifier": "apple:credit:3106883423",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_99pi",
+    "person": "per_music1",
+    "apple_id": 3106883423,
+    "feed_url": "https://feeds.example.com/credits/cr_99pi_music",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_99pi_music/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_bearbrook_music",
+    "source_identifier": "apple:credit:3165864150",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_bearbrook",
+    "person": "per_music3",
+    "apple_id": 3165864150,
+    "feed_url": "https://feeds.example.com/credits/cr_bearbrook_music",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_bearbrook_music/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_replyall_music",
+    "source_identifier": "apple:credit:2373147771",
+    "role": "music",
+    "episode": null,
+    "podcast": "pod_replyall",
+    "person": "per_music2",
+    "apple_id": 2373147771,
+    "feed_url": "https://feeds.example.com/credits/cr_replyall_music",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_replyall_music/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_jre_ferriss_guest",
+    "source_identifier": "apple:credit:3375320463",
+    "role": "guest",
+    "episode": "ep_jre_2200",
+    "podcast": null,
+    "person": "per_ferriss",
+    "apple_id": 3375320463,
+    "feed_url": "https://feeds.example.com/credits/cr_jre_ferriss_guest",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_jre_ferriss_guest/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_huberman_attia_extra",
+    "source_identifier": "apple:credit:4392846119",
+    "role": "guest",
+    "episode": "ep_huberman_dopamine",
+    "podcast": null,
+    "person": "per_attia",
+    "apple_id": 4392846119,
+    "feed_url": "https://feeds.example.com/credits/cr_huberman_attia_extra",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_huberman_attia_extra/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "cr_armchair_grant_extra",
+    "source_identifier": "apple:credit:1813358170",
+    "role": "guest",
+    "episode": "ep_armchair_grant",
+    "podcast": null,
+    "person": "per_grant",
+    "apple_id": 1813358170,
+    "feed_url": "https://feeds.example.com/credits/cr_armchair_grant_extra",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Credits/cr_armchair_grant_extra/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  }
+]

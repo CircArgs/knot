@@ -1,0 +1,1779 @@
+[
+  {
+    "canonical_id": "p_tarantino",
+    "source_identifier": "nm3029921",
+    "name": "Quentin Tarantino",
+    "birth_country": "USA",
+    "birth_year": 1963,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt5912044",
+      "tt6644102",
+      "tt3203419"
+    ],
+    "height_cm": 165
+  },
+  {
+    "canonical_id": "p_kurosawa",
+    "source_identifier": "nm1482525",
+    "name": "Akira Kurosawa",
+    "birth_country": "Japan",
+    "birth_year": 1910,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt4678577",
+      "tt5273287",
+      "tt3010567"
+    ],
+    "height_cm": 199
+  },
+  {
+    "canonical_id": "p_miyazaki",
+    "source_identifier": "nm3050865",
+    "name": "Hayao Miyazaki",
+    "birth_country": "Japan",
+    "birth_year": 1941,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt0072380",
+      "tt9229251",
+      "tt7045248"
+    ],
+    "height_cm": 176
+  },
+  {
+    "canonical_id": "p_scorsese",
+    "source_identifier": "nm8150931",
+    "name": "Martin Scorsese",
+    "birth_country": "USA",
+    "birth_year": 1942,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt6295349",
+      "tt7136944",
+      "tt6856775"
+    ],
+    "height_cm": 157
+  },
+  {
+    "canonical_id": "p_spielberg",
+    "source_identifier": "nm7546264",
+    "name": "Steven Spielberg",
+    "birth_country": "USA",
+    "birth_year": 1946,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt5285376",
+      "tt7813294",
+      "tt3773917"
+    ],
+    "height_cm": 183
+  },
+  {
+    "canonical_id": "p_coppola",
+    "source_identifier": "nm4939212",
+    "name": "Francis Ford Coppola",
+    "birth_country": "USA",
+    "birth_year": 1939,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt8777188",
+      "tt4977907",
+      "tt3860055"
+    ],
+    "height_cm": 178
+  },
+  {
+    "canonical_id": "p_nolan",
+    "source_identifier": "nm7801353",
+    "name": "Christopher Nolan",
+    "birth_country": "UK",
+    "birth_year": 1970,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt9334159",
+      "tt9736103",
+      "tt1179531"
+    ],
+    "height_cm": 174
+  },
+  {
+    "canonical_id": "p_villeneuve",
+    "source_identifier": "nm1015343",
+    "name": "Denis Villeneuve",
+    "birth_country": "Canada",
+    "birth_year": 1967,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt3859761",
+      "tt5152675",
+      "tt1478721"
+    ],
+    "height_cm": 199
+  },
+  {
+    "canonical_id": "p_anderson_pt",
+    "source_identifier": "nm4585079",
+    "name": "Paul Thomas Anderson",
+    "birth_country": "USA",
+    "birth_year": 1970,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt8179015",
+      "tt6503844",
+      "tt6901590"
+    ],
+    "height_cm": 195
+  },
+  {
+    "canonical_id": "p_anderson_wes",
+    "source_identifier": "nm3390069",
+    "name": "Wes Anderson",
+    "birth_country": "USA",
+    "birth_year": 1969,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt2528153",
+      "tt2338158",
+      "tt4162966"
+    ],
+    "height_cm": 198
+  },
+  {
+    "canonical_id": "p_finch",
+    "source_identifier": "nm3759722",
+    "name": "David Fincher",
+    "birth_country": "USA",
+    "birth_year": 1962,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt6221779",
+      "tt3670980",
+      "tt3150485"
+    ],
+    "height_cm": 196
+  },
+  {
+    "canonical_id": "p_lynch",
+    "source_identifier": "nm7674260",
+    "name": "David Lynch",
+    "birth_country": "USA",
+    "birth_year": 1946,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt9873234",
+      "tt3227329",
+      "tt1680409"
+    ],
+    "height_cm": 191
+  },
+  {
+    "canonical_id": "p_jarmusch",
+    "source_identifier": "nm8207718",
+    "name": "Jim Jarmusch",
+    "birth_country": "USA",
+    "birth_year": 1953,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt4323969",
+      "tt9063467",
+      "tt6693353"
+    ],
+    "height_cm": 159
+  },
+  {
+    "canonical_id": "p_bong",
+    "source_identifier": "nm5394935",
+    "name": "Bong Joon-ho",
+    "birth_country": "South Korea",
+    "birth_year": 1969,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt6905918",
+      "tt1920007",
+      "tt2775215"
+    ],
+    "height_cm": 161
+  },
+  {
+    "canonical_id": "p_park",
+    "source_identifier": "nm2066232",
+    "name": "Park Chan-wook",
+    "birth_country": "South Korea",
+    "birth_year": 1963,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt1326265",
+      "tt5801318",
+      "tt6816129"
+    ],
+    "height_cm": 161
+  },
+  {
+    "canonical_id": "p_almodovar",
+    "source_identifier": "nm8592597",
+    "name": "Pedro Almodóvar",
+    "birth_country": "Spain",
+    "birth_year": 1949,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2546988",
+      "tt4668134",
+      "tt1428535"
+    ],
+    "height_cm": 197
+  },
+  {
+    "canonical_id": "p_haneke",
+    "source_identifier": "nm8302542",
+    "name": "Michael Haneke",
+    "birth_country": "Austria",
+    "birth_year": 1942,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt6574269",
+      "tt9749736",
+      "tt3419834"
+    ],
+    "height_cm": 178
+  },
+  {
+    "canonical_id": "p_chazelle",
+    "source_identifier": "nm5312400",
+    "name": "Damien Chazelle",
+    "birth_country": "USA",
+    "birth_year": 1985,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt4048797",
+      "tt9231790",
+      "tt9314029"
+    ],
+    "height_cm": 190
+  },
+  {
+    "canonical_id": "p_gerwig",
+    "source_identifier": "nm2369824",
+    "name": "Greta Gerwig",
+    "birth_country": "USA",
+    "birth_year": 1983,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2698906",
+      "tt3338851",
+      "tt7586093"
+    ],
+    "height_cm": 173
+  },
+  {
+    "canonical_id": "p_peele",
+    "source_identifier": "nm3686395",
+    "name": "Jordan Peele",
+    "birth_country": "USA",
+    "birth_year": 1979,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt4092613",
+      "tt3998834",
+      "tt4906016"
+    ],
+    "height_cm": 191
+  },
+  {
+    "canonical_id": "p_eggers",
+    "source_identifier": "nm8456496",
+    "name": "Robert Eggers",
+    "birth_country": "USA",
+    "birth_year": 1983,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt1486981",
+      "tt0343750",
+      "tt4890069"
+    ],
+    "height_cm": 167
+  },
+  {
+    "canonical_id": "p_aster",
+    "source_identifier": "nm2254104",
+    "name": "Ari Aster",
+    "birth_country": "USA",
+    "birth_year": 1986,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt7051516",
+      "tt2427091",
+      "tt8163346"
+    ],
+    "height_cm": 185
+  },
+  {
+    "canonical_id": "p_lanthimos",
+    "source_identifier": "nm4321819",
+    "name": "Yorgos Lanthimos",
+    "birth_country": "Greece",
+    "birth_year": 1973,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt3859084",
+      "tt6123152",
+      "tt5991988"
+    ],
+    "height_cm": 168
+  },
+  {
+    "canonical_id": "p_zhao",
+    "source_identifier": "nm1180257",
+    "name": "Chloe Zhao",
+    "birth_country": "China",
+    "birth_year": 1982,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt7394299",
+      "tt0933917",
+      "tt9252680"
+    ],
+    "height_cm": 196
+  },
+  {
+    "canonical_id": "p_kogonada",
+    "source_identifier": "nm3313954",
+    "name": "Kogonada",
+    "birth_country": "South Korea",
+    "birth_year": 1971,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt3713533",
+      "tt4345966",
+      "tt1824572"
+    ],
+    "height_cm": 170
+  },
+  {
+    "canonical_id": "p_panahi",
+    "source_identifier": "nm0743662",
+    "name": "Jafar Panahi",
+    "birth_country": "Iran",
+    "birth_year": 1960,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt5003120",
+      "tt3752962",
+      "tt7910614"
+    ],
+    "height_cm": 193
+  },
+  {
+    "canonical_id": "p_kiarostami",
+    "source_identifier": "nm4256165",
+    "name": "Abbas Kiarostami",
+    "birth_country": "Iran",
+    "birth_year": 1940,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt0973897",
+      "tt7345839",
+      "tt5077625"
+    ],
+    "height_cm": 166
+  },
+  {
+    "canonical_id": "p_eisenstein",
+    "source_identifier": "nm3444677",
+    "name": "Sergei Eisenstein",
+    "birth_country": "Russia",
+    "birth_year": 1898,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt1599326",
+      "tt6106011",
+      "tt2313050"
+    ],
+    "height_cm": 176
+  },
+  {
+    "canonical_id": "p_chaplin",
+    "source_identifier": "nm1067089",
+    "name": "Charlie Chaplin",
+    "birth_country": "UK",
+    "birth_year": 1889,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt3432766",
+      "tt7493042",
+      "tt1822515"
+    ],
+    "height_cm": 168
+  },
+  {
+    "canonical_id": "p_keaton",
+    "source_identifier": "nm8840895",
+    "name": "Buster Keaton",
+    "birth_country": "USA",
+    "birth_year": 1895,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt1819933",
+      "tt0032116",
+      "tt3660171"
+    ],
+    "height_cm": 161
+  },
+  {
+    "canonical_id": "p_lang",
+    "source_identifier": "nm9487956",
+    "name": "Fritz Lang",
+    "birth_country": "Austria",
+    "birth_year": 1890,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt3592710",
+      "tt2754864",
+      "tt8645957"
+    ],
+    "height_cm": 167
+  },
+  {
+    "canonical_id": "p_welles",
+    "source_identifier": "nm8385541",
+    "name": "Orson Welles",
+    "birth_country": "USA",
+    "birth_year": 1915,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt5411793",
+      "tt1019386",
+      "tt3568970"
+    ],
+    "height_cm": 160
+  },
+  {
+    "canonical_id": "p_hitchcock",
+    "source_identifier": "nm3290576",
+    "name": "Alfred Hitchcock",
+    "birth_country": "UK",
+    "birth_year": 1899,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt7594625",
+      "tt2659956",
+      "tt7345432"
+    ],
+    "height_cm": 185
+  },
+  {
+    "canonical_id": "p_godard",
+    "source_identifier": "nm9637026",
+    "name": "Jean-Luc Godard",
+    "birth_country": "France",
+    "birth_year": 1930,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2625576",
+      "tt9824936",
+      "tt3064200"
+    ],
+    "height_cm": 197
+  },
+  {
+    "canonical_id": "p_truffaut",
+    "source_identifier": "nm0917895",
+    "name": "François Truffaut",
+    "birth_country": "France",
+    "birth_year": 1932,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt7350376",
+      "tt1060890",
+      "tt0867550"
+    ],
+    "height_cm": 199
+  },
+  {
+    "canonical_id": "p_bergman",
+    "source_identifier": "nm9508020",
+    "name": "Ingmar Bergman",
+    "birth_country": "Sweden",
+    "birth_year": 1918,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt8374112",
+      "tt7312833",
+      "tt7371366"
+    ],
+    "height_cm": 166
+  },
+  {
+    "canonical_id": "p_fellini",
+    "source_identifier": "nm5262534",
+    "name": "Federico Fellini",
+    "birth_country": "Italy",
+    "birth_year": 1920,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2372698",
+      "tt6364966",
+      "tt5991618"
+    ],
+    "height_cm": 178
+  },
+  {
+    "canonical_id": "p_tarkovsky",
+    "source_identifier": "nm7055573",
+    "name": "Andrei Tarkovsky",
+    "birth_country": "Russia",
+    "birth_year": 1932,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt8836246",
+      "tt5336802",
+      "tt7873350"
+    ],
+    "height_cm": 197
+  },
+  {
+    "canonical_id": "p_ozu",
+    "source_identifier": "nm7440220",
+    "name": "Yasujiro Ozu",
+    "birth_country": "Japan",
+    "birth_year": 1903,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt8010001",
+      "tt6800229",
+      "tt7343068"
+    ],
+    "height_cm": 194
+  },
+  {
+    "canonical_id": "p_travolta",
+    "source_identifier": "nm6584780",
+    "name": "John Travolta",
+    "birth_country": "USA",
+    "birth_year": 1954,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt2338994",
+      "tt5067099",
+      "tt0676006"
+    ],
+    "height_cm": 189
+  },
+  {
+    "canonical_id": "p_jackson_sl",
+    "source_identifier": "nm2841350",
+    "name": "Samuel L. Jackson",
+    "birth_country": "USA",
+    "birth_year": 1948,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt6691923",
+      "tt6906060",
+      "tt4285672"
+    ],
+    "height_cm": 169
+  },
+  {
+    "canonical_id": "p_thurman",
+    "source_identifier": "nm6347196",
+    "name": "Uma Thurman",
+    "birth_country": "USA",
+    "birth_year": 1970,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt7364141",
+      "tt8565691",
+      "tt8892042"
+    ],
+    "height_cm": 182
+  },
+  {
+    "canonical_id": "p_willis",
+    "source_identifier": "nm5042522",
+    "name": "Bruce Willis",
+    "birth_country": "USA",
+    "birth_year": 1955,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt6742191",
+      "tt0051736",
+      "tt0397789"
+    ],
+    "height_cm": 161
+  },
+  {
+    "canonical_id": "p_dicaprio",
+    "source_identifier": "nm3310085",
+    "name": "Leonardo DiCaprio",
+    "birth_country": "USA",
+    "birth_year": 1974,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt9471605",
+      "tt6161505",
+      "tt6156533"
+    ],
+    "height_cm": 159
+  },
+  {
+    "canonical_id": "p_pitt",
+    "source_identifier": "nm2735992",
+    "name": "Brad Pitt",
+    "birth_country": "USA",
+    "birth_year": 1963,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt5981239",
+      "tt0713666",
+      "tt7655632"
+    ],
+    "height_cm": 161
+  },
+  {
+    "canonical_id": "p_robbie",
+    "source_identifier": "nm4153946",
+    "name": "Margot Robbie",
+    "birth_country": "Australia",
+    "birth_year": 1990,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2578685",
+      "tt9283191",
+      "tt1176048"
+    ],
+    "height_cm": 190
+  },
+  {
+    "canonical_id": "p_pacino",
+    "source_identifier": "nm6877855",
+    "name": "Al Pacino",
+    "birth_country": "USA",
+    "birth_year": 1940,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt4270752",
+      "tt3381964",
+      "tt5166065"
+    ],
+    "height_cm": 181
+  },
+  {
+    "canonical_id": "p_deniro",
+    "source_identifier": "nm8081636",
+    "name": "Robert De Niro",
+    "birth_country": "USA",
+    "birth_year": 1943,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt4950037",
+      "tt3530286",
+      "tt9005021"
+    ],
+    "height_cm": 175
+  },
+  {
+    "canonical_id": "p_brando",
+    "source_identifier": "nm1088913",
+    "name": "Marlon Brando",
+    "birth_country": "USA",
+    "birth_year": 1924,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt1382026",
+      "tt5698564",
+      "tt7314671"
+    ],
+    "height_cm": 172
+  },
+  {
+    "canonical_id": "p_streep",
+    "source_identifier": "nm8470769",
+    "name": "Meryl Streep",
+    "birth_country": "USA",
+    "birth_year": 1949,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt0130220",
+      "tt3524153",
+      "tt2188735"
+    ],
+    "height_cm": 155
+  },
+  {
+    "canonical_id": "p_blanchett",
+    "source_identifier": "nm0351947",
+    "name": "Cate Blanchett",
+    "birth_country": "Australia",
+    "birth_year": 1969,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt3000323",
+      "tt4772790",
+      "tt1437597"
+    ],
+    "height_cm": 199
+  },
+  {
+    "canonical_id": "p_dench",
+    "source_identifier": "nm8747048",
+    "name": "Judi Dench",
+    "birth_country": "UK",
+    "birth_year": 1934,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt1694108",
+      "tt5461278",
+      "tt1461496"
+    ],
+    "height_cm": 176
+  },
+  {
+    "canonical_id": "p_oldman",
+    "source_identifier": "nm2231938",
+    "name": "Gary Oldman",
+    "birth_country": "UK",
+    "birth_year": 1958,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt5408926",
+      "tt1919945",
+      "tt6830126"
+    ],
+    "height_cm": 162
+  },
+  {
+    "canonical_id": "p_dafoe",
+    "source_identifier": "nm1582696",
+    "name": "Willem Dafoe",
+    "birth_country": "USA",
+    "birth_year": 1955,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt0433107",
+      "tt0532457",
+      "tt0939545"
+    ],
+    "height_cm": 155
+  },
+  {
+    "canonical_id": "p_pattinson",
+    "source_identifier": "nm4605390",
+    "name": "Robert Pattinson",
+    "birth_country": "UK",
+    "birth_year": 1986,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt3404968",
+      "tt9027263",
+      "tt2917905"
+    ],
+    "height_cm": 181
+  },
+  {
+    "canonical_id": "p_stewart_kr",
+    "source_identifier": "nm2661898",
+    "name": "Kristen Stewart",
+    "birth_country": "USA",
+    "birth_year": 1990,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt6475183",
+      "tt5896160",
+      "tt1775359"
+    ],
+    "height_cm": 179
+  },
+  {
+    "canonical_id": "p_chalamet",
+    "source_identifier": "nm6962463",
+    "name": "Timothée Chalamet",
+    "birth_country": "USA",
+    "birth_year": 1995,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt0666920",
+      "tt2019978",
+      "tt4281042"
+    ],
+    "height_cm": 187
+  },
+  {
+    "canonical_id": "p_zendaya",
+    "source_identifier": "nm0710394",
+    "name": "Zendaya",
+    "birth_country": "USA",
+    "birth_year": 1996,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt3557445",
+      "tt8491815",
+      "tt1304797"
+    ],
+    "height_cm": 173
+  },
+  {
+    "canonical_id": "p_gosling",
+    "source_identifier": "nm1059367",
+    "name": "Ryan Gosling",
+    "birth_country": "Canada",
+    "birth_year": 1980,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt1820583",
+      "tt7620559",
+      "tt9141090"
+    ],
+    "height_cm": 176
+  },
+  {
+    "canonical_id": "p_stone_em",
+    "source_identifier": "nm8470535",
+    "name": "Emma Stone",
+    "birth_country": "USA",
+    "birth_year": 1988,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt8148720",
+      "tt8150282",
+      "tt3625909"
+    ],
+    "height_cm": 159
+  },
+  {
+    "canonical_id": "p_phoenix",
+    "source_identifier": "nm7220552",
+    "name": "Joaquin Phoenix",
+    "birth_country": "USA",
+    "birth_year": 1974,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2976530",
+      "tt1624192",
+      "tt3189911"
+    ],
+    "height_cm": 156
+  },
+  {
+    "canonical_id": "p_mifune",
+    "source_identifier": "nm6002653",
+    "name": "Toshiro Mifune",
+    "birth_country": "Japan",
+    "birth_year": 1920,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt2678772",
+      "tt8363850",
+      "tt3868162"
+    ],
+    "height_cm": 182
+  },
+  {
+    "canonical_id": "p_song_kh",
+    "source_identifier": "nm9663496",
+    "name": "Song Kang-ho",
+    "birth_country": "South Korea",
+    "birth_year": 1967,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt8642059",
+      "tt9675130",
+      "tt2649915"
+    ],
+    "height_cm": 155
+  },
+  {
+    "canonical_id": "p_choi_mn",
+    "source_identifier": "nm4032316",
+    "name": "Choi Min-sik",
+    "birth_country": "South Korea",
+    "birth_year": 1962,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt9819357",
+      "tt4621556",
+      "tt9733697"
+    ],
+    "height_cm": 185
+  },
+  {
+    "canonical_id": "p_cruz",
+    "source_identifier": "nm0759774",
+    "name": "Penelope Cruz",
+    "birth_country": "Spain",
+    "birth_year": 1974,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt1196902",
+      "tt9689528",
+      "tt4150164"
+    ],
+    "height_cm": 163
+  },
+  {
+    "canonical_id": "p_bardem",
+    "source_identifier": "nm1977683",
+    "name": "Javier Bardem",
+    "birth_country": "Spain",
+    "birth_year": 1969,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt7875279",
+      "tt9980139",
+      "tt4214131"
+    ],
+    "height_cm": 194
+  },
+  {
+    "canonical_id": "p_marceau",
+    "source_identifier": "nm4148310",
+    "name": "Sophie Marceau",
+    "birth_country": "France",
+    "birth_year": 1966,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2460964",
+      "tt0783541",
+      "tt8193474"
+    ],
+    "height_cm": 171
+  },
+  {
+    "canonical_id": "p_binoche",
+    "source_identifier": "nm9980298",
+    "name": "Juliette Binoche",
+    "birth_country": "France",
+    "birth_year": 1964,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt3419967",
+      "tt3259867",
+      "tt4760789"
+    ],
+    "height_cm": 197
+  },
+  {
+    "canonical_id": "p_huppert",
+    "source_identifier": "nm5313815",
+    "name": "Isabelle Huppert",
+    "birth_country": "France",
+    "birth_year": 1953,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt0510598",
+      "tt1676421",
+      "tt7977052"
+    ],
+    "height_cm": 174
+  },
+  {
+    "canonical_id": "p_mastroianni",
+    "source_identifier": "nm1161229",
+    "name": "Marcello Mastroianni",
+    "birth_country": "Italy",
+    "birth_year": 1924,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt5861514",
+      "tt1743117",
+      "tt0566808"
+    ],
+    "height_cm": 195
+  },
+  {
+    "canonical_id": "p_keaton_bu",
+    "source_identifier": "nm6277878",
+    "name": "Buster Keaton",
+    "birth_country": "USA",
+    "birth_year": 1895,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt2499227",
+      "tt9130134",
+      "tt0173630"
+    ],
+    "height_cm": 184
+  },
+  {
+    "canonical_id": "p_grant_hugh",
+    "source_identifier": "nm0488665",
+    "name": "Hugh Grant",
+    "birth_country": "UK",
+    "birth_year": 1960,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt3465999",
+      "tt4660595",
+      "tt6319936"
+    ],
+    "height_cm": 176
+  },
+  {
+    "canonical_id": "p_thompson_em",
+    "source_identifier": "nm4431694",
+    "name": "Emma Thompson",
+    "birth_country": "UK",
+    "birth_year": 1959,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt9995293",
+      "tt8300741",
+      "tt6877109"
+    ],
+    "height_cm": 155
+  },
+  {
+    "canonical_id": "p_winslet",
+    "source_identifier": "nm9312426",
+    "name": "Kate Winslet",
+    "birth_country": "UK",
+    "birth_year": 1975,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt9635529",
+      "tt2961268",
+      "tt7381611"
+    ],
+    "height_cm": 162
+  },
+  {
+    "canonical_id": "p_firth",
+    "source_identifier": "nm8824229",
+    "name": "Colin Firth",
+    "birth_country": "UK",
+    "birth_year": 1960,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt0364961",
+      "tt5922260",
+      "tt8753632"
+    ],
+    "height_cm": 183
+  },
+  {
+    "canonical_id": "p_redmayne",
+    "source_identifier": "nm8021940",
+    "name": "Eddie Redmayne",
+    "birth_country": "UK",
+    "birth_year": 1982,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt2148147",
+      "tt1839297",
+      "tt8424603"
+    ],
+    "height_cm": 156
+  },
+  {
+    "canonical_id": "p_isaac",
+    "source_identifier": "nm4800693",
+    "name": "Oscar Isaac",
+    "birth_country": "Guatemala",
+    "birth_year": 1979,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt1178132",
+      "tt4582278",
+      "tt0071934"
+    ],
+    "height_cm": 196
+  },
+  {
+    "canonical_id": "p_driver",
+    "source_identifier": "nm5944785",
+    "name": "Adam Driver",
+    "birth_country": "USA",
+    "birth_year": 1983,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt2268044",
+      "tt1871327",
+      "tt9602346"
+    ],
+    "height_cm": 181
+  },
+  {
+    "canonical_id": "p_pugh",
+    "source_identifier": "nm6186566",
+    "name": "Florence Pugh",
+    "birth_country": "UK",
+    "birth_year": 1996,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt1126989",
+      "tt4779619",
+      "tt0020053"
+    ],
+    "height_cm": 180
+  },
+  {
+    "canonical_id": "p_butler",
+    "source_identifier": "nm6476183",
+    "name": "Austin Butler",
+    "birth_country": "USA",
+    "birth_year": 1991,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt7069323",
+      "tt8806198",
+      "tt2186043"
+    ],
+    "height_cm": 177
+  },
+  {
+    "canonical_id": "p_freeman",
+    "source_identifier": "nm6764832",
+    "name": "Morgan Freeman",
+    "birth_country": "USA",
+    "birth_year": 1937,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt0691967",
+      "tt8546221",
+      "tt7570813"
+    ],
+    "height_cm": 171
+  },
+  {
+    "canonical_id": "p_hopkins",
+    "source_identifier": "nm9019685",
+    "name": "Anthony Hopkins",
+    "birth_country": "UK",
+    "birth_year": 1937,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt5130969",
+      "tt7786936",
+      "tt5909165"
+    ],
+    "height_cm": 199
+  },
+  {
+    "canonical_id": "p_foster_jd",
+    "source_identifier": "nm0536595",
+    "name": "Jodie Foster",
+    "birth_country": "USA",
+    "birth_year": 1962,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt3297474",
+      "tt3351508",
+      "tt8129468"
+    ],
+    "height_cm": 164
+  },
+  {
+    "canonical_id": "p_keitel",
+    "source_identifier": "nm6008212",
+    "name": "Harvey Keitel",
+    "birth_country": "USA",
+    "birth_year": 1939,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt4516961",
+      "tt2418859",
+      "tt1445381"
+    ],
+    "height_cm": 183
+  },
+  {
+    "canonical_id": "p_garfield",
+    "source_identifier": "nm1690832",
+    "name": "Andrew Garfield",
+    "birth_country": "USA",
+    "birth_year": 1983,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt7840646",
+      "tt3044745",
+      "tt4984460"
+    ],
+    "height_cm": 178
+  },
+  {
+    "canonical_id": "p_avary",
+    "source_identifier": "nm4034108",
+    "name": "Roger Avary",
+    "birth_country": "Canada",
+    "birth_year": 1965,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt0537838",
+      "tt2960111",
+      "tt0843525"
+    ],
+    "height_cm": 157
+  },
+  {
+    "canonical_id": "p_deakins",
+    "source_identifier": "nm0677582",
+    "name": "Roger Deakins",
+    "birth_country": "UK",
+    "birth_year": 1949,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt9424766",
+      "tt0865081",
+      "tt5228034"
+    ],
+    "height_cm": 181
+  },
+  {
+    "canonical_id": "p_lubezki",
+    "source_identifier": "nm5358633",
+    "name": "Emmanuel Lubezki",
+    "birth_country": "Mexico",
+    "birth_year": 1964,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt9363234",
+      "tt1946759",
+      "tt2228103"
+    ],
+    "height_cm": 192
+  },
+  {
+    "canonical_id": "p_pfister",
+    "source_identifier": "nm6738817",
+    "name": "Wally Pfister",
+    "birth_country": "USA",
+    "birth_year": 1961,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt6648877",
+      "tt2887355",
+      "tt7961593"
+    ],
+    "height_cm": 198
+  },
+  {
+    "canonical_id": "p_richardson",
+    "source_identifier": "nm3643607",
+    "name": "Robert Richardson",
+    "birth_country": "USA",
+    "birth_year": 1955,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt2649550",
+      "tt5834340",
+      "tt6865929"
+    ],
+    "height_cm": 156
+  },
+  {
+    "canonical_id": "p_zsigmond",
+    "source_identifier": "nm4372192",
+    "name": "Vilmos Zsigmond",
+    "birth_country": "Hungary",
+    "birth_year": 1930,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt3455270",
+      "tt8182665",
+      "tt2777766"
+    ],
+    "height_cm": 171
+  },
+  {
+    "canonical_id": "p_storaro",
+    "source_identifier": "nm4534113",
+    "name": "Vittorio Storaro",
+    "birth_country": "Italy",
+    "birth_year": 1940,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt2865127",
+      "tt7933284",
+      "tt6837096"
+    ],
+    "height_cm": 157
+  },
+  {
+    "canonical_id": "p_doyle",
+    "source_identifier": "nm2563167",
+    "name": "Christopher Doyle",
+    "birth_country": "Australia",
+    "birth_year": 1952,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt0823095",
+      "tt8742901",
+      "tt8008481"
+    ],
+    "height_cm": 163
+  },
+  {
+    "canonical_id": "p_kaufman_charlie",
+    "source_identifier": "nm7999749",
+    "name": "Charlie Kaufman",
+    "birth_country": "USA",
+    "birth_year": 1958,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt6575598",
+      "tt4143532",
+      "tt5369154"
+    ],
+    "height_cm": 160
+  },
+  {
+    "canonical_id": "p_sorkin",
+    "source_identifier": "nm1233697",
+    "name": "Aaron Sorkin",
+    "birth_country": "USA",
+    "birth_year": 1961,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt5960836",
+      "tt3824945",
+      "tt8684846"
+    ],
+    "height_cm": 156
+  },
+  {
+    "canonical_id": "p_jin_won",
+    "source_identifier": "nm6712284",
+    "name": "Jin Won-han",
+    "birth_country": "South Korea",
+    "birth_year": 1982,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt5070143",
+      "tt2510174",
+      "tt6142305"
+    ],
+    "height_cm": 155
+  },
+  {
+    "canonical_id": "p_lee_chunyung",
+    "source_identifier": "nm3228565",
+    "name": "Lee Chun-yung",
+    "birth_country": "South Korea",
+    "birth_year": 1975,
+    "primary_profession": [
+      "director"
+    ],
+    "known_for_titles": [
+      "tt0930049",
+      "tt4727780",
+      "tt2190837"
+    ],
+    "height_cm": 181
+  },
+  {
+    "canonical_id": "p_takahata",
+    "source_identifier": "nm8620710",
+    "name": "Isao Takahata",
+    "birth_country": "Japan",
+    "birth_year": 1935,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt2889840",
+      "tt0161312",
+      "tt9175693"
+    ],
+    "height_cm": 164
+  },
+  {
+    "canonical_id": "p_hisaishi",
+    "source_identifier": "nm6607982",
+    "name": "Joe Hisaishi",
+    "birth_country": "Japan",
+    "birth_year": 1950,
+    "primary_profession": [
+      "actor",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt6046064",
+      "tt2889445",
+      "tt9676252"
+    ],
+    "height_cm": 178
+  },
+  {
+    "canonical_id": "p_williams_jh",
+    "source_identifier": "nm4497256",
+    "name": "John Williams",
+    "birth_country": "USA",
+    "birth_year": 1932,
+    "primary_profession": [
+      "cinematographer"
+    ],
+    "known_for_titles": [
+      "tt6033339",
+      "tt6562032",
+      "tt0856019"
+    ],
+    "height_cm": 167
+  },
+  {
+    "canonical_id": "p_zimmer",
+    "source_identifier": "nm9406451",
+    "name": "Hans Zimmer",
+    "birth_country": "Germany",
+    "birth_year": 1957,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt0644107",
+      "tt8897998",
+      "tt5250740"
+    ],
+    "height_cm": 185
+  },
+  {
+    "canonical_id": "p_greenwood",
+    "source_identifier": "nm8497187",
+    "name": "Jonny Greenwood",
+    "birth_country": "UK",
+    "birth_year": 1971,
+    "primary_profession": [
+      "writer",
+      "director",
+      "producer"
+    ],
+    "known_for_titles": [
+      "tt5446821",
+      "tt6355447",
+      "tt2412262"
+    ],
+    "height_cm": 168
+  },
+  {
+    "canonical_id": "p_olmos",
+    "source_identifier": "nm9740904",
+    "name": "Edward James Olmos",
+    "birth_country": "USA",
+    "birth_year": 1947,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt6070518",
+      "tt5751409",
+      "tt8529529"
+    ],
+    "height_cm": 155
+  },
+  {
+    "canonical_id": "p_yeoh",
+    "source_identifier": "nm6718218",
+    "name": "Michelle Yeoh",
+    "birth_country": "Malaysia",
+    "birth_year": 1962,
+    "primary_profession": [
+      "composer"
+    ],
+    "known_for_titles": [
+      "tt7747141",
+      "tt9110469",
+      "tt0685336"
+    ],
+    "height_cm": 174
+  },
+  {
+    "canonical_id": "p_quan",
+    "source_identifier": "nm6329014",
+    "name": "Ke Huy Quan",
+    "birth_country": "Vietnam",
+    "birth_year": 1971,
+    "primary_profession": [
+      "actor"
+    ],
+    "known_for_titles": [
+      "tt4640036",
+      "tt3884682",
+      "tt7841684"
+    ],
+    "height_cm": 175
+  },
+  {
+    "canonical_id": "p_curtis_jl",
+    "source_identifier": "nm7829669",
+    "name": "Jamie Lee Curtis",
+    "birth_country": "USA",
+    "birth_year": 1958,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt5139710",
+      "tt8941082",
+      "tt4027318"
+    ],
+    "height_cm": 183
+  },
+  {
+    "canonical_id": "p_hsu_st",
+    "source_identifier": "nm6985702",
+    "name": "Stephanie Hsu",
+    "birth_country": "USA",
+    "birth_year": 1990,
+    "primary_profession": [
+      "director",
+      "writer"
+    ],
+    "known_for_titles": [
+      "tt7449542",
+      "tt5001017",
+      "tt5977750"
+    ],
+    "height_cm": 183
+  }
+]

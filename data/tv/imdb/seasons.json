@@ -1,0 +1,23 @@
+[
+  {"canonical_id": "se_breakingbad_s1", "source_identifier": "tt0903747_s1", "show": "s_breakingbad", "season_number": 1, "episode_count": 7, "year": 2008, "imdb_rating": 8.6, "votes": 41200, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_breakingbad_s2", "source_identifier": "tt0903747_s2", "show": "s_breakingbad", "season_number": 2, "episode_count": 13, "year": 2009, "imdb_rating": 8.7, "votes": 38900, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_thewire_s1", "source_identifier": "tt0306414_s1", "show": "s_thewire", "season_number": 1, "episode_count": 13, "year": 2002, "imdb_rating": 9.0, "votes": 18400, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_succession_s1", "source_identifier": "tt7660850_s1", "show": "s_succession", "season_number": 1, "episode_count": 10, "year": 2018, "imdb_rating": 8.4, "votes": 14700, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_severance_s1", "source_identifier": "tt11280740_s1", "show": "s_severance", "season_number": 1, "episode_count": 9, "year": 2022, "imdb_rating": 8.8, "votes": 24100, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_fleabag_s1", "source_identifier": "tt5687612_s1", "show": "s_fleabag", "season_number": 1, "episode_count": 6, "year": 2016, "imdb_rating": 8.4, "votes": 9800, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_fleabag_s2", "source_identifier": "tt5687612_s2", "show": "s_fleabag", "season_number": 2, "episode_count": 6, "year": 2019, "imdb_rating": 9.1, "votes": 14200, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_blackmirror_s1", "source_identifier": "tt2085059_s1", "show": "s_blackmirror", "season_number": 1, "episode_count": 3, "year": 2011, "imdb_rating": 8.7, "votes": 19200, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_thebear_s1", "source_identifier": "tt14452776_s1", "show": "s_thebear", "season_number": 1, "episode_count": 8, "year": 2022, "imdb_rating": 8.5, "votes": 8900, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_twinpeaks_s1", "source_identifier": "tt0098936_s1", "show": "s_twinpeaks", "season_number": 1, "episode_count": 8, "year": 1990, "imdb_rating": 8.8, "votes": 12300, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_startrek_tos_s1", "source_identifier": "tt0060028_s1", "show": "s_startrek_tos", "season_number": 1, "episode_count": 29, "year": 1966, "imdb_rating": 8.4, "votes": 6700, "parental_rating": "TV-PG"},
+  {"canonical_id": "se_squidgame_s1", "source_identifier": "tt10919420_s1", "show": "s_squidgame", "season_number": 1, "episode_count": 9, "year": 2021, "imdb_rating": 8.1, "votes": 47800, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_lupin_s1", "source_identifier": "tt12809988_s1", "show": "s_lupin", "season_number": 1, "episode_count": 5, "year": 2021, "imdb_rating": 7.6, "votes": 9100, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_arcane_s1", "source_identifier": "tt11126994_s1", "show": "s_arcane", "season_number": 1, "episode_count": 9, "year": 2021, "imdb_rating": 9.0, "votes": 22300, "parental_rating": "TV-14"},
+  {"canonical_id": "se_thelastofus_s1", "source_identifier": "tt3581920_s1", "show": "s_thelastofus", "season_number": 1, "episode_count": 9, "year": 2023, "imdb_rating": 8.8, "votes": 41900, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_imdb_only_sopranos_s1", "source_identifier": "tt0141842_s1", "show": "s_imdb_only_sopranos", "season_number": 1, "episode_count": 13, "year": 1999, "imdb_rating": 8.8, "votes": 14600, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_imdb_only_chernobyl_s1", "source_identifier": "tt7366338_s1", "show": "s_imdb_only_chernobyl", "season_number": 1, "episode_count": 5, "year": 2019, "imdb_rating": 9.4, "votes": 38900, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_imdb_only_got_s1", "source_identifier": "tt0944947_s1", "show": "s_imdb_only_got", "season_number": 1, "episode_count": 10, "year": 2011, "imdb_rating": 9.0, "votes": 81200, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_imdb_only_peakyblinders_s1", "source_identifier": "tt2442560_s1", "show": "s_imdb_only_peakyblinders", "season_number": 1, "episode_count": 6, "year": 2013, "imdb_rating": 8.6, "votes": 22300, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_imdb_only_bettercallsaul_s1", "source_identifier": "tt3032476_s1", "show": "s_imdb_only_bettercallsaul", "season_number": 1, "episode_count": 10, "year": 2015, "imdb_rating": 8.4, "votes": 28100, "parental_rating": "TV-MA"},
+  {"canonical_id": "se_imdb_only_thecrown_s1", "source_identifier": "tt4786824_s1", "show": "s_imdb_only_thecrown", "season_number": 1, "episode_count": 10, "year": 2016, "imdb_rating": 8.6, "votes": 14400, "parental_rating": "TV-MA"}
+]

@@ -1,0 +1,3077 @@
+[
+  {
+    "canonical_id": "mention_wiki_0000",
+    "source_identifier": "https://filmwiki.example.org/wiki/Ryan_Gosling",
+    "subject_movie": null,
+    "subject_person": "p_ryangosling",
+    "text_excerpt": "Ryan Gosling is a filmmaker known for spare dialogue. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Ryan Gosling",
+    "infobox": {
+      "name": "Ryan Gosling",
+      "occupation": "Actor",
+      "birth_date": "1942-11-17",
+      "birth_place": "Seoul, South Korea",
+      "years_active": "1987–present",
+      "spouse": "[redacted]",
+      "notable_works": [
+        "Once Upon a Time in Hollywood",
+        "No Country for Old Men",
+        "Everything Everywhere All at Once",
+        "Inception"
+      ]
+    },
+    "body_excerpt": "Ryan Gosling is a filmmaker known for spare dialogue. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "contributors": [
+      "BotrunSamurai",
+      "moviewiki_editor3",
+      "GraciousGreta"
+    ],
+    "page_views_30d": 382728,
+    "references_count": 51,
+    "is_stub": false,
+    "external_links": [
+      "https://imdb.com/title/tt1051452",
+      "https://rottentomatoes.com/m/ryan_gosling"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0001",
+    "source_identifier": "https://filmwiki.example.org/wiki/Terminator_2:_Judgment_Day",
+    "subject_movie": "m_terminator2",
+    "subject_person": null,
+    "text_excerpt": "Terminator 2: Judgment Day (1999) is a drama film directed by Stanley Kubrick. Production began in 1998 and the film opened in select theaters.",
+    "sentiment": null,
+    "page_title": "Terminator 2: Judgment Day",
+    "infobox": {
+      "title": "Terminator 2: Judgment Day",
+      "year": 1999,
+      "director": "Stanley Kubrick",
+      "runtime": "124 min",
+      "country": "France",
+      "budget": "unknown",
+      "box_office": "$48M",
+      "screenplay": "Stanley Kubrick",
+      "music": "Trent Reznor"
+    },
+    "body_excerpt": "Terminator 2: Judgment Day (1999) is a drama film directed by Stanley Kubrick. Production began in 1998 and the film opened in select theaters.",
+    "categories": [
+      "American films",
+      "Neo-noir films",
+      "Films shot in 70mm"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "JoshKrueger",
+      "TaranAdmin",
+      "moviewiki_editor3",
+      "FilmEditorBot"
+    ],
+    "references_count": 36,
+    "edit_count": 515
+  },
+  {
+    "canonical_id": "mention_wiki_0002",
+    "source_identifier": "https://filmwiki.example.org/wiki/L'homme_du_pied",
+    "subject_movie": "m_lhomme_pied",
+    "subject_person": null,
+    "text_excerpt": "Released in 2023, L'homme du pied is widely regarded as one of Florence Pugh's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "L'homme du pied",
+    "infobox": {
+      "title": "L'homme du pied",
+      "year": 2023,
+      "director": "Florence Pugh",
+      "runtime": "183 min",
+      "budget": "$165,000,000",
+      "box_office": "$213 million",
+      "distributor": "A24"
+    },
+    "body_excerpt": "Released in 2023, L'homme du pied is widely regarded as one of Florence Pugh's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "Universal Pictures films",
+      "Neo-noir films",
+      "Crime films",
+      "Films about hitmen",
+      "Films directed by Christopher Nolan",
+      "Films set in New York City",
+      "A24 films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "FilmEditorBot"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3138924"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0003",
+    "source_identifier": "https://filmwiki.example.org/wiki/Pulp_Fiction",
+    "subject_movie": "m_pulpfiction",
+    "subject_person": null,
+    "text_excerpt": "Pulp Fiction (1976) is a drama film directed by Adam Driver. Production began in 1975 and the film opened in select theaters.",
+    "sentiment": null,
+    "page_title": "Pulp Fiction",
+    "infobox": {
+      "title": "Pulp Fiction",
+      "year": 1976,
+      "director": "Adam Driver",
+      "runtime": "197 min",
+      "language": "Korean",
+      "budget": "$25 million",
+      "screenplay": "Adam Driver",
+      "cinematography": "Roger Deakins",
+      "editing": "Joe Walker"
+    },
+    "body_excerpt": "Pulp Fiction (1976) is a drama film directed by Adam Driver. Production began in 1975 and the film opened in select theaters.",
+    "categories": [
+      "Films featuring an ensemble cast",
+      "Universal Pictures films",
+      "American films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "page_views_30d": 172627
+  },
+  {
+    "canonical_id": "mention_wiki_0004",
+    "source_identifier": "https://filmwiki.example.org/wiki/Apocalypse_Now",
+    "subject_movie": "m_apocalypsenow",
+    "subject_person": null,
+    "text_excerpt": "Released in 2019, Apocalypse Now is widely regarded as one of Brad Pitt's finest works. It won three Academy Awards.",
+    "sentiment": null,
+    "page_title": "Apocalypse Now",
+    "infobox": {
+      "title": "Apocalypse Now",
+      "year": 2019,
+      "director": "Brad Pitt",
+      "runtime": "122 min",
+      "genre": "Horror",
+      "country": "United States",
+      "language": "English/French"
+    },
+    "body_excerpt": "Released in 2019, Apocalypse Now is widely regarded as one of Brad Pitt's finest works. It won three Academy Awards.",
+    "categories": [
+      "Films directed by Quentin Tarantino",
+      "Films set in New York City",
+      "Films featuring an ensemble cast",
+      "Independent films",
+      "American films",
+      "Postmodern films",
+      "Universal Pictures films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "PageWatcher.Saul"
+    ],
+    "page_views_30d": 134548,
+    "edit_count": 1077,
+    "external_links": [
+      "https://imdb.com/title/tt6726499",
+      "https://rottentomatoes.com/m/apocalypse_now"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0005",
+    "source_identifier": "https://filmwiki.example.org/wiki/Django_Unchained",
+    "subject_movie": "m_djangounchained",
+    "subject_person": null,
+    "text_excerpt": "Released in 2014, Django Unchained is widely regarded as one of Keanu Reeves's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "Django Unchained",
+    "infobox": {
+      "title": "Django Unchained",
+      "year": 2014,
+      "director": "Keanu Reeves",
+      "runtime": "125 min",
+      "genre": "Comedy",
+      "budget": "$60M",
+      "box_office": "$213 million",
+      "music": "Trent Reznor"
+    },
+    "body_excerpt": "Released in 2014, Django Unchained is widely regarded as one of Keanu Reeves's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "Independent films",
+      "Films directed by Christopher Nolan",
+      "Films featuring an ensemble cast",
+      "Universal Pictures films",
+      "Warner Bros. films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "BotrunSamurai",
+      "moviewiki_editor3",
+      "PageWatcher.Saul",
+      "MoviepageEditor"
+    ],
+    "edit_count": 1677,
+    "external_links": [
+      "https://imdb.com/title/tt9467201",
+      "https://rottentomatoes.com/m/django_unchained"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0006",
+    "source_identifier": "https://filmwiki.example.org/wiki/Independent_film",
+    "subject_movie": null,
+    "subject_person": null,
+    "text_excerpt": "This article covers independent film. It is maintained by contributors of the FilmWiki project.",
+    "sentiment": null,
+    "page_title": "Independent film",
+    "infobox": {},
+    "body_excerpt": "This article covers independent film. It is maintained by contributors of the FilmWiki project.",
+    "categories": [
+      "Lists of films",
+      "Film categories"
+    ],
+    "last_edited": "2025-05-01",
+    "edit_count": 625
+  },
+  {
+    "canonical_id": "mention_wiki_0007",
+    "source_identifier": "https://filmwiki.example.org/wiki/Zendaya",
+    "subject_movie": null,
+    "subject_person": "p_zendaya",
+    "text_excerpt": "Zendaya is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Zendaya",
+    "infobox": {
+      "name": "Zendaya",
+      "occupation": "Filmmaker",
+      "birth_place": "Knoxville, Tennessee, U.S.",
+      "years_active": "1971–2018",
+      "notable_works": [
+        "Perfect Days",
+        "La La Land"
+      ]
+    },
+    "body_excerpt": "Zendaya is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "CtrlSemicolonBot"
+    ],
+    "edit_count": 2123,
+    "external_links": [
+      "https://imdb.com/title/tt6368169",
+      "https://rottentomatoes.com/m/zendaya"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0008",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Hateful_Eight",
+    "subject_movie": "m_thehatefuleight",
+    "subject_person": null,
+    "text_excerpt": "The Hateful Eight (2007) is a Crime film directed by David Fincher. Production began in 2006 and the film opened in select theaters.",
+    "sentiment": null,
+    "page_title": "The Hateful Eight",
+    "infobox": {
+      "title": "The Hateful Eight",
+      "year": 2007,
+      "director": "David Fincher",
+      "runtime": "131 min",
+      "genre": "Crime",
+      "country": "Germany",
+      "budget": "unknown",
+      "music": "Ennio Morricone"
+    },
+    "body_excerpt": "The Hateful Eight (2007) is a Crime film directed by David Fincher. Production began in 2006 and the film opened in select theaters.",
+    "categories": [
+      "Warner Bros. films",
+      "American films",
+      "Films about hitmen",
+      "Postmodern films",
+      "Best Picture Academy Award winners",
+      "Films featuring an ensemble cast"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "page_views_30d": 140334,
+    "references_count": 62,
+    "edit_count": 297,
+    "external_links": [
+      "https://imdb.com/title/tt4213647"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0009",
+    "source_identifier": "https://filmwiki.example.org/wiki/Wes_Anderson",
+    "subject_movie": null,
+    "subject_person": "p_wesanderson",
+    "text_excerpt": "Wes Anderson is a filmmaker known for practical effects. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Wes Anderson",
+    "infobox": {
+      "name": "Wes Anderson",
+      "occupation": "Actor",
+      "birth_date": "1928-04-03",
+      "birth_place": "London, England",
+      "years_active": "2002–present"
+    },
+    "body_excerpt": "Wes Anderson is a filmmaker known for practical effects. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "contributors": [
+      "TaranAdmin",
+      "GraciousGreta",
+      "moviewiki_editor3",
+      "10000editsclub"
+    ],
+    "page_views_30d": 329671,
+    "references_count": 56,
+    "edit_count": 1000
+  },
+  {
+    "canonical_id": "mention_wiki_0010",
+    "source_identifier": "https://filmwiki.example.org/wiki/Dunkirk",
+    "subject_movie": "m_dunkirk",
+    "subject_person": null,
+    "text_excerpt": "Released in 1976, Dunkirk is widely regarded as one of Daniel Day-Lewis's finest works. It was a commercial disappointment at the time.",
+    "sentiment": null,
+    "page_title": "Dunkirk",
+    "infobox": {
+      "title": "Dunkirk",
+      "year": 1976,
+      "director": "Daniel Day-Lewis",
+      "runtime": "136 min",
+      "budget": "$8 million",
+      "box_office": "$3.4M (limited)",
+      "cinematography": "Robert Yeoman",
+      "music": "Trent Reznor"
+    },
+    "body_excerpt": "Released in 1976, Dunkirk is widely regarded as one of Daniel Day-Lewis's finest works. It was a commercial disappointment at the time.",
+    "categories": [
+      "American films",
+      "Cult films",
+      "Neo-noir films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "user_8412"
+    ],
+    "references_count": 30,
+    "is_stub": true,
+    "external_links": [
+      "https://imdb.com/title/tt8893889",
+      "https://rottentomatoes.com/m/dunkirk"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0011",
+    "source_identifier": "https://filmwiki.example.org/wiki/Alejandro_G._Iñárritu",
+    "subject_movie": null,
+    "subject_person": "p_iñárritu",
+    "text_excerpt": "Alejandro G. Iñárritu is a filmmaker known for long takes. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Alejandro G. Iñárritu",
+    "infobox": {
+      "name": "Alejandro G. Iñárritu",
+      "occupation": "Director"
+    },
+    "body_excerpt": "Alejandro G. Iñárritu is a filmmaker known for long takes. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "edit_count": 138
+  },
+  {
+    "canonical_id": "mention_wiki_0012",
+    "source_identifier": "https://filmwiki.example.org/wiki/Christian_Bale",
+    "subject_movie": null,
+    "subject_person": "p_christian_bale",
+    "text_excerpt": "Christian Bale is a filmmaker known for practical effects. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Christian Bale",
+    "infobox": {
+      "name": "Christian Bale",
+      "occupation": "Director",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "Christian Bale is a filmmaker known for practical effects. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "page_views_30d": 300243,
+    "edit_count": 1661,
+    "external_links": [
+      "https://imdb.com/title/tt1750968",
+      "https://rottentomatoes.com/m/christian_bale"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0013",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Godfather_Part_II",
+    "subject_movie": "m_godfather2",
+    "subject_person": null,
+    "text_excerpt": "The Godfather Part II is a 1976 film directed by Jonathan Glazer, noted for its score and screenplay.",
+    "sentiment": null,
+    "page_title": "The Godfather Part II",
+    "infobox": {
+      "title": "The Godfather Part II",
+      "year": 1976,
+      "director": "Jonathan Glazer",
+      "runtime": "183 min",
+      "country": "United Kingdom",
+      "box_office": "$3.4M (limited)",
+      "cinematography": "Emmanuel Lubezki",
+      "editing": "Lee Smith",
+      "music": "Hans Zimmer",
+      "distributor": "A24"
+    },
+    "body_excerpt": "The Godfather Part II is a 1976 film directed by Jonathan Glazer, noted for its score and screenplay.",
+    "categories": [
+      "Universal Pictures films",
+      "Best Picture Academy Award winners",
+      "A24 films",
+      "Cult films",
+      "Crime films",
+      "Postmodern films",
+      "Films scored by Hans Zimmer"
+    ],
+    "last_edited": "2025-05-01",
+    "page_views_30d": 77469
+  },
+  {
+    "canonical_id": "mention_wiki_0014",
+    "source_identifier": "https://filmwiki.example.org/wiki/David_Lynch",
+    "subject_movie": null,
+    "subject_person": "p_lynch",
+    "text_excerpt": "David Lynch is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "David Lynch",
+    "infobox": {
+      "name": "David Lynch",
+      "occupation": "Director, Screenwriter",
+      "birth_place": "Seoul, South Korea"
+    },
+    "body_excerpt": "David Lynch is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "American film directors",
+      "Living people"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "user_8412",
+      "10000editsclub"
+    ],
+    "edit_count": 421,
+    "is_stub": false,
+    "external_links": [
+      "https://imdb.com/title/tt2933992",
+      "https://rottentomatoes.com/m/david_lynch"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0015",
+    "source_identifier": "https://filmwiki.example.org/wiki/Arrival",
+    "subject_movie": "m_arrival",
+    "subject_person": null,
+    "text_excerpt": "Arrival is a 2023 France Crime film directed by Denzel Washington. The film stars Florence Pugh, Darren Aronofsky, Ryan Gosling, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "Arrival",
+    "infobox": {
+      "title": "Arrival",
+      "year": 2023,
+      "director": "Denzel Washington",
+      "runtime": "114 min",
+      "genre": "Crime",
+      "country": "France",
+      "budget": "unknown",
+      "screenplay": "Denzel Washington"
+    },
+    "body_excerpt": "Arrival is a 2023 France Crime film directed by Denzel Washington. The film stars Florence Pugh, Darren Aronofsky, Ryan Gosling, and received widespread critical acclaim upon release.",
+    "categories": [
+      "Miramax films",
+      "Films featuring nonlinear narratives",
+      "A24 films",
+      "Films about hitmen",
+      "Warner Bros. films",
+      "Crime films",
+      "American films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "FilmEditorBot",
+      "anon_211.x.x.x",
+      "MoviepageEditor"
+    ],
+    "is_stub": true
+  },
+  {
+    "canonical_id": "mention_wiki_0016",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Fellowship_of_the_Ring",
+    "subject_movie": "m_lotr_fotr",
+    "subject_person": null,
+    "text_excerpt": "Released in 1985, The Lord of the Rings: The Fellowship of the Ring is widely regarded as one of Ari Aster's finest works. It was a commercial disappointment at the time.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Fellowship of the Ring",
+    "infobox": {
+      "title": "The Lord of the Rings: The Fellowship of the Ring",
+      "year": 1985,
+      "director": "Ari Aster",
+      "runtime": "177 min",
+      "genre": "Drama",
+      "country": "Germany",
+      "distributor": "A24"
+    },
+    "body_excerpt": "Released in 1985, The Lord of the Rings: The Fellowship of the Ring is widely regarded as one of Ari Aster's finest works. It was a commercial disappointment at the time.",
+    "categories": [
+      "Films featuring an ensemble cast",
+      "1990s films",
+      "Crime films",
+      "Independent films",
+      "Paramount Pictures films",
+      "Films about hitmen",
+      "Miramax films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "WikiArchivist77",
+      "TaranAdmin",
+      "Anonymous",
+      "CtrlSemicolonBot"
+    ],
+    "references_count": 92,
+    "edit_count": 2356
+  },
+  {
+    "canonical_id": "mention_wiki_0017",
+    "source_identifier": "https://filmwiki.example.org/wiki/Michael_Fassbender",
+    "subject_movie": null,
+    "subject_person": "p_michaelfass",
+    "text_excerpt": "Michael Fassbender is a filmmaker known for stylized violence. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Michael Fassbender",
+    "infobox": {
+      "name": "Michael Fassbender",
+      "occupation": "Director",
+      "birth_date": "March 27, 1963",
+      "years_active": "2002–present"
+    },
+    "body_excerpt": "Michael Fassbender is a filmmaker known for stylized violence. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "@cineditor",
+      "GraciousGreta"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0018",
+    "source_identifier": "https://filmwiki.example.org/wiki/There_Will_Be_Blood",
+    "subject_movie": "m_thereWillBeBlood",
+    "subject_person": null,
+    "text_excerpt": "There Will Be Blood is a 2007 Germany Sci-Fi film directed by Ari Aster. The film stars Jonathan Glazer, Brad Pitt, Zendaya, and received mixed reviews upon release.",
+    "sentiment": null,
+    "page_title": "There Will Be Blood",
+    "infobox": {
+      "title": "There Will Be Blood",
+      "year": 2007,
+      "director": "Ari Aster",
+      "runtime": "149 min",
+      "genre": "Sci-Fi",
+      "country": "Germany",
+      "budget": "unknown",
+      "screenplay": "Ari Aster",
+      "music": "Jonny Greenwood",
+      "distributor": "Focus Features"
+    },
+    "body_excerpt": "There Will Be Blood is a 2007 Germany Sci-Fi film directed by Ari Aster. The film stars Jonathan Glazer, Brad Pitt, Zendaya, and received mixed reviews upon release.",
+    "categories": [
+      "Films directed by Quentin Tarantino",
+      "Best Picture Academy Award winners",
+      "Films featuring an ensemble cast",
+      "Warner Bros. films",
+      "American films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "references_count": 18,
+    "edit_count": 2259,
+    "is_stub": false,
+    "external_links": [
+      "https://imdb.com/title/tt6730433",
+      "https://rottentomatoes.com/m/there_will_be_blood"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0019",
+    "source_identifier": "https://filmwiki.example.org/wiki/E.T._the_Extra-Terrestrial",
+    "subject_movie": "m_e.t.",
+    "subject_person": null,
+    "text_excerpt": "Released in 1976, E.T. the Extra-Terrestrial is widely regarded as one of David Fincher's finest works. Critics praised the lead performance.",
+    "sentiment": null,
+    "page_title": "E.T. the Extra-Terrestrial",
+    "infobox": {
+      "title": "E.T. the Extra-Terrestrial",
+      "year": 1976,
+      "director": "David Fincher",
+      "runtime": 186,
+      "language": "Japanese"
+    },
+    "body_excerpt": "Released in 1976, E.T. the Extra-Terrestrial is widely regarded as one of David Fincher's finest works. Critics praised the lead performance.",
+    "categories": [
+      "Films scored by Hans Zimmer",
+      "Films featuring an ensemble cast",
+      "Films directed by Christopher Nolan",
+      "Films shot in 70mm",
+      "1990s films"
+    ],
+    "contributors": [
+      "Anonymous"
+    ],
+    "is_stub": true
+  },
+  {
+    "canonical_id": "mention_wiki_0020",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Brutalist",
+    "subject_movie": "m_thebrutalist",
+    "subject_person": null,
+    "text_excerpt": "Released in 1979, The Brutalist is widely regarded as one of Cate Blanchett's finest works. It was a commercial disappointment at the time.",
+    "sentiment": null,
+    "page_title": "The Brutalist",
+    "infobox": {
+      "title": "The Brutalist",
+      "year": 1979,
+      "director": "Cate Blanchett",
+      "runtime": "99 min",
+      "genre": "Crime",
+      "country": "France",
+      "budget": "$8 million",
+      "box_office": "$48M",
+      "editing": "Joe Walker"
+    },
+    "body_excerpt": "Released in 1979, The Brutalist is widely regarded as one of Cate Blanchett's finest works. It was a commercial disappointment at the time.",
+    "categories": [
+      "Films featuring nonlinear narratives",
+      "Films shot in 70mm",
+      "1990s films",
+      "American films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "CtrlSemicolonBot"
+    ],
+    "page_views_30d": 169457,
+    "external_links": [
+      "https://imdb.com/title/tt4013140"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0021",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Hateful_Eight",
+    "subject_movie": "m_thehatefuleight",
+    "subject_person": null,
+    "text_excerpt": "The Hateful Eight is a 1990 film directed by Jessica Chastain, noted for its use of color and production design.",
+    "sentiment": null,
+    "page_title": "The Hateful Eight",
+    "infobox": {
+      "title": "The Hateful Eight",
+      "year": 1990,
+      "director": "Jessica Chastain",
+      "runtime": "170 min",
+      "genre": "Drama",
+      "language": "English",
+      "cinematography": "Roger Deakins",
+      "editing": "Lee Smith"
+    },
+    "body_excerpt": "The Hateful Eight is a 1990 film directed by Jessica Chastain, noted for its use of color and production design.",
+    "categories": [
+      "Miramax films",
+      "Films featuring nonlinear narratives",
+      "Films set in Los Angeles",
+      "Best Picture Academy Award winners",
+      "1990s films",
+      "Cult films",
+      "Postmodern films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "10000editsclub",
+      "MoviepageEditor",
+      "FilmEditorBot",
+      "Anonymous",
+      "PageWatcher.Saul"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0022",
+    "source_identifier": "https://filmwiki.example.org/wiki/Jessica_Chastain",
+    "subject_movie": null,
+    "subject_person": "p_chastain",
+    "text_excerpt": "Jessica Chastain is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Jessica Chastain",
+    "infobox": {
+      "name": "Jessica Chastain",
+      "occupation": "Actor, Producer",
+      "birth_place": "London, England"
+    },
+    "body_excerpt": "Jessica Chastain is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "references_count": 85,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0023",
+    "source_identifier": "https://filmwiki.example.org/wiki/Ryan_Gosling",
+    "subject_movie": null,
+    "subject_person": "p_ryangosling",
+    "text_excerpt": "Ryan Gosling is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Ryan Gosling",
+    "infobox": {
+      "name": "Ryan Gosling",
+      "occupation": "Director",
+      "birth_place": "Knoxville, Tennessee, U.S."
+    },
+    "body_excerpt": "Ryan Gosling is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "page_views_30d": 166345,
+    "external_links": [
+      "https://imdb.com/title/tt6664238"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0024",
+    "source_identifier": "https://filmwiki.example.org/wiki/Blade_Runner_2049",
+    "subject_movie": "m_blade_runner_2049",
+    "subject_person": null,
+    "text_excerpt": "Blade Runner 2049 is a 2022 France drama film directed by Florence Pugh. The film stars Robert Eggers, Steven Spielberg, Leonardo DiCaprio, and received mixed reviews upon release.",
+    "sentiment": null,
+    "page_title": "Blade Runner 2049",
+    "infobox": {
+      "title": "Blade Runner 2049",
+      "year": 2022,
+      "director": "Florence Pugh",
+      "runtime": "128 min",
+      "country": "France",
+      "language": "English",
+      "budget": "$165,000,000",
+      "box_office": "$213 million",
+      "cinematography": "Roger Deakins",
+      "music": "Ennio Morricone"
+    },
+    "body_excerpt": "Blade Runner 2049 is a 2022 France drama film directed by Florence Pugh. The film stars Robert Eggers, Steven Spielberg, Leonardo DiCaprio, and received mixed reviews upon release.",
+    "categories": [
+      "A24 films",
+      "Best Picture Academy Award winners",
+      "Crime films",
+      "American films",
+      "Neo-noir films",
+      "Miramax films"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "Anonymous",
+      "BotrunSamurai",
+      "moviewiki_editor3"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0025",
+    "source_identifier": "https://filmwiki.example.org/wiki/Workingman's_Death",
+    "subject_movie": "m_workingmanthemes",
+    "subject_person": null,
+    "text_excerpt": "Workingman's Death (2022) is a drama film directed by Joaquin Phoenix. Production began in 2021 and the film opened in select theaters.",
+    "sentiment": null,
+    "page_title": "Workingman's Death",
+    "infobox": {
+      "title": "Workingman's Death",
+      "year": 2022,
+      "director": "Joaquin Phoenix",
+      "runtime": "162 min",
+      "country": "South Korea",
+      "language": "Spanish",
+      "screenplay": "Joaquin Phoenix",
+      "music": "Mica Levi"
+    },
+    "body_excerpt": "Workingman's Death (2022) is a drama film directed by Joaquin Phoenix. Production began in 2021 and the film opened in select theaters.",
+    "categories": [
+      "Films directed by Quentin Tarantino",
+      "Crime films",
+      "Neo-noir films",
+      "Films set in New York City"
+    ],
+    "contributors": [
+      "CtrlSemicolonBot",
+      "@cineditor",
+      "PageWatcher.Saul"
+    ],
+    "references_count": 76,
+    "edit_count": 483
+  },
+  {
+    "canonical_id": "mention_wiki_0026",
+    "source_identifier": "https://filmwiki.example.org/wiki/Wes_Anderson",
+    "subject_movie": null,
+    "subject_person": "p_wesanderson",
+    "text_excerpt": "Wes Anderson is a filmmaker known for practical effects. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Wes Anderson",
+    "infobox": {
+      "name": "Wes Anderson",
+      "occupation": "Filmmaker"
+    },
+    "body_excerpt": "Wes Anderson is a filmmaker known for practical effects. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "is_stub": true,
+    "external_links": [
+      "https://imdb.com/title/tt2749043",
+      "https://rottentomatoes.com/m/wes_anderson"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0027",
+    "source_identifier": "https://filmwiki.example.org/wiki/Vertigo",
+    "subject_movie": "m_vertigo",
+    "subject_person": null,
+    "text_excerpt": "Released in 1994, Vertigo is widely regarded as one of Jake Gyllenhaal's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "Vertigo",
+    "infobox": {
+      "title": "Vertigo",
+      "year": 1994,
+      "director": "Jake Gyllenhaal",
+      "runtime": "187 min",
+      "country": "Japan",
+      "language": "English/French",
+      "screenplay": "Jake Gyllenhaal",
+      "editing": "Sally Menke"
+    },
+    "body_excerpt": "Released in 1994, Vertigo is widely regarded as one of Jake Gyllenhaal's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "American films",
+      "Films featuring an ensemble cast",
+      "Cult films",
+      "Films set in Los Angeles",
+      "Films shot in 70mm",
+      "Paramount Pictures films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "page_views_30d": 66595,
+    "references_count": 13,
+    "external_links": [
+      "https://imdb.com/title/tt3271656"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0028",
+    "source_identifier": "https://filmwiki.example.org/wiki/Quentin_Tarantino",
+    "subject_movie": null,
+    "subject_person": "p_tarantino",
+    "text_excerpt": "Quentin Tarantino is a filmmaker known for stylized violence. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Quentin Tarantino",
+    "infobox": {
+      "name": "Quentin Tarantino",
+      "occupation": "Director, Screenwriter",
+      "years_active": "1971–2018"
+    },
+    "body_excerpt": "Quentin Tarantino is a filmmaker known for stylized violence. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "American film directors",
+      "Living people"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "JoshKrueger",
+      "MoviepageEditor",
+      "FilmEditorBot",
+      "user_8412"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0029",
+    "source_identifier": "https://filmwiki.example.org/wiki/Terminator_2:_Judgment_Day",
+    "subject_movie": "m_terminator2",
+    "subject_person": null,
+    "text_excerpt": "Released in 2023, Terminator 2: Judgment Day is widely regarded as one of Stanley Kubrick's finest works. It was a commercial disappointment at the time.",
+    "sentiment": null,
+    "page_title": "Terminator 2: Judgment Day",
+    "infobox": {
+      "title": "Terminator 2: Judgment Day",
+      "year": 2023,
+      "director": "Stanley Kubrick",
+      "runtime": "101 min",
+      "country": "Japan",
+      "language": "Spanish",
+      "box_office": "$3.4M (limited)",
+      "screenplay": "Stanley Kubrick",
+      "music": "Trent Reznor"
+    },
+    "body_excerpt": "Released in 2023, Terminator 2: Judgment Day is widely regarded as one of Stanley Kubrick's finest works. It was a commercial disappointment at the time.",
+    "categories": [
+      "Films featuring nonlinear narratives",
+      "1990s films",
+      "Films directed by Christopher Nolan",
+      "A24 films",
+      "Warner Bros. films",
+      "Paramount Pictures films",
+      "Cult films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "page_views_30d": 367105,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0030",
+    "source_identifier": "https://filmwiki.example.org/wiki/Interstellar",
+    "subject_movie": "m_interstellar",
+    "subject_person": null,
+    "text_excerpt": "Interstellar is a 1976 film directed by Martin Scorsese, noted for its score and cinematography.",
+    "sentiment": null,
+    "page_title": "Interstellar",
+    "infobox": {
+      "title": "Interstellar",
+      "year": 1976,
+      "director": "Martin Scorsese",
+      "runtime": "172 min",
+      "genre": "Thriller",
+      "box_office": "$213 million",
+      "screenplay": "Martin Scorsese"
+    },
+    "body_excerpt": "Interstellar is a 1976 film directed by Martin Scorsese, noted for its score and cinematography.",
+    "categories": [
+      "Films shot in 70mm",
+      "Cult films",
+      "A24 films",
+      "Films set in Los Angeles",
+      "Films about hitmen"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "user_8412",
+      "K.O.A_admin",
+      "GraciousGreta",
+      "JoshKrueger"
+    ],
+    "references_count": 76,
+    "external_links": [
+      "https://imdb.com/title/tt6498191",
+      "https://rottentomatoes.com/m/interstellar"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0031",
+    "source_identifier": "https://filmwiki.example.org/wiki/Timothée_Chalamet",
+    "subject_movie": null,
+    "subject_person": "p_chalamet",
+    "text_excerpt": "Timothée Chalamet is a filmmaker known for long takes. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Timothée Chalamet",
+    "infobox": {
+      "name": "Timothée Chalamet",
+      "occupation": "Actor",
+      "birth_date": "1970-07-30",
+      "years_active": "1971–2018"
+    },
+    "body_excerpt": "Timothée Chalamet is a filmmaker known for long takes. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "page_views_30d": 40517,
+    "edit_count": 1893,
+    "is_stub": true
+  },
+  {
+    "canonical_id": "mention_wiki_0032",
+    "source_identifier": "https://filmwiki.example.org/wiki/Workingman's_Death",
+    "subject_movie": "m_workingmanthemes",
+    "subject_person": null,
+    "text_excerpt": "Workingman's Death is a 2007 film directed by Greta Gerwig, noted for its editing and production design.",
+    "sentiment": null,
+    "page_title": "Workingman's Death",
+    "infobox": {
+      "title": "Workingman's Death",
+      "year": 2007,
+      "director": "Greta Gerwig",
+      "runtime": "143 min",
+      "genre": "Crime",
+      "country": "France",
+      "budget": "unknown",
+      "cinematography": "Robert Yeoman"
+    },
+    "body_excerpt": "Workingman's Death is a 2007 film directed by Greta Gerwig, noted for its editing and production design.",
+    "categories": [
+      "Films directed by Christopher Nolan",
+      "Films featuring nonlinear narratives",
+      "Neo-noir films",
+      "Warner Bros. films"
+    ],
+    "contributors": [
+      "MoviepageEditor"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt2183716"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0033",
+    "source_identifier": "https://filmwiki.example.org/wiki/Aftersun",
+    "subject_movie": "m_aftersun",
+    "subject_person": null,
+    "text_excerpt": "Aftersun is a 1976 Japan drama film directed by Ewan McGregor. The film stars Martin Scorsese, Barry Jenkins, Alejandro G. Iñárritu, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "Aftersun",
+    "infobox": {
+      "title": "Aftersun",
+      "year": 1976,
+      "director": "Ewan McGregor",
+      "runtime": "101 min",
+      "country": "Japan",
+      "language": "Korean",
+      "budget": "$8 million"
+    },
+    "body_excerpt": "Aftersun is a 1976 Japan drama film directed by Ewan McGregor. The film stars Martin Scorsese, Barry Jenkins, Alejandro G. Iñárritu, and received widespread critical acclaim upon release.",
+    "categories": [
+      "Best Picture Academy Award winners",
+      "Miramax films",
+      "Films about hitmen",
+      "Films scored by Hans Zimmer"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "PageWatcher.Saul",
+      "anon_211.x.x.x",
+      "MoviepageEditor",
+      "TaranAdmin",
+      "Anonymous"
+    ],
+    "references_count": 177,
+    "edit_count": 879,
+    "is_stub": false,
+    "external_links": [
+      "https://imdb.com/title/tt7015182",
+      "https://rottentomatoes.com/m/aftersun"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0034",
+    "source_identifier": "https://filmwiki.example.org/wiki/Midsommar",
+    "subject_movie": "m_midsommar",
+    "subject_person": null,
+    "text_excerpt": "Released in 2003, Midsommar is widely regarded as one of Joaquin Phoenix's finest works. Critics praised the lead performance.",
+    "sentiment": null,
+    "page_title": "Midsommar",
+    "infobox": {
+      "title": "Midsommar",
+      "year": 2003,
+      "director": "Joaquin Phoenix",
+      "runtime": "184 min",
+      "genre": "Drama",
+      "country": "Japan",
+      "budget": "$165,000,000",
+      "box_office": "$1.2 billion",
+      "editing": "Thelma Schoonmaker",
+      "music": "Jonny Greenwood"
+    },
+    "body_excerpt": "Released in 2003, Midsommar is widely regarded as one of Joaquin Phoenix's finest works. Critics praised the lead performance.",
+    "categories": [
+      "Films set in Los Angeles",
+      "Postmodern films",
+      "Crime films",
+      "Paramount Pictures films",
+      "1990s films",
+      "American films",
+      "Neo-noir films"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "TaranAdmin",
+      "GraciousGreta",
+      "K.O.A_admin"
+    ],
+    "page_views_30d": 183877,
+    "references_count": 84,
+    "external_links": [
+      "https://imdb.com/title/tt7255357",
+      "https://rottentomatoes.com/m/midsommar"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0035",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Return_of_the_King",
+    "subject_movie": "m_lotr_rotk",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Return of the King is a 2023 American Drama film directed by Meryl Streep. The film stars Guillermo del Toro, Alfonso Cuarón, Greta Gerwig, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Return of the King",
+    "infobox": {
+      "title": "The Lord of the Rings: The Return of the King",
+      "year": 2023,
+      "director": "Meryl Streep",
+      "runtime": "110 min",
+      "genre": "Drama",
+      "language": "Japanese",
+      "box_office": null,
+      "screenplay": "Meryl Streep",
+      "distributor": "Focus Features"
+    },
+    "body_excerpt": "The Lord of the Rings: The Return of the King is a 2023 American Drama film directed by Meryl Streep. The film stars Guillermo del Toro, Alfonso Cuarón, Greta Gerwig, and received widespread critical acclaim upon release.",
+    "categories": [
+      "1990s films",
+      "Films shot in 70mm",
+      "Neo-noir films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "FilmEditorBot",
+      "CtrlSemicolonBot",
+      "K.O.A_admin"
+    ],
+    "page_views_30d": 342980,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0036",
+    "source_identifier": "https://filmwiki.example.org/wiki/Whiplash",
+    "subject_movie": "m_whiplash",
+    "subject_person": null,
+    "text_excerpt": "Released in 2003, Whiplash is widely regarded as one of David Fincher's finest works. It won three Academy Awards.",
+    "sentiment": null,
+    "page_title": "Whiplash",
+    "infobox": {
+      "title": "Whiplash",
+      "year": 2003,
+      "director": "David Fincher",
+      "runtime": "102 min",
+      "language": "English/French",
+      "music": "Trent Reznor",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Released in 2003, Whiplash is widely regarded as one of David Fincher's finest works. It won three Academy Awards.",
+    "categories": [
+      "Cult films",
+      "Films featuring nonlinear narratives",
+      "Warner Bros. films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "edit_count": 1481
+  },
+  {
+    "canonical_id": "mention_wiki_0037",
+    "source_identifier": "https://filmwiki.example.org/wiki/Independent_film",
+    "subject_movie": null,
+    "subject_person": null,
+    "text_excerpt": "This article covers independent film. It is maintained by contributors of the FilmWiki project.",
+    "sentiment": null,
+    "page_title": "Independent film",
+    "infobox": {},
+    "body_excerpt": "This article covers independent film. It is maintained by contributors of the FilmWiki project.",
+    "categories": [
+      "Lists of films",
+      "Film categories"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "FilmEditorBot"
+    ],
+    "edit_count": 1099
+  },
+  {
+    "canonical_id": "mention_wiki_0038",
+    "source_identifier": "https://filmwiki.example.org/wiki/Memento",
+    "subject_movie": "m_memento",
+    "subject_person": null,
+    "text_excerpt": "Memento is a 2014 film directed by Greta Gerwig, noted for its score and screenplay.",
+    "sentiment": null,
+    "page_title": "Memento",
+    "infobox": {
+      "title": "Memento",
+      "year": 2014,
+      "director": "Greta Gerwig",
+      "runtime": "162 min",
+      "genre": "Thriller",
+      "language": "Korean",
+      "budget": "$25 million",
+      "box_office": "$3.4M (limited)",
+      "cinematography": "Emmanuel Lubezki"
+    },
+    "body_excerpt": "Memento is a 2014 film directed by Greta Gerwig, noted for its score and screenplay.",
+    "categories": [
+      "Warner Bros. films",
+      "Paramount Pictures films",
+      "Neo-noir films",
+      "Films featuring nonlinear narratives",
+      "Crime films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "FilmEditorBot",
+      "GraciousGreta",
+      "moviewiki_editor3"
+    ],
+    "edit_count": 1859,
+    "external_links": [
+      "https://imdb.com/title/tt7149000",
+      "https://rottentomatoes.com/m/memento"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0039",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Two_Towers",
+    "subject_movie": "m_lotr_tt",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Two Towers is a 2024 American Thriller film directed by Damien Chazelle. The film stars Ryan Gosling, Wes Anderson, David Fincher, and received polarized reactions upon release.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Two Towers",
+    "infobox": {
+      "title": "The Lord of the Rings: The Two Towers",
+      "year": 2024,
+      "director": "Damien Chazelle",
+      "runtime": "166 min",
+      "genre": "Thriller",
+      "distributor": "Warner Bros."
+    },
+    "body_excerpt": "The Lord of the Rings: The Two Towers is a 2024 American Thriller film directed by Damien Chazelle. The film stars Ryan Gosling, Wes Anderson, David Fincher, and received polarized reactions upon release.",
+    "categories": [
+      "Films featuring nonlinear narratives",
+      "Neo-noir films",
+      "Cult films",
+      "Films shot in 70mm",
+      "Paramount Pictures films",
+      "Postmodern films",
+      "Crime films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "BotrunSamurai",
+      "moviewiki_editor3",
+      "WikiArchivist77",
+      "10000editsclub",
+      "PageWatcher.Saul"
+    ],
+    "page_views_30d": 374468,
+    "references_count": 69,
+    "edit_count": 2281,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0040",
+    "source_identifier": "https://filmwiki.example.org/wiki/Dune:_Part_Two",
+    "subject_movie": "m_dune2_2024",
+    "subject_person": null,
+    "text_excerpt": "Dune: Part Two is a 2024 American Horror film directed by Robert Eggers. The film stars Paul Thomas Anderson, Francis Ford Coppola, Timothée Chalamet, and received polarized reactions upon release.",
+    "sentiment": null,
+    "page_title": "Dune: Part Two",
+    "infobox": {
+      "title": "Dune: Part Two",
+      "year": 2024,
+      "director": "Robert Eggers",
+      "runtime": "159 min",
+      "genre": "Horror",
+      "language": "English",
+      "box_office": null,
+      "screenplay": "Robert Eggers",
+      "cinematography": "Roger Deakins",
+      "editing": "Thelma Schoonmaker",
+      "music": "Jonny Greenwood",
+      "distributor": "Warner Bros."
+    },
+    "body_excerpt": "Dune: Part Two is a 2024 American Horror film directed by Robert Eggers. The film stars Paul Thomas Anderson, Francis Ford Coppola, Timothée Chalamet, and received polarized reactions upon release.",
+    "categories": [
+      "American films",
+      "Films directed by Christopher Nolan",
+      "Films featuring an ensemble cast",
+      "Crime films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "GraciousGreta",
+      "BotrunSamurai",
+      "TaranAdmin",
+      "anon_211.x.x.x"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0041",
+    "source_identifier": "https://filmwiki.example.org/wiki/Robert_Pattinson",
+    "subject_movie": null,
+    "subject_person": "p_pattinson",
+    "text_excerpt": "Robert Pattinson is a filmmaker known for spare dialogue. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Robert Pattinson",
+    "infobox": {
+      "name": "Robert Pattinson",
+      "occupation": "Director",
+      "birth_place": "Seoul, South Korea",
+      "years_active": "1987–present",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "Robert Pattinson is a filmmaker known for spare dialogue. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "contributors": [
+      "BotrunSamurai",
+      "10000editsclub"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0042",
+    "source_identifier": "https://filmwiki.example.org/wiki/Dasher",
+    "subject_movie": "m_dasher_2017",
+    "subject_person": null,
+    "text_excerpt": "Released in 1979, Dasher is widely regarded as one of Keanu Reeves's finest works. It won three Academy Awards.",
+    "sentiment": null,
+    "page_title": "Dasher",
+    "infobox": {
+      "title": "Dasher",
+      "year": 1979,
+      "director": "Keanu Reeves",
+      "runtime": "119 min",
+      "genre": "Drama",
+      "budget": "$25 million",
+      "cinematography": "Hoyte van Hoytema"
+    },
+    "body_excerpt": "Released in 1979, Dasher is widely regarded as one of Keanu Reeves's finest works. It won three Academy Awards.",
+    "categories": [
+      "American films",
+      "Warner Bros. films",
+      "Best Picture Academy Award winners",
+      "Films directed by Quentin Tarantino",
+      "Neo-noir films",
+      "Films scored by Hans Zimmer"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "FilmEditorBot",
+      "BotrunSamurai",
+      "MoviepageEditor",
+      "GraciousGreta"
+    ],
+    "page_views_30d": 275183,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0043",
+    "source_identifier": "https://filmwiki.example.org/wiki/Parasite",
+    "subject_movie": "m_parasite",
+    "subject_person": null,
+    "text_excerpt": "Parasite (2019) is a Crime film directed by Zendaya. Production began in 2018 and the film opened on streaming-first release.",
+    "sentiment": null,
+    "page_title": "Parasite",
+    "infobox": {
+      "title": "Parasite",
+      "year": 2019,
+      "director": "Zendaya",
+      "runtime": "177 min",
+      "genre": "Crime",
+      "country": "Japan",
+      "box_office": "$213 million",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Parasite (2019) is a Crime film directed by Zendaya. Production began in 2018 and the film opened on streaming-first release.",
+    "categories": [
+      "Paramount Pictures films",
+      "Films shot in 70mm",
+      "Independent films",
+      "A24 films",
+      "Cult films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "GraciousGreta",
+      "K.O.A_admin"
+    ],
+    "edit_count": 1605
+  },
+  {
+    "canonical_id": "mention_wiki_0044",
+    "source_identifier": "https://filmwiki.example.org/wiki/David_Lynch",
+    "subject_movie": null,
+    "subject_person": "p_lynch",
+    "text_excerpt": "David Lynch is a filmmaker known for stylized violence. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "David Lynch",
+    "infobox": {
+      "name": "David Lynch",
+      "occupation": "Filmmaker",
+      "birth_date": "1963-03-27",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "David Lynch is a filmmaker known for stylized violence. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "American film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "TaranAdmin"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt5196237"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0045",
+    "source_identifier": "https://filmwiki.example.org/wiki/Blade_Runner",
+    "subject_movie": "m_blade_runner",
+    "subject_person": null,
+    "text_excerpt": "Blade Runner (1985) is a Drama/Crime film directed by Francis Ford Coppola. Production began in 1984 and the film opened on streaming-first release.",
+    "sentiment": null,
+    "page_title": "Blade Runner",
+    "infobox": {
+      "title": "Blade Runner",
+      "year": 1985,
+      "director": "Francis Ford Coppola",
+      "runtime": "178 min",
+      "genre": "Drama/Crime",
+      "language": "English"
+    },
+    "body_excerpt": "Blade Runner (1985) is a Drama/Crime film directed by Francis Ford Coppola. Production began in 1984 and the film opened on streaming-first release.",
+    "categories": [
+      "Postmodern films",
+      "Best Picture Academy Award winners",
+      "Paramount Pictures films",
+      "American films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "@cineditor",
+      "K.O.A_admin",
+      "MoviepageEditor",
+      "CtrlSemicolonBot",
+      "user_8412"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt9895857"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0046",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Prestige",
+    "subject_movie": "m_prestige",
+    "subject_person": null,
+    "text_excerpt": "The Prestige is a 2003 film directed by Jonathan Glazer, noted for its use of color and screenplay.",
+    "sentiment": null,
+    "page_title": "The Prestige",
+    "infobox": {
+      "title": "The Prestige",
+      "year": 2003,
+      "director": "Jonathan Glazer",
+      "runtime": "195 min",
+      "country": "Germany",
+      "language": "Spanish",
+      "budget": "$25 million",
+      "screenplay": "Jonathan Glazer"
+    },
+    "body_excerpt": "The Prestige is a 2003 film directed by Jonathan Glazer, noted for its use of color and screenplay.",
+    "categories": [
+      "Films set in New York City",
+      "Films featuring nonlinear narratives",
+      "Warner Bros. films",
+      "Films directed by Christopher Nolan",
+      "A24 films",
+      "Paramount Pictures films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "PageWatcher.Saul",
+      "FilmEditorBot",
+      "10000editsclub"
+    ],
+    "page_views_30d": 309736
+  },
+  {
+    "canonical_id": "mention_wiki_0047",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Return_of_the_King",
+    "subject_movie": "m_lotr_rotk",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Return of the King is a 1999 American Drama film directed by Christian Bale. The film stars Park Chan-wook, Christian Bale, Bong Joon-ho, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Return of the King",
+    "infobox": {
+      "title": "The Lord of the Rings: The Return of the King",
+      "year": 1999,
+      "director": "Christian Bale",
+      "runtime": "161 min",
+      "genre": "Drama",
+      "language": "English/French",
+      "box_office": "$213 million",
+      "music": "Mica Levi",
+      "distributor": "Universal Pictures"
+    },
+    "body_excerpt": "The Lord of the Rings: The Return of the King is a 1999 American Drama film directed by Christian Bale. The film stars Park Chan-wook, Christian Bale, Bong Joon-ho, and received widespread critical acclaim upon release.",
+    "categories": [
+      "Films scored by Hans Zimmer",
+      "Films directed by Christopher Nolan",
+      "Warner Bros. films"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0048",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Dark_Knight",
+    "subject_movie": "m_darkknight",
+    "subject_person": null,
+    "text_excerpt": "The Dark Knight is a 1976 Japan drama film directed by Christopher Nolan. The film stars Ryan Gosling, Jessica Chastain, Barry Jenkins, and received polarized reactions upon release.",
+    "sentiment": null,
+    "page_title": "The Dark Knight",
+    "infobox": {
+      "title": "The Dark Knight",
+      "year": 1976,
+      "director": "Christopher Nolan",
+      "runtime": "161 min",
+      "country": "Japan",
+      "box_office": null,
+      "screenplay": "Christopher Nolan",
+      "editing": "Thelma Schoonmaker",
+      "music": "Mica Levi"
+    },
+    "body_excerpt": "The Dark Knight is a 1976 Japan drama film directed by Christopher Nolan. The film stars Ryan Gosling, Jessica Chastain, Barry Jenkins, and received polarized reactions upon release.",
+    "categories": [
+      "Crime films",
+      "Universal Pictures films",
+      "Paramount Pictures films",
+      "Independent films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "Anonymous"
+    ],
+    "page_views_30d": 135725,
+    "edit_count": 1544,
+    "external_links": [
+      "https://imdb.com/title/tt5680240",
+      "https://rottentomatoes.com/m/the_dark_knight"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0049",
+    "source_identifier": "https://filmwiki.example.org/wiki/Quentin_Tarantino",
+    "subject_movie": null,
+    "subject_person": "p_tarantino",
+    "text_excerpt": "Quentin Tarantino is a filmmaker known for spare dialogue. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Quentin Tarantino",
+    "infobox": {
+      "name": "Quentin Tarantino",
+      "occupation": "Actor, Producer",
+      "birth_date": "March 27, 1963"
+    },
+    "body_excerpt": "Quentin Tarantino is a filmmaker known for spare dialogue. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-04-22 16:00"
+  },
+  {
+    "canonical_id": "mention_wiki_0050",
+    "source_identifier": "https://filmwiki.example.org/wiki/Gone_Girl",
+    "subject_movie": "m_gonegirl",
+    "subject_person": null,
+    "text_excerpt": "Gone Girl (1994) is a Drama film directed by Jonathan Glazer. Production began in 1993 and the film opened on 3,200 screens nationwide.",
+    "sentiment": null,
+    "page_title": "Gone Girl",
+    "infobox": {
+      "title": "Gone Girl",
+      "year": 1994,
+      "director": "Jonathan Glazer",
+      "runtime": "135 min",
+      "genre": "Drama",
+      "country": "Japan",
+      "language": "Japanese",
+      "box_office": "$3.4M (limited)"
+    },
+    "body_excerpt": "Gone Girl (1994) is a Drama film directed by Jonathan Glazer. Production began in 1993 and the film opened on 3,200 screens nationwide.",
+    "categories": [
+      "Paramount Pictures films",
+      "Films set in New York City",
+      "Crime films",
+      "Miramax films"
+    ],
+    "last_edited": "2025-05-01",
+    "page_views_30d": 400961,
+    "references_count": 171,
+    "edit_count": 189,
+    "is_stub": false,
+    "external_links": [
+      "https://imdb.com/title/tt3210577",
+      "https://rottentomatoes.com/m/gone_girl"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0051",
+    "source_identifier": "https://filmwiki.example.org/wiki/Michael_Fassbender",
+    "subject_movie": null,
+    "subject_person": "p_michaelfass",
+    "text_excerpt": "Michael Fassbender is a filmmaker known for practical effects. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Michael Fassbender",
+    "infobox": {
+      "name": "Michael Fassbender",
+      "occupation": "Filmmaker",
+      "birth_date": "1942-11-17",
+      "years_active": "1987–present"
+    },
+    "body_excerpt": "Michael Fassbender is a filmmaker known for practical effects. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "American film directors",
+      "Living people"
+    ],
+    "references_count": 39,
+    "is_stub": false,
+    "external_links": [
+      "https://imdb.com/title/tt6741290"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0052",
+    "source_identifier": "https://filmwiki.example.org/wiki/Cate_Blanchett",
+    "subject_movie": null,
+    "subject_person": "p_blanchett",
+    "text_excerpt": "Cate Blanchett is a filmmaker known for genre-bending narratives. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Cate Blanchett",
+    "infobox": {
+      "name": "Cate Blanchett",
+      "occupation": "Filmmaker",
+      "birth_date": "March 27, 1963",
+      "birth_place": "London, England"
+    },
+    "body_excerpt": "Cate Blanchett is a filmmaker known for genre-bending narratives. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "user_8412",
+      "JoshKrueger",
+      "FilmEditorBot",
+      "moviewiki_editor3"
+    ],
+    "is_stub": true
+  },
+  {
+    "canonical_id": "mention_wiki_0053",
+    "source_identifier": "https://filmwiki.example.org/wiki/Oldboy",
+    "subject_movie": "m_oldboy",
+    "subject_person": null,
+    "text_excerpt": "Oldboy is a 2019 American Drama/Crime film directed by Jonathan Glazer. The film stars Meryl Streep, Michael Fassbender, David Fincher, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "Oldboy",
+    "infobox": {
+      "title": "Oldboy",
+      "year": 2019,
+      "director": "Jonathan Glazer",
+      "runtime": "199 min",
+      "genre": "Drama/Crime",
+      "language": "Spanish",
+      "budget": "$165,000,000",
+      "box_office": "$1.2 billion",
+      "editing": "Lee Smith"
+    },
+    "body_excerpt": "Oldboy is a 2019 American Drama/Crime film directed by Jonathan Glazer. The film stars Meryl Streep, Michael Fassbender, David Fincher, and received widespread critical acclaim upon release.",
+    "categories": [
+      "Films set in New York City",
+      "1990s films",
+      "Paramount Pictures films",
+      "American films",
+      "Films set in Los Angeles"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "references_count": 47
+  },
+  {
+    "canonical_id": "mention_wiki_0054",
+    "source_identifier": "https://filmwiki.example.org/wiki/Goodfellas",
+    "subject_movie": "m_goodfellas",
+    "subject_person": null,
+    "text_excerpt": "Released in 2024, Goodfellas is widely regarded as one of Denis Villeneuve's finest works. Critics praised the lead performance.",
+    "sentiment": null,
+    "page_title": "Goodfellas",
+    "infobox": {
+      "title": "Goodfellas",
+      "year": 2024,
+      "director": "Denis Villeneuve",
+      "runtime": "201 min",
+      "genre": "Crime",
+      "language": "English",
+      "box_office": "$48M",
+      "music": "Jonny Greenwood"
+    },
+    "body_excerpt": "Released in 2024, Goodfellas is widely regarded as one of Denis Villeneuve's finest works. Critics praised the lead performance.",
+    "categories": [
+      "Films directed by Quentin Tarantino",
+      "Films set in New York City",
+      "Films featuring an ensemble cast",
+      "Postmodern films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "PageWatcher.Saul",
+      "WikiArchivist77"
+    ],
+    "edit_count": 1391,
+    "external_links": [
+      "https://imdb.com/title/tt8805122"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0055",
+    "source_identifier": "https://filmwiki.example.org/wiki/Blue_Eyed_Boy",
+    "subject_movie": "m_blueeyedboy",
+    "subject_person": null,
+    "text_excerpt": "Blue Eyed Boy (1976) is a Horror film directed by Wes Anderson. Production began in 1975 and the film opened on 3,200 screens nationwide.",
+    "sentiment": null,
+    "page_title": "Blue Eyed Boy",
+    "infobox": {
+      "title": "Blue Eyed Boy",
+      "year": 1976,
+      "director": "Wes Anderson",
+      "runtime": "129 min",
+      "genre": "Horror",
+      "country": "Germany",
+      "budget": "$60M",
+      "screenplay": "Wes Anderson",
+      "music": "Jonny Greenwood"
+    },
+    "body_excerpt": "Blue Eyed Boy (1976) is a Horror film directed by Wes Anderson. Production began in 1975 and the film opened on 3,200 screens nationwide.",
+    "categories": [
+      "Crime films",
+      "Films set in New York City",
+      "Cult films",
+      "Best Picture Academy Award winners",
+      "Films featuring an ensemble cast",
+      "Universal Pictures films",
+      "Films about hitmen"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "edit_count": 182
+  },
+  {
+    "canonical_id": "mention_wiki_0056",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Empire_Strikes_Back",
+    "subject_movie": "m_starwars_empire",
+    "subject_person": null,
+    "text_excerpt": "The Empire Strikes Back is a 2019 film directed by Martin Scorsese, noted for its use of color and production design.",
+    "sentiment": null,
+    "page_title": "The Empire Strikes Back",
+    "infobox": {
+      "title": "The Empire Strikes Back",
+      "year": 2019,
+      "director": "Martin Scorsese",
+      "runtime": "193 min",
+      "genre": "Drama",
+      "language": "Korean",
+      "budget": "unknown",
+      "distributor": "Universal Pictures"
+    },
+    "body_excerpt": "The Empire Strikes Back is a 2019 film directed by Martin Scorsese, noted for its use of color and production design.",
+    "categories": [
+      "Warner Bros. films",
+      "Neo-noir films",
+      "Films directed by Quentin Tarantino",
+      "Paramount Pictures films",
+      "A24 films",
+      "Postmodern films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "page_views_30d": 122850,
+    "external_links": [
+      "https://imdb.com/title/tt3879016"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0057",
+    "source_identifier": "https://filmwiki.example.org/wiki/Cinematography_of_the_2010s",
+    "subject_movie": null,
+    "subject_person": null,
+    "text_excerpt": "This article covers cinematography of the 2010s. It is maintained by contributors of the FilmWiki project.",
+    "sentiment": null,
+    "page_title": "Cinematography of the 2010s",
+    "infobox": {},
+    "body_excerpt": "This article covers cinematography of the 2010s. It is maintained by contributors of the FilmWiki project.",
+    "categories": [
+      "Lists of films",
+      "Film categories"
+    ],
+    "last_edited": "2025-05-01",
+    "page_views_30d": 256761,
+    "references_count": 127
+  },
+  {
+    "canonical_id": "mention_wiki_0058",
+    "source_identifier": "https://filmwiki.example.org/wiki/Denzel_Washington",
+    "subject_movie": null,
+    "subject_person": "p_denzel",
+    "text_excerpt": "Denzel Washington is a filmmaker known for stylized violence. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Denzel Washington",
+    "infobox": {
+      "name": "Denzel Washington",
+      "occupation": "Director",
+      "birth_date": "March 27, 1963",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "Denzel Washington is a filmmaker known for stylized violence. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "contributors": [
+      "BotrunSamurai",
+      "FilmEditorBot",
+      "Anonymous"
+    ],
+    "page_views_30d": 411571
+  },
+  {
+    "canonical_id": "mention_wiki_0059",
+    "source_identifier": "https://filmwiki.example.org/wiki/Alejandro_G._Iñárritu",
+    "subject_movie": null,
+    "subject_person": "p_iñárritu",
+    "text_excerpt": "Alejandro G. Iñárritu is a filmmaker known for practical effects. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Alejandro G. Iñárritu",
+    "infobox": {
+      "name": "Alejandro G. Iñárritu",
+      "occupation": "Actor",
+      "birth_date": "1942-11-17",
+      "birth_place": "Knoxville, Tennessee, U.S.",
+      "years_active": "1987–present",
+      "notable_works": [
+        "Arrival",
+        "The Godfather Part II",
+        "Past Lives"
+      ]
+    },
+    "body_excerpt": "Alejandro G. Iñárritu is a filmmaker known for practical effects. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "contributors": [
+      "GraciousGreta",
+      "anon_211.x.x.x",
+      "CtrlSemicolonBot"
+    ],
+    "references_count": 147,
+    "edit_count": 608
+  },
+  {
+    "canonical_id": "mention_wiki_0060",
+    "source_identifier": "https://filmwiki.example.org/wiki/All_the_Beauty_and_the_Bloodshed",
+    "subject_movie": "m_alltheboys",
+    "subject_person": null,
+    "text_excerpt": "Released in 1976, All the Beauty and the Bloodshed is widely regarded as one of David Fincher's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "All the Beauty and the Bloodshed",
+    "infobox": {
+      "title": "All the Beauty and the Bloodshed",
+      "year": 1976,
+      "director": "David Fincher",
+      "runtime": "132 min",
+      "genre": "Horror",
+      "country": "South Korea",
+      "budget": "$25 million"
+    },
+    "body_excerpt": "Released in 1976, All the Beauty and the Bloodshed is widely regarded as one of David Fincher's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "A24 films",
+      "Warner Bros. films",
+      "Films featuring an ensemble cast",
+      "Films shot in 70mm"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "K.O.A_admin",
+      "MoviepageEditor",
+      "moviewiki_editor3"
+    ],
+    "page_views_30d": 326024
+  },
+  {
+    "canonical_id": "mention_wiki_0061",
+    "source_identifier": "https://filmwiki.example.org/wiki/Damien_Chazelle",
+    "subject_movie": null,
+    "subject_person": "p_chazelle",
+    "text_excerpt": "Damien Chazelle is a filmmaker known for genre-bending narratives. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Damien Chazelle",
+    "infobox": {
+      "name": "Damien Chazelle",
+      "occupation": "Director",
+      "birth_date": "1970-07-30",
+      "years_active": "1971–2018",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "Damien Chazelle is a filmmaker known for genre-bending narratives. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "American film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "anon_211.x.x.x",
+      "@cineditor"
+    ],
+    "page_views_30d": 341896,
+    "external_links": [
+      "https://imdb.com/title/tt5308613"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0062",
+    "source_identifier": "https://filmwiki.example.org/wiki/Civil_War",
+    "subject_movie": "m_civilwar2024",
+    "subject_person": null,
+    "text_excerpt": "Civil War is a 2010 film directed by Francis Ford Coppola, noted for its score and screenplay.",
+    "sentiment": null,
+    "page_title": "Civil War",
+    "infobox": {
+      "title": "Civil War",
+      "year": 2010,
+      "director": "Francis Ford Coppola",
+      "runtime": "133 min",
+      "genre": "Drama/Crime",
+      "language": "English",
+      "budget": "$165,000,000",
+      "cinematography": "Roger Deakins"
+    },
+    "body_excerpt": "Civil War is a 2010 film directed by Francis Ford Coppola, noted for its score and screenplay.",
+    "categories": [
+      "Films about hitmen",
+      "Paramount Pictures films",
+      "Miramax films",
+      "Independent films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "TaranAdmin",
+      "user_8412",
+      "K.O.A_admin",
+      "PageWatcher.Saul",
+      "@cineditor"
+    ],
+    "is_stub": true,
+    "external_links": [
+      "https://imdb.com/title/tt6887894",
+      "https://rottentomatoes.com/m/civil_war"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0063",
+    "source_identifier": "https://filmwiki.example.org/wiki/Gone_Girl",
+    "subject_movie": "m_gonegirl",
+    "subject_person": null,
+    "text_excerpt": "Released in 2007, Gone Girl is widely regarded as one of Damien Chazelle's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "Gone Girl",
+    "infobox": {
+      "title": "Gone Girl",
+      "year": 2007,
+      "director": "Damien Chazelle",
+      "runtime": "92 min",
+      "genre": "Comedy",
+      "country": "Japan",
+      "language": "English",
+      "budget": "$25 million",
+      "box_office": "$213 million",
+      "cinematography": "Roger Deakins",
+      "editing": "Lee Smith"
+    },
+    "body_excerpt": "Released in 2007, Gone Girl is widely regarded as one of Damien Chazelle's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "Warner Bros. films",
+      "1990s films",
+      "Films about hitmen",
+      "Films directed by Christopher Nolan"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "10000editsclub",
+      "K.O.A_admin",
+      "TaranAdmin"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt8037828"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0064",
+    "source_identifier": "https://filmwiki.example.org/wiki/Alien",
+    "subject_movie": "m_alien",
+    "subject_person": null,
+    "text_excerpt": "Alien is a 1976 film directed by David Lynch, noted for its score and screenplay.",
+    "sentiment": null,
+    "page_title": "Alien",
+    "infobox": {
+      "title": "Alien",
+      "year": 1976,
+      "director": "David Lynch",
+      "runtime": "158 min",
+      "genre": "Thriller",
+      "distributor": "Focus Features"
+    },
+    "body_excerpt": "Alien is a 1976 film directed by David Lynch, noted for its score and screenplay.",
+    "categories": [
+      "Cult films",
+      "Films shot in 70mm",
+      "Crime films",
+      "Films set in New York City",
+      "American films",
+      "Films featuring an ensemble cast"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "WikiArchivist77",
+      "K.O.A_admin"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0065",
+    "source_identifier": "https://filmwiki.example.org/wiki/Meryl_Streep",
+    "subject_movie": null,
+    "subject_person": "p_streep",
+    "text_excerpt": "Meryl Streep is a filmmaker known for stylized violence. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Meryl Streep",
+    "infobox": {
+      "name": "Meryl Streep",
+      "occupation": "Director, Screenwriter",
+      "birth_place": "Mexico City, Mexico",
+      "years_active": "1963–present",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "Meryl Streep is a filmmaker known for stylized violence. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "K.O.A_admin",
+      "anon_211.x.x.x",
+      "GraciousGreta",
+      "MoviepageEditor",
+      "@cineditor"
+    ],
+    "edit_count": 1324,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0066",
+    "source_identifier": "https://filmwiki.example.org/wiki/Denis_Villeneuve",
+    "subject_movie": null,
+    "subject_person": "p_villeneuve",
+    "text_excerpt": "Denis Villeneuve is a filmmaker known for practical effects. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Denis Villeneuve",
+    "infobox": {
+      "name": "Denis Villeneuve",
+      "occupation": "Actor, Producer",
+      "birth_place": "Knoxville, Tennessee, U.S."
+    },
+    "body_excerpt": "Denis Villeneuve is a filmmaker known for practical effects. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "FilmEditorBot",
+      "@cineditor",
+      "BotrunSamurai",
+      "10000editsclub"
+    ],
+    "references_count": 15,
+    "edit_count": 633,
+    "external_links": [
+      "https://imdb.com/title/tt6571653",
+      "https://rottentomatoes.com/m/denis_villeneuve"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0067",
+    "source_identifier": "https://filmwiki.example.org/wiki/A_Clockwork_Orange",
+    "subject_movie": "m_clockworkorange",
+    "subject_person": null,
+    "text_excerpt": "A Clockwork Orange (2014) is a Thriller film directed by Margot Robbie. Production began in 2013 and the film opened in select theaters.",
+    "sentiment": null,
+    "page_title": "A Clockwork Orange",
+    "infobox": {
+      "title": "A Clockwork Orange",
+      "year": 2014,
+      "director": "Margot Robbie",
+      "runtime": "209 min",
+      "genre": "Thriller",
+      "country": "United Kingdom",
+      "language": "Japanese",
+      "budget": "$60M",
+      "box_office": "$3.4M (limited)",
+      "screenplay": "Margot Robbie",
+      "cinematography": "Robert Yeoman",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "A Clockwork Orange (2014) is a Thriller film directed by Margot Robbie. Production began in 2013 and the film opened in select theaters.",
+    "categories": [
+      "Films scored by Hans Zimmer",
+      "American films",
+      "Films directed by Christopher Nolan",
+      "Cult films",
+      "Films shot in 70mm"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "Anonymous",
+      "@cineditor"
+    ],
+    "page_views_30d": 46847
+  },
+  {
+    "canonical_id": "mention_wiki_0068",
+    "source_identifier": "https://filmwiki.example.org/wiki/Jurassic_Park",
+    "subject_movie": "m_jurassicpark",
+    "subject_person": null,
+    "text_excerpt": "Jurassic Park is a 1985 film directed by Jonathan Glazer, noted for its score and production design.",
+    "sentiment": null,
+    "page_title": "Jurassic Park",
+    "infobox": {
+      "title": "Jurassic Park",
+      "year": 1985,
+      "director": "Jonathan Glazer",
+      "runtime": "178 min",
+      "genre": "Horror",
+      "language": "Spanish",
+      "budget": "$165,000,000",
+      "box_office": "$1.2 billion",
+      "cinematography": "Hoyte van Hoytema",
+      "music": "Mica Levi",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Jurassic Park is a 1985 film directed by Jonathan Glazer, noted for its score and production design.",
+    "categories": [
+      "Films about hitmen",
+      "Films directed by Christopher Nolan",
+      "Independent films",
+      "Films featuring nonlinear narratives",
+      "Cult films",
+      "Miramax films",
+      "Universal Pictures films"
+    ],
+    "last_edited": "2025-05-01",
+    "edit_count": 1346,
+    "external_links": [
+      "https://imdb.com/title/tt9329589",
+      "https://rottentomatoes.com/m/jurassic_park"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0069",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Return_of_the_King",
+    "subject_movie": "m_lotr_rotk",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Return of the King (2024) is a Drama film directed by Denzel Washington. Production began in 2023 and the film opened on streaming-first release.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Return of the King",
+    "infobox": {
+      "title": "The Lord of the Rings: The Return of the King",
+      "year": 2024,
+      "director": "Denzel Washington",
+      "runtime": "187 min",
+      "genre": "Drama",
+      "language": "English",
+      "budget": "$60M",
+      "editing": "Lee Smith"
+    },
+    "body_excerpt": "The Lord of the Rings: The Return of the King (2024) is a Drama film directed by Denzel Washington. Production began in 2023 and the film opened on streaming-first release.",
+    "categories": [
+      "Films about hitmen",
+      "Films shot in 70mm",
+      "Cult films",
+      "Universal Pictures films"
+    ],
+    "contributors": [
+      "PageWatcher.Saul"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0070",
+    "source_identifier": "https://filmwiki.example.org/wiki/Gone_Girl",
+    "subject_movie": "m_gonegirl",
+    "subject_person": null,
+    "text_excerpt": "Released in 1980, Gone Girl is widely regarded as one of Brad Pitt's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "Gone Girl",
+    "infobox": {
+      "title": "Gone Girl",
+      "year": 1980,
+      "director": "Brad Pitt",
+      "runtime": "110 min",
+      "genre": "Drama/Crime",
+      "country": "France",
+      "language": "English",
+      "box_office": "$48M",
+      "editing": "Sally Menke",
+      "music": "Ennio Morricone"
+    },
+    "body_excerpt": "Released in 1980, Gone Girl is widely regarded as one of Brad Pitt's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "A24 films",
+      "Paramount Pictures films",
+      "Miramax films",
+      "Films featuring an ensemble cast",
+      "Films about hitmen",
+      "Independent films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "page_views_30d": 196965,
+    "edit_count": 2128
+  },
+  {
+    "canonical_id": "mention_wiki_0071",
+    "source_identifier": "https://filmwiki.example.org/wiki/Aftersun",
+    "subject_movie": "m_aftersun",
+    "subject_person": null,
+    "text_excerpt": "Aftersun is a 2022 film directed by Brad Pitt, noted for its editing and screenplay.",
+    "sentiment": null,
+    "page_title": "Aftersun",
+    "infobox": {
+      "title": "Aftersun",
+      "year": 2022,
+      "director": "Brad Pitt",
+      "runtime": "107 min",
+      "budget": "$25 million",
+      "screenplay": "Brad Pitt",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Aftersun is a 2022 film directed by Brad Pitt, noted for its editing and screenplay.",
+    "categories": [
+      "Postmodern films",
+      "Films directed by Christopher Nolan",
+      "Films about hitmen",
+      "Films shot in 70mm",
+      "Warner Bros. films"
+    ],
+    "page_views_30d": 211274,
+    "is_stub": true
+  },
+  {
+    "canonical_id": "mention_wiki_0072",
+    "source_identifier": "https://filmwiki.example.org/wiki/Saving_Private_Ryan",
+    "subject_movie": "m_savingprivateryan",
+    "subject_person": null,
+    "text_excerpt": "Saving Private Ryan (2024) is a Sci-Fi film directed by Brad Pitt. Production began in 2023 and the film opened on streaming-first release.",
+    "sentiment": null,
+    "page_title": "Saving Private Ryan",
+    "infobox": {
+      "title": "Saving Private Ryan",
+      "year": 2024,
+      "director": "Brad Pitt",
+      "runtime": "201 min",
+      "genre": "Sci-Fi",
+      "country": "United Kingdom",
+      "budget": "$25 million",
+      "box_office": "$48M",
+      "screenplay": "Brad Pitt",
+      "cinematography": "Roger Deakins"
+    },
+    "body_excerpt": "Saving Private Ryan (2024) is a Sci-Fi film directed by Brad Pitt. Production began in 2023 and the film opened on streaming-first release.",
+    "categories": [
+      "Universal Pictures films",
+      "Films shot in 70mm",
+      "Warner Bros. films",
+      "Films featuring an ensemble cast"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "Anonymous",
+      "BotrunSamurai",
+      "GraciousGreta"
+    ],
+    "page_views_30d": 87723,
+    "references_count": 182
+  },
+  {
+    "canonical_id": "mention_wiki_0073",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Two_Towers",
+    "subject_movie": "m_lotr_tt",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Two Towers is a 2014 South Korea Drama/Crime film directed by Ari Aster. The film stars Robert Eggers, Oscar Isaac, Quentin Tarantino, and received polarized reactions upon release.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Two Towers",
+    "infobox": {
+      "title": "The Lord of the Rings: The Two Towers",
+      "year": 2014,
+      "director": "Ari Aster",
+      "runtime": "205 min",
+      "genre": "Drama/Crime",
+      "country": "South Korea",
+      "cinematography": "Emmanuel Lubezki",
+      "music": "Hans Zimmer"
+    },
+    "body_excerpt": "The Lord of the Rings: The Two Towers is a 2014 South Korea Drama/Crime film directed by Ari Aster. The film stars Robert Eggers, Oscar Isaac, Quentin Tarantino, and received polarized reactions upon release.",
+    "categories": [
+      "Independent films",
+      "Films shot in 70mm",
+      "Neo-noir films",
+      "Films scored by Hans Zimmer",
+      "Films about hitmen",
+      "Films set in Los Angeles",
+      "A24 films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "user_8412",
+      "TaranAdmin",
+      "moviewiki_editor3",
+      "@cineditor",
+      "PageWatcher.Saul"
+    ],
+    "page_views_30d": 375370,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0074",
+    "source_identifier": "https://filmwiki.example.org/wiki/Oldboy",
+    "subject_movie": "m_oldboy",
+    "subject_person": null,
+    "text_excerpt": "Released in 1999, Oldboy is widely regarded as one of Stanley Kubrick's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "Oldboy",
+    "infobox": {
+      "title": "Oldboy",
+      "year": 1999,
+      "director": "Stanley Kubrick",
+      "runtime": "174 min",
+      "genre": "Comedy",
+      "country": "South Korea",
+      "language": "Spanish",
+      "box_office": "$3.4M (limited)",
+      "cinematography": "Robert Yeoman",
+      "music": "Trent Reznor",
+      "distributor": "A24"
+    },
+    "body_excerpt": "Released in 1999, Oldboy is widely regarded as one of Stanley Kubrick's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "Films directed by Quentin Tarantino",
+      "Best Picture Academy Award winners",
+      "American films",
+      "Cult films",
+      "Films set in Los Angeles"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "edit_count": 211,
+    "is_stub": true
+  },
+  {
+    "canonical_id": "mention_wiki_0075",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Two_Towers",
+    "subject_movie": "m_lotr_tt",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Two Towers (2010) is a Crime film directed by Jonathan Glazer. Production began in 2009 and the film opened on streaming-first release.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Two Towers",
+    "infobox": {
+      "title": "The Lord of the Rings: The Two Towers",
+      "year": 2010,
+      "director": "Jonathan Glazer",
+      "runtime": "112 min",
+      "genre": "Crime",
+      "country": "South Korea",
+      "box_office": "$1.2 billion"
+    },
+    "body_excerpt": "The Lord of the Rings: The Two Towers (2010) is a Crime film directed by Jonathan Glazer. Production began in 2009 and the film opened on streaming-first release.",
+    "categories": [
+      "Neo-noir films",
+      "A24 films",
+      "Warner Bros. films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "FilmEditorBot",
+      "BotrunSamurai"
+    ],
+    "page_views_30d": 143206,
+    "references_count": 76,
+    "external_links": [
+      "https://imdb.com/title/tt6958804",
+      "https://rottentomatoes.com/m/the_lord_of_the_rings:_the_two_towers"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0076",
+    "source_identifier": "https://filmwiki.example.org/wiki/Martin_Scorsese",
+    "subject_movie": null,
+    "subject_person": "p_scorsese",
+    "text_excerpt": "Martin Scorsese is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "sentiment": null,
+    "page_title": "Martin Scorsese",
+    "infobox": {
+      "name": "Martin Scorsese",
+      "occupation": "Filmmaker",
+      "birth_date": "1928-04-03",
+      "spouse": "[redacted]"
+    },
+    "body_excerpt": "Martin Scorsese is a filmmaker known for spare dialogue. They are widely cited as a major influence on contemporary cinema.",
+    "categories": [
+      "Film directors",
+      "South Korean film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "FilmEditorBot",
+      "PageWatcher.Saul"
+    ],
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0077",
+    "source_identifier": "https://filmwiki.example.org/wiki/Hereditary",
+    "subject_movie": "m_hereditary",
+    "subject_person": null,
+    "text_excerpt": "Released in 1972, Hereditary is widely regarded as one of Robert Pattinson's finest works. Critics praised the lead performance.",
+    "sentiment": null,
+    "page_title": "Hereditary",
+    "infobox": {
+      "title": "Hereditary",
+      "year": 1972,
+      "director": "Robert Pattinson",
+      "runtime": "180 min",
+      "genre": "Drama/Crime",
+      "budget": "unknown",
+      "editing": "Joe Walker"
+    },
+    "body_excerpt": "Released in 1972, Hereditary is widely regarded as one of Robert Pattinson's finest works. Critics praised the lead performance.",
+    "categories": [
+      "Independent films",
+      "Films directed by Quentin Tarantino",
+      "1990s films",
+      "Films directed by Christopher Nolan"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "GraciousGreta",
+      "10000editsclub",
+      "Anonymous",
+      "FilmEditorBot"
+    ],
+    "page_views_30d": 4690,
+    "references_count": 79
+  },
+  {
+    "canonical_id": "mention_wiki_0078",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Dark_Knight",
+    "subject_movie": "m_darkknight",
+    "subject_person": null,
+    "text_excerpt": "The Dark Knight (1999) is a Sci-Fi film directed by Robert Eggers. Production began in 1998 and the film opened on 3,200 screens nationwide.",
+    "sentiment": null,
+    "page_title": "The Dark Knight",
+    "infobox": {
+      "title": "The Dark Knight",
+      "year": 1999,
+      "director": "Robert Eggers",
+      "runtime": "84 min",
+      "genre": "Sci-Fi",
+      "language": "English",
+      "music": "Trent Reznor"
+    },
+    "body_excerpt": "The Dark Knight (1999) is a Sci-Fi film directed by Robert Eggers. Production began in 1998 and the film opened on 3,200 screens nationwide.",
+    "categories": [
+      "Warner Bros. films",
+      "Films directed by Quentin Tarantino",
+      "Films featuring nonlinear narratives"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "GraciousGreta",
+      "JoshKrueger"
+    ],
+    "page_views_30d": 6175
+  },
+  {
+    "canonical_id": "mention_wiki_0079",
+    "source_identifier": "https://filmwiki.example.org/wiki/Kill_Bill:_Vol._2",
+    "subject_movie": "m_killbill2",
+    "subject_person": null,
+    "text_excerpt": "Released in 1994, Kill Bill: Vol. 2 is widely regarded as one of Jessica Chastain's finest works. It has since been re-evaluated as a landmark of its era.",
+    "sentiment": null,
+    "page_title": "Kill Bill: Vol. 2",
+    "infobox": {
+      "title": "Kill Bill: Vol. 2",
+      "year": 1994,
+      "director": "Jessica Chastain",
+      "runtime": 114,
+      "country": "United States",
+      "box_office": "$1.2 billion",
+      "cinematography": "Emmanuel Lubezki"
+    },
+    "body_excerpt": "Released in 1994, Kill Bill: Vol. 2 is widely regarded as one of Jessica Chastain's finest works. It has since been re-evaluated as a landmark of its era.",
+    "categories": [
+      "1990s films",
+      "Films featuring nonlinear narratives",
+      "Films set in Los Angeles",
+      "Miramax films"
+    ],
+    "page_views_30d": 1714,
+    "references_count": 132,
+    "edit_count": 2035
+  },
+  {
+    "canonical_id": "mention_wiki_0080",
+    "source_identifier": "https://filmwiki.example.org/wiki/Stalker",
+    "subject_movie": "m_stalker1979",
+    "subject_person": null,
+    "text_excerpt": "Stalker (2024) is a drama film directed by David Fincher. Production began in 2023 and the film opened on 3,200 screens nationwide.",
+    "sentiment": null,
+    "page_title": "Stalker",
+    "infobox": {
+      "title": "Stalker",
+      "year": 2024,
+      "director": "David Fincher",
+      "runtime": "201 min",
+      "country": "South Korea",
+      "budget": "$165,000,000"
+    },
+    "body_excerpt": "Stalker (2024) is a drama film directed by David Fincher. Production began in 2023 and the film opened on 3,200 screens nationwide.",
+    "categories": [
+      "Postmodern films",
+      "Miramax films",
+      "American films",
+      "Films directed by Quentin Tarantino"
+    ],
+    "contributors": [
+      "moviewiki_editor3",
+      "MoviepageEditor",
+      "K.O.A_admin",
+      "PageWatcher.Saul"
+    ],
+    "page_views_30d": 203993
+  },
+  {
+    "canonical_id": "mention_wiki_0081",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Batman",
+    "subject_movie": "m_thebatman2022",
+    "subject_person": null,
+    "text_excerpt": "The Batman (2007) is a Drama/Crime film directed by Wes Anderson. Production began in 2006 and the film opened in select theaters.",
+    "sentiment": null,
+    "page_title": "The Batman",
+    "infobox": {
+      "title": "The Batman",
+      "year": 2007,
+      "director": "Wes Anderson",
+      "runtime": "178 min",
+      "genre": "Drama/Crime",
+      "budget": "$8 million",
+      "music": "Trent Reznor",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "The Batman (2007) is a Drama/Crime film directed by Wes Anderson. Production began in 2006 and the film opened in select theaters.",
+    "categories": [
+      "Independent films",
+      "Warner Bros. films",
+      "Miramax films",
+      "Cult films",
+      "Films featuring an ensemble cast"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "K.O.A_admin",
+      "CtrlSemicolonBot"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0082",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Prestige",
+    "subject_movie": "m_prestige",
+    "subject_person": null,
+    "text_excerpt": "The Prestige is a 1980 Japan Drama/Crime film directed by Quentin Tarantino. The film stars Leonardo DiCaprio, Martin Scorsese, Quentin Tarantino, and received mixed reviews upon release.",
+    "sentiment": null,
+    "page_title": "The Prestige",
+    "infobox": {
+      "title": "The Prestige",
+      "year": 1980,
+      "director": "Quentin Tarantino",
+      "runtime": "134 min",
+      "genre": "Drama/Crime",
+      "country": "Japan",
+      "screenplay": "Quentin Tarantino",
+      "cinematography": "Rodrigo Prieto"
+    },
+    "body_excerpt": "The Prestige is a 1980 Japan Drama/Crime film directed by Quentin Tarantino. The film stars Leonardo DiCaprio, Martin Scorsese, Quentin Tarantino, and received mixed reviews upon release.",
+    "categories": [
+      "Postmodern films",
+      "Paramount Pictures films",
+      "Films about hitmen",
+      "Warner Bros. films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "WikiArchivist77"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0083",
+    "source_identifier": "https://filmwiki.example.org/wiki/Vertigo",
+    "subject_movie": "m_vertigo",
+    "subject_person": null,
+    "text_excerpt": "Vertigo is a 2023 South Korea Thriller film directed by Joaquin Phoenix. The film stars Meryl Streep, Martin Scorsese, Greta Gerwig, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "Vertigo",
+    "infobox": {
+      "title": "Vertigo",
+      "year": 2023,
+      "director": "Joaquin Phoenix",
+      "runtime": "204 min",
+      "genre": "Thriller",
+      "country": "South Korea",
+      "editing": "Lee Smith",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Vertigo is a 2023 South Korea Thriller film directed by Joaquin Phoenix. The film stars Meryl Streep, Martin Scorsese, Greta Gerwig, and received widespread critical acclaim upon release.",
+    "categories": [
+      "Films set in New York City",
+      "Crime films",
+      "Best Picture Academy Award winners"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "TaranAdmin"
+    ],
+    "page_views_30d": 153335
+  },
+  {
+    "canonical_id": "mention_wiki_0084",
+    "source_identifier": "https://filmwiki.example.org/wiki/Oscar_Isaac",
+    "subject_movie": null,
+    "subject_person": "p_oscarisaac",
+    "text_excerpt": "Oscar Isaac is a filmmaker known for spare dialogue. They emerged from the studio system.",
+    "sentiment": null,
+    "page_title": "Oscar Isaac",
+    "infobox": {
+      "name": "Oscar Isaac",
+      "occupation": "Filmmaker",
+      "birth_date": "1928-04-03",
+      "birth_place": "Knoxville, Tennessee, U.S.",
+      "notable_works": [
+        "The Return",
+        "Civil War",
+        "A Clockwork Orange",
+        "Whiplash"
+      ]
+    },
+    "body_excerpt": "Oscar Isaac is a filmmaker known for spare dialogue. They emerged from the studio system.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "GraciousGreta",
+      "moviewiki_editor3",
+      "@cineditor"
+    ],
+    "references_count": 46,
+    "external_links": [
+      "https://imdb.com/title/tt2838173",
+      "https://rottentomatoes.com/m/oscar_isaac"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0085",
+    "source_identifier": "https://filmwiki.example.org/wiki/List_of_A24_films",
+    "subject_movie": null,
+    "subject_person": null,
+    "text_excerpt": "This article covers list of a24 films. It is maintained by contributors of the FilmWiki project.",
+    "sentiment": null,
+    "page_title": "List of A24 films",
+    "infobox": {},
+    "body_excerpt": "This article covers list of a24 films. It is maintained by contributors of the FilmWiki project.",
+    "categories": [
+      "Lists of films",
+      "Film categories"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "K.O.A_admin",
+      "CtrlSemicolonBot",
+      "TaranAdmin",
+      "Anonymous",
+      "WikiArchivist77"
+    ],
+    "page_views_30d": 126259
+  },
+  {
+    "canonical_id": "mention_wiki_0086",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lord_of_the_Rings:_The_Two_Towers",
+    "subject_movie": "m_lotr_tt",
+    "subject_person": null,
+    "text_excerpt": "The Lord of the Rings: The Two Towers is a 1994 film directed by Martin Scorsese, noted for its score and production design.",
+    "sentiment": null,
+    "page_title": "The Lord of the Rings: The Two Towers",
+    "infobox": {
+      "title": "The Lord of the Rings: The Two Towers",
+      "year": 1994,
+      "director": "Martin Scorsese",
+      "runtime": "159 min",
+      "genre": "Drama/Crime",
+      "country": "Japan",
+      "language": "English/French",
+      "budget": "$165,000,000",
+      "box_office": "$48M",
+      "editing": "Thelma Schoonmaker"
+    },
+    "body_excerpt": "The Lord of the Rings: The Two Towers is a 1994 film directed by Martin Scorsese, noted for its score and production design.",
+    "categories": [
+      "Films shot in 70mm",
+      "Films featuring an ensemble cast",
+      "Films about hitmen",
+      "Cult films",
+      "Crime films"
+    ],
+    "contributors": [
+      "10000editsclub"
+    ],
+    "page_views_30d": 50216,
+    "edit_count": 225,
+    "external_links": [
+      "https://imdb.com/title/tt6859132",
+      "https://rottentomatoes.com/m/the_lord_of_the_rings:_the_two_towers"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0087",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Lighthouse",
+    "subject_movie": "m_thelighthouse",
+    "subject_person": null,
+    "text_excerpt": "Released in 1985, The Lighthouse is widely regarded as one of Florence Pugh's finest works. It won three Academy Awards.",
+    "sentiment": null,
+    "page_title": "The Lighthouse",
+    "infobox": {
+      "title": "The Lighthouse",
+      "year": 1985,
+      "director": "Florence Pugh",
+      "runtime": "93 min",
+      "genre": "Horror",
+      "country": "United Kingdom",
+      "box_office": "$48M",
+      "cinematography": "Roger Deakins"
+    },
+    "body_excerpt": "Released in 1985, The Lighthouse is widely regarded as one of Florence Pugh's finest works. It won three Academy Awards.",
+    "categories": [
+      "Films set in Los Angeles",
+      "American films",
+      "1990s films",
+      "Films set in New York City",
+      "Universal Pictures films",
+      "Postmodern films",
+      "Films shot in 70mm"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "CtrlSemicolonBot",
+      "FilmEditorBot",
+      "TaranAdmin",
+      "@cineditor"
+    ],
+    "references_count": 99,
+    "is_stub": false
+  },
+  {
+    "canonical_id": "mention_wiki_0088",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Substance",
+    "subject_movie": "m_thesubstance",
+    "subject_person": null,
+    "text_excerpt": "The Substance is a 1980 American drama film directed by Christopher Nolan. The film stars Brad Pitt, Denzel Washington, Alfonso Cuarón, and received widespread critical acclaim upon release.",
+    "sentiment": null,
+    "page_title": "The Substance",
+    "infobox": {
+      "title": "The Substance",
+      "year": 1980,
+      "director": "Christopher Nolan",
+      "runtime": "167 min",
+      "screenplay": "Christopher Nolan",
+      "music": "Ennio Morricone"
+    },
+    "body_excerpt": "The Substance is a 1980 American drama film directed by Christopher Nolan. The film stars Brad Pitt, Denzel Washington, Alfonso Cuarón, and received widespread critical acclaim upon release.",
+    "categories": [
+      "Cult films",
+      "Paramount Pictures films",
+      "Films directed by Christopher Nolan",
+      "American films",
+      "Films shot in 70mm",
+      "1990s films"
+    ],
+    "last_edited": "Apr 22, 2025",
+    "contributors": [
+      "BotrunSamurai",
+      "MoviepageEditor",
+      "moviewiki_editor3",
+      "user_8412",
+      "JoshKrueger"
+    ],
+    "page_views_30d": 335189,
+    "references_count": 104
+  },
+  {
+    "canonical_id": "mention_wiki_0089",
+    "source_identifier": "https://filmwiki.example.org/wiki/E.T._the_Extra-Terrestrial",
+    "subject_movie": "m_e.t.",
+    "subject_person": null,
+    "text_excerpt": "E.T. the Extra-Terrestrial is a 2022 film directed by Barry Jenkins, noted for its editing and screenplay.",
+    "sentiment": null,
+    "page_title": "E.T. the Extra-Terrestrial",
+    "infobox": {
+      "title": "E.T. the Extra-Terrestrial",
+      "year": 2022,
+      "director": "Barry Jenkins",
+      "runtime": "147 min",
+      "genre": "Sci-Fi",
+      "budget": "$60M",
+      "screenplay": "Barry Jenkins"
+    },
+    "body_excerpt": "E.T. the Extra-Terrestrial is a 2022 film directed by Barry Jenkins, noted for its editing and screenplay.",
+    "categories": [
+      "Films shot in 70mm",
+      "Films about hitmen",
+      "Postmodern films",
+      "Films featuring nonlinear narratives",
+      "Best Picture Academy Award winners",
+      "Films scored by Hans Zimmer",
+      "Paramount Pictures films"
+    ],
+    "contributors": [
+      "K.O.A_admin",
+      "BotrunSamurai",
+      "MoviepageEditor",
+      "moviewiki_editor3"
+    ],
+    "references_count": 166
+  },
+  {
+    "canonical_id": "mention_wiki_0090",
+    "source_identifier": "https://filmwiki.example.org/wiki/The_Holdovers",
+    "subject_movie": "m_holdovers",
+    "subject_person": null,
+    "text_excerpt": "Released in 1976, The Holdovers is widely regarded as one of Quentin Tarantino's finest works. It won three Academy Awards.",
+    "sentiment": null,
+    "page_title": "The Holdovers",
+    "infobox": {
+      "title": "The Holdovers",
+      "year": 1976,
+      "director": "Quentin Tarantino",
+      "runtime": "166 min",
+      "genre": "Comedy",
+      "budget": "$8 million",
+      "screenplay": "Quentin Tarantino",
+      "cinematography": "Roger Deakins"
+    },
+    "body_excerpt": "Released in 1976, The Holdovers is widely regarded as one of Quentin Tarantino's finest works. It won three Academy Awards.",
+    "categories": [
+      "Films featuring an ensemble cast",
+      "Best Picture Academy Award winners",
+      "Films featuring nonlinear narratives",
+      "Universal Pictures films"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "page_views_30d": 24031
+  },
+  {
+    "canonical_id": "mention_wiki_0091",
+    "source_identifier": "https://filmwiki.example.org/wiki/Alien",
+    "subject_movie": "m_alien",
+    "subject_person": null,
+    "text_excerpt": "Alien is a 2010 film directed by Denzel Washington, noted for its score and screenplay.",
+    "sentiment": null,
+    "page_title": "Alien",
+    "infobox": {
+      "title": "Alien",
+      "year": 2010,
+      "director": "Denzel Washington",
+      "runtime": "200 min",
+      "genre": "Drama",
+      "budget": "$165,000,000",
+      "editing": "Sally Menke",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Alien is a 2010 film directed by Denzel Washington, noted for its score and screenplay.",
+    "categories": [
+      "Films directed by Quentin Tarantino",
+      "Films set in Los Angeles",
+      "Crime films",
+      "Postmodern films",
+      "Films featuring an ensemble cast",
+      "Universal Pictures films"
+    ],
+    "last_edited": "2025-04-22 16:00",
+    "contributors": [
+      "FilmEditorBot",
+      "CtrlSemicolonBot",
+      "TaranAdmin",
+      "BotrunSamurai",
+      "anon_211.x.x.x"
+    ],
+    "references_count": 58,
+    "edit_count": 603
+  },
+  {
+    "canonical_id": "mention_wiki_0092",
+    "source_identifier": "https://filmwiki.example.org/wiki/Ewan_McGregor",
+    "subject_movie": null,
+    "subject_person": "p_mcgregor",
+    "text_excerpt": "Ewan McGregor is a filmmaker known for spare dialogue. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Ewan McGregor",
+    "infobox": {
+      "name": "Ewan McGregor",
+      "occupation": "Actor, Producer",
+      "birth_place": "Mexico City, Mexico",
+      "years_active": "2002–present"
+    },
+    "body_excerpt": "Ewan McGregor is a filmmaker known for spare dialogue. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "American film directors",
+      "Living people"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "edit_count": 1403,
+    "external_links": [
+      "https://imdb.com/title/tt4930325",
+      "https://rottentomatoes.com/m/ewan_mcgregor"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0093",
+    "source_identifier": "https://filmwiki.example.org/wiki/List_of_Academy_Award–winning_films",
+    "subject_movie": null,
+    "subject_person": null,
+    "text_excerpt": "This article covers list of academy award–winning films. It is maintained by contributors of the FilmWiki project.",
+    "sentiment": null,
+    "page_title": "List of Academy Award–winning films",
+    "infobox": {},
+    "body_excerpt": "This article covers list of academy award–winning films. It is maintained by contributors of the FilmWiki project.",
+    "categories": [
+      "Lists of films",
+      "Film categories"
+    ]
+  },
+  {
+    "canonical_id": "mention_wiki_0094",
+    "source_identifier": "https://filmwiki.example.org/wiki/Pulp_Fiction",
+    "subject_movie": "m_pulpfiction",
+    "subject_person": null,
+    "text_excerpt": "Pulp Fiction is a 1985 American Drama film directed by Denis Villeneuve. The film stars Florence Pugh, Greta Gerwig, Jake Gyllenhaal, and received polarized reactions upon release.",
+    "sentiment": null,
+    "page_title": "Pulp Fiction",
+    "infobox": {
+      "title": "Pulp Fiction",
+      "year": 1985,
+      "director": "Denis Villeneuve",
+      "runtime": "152 min",
+      "genre": "Drama",
+      "distributor": "Paramount"
+    },
+    "body_excerpt": "Pulp Fiction is a 1985 American Drama film directed by Denis Villeneuve. The film stars Florence Pugh, Greta Gerwig, Jake Gyllenhaal, and received polarized reactions upon release.",
+    "categories": [
+      "American films",
+      "Paramount Pictures films",
+      "Films featuring nonlinear narratives",
+      "Films about hitmen",
+      "Films shot in 70mm",
+      "1990s films",
+      "Warner Bros. films"
+    ],
+    "last_edited": "2025-05-01",
+    "contributors": [
+      "JoshKrueger",
+      "10000editsclub",
+      "anon_211.x.x.x",
+      "TaranAdmin"
+    ],
+    "edit_count": 1473
+  },
+  {
+    "canonical_id": "mention_wiki_0095",
+    "source_identifier": "https://filmwiki.example.org/wiki/Barry_Jenkins",
+    "subject_movie": null,
+    "subject_person": "p_jenkins_barry",
+    "text_excerpt": "Barry Jenkins is a filmmaker known for long takes. Their early career was defined by independent work.",
+    "sentiment": null,
+    "page_title": "Barry Jenkins",
+    "infobox": {
+      "name": "Barry Jenkins",
+      "occupation": "Director, Screenwriter",
+      "birth_date": "1970-07-30",
+      "birth_place": "Knoxville, Tennessee, U.S.",
+      "notable_works": [
+        "Raiders of the Lost Ark",
+        "E.T. the Extra-Terrestrial",
+        "Perfect Days"
+      ]
+    },
+    "body_excerpt": "Barry Jenkins is a filmmaker known for long takes. Their early career was defined by independent work.",
+    "categories": [
+      "Film directors",
+      "British film directors",
+      "Living people"
+    ],
+    "last_edited": "2024-12-19T03:14:00Z",
+    "contributors": [
+      "GraciousGreta",
+      "CtrlSemicolonBot",
+      "K.O.A_admin",
+      "MoviepageEditor",
+      "10000editsclub"
+    ],
+    "page_views_30d": 229296,
+    "edit_count": 522,
+    "external_links": [
+      "https://imdb.com/title/tt5477096"
+    ]
+  }
+]

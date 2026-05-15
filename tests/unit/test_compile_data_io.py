@@ -81,7 +81,7 @@ def test_mapped_single_row_emits_close_out_and_insert(movie_spec):
     assert "UPDATE knot_data.movie_bindings" in _all_sql(bw)
     assert "INSERT INTO knot_data.movie_bindings" in _all_sql(bw)
     assert "source_name = 'imdb'" in _all_sql(bw)  # baked-in literal
-    assert "jsonb_array_elements(%(movie_rows)s::jsonb)" in _all_sql(bw)
+    assert "jsonb_array_elements(%(imdb_movie_rows)s::jsonb)" in _all_sql(bw)
 
 
 def test_mapped_rows_serialized_as_jsonb_array(movie_spec):
@@ -95,7 +95,7 @@ def test_mapped_rows_serialized_as_jsonb_array(movie_spec):
         [ClassWrites(binding=b, rows=rows)],
         enforce=False,
     )
-    assert json.loads(_all_params(bw)["movie_rows"]) == rows
+    assert json.loads(_all_params(bw)["imdb_movie_rows"]) == rows
 
 
 def test_mapped_sql_shape_independent_of_row_count(movie_spec):
@@ -282,7 +282,7 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
     assert "knot_data.movie_bindings" in _all_sql(bw)
     assert "knot_data.credit_bindings" in _all_sql(bw)
     assert bw.affected_classes == ("Credit", "Movie")  # sorted
-    assert set(_all_params(bw).keys()) == {"movie_rows", "credit_rows"}
+    assert set(_all_params(bw).keys()) == {"imdb_movie_rows", "imdb_credit_rows"}
 
 
 def test_duplicate_class_in_batch_rejected(movie_spec):

@@ -1,0 +1,2383 @@
+[
+  {
+    "canonical_id": "mention_blog_0000",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2020/10/solaris",
+    "subject_movie": "m_solaris1972",
+    "subject_person": "p_dayLewis",
+    "text_excerpt": "Watching Solaris again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2020/10/solaris",
+    "author": "Camille Reyes",
+    "headline": "Why everyone is wrong about Solaris",
+    "body_html_stripped": "Watching Solaris again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2020-11-12",
+    "word_count": 3860,
+    "read_time_minutes": 11,
+    "share_count": 17614
+  },
+  {
+    "canonical_id": "mention_blog_0001",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2020/01/kratos",
+    "subject_movie": "m_kratos2009",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Kratos without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": null,
+    "url": "https://thefilmstage-mirror.example.net/2020/01/kratos",
+    "author": "EditorialDesk",
+    "headline": "Re-evaluating Kratos ten years on",
+    "body_html_stripped": "It's hard to write about Kratos without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "June 11, 2020",
+    "external_links": [
+      "https://imdb.com/title/tt5860543",
+      "https://letterboxd.com/film/kratos"
+    ],
+    "score_out_of_10": "9/10",
+    "word_count": 2313,
+    "share_count": 360,
+    "byline": [
+      "EditorialDesk",
+      "Hannah Engh"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0002",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2023/05/perfect-days",
+    "subject_movie": "m_perfectdays",
+    "subject_person": null,
+    "text_excerpt": "Watching Perfect Days again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "positive",
+    "url": "https://thefilmstage-mirror.example.net/2023/05/perfect-days",
+    "author": "JD Marlowe",
+    "headline": "Why everyone is wrong about Perfect Days",
+    "body_html_stripped": "Watching Perfect Days again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023/12/06",
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0003",
+    "source_identifier": "https://longreads-film.example.org/2020/09/moonlight",
+    "subject_movie": "m_moonlight",
+    "subject_person": "p_pta",
+    "text_excerpt": "Watching Moonlight again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2020/09/moonlight",
+    "author": "Anya R.",
+    "headline": "Listen: our podcast on Moonlight is up",
+    "body_html_stripped": "Watching Moonlight again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "January 8, 2020",
+    "word_count": 934,
+    "read_time_minutes": 24
+  },
+  {
+    "canonical_id": "mention_blog_0004",
+    "source_identifier": "https://longreads-film.example.org/2023/03/the-lord-of-the-rings-the-fellowship-of-the-ring",
+    "subject_movie": "m_lotr_fotr",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think The Lord of the Rings: The Fellowship of the Ring is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://longreads-film.example.org/2023/03/the-lord-of-the-rings-the-fellowship-of-the-ring",
+    "author": "Sara McNamara",
+    "headline": "The Lord of the Rings: The Fellowship of the Ring review: a flawed masterpiece",
+    "body_html_stripped": "I want to be clear: I don't think The Lord of the Rings: The Fellowship of the Ring is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2023/08/24",
+    "external_links": [
+      "https://imdb.com/title/tt2948237"
+    ],
+    "read_time_minutes": 8,
+    "paywalled": false,
+    "editor_pick": false
+  },
+  {
+    "canonical_id": "mention_blog_0005",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2020/06/et-the-extra-terrestrial",
+    "subject_movie": "m_e.t.",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in E.T. the Extra-Terrestrial, about 47 minutes in, where the camera holds on Wes Anderson's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic,",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2020/06/et-the-extra-terrestrial",
+    "author": "Anya R.",
+    "headline": "Re-evaluating E.T. the Extra-Terrestrial ten years on",
+    "body_html_stripped": "There's a moment in E.T. the Extra-Terrestrial, about 47 minutes in, where the camera holds on Wes Anderson's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2020/10/19",
+    "external_links": [
+      "https://imdb.com/title/tt5788142"
+    ],
+    "score_out_of_10": "9/10",
+    "share_count": 2815,
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0006",
+    "source_identifier": "https://longreads-film.example.org/2019/07/the-zone-of-interest",
+    "subject_movie": "m_zoneofinterest",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in The Zone of Interest, about 47 minutes in, where the camera holds on Margot Robbie's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it u",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2019/07/the-zone-of-interest",
+    "author": "Sara McNamara",
+    "headline": "Why everyone is wrong about The Zone of Interest",
+    "body_html_stripped": "There's a moment in The Zone of Interest, about 47 minutes in, where the camera holds on Margot Robbie's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2019/07/01",
+    "external_links": [
+      "https://imdb.com/title/tt4604417",
+      "https://letterboxd.com/film/the-zone-of-interest",
+      "https://en.wikipedia.org/wiki/The_Zone_of_Interest"
+    ],
+    "read_time_minutes": 24
+  },
+  {
+    "canonical_id": "mention_blog_0007",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2025/04/hereditary",
+    "subject_movie": "m_hereditary",
+    "subject_person": "p_lynch",
+    "text_excerpt": "It's hard to write about Hereditary without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2025/04/hereditary",
+    "author": "Vikram Patel",
+    "headline": "David Lynch's Hereditary doesn't quite work — and that's interesting",
+    "body_html_stripped": "It's hard to write about Hereditary without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "1665823042",
+    "external_links": [
+      "https://imdb.com/title/tt3394069"
+    ],
+    "read_time_minutes": 11,
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0008",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2022/11/satantango",
+    "subject_movie": "m_satantango",
+    "subject_person": "p_robbiemargot",
+    "text_excerpt": "There's a moment in Satantango, about 47 minutes in, where the camera holds on Margot Robbie's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2022/11/satantango",
+    "author": "Hannah Engh",
+    "headline": "Re-evaluating Satantango ten years on",
+    "body_html_stripped": "There's a moment in Satantango, about 47 minutes in, where the camera holds on Margot Robbie's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "tags": [
+      "best-of-year",
+      "video-essay"
+    ],
+    "score_out_of_10": "N/A",
+    "read_time_minutes": 16
+  },
+  {
+    "canonical_id": "mention_blog_0009",
+    "source_identifier": "https://longreads-film.example.org/2022/03/raiders-of-the-lost-ark",
+    "subject_movie": "m_indiana_raiders",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Raiders of the Lost Ark without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2022/03/raiders-of-the-lost-ark",
+    "author": "Camille Reyes",
+    "headline": "Why everyone is wrong about Raiders of the Lost Ark",
+    "body_html_stripped": "It's hard to write about Raiders of the Lost Ark without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "October 22, 2022",
+    "score_out_of_10": 4.0,
+    "word_count": 4405,
+    "read_time_minutes": 11
+  },
+  {
+    "canonical_id": "mention_blog_0010",
+    "source_identifier": "https://indiewire-clone.example.com/2025/05/the-matrix",
+    "subject_movie": "m_matrix",
+    "subject_person": "p_denzel",
+    "text_excerpt": "There's a moment in The Matrix, about 47 minutes in, where the camera holds on Denzel Washington's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2025/05/the-matrix",
+    "author": "F. Beaumont",
+    "headline": "Why The Matrix is the best film of 2025",
+    "body_html_stripped": "There's a moment in The Matrix, about 47 minutes in, where the camera holds on Denzel Washington's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "June 24, 2025",
+    "external_links": [
+      "https://imdb.com/title/tt6707576"
+    ],
+    "score_out_of_10": "9/10",
+    "share_count": 9876,
+    "byline": "F. Beaumont"
+  },
+  {
+    "canonical_id": "mention_blog_0011",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2025/06/civil-war",
+    "subject_movie": "m_civilwar2024",
+    "subject_person": null,
+    "text_excerpt": "Denzel Washington has always made films about loneliness. Civil War extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://thefilmstage-mirror.example.net/2025/06/civil-war",
+    "author": "Hannah Engh",
+    "headline": "The cinematography of Civil War, breakdown",
+    "body_html_stripped": "Denzel Washington has always made films about loneliness. Civil War extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2025/01/28",
+    "tags": [
+      "review"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt4765717",
+      "https://letterboxd.com/film/civil-war",
+      "https://en.wikipedia.org/wiki/Civil_War"
+    ],
+    "paywalled": false,
+    "byline": "Hannah Engh"
+  },
+  {
+    "canonical_id": "mention_blog_0012",
+    "source_identifier": "https://highbrowcinema.example.io/2024/09/perfect-days",
+    "subject_movie": "m_perfectdays",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Perfect Days without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://highbrowcinema.example.io/2024/09/perfect-days",
+    "author": "the editorial team",
+    "headline": "Michael Fassbender's Perfect Days doesn't quite work — and that's interesting",
+    "body_html_stripped": "It's hard to write about Perfect Days without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "tags": [
+      "longform",
+      "cannes"
+    ],
+    "score_out_of_10": 9,
+    "read_time_minutes": 20
+  },
+  {
+    "canonical_id": "mention_blog_0013",
+    "source_identifier": "https://indiewire-clone.example.com/2022/11/andrei-rublev",
+    "subject_movie": "m_andreirublev",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Andrei Rublev, about 47 minutes in, where the camera holds on Ewan McGregor's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks ",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2022/11/andrei-rublev",
+    "author": "Camille Reyes",
+    "headline": "Re-evaluating Andrei Rublev ten years on",
+    "body_html_stripped": "There's a moment in Andrei Rublev, about 47 minutes in, where the camera holds on Ewan McGregor's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2022/11/21",
+    "tags": [
+      "auteurism",
+      "berlinale"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt6107223",
+      "https://letterboxd.com/film/andrei-rublev"
+    ],
+    "score_out_of_10": 9.2,
+    "word_count": 3199,
+    "read_time_minutes": 5,
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0014",
+    "source_identifier": "https://highbrowcinema.example.io/2024/03/anora",
+    "subject_movie": "m_anora",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Anora is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://highbrowcinema.example.io/2024/03/anora",
+    "author": "Kira Jefferson",
+    "headline": "Why everyone is wrong about Anora",
+    "body_html_stripped": "I want to be clear: I don't think Anora is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "November 11, 2024",
+    "tags": [
+      "venice"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0015",
+    "source_identifier": "https://indiewire-clone.example.com/2023/06/mulholland-drive",
+    "subject_movie": "m_mulhollanddrive",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Mulholland Drive is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://indiewire-clone.example.com/2023/06/mulholland-drive",
+    "author": "JD Marlowe",
+    "headline": "The 25 best films of the decade: Mulholland Drive at #3",
+    "body_html_stripped": "I want to be clear: I don't think Mulholland Drive is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2023-09-19",
+    "tags": [
+      "best-of-year"
+    ],
+    "editor_pick": true,
+    "byline": "JD Marlowe"
+  },
+  {
+    "canonical_id": "mention_blog_0016",
+    "source_identifier": "https://longreads-film.example.org/2023/07/interstellar",
+    "subject_movie": "m_interstellar",
+    "subject_person": null,
+    "text_excerpt": "Watching Interstellar again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2023/07/interstellar",
+    "author": "Hannah Engh",
+    "headline": "Why everyone is wrong about Interstellar",
+    "body_html_stripped": "Watching Interstellar again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023/05/25",
+    "tags": [
+      "review"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt5059394",
+      "https://letterboxd.com/film/interstellar"
+    ],
+    "word_count": 3961,
+    "read_time_minutes": 13
+  },
+  {
+    "canonical_id": "mention_blog_0017",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2021/01/raiders-of-the-lost-ark",
+    "subject_movie": "m_indiana_raiders",
+    "subject_person": null,
+    "text_excerpt": "Watching Raiders of the Lost Ark again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2021/01/raiders-of-the-lost-ark",
+    "author": "Lee Park",
+    "headline": "Timothée Chalamet's Raiders of the Lost Ark doesn't quite work — and that's interesting",
+    "body_html_stripped": "Watching Raiders of the Lost Ark again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2021-04-04",
+    "tags": [
+      "longform",
+      "video-essay",
+      "best-of-year"
+    ],
+    "score_out_of_10": "9/10",
+    "share_count": 7019,
+    "byline": [
+      "Lee Park",
+      "Tomasz Krol"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0018",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2024/01/alien",
+    "subject_movie": "m_alien",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Alien, about 47 minutes in, where the camera holds on Jessica Chastain's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the w",
+    "sentiment": null,
+    "url": "https://filmschoolrejects-mirror.example.net/2024/01/alien",
+    "author": "F. Beaumont",
+    "headline": "Alien review: a flawed masterpiece",
+    "body_html_stripped": "There's a moment in Alien, about 47 minutes in, where the camera holds on Jessica Chastain's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "December 11, 2024",
+    "tags": [
+      "auteurism",
+      "tiff",
+      "longform"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3016053",
+      "https://letterboxd.com/film/alien"
+    ],
+    "score_out_of_10": "7.5/10",
+    "word_count": 580,
+    "read_time_minutes": 3
+  },
+  {
+    "canonical_id": "mention_blog_0019",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2020/05/2001-a-space-odyssey",
+    "subject_movie": "m_2001",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think 2001: A Space Odyssey is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": null,
+    "url": "https://screen-anarchy-archive.example.com/2020/05/2001-a-space-odyssey",
+    "author": "@filmpolicy",
+    "headline": "Re-evaluating 2001: A Space Odyssey ten years on",
+    "body_html_stripped": "I want to be clear: I don't think 2001: A Space Odyssey is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2020-10-19",
+    "tags": [
+      "cannes"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3833593",
+      "https://letterboxd.com/film/2001-a-space-odyssey",
+      "https://en.wikipedia.org/wiki/2001:_A_Space_Odyssey"
+    ],
+    "score_out_of_10": 8.5,
+    "word_count": 2818,
+    "share_count": 2511
+  },
+  {
+    "canonical_id": "mention_blog_0020",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2021/11/perfect-days",
+    "subject_movie": "m_perfectdays",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Perfect Days without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://screen-anarchy-archive.example.com/2021/11/perfect-days",
+    "author": "Vikram Patel",
+    "headline": "Listen: our podcast on Perfect Days is up",
+    "body_html_stripped": "It's hard to write about Perfect Days without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "June 22, 2021",
+    "external_links": [
+      "https://imdb.com/title/tt2248553",
+      "https://letterboxd.com/film/perfect-days",
+      "https://en.wikipedia.org/wiki/Perfect_Days"
+    ],
+    "word_count": 337,
+    "byline": "Vikram Patel"
+  },
+  {
+    "canonical_id": "mention_blog_0021",
+    "source_identifier": "https://longreads-film.example.org/2024/12/a-clockwork-orange",
+    "subject_movie": "m_clockworkorange",
+    "subject_person": null,
+    "text_excerpt": "Watching A Clockwork Orange again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": null,
+    "url": "https://longreads-film.example.org/2024/12/a-clockwork-orange",
+    "author": "Kira Jefferson",
+    "headline": "The 25 best films of the decade: A Clockwork Orange at #3",
+    "body_html_stripped": "Watching A Clockwork Orange again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2024-05-25",
+    "external_links": [
+      "https://imdb.com/title/tt9394726",
+      "https://letterboxd.com/film/a-clockwork-orange",
+      "https://en.wikipedia.org/wiki/A_Clockwork_Orange"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0022",
+    "source_identifier": "https://indiewire-clone.example.com/2022/10/kill-bill-vol-2",
+    "subject_movie": "m_killbill2",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Kill Bill: Vol. 2, about 47 minutes in, where the camera holds on David Lynch's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlock",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2022/10/kill-bill-vol-2",
+    "author": "Sara McNamara",
+    "headline": "Why everyone is wrong about Kill Bill: Vol. 2",
+    "body_html_stripped": "There's a moment in Kill Bill: Vol. 2, about 47 minutes in, where the camera holds on David Lynch's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2022-07-10",
+    "tags": [
+      "tiff",
+      "best-of-year"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt8276076"
+    ],
+    "score_out_of_10": 10,
+    "read_time_minutes": 21,
+    "byline": [
+      "Sara McNamara",
+      "Vikram Patel"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0023",
+    "source_identifier": "https://indiewire-clone.example.com/2019/07/the-matrix",
+    "subject_movie": "m_matrix",
+    "subject_person": null,
+    "text_excerpt": "Watching The Matrix again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2019/07/the-matrix",
+    "author": "the editorial team",
+    "headline": "Why everyone is wrong about The Matrix",
+    "body_html_stripped": "Watching The Matrix again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2019-05-07",
+    "tags": [
+      "best-of-year",
+      "tiff"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt2860418",
+      "https://letterboxd.com/film/the-matrix"
+    ],
+    "score_out_of_10": 6.5
+  },
+  {
+    "canonical_id": "mention_blog_0024",
+    "source_identifier": "https://indiewire-clone.example.com/2025/01/solaris",
+    "subject_movie": "m_solaris1972",
+    "subject_person": null,
+    "text_excerpt": "Wes Anderson has always made films about loneliness. Solaris extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2025/01/solaris",
+    "author": "Owen Hewitt",
+    "headline": "Why Solaris is the best film of 2025",
+    "body_html_stripped": "Wes Anderson has always made films about loneliness. Solaris extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "January 15, 2025",
+    "score_out_of_10": 8
+  },
+  {
+    "canonical_id": "mention_blog_0025",
+    "source_identifier": "https://indiewire-clone.example.com/2022/07/et-the-extra-terrestrial",
+    "subject_movie": "m_e.t.",
+    "subject_person": null,
+    "text_excerpt": "Watching E.T. the Extra-Terrestrial again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2022/07/et-the-extra-terrestrial",
+    "author": "Owen Hewitt",
+    "headline": "E.T. the Extra-Terrestrial is the 2022 film I keep returning to",
+    "body_html_stripped": "Watching E.T. the Extra-Terrestrial again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "December 24, 2022",
+    "score_out_of_10": 4.0
+  },
+  {
+    "canonical_id": "mention_blog_0026",
+    "source_identifier": "https://longreads-film.example.org/2023/03/the-matrix",
+    "subject_movie": null,
+    "subject_person": "p_oscarisaac",
+    "text_excerpt": "Watching The Matrix again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": null,
+    "url": "https://longreads-film.example.org/2023/03/the-matrix",
+    "author": "Kira Jefferson",
+    "headline": "Oscar Isaac's The Matrix doesn't quite work — and that's interesting",
+    "body_html_stripped": "Watching The Matrix again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023/10/17",
+    "score_out_of_10": 6.5,
+    "word_count": 482,
+    "share_count": 4241
+  },
+  {
+    "canonical_id": "mention_blog_0027",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2022/10/civil-war",
+    "subject_movie": "m_civilwar2024",
+    "subject_person": null,
+    "text_excerpt": "Watching Civil War again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2022/10/civil-war",
+    "author": "EditorialDesk",
+    "headline": "Quentin Tarantino's Civil War doesn't quite work — and that's interesting",
+    "body_html_stripped": "Watching Civil War again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "share_count": 6078
+  },
+  {
+    "canonical_id": "mention_blog_0028",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2024/06/midsommar",
+    "subject_movie": "m_midsommar",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Midsommar without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "negative",
+    "url": "https://filmschoolrejects-mirror.example.net/2024/06/midsommar",
+    "author": "Sara McNamara",
+    "headline": "Adam Driver's Midsommar doesn't quite work — and that's interesting",
+    "body_html_stripped": "It's hard to write about Midsommar without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2024/02/04",
+    "tags": [
+      "video-essay",
+      "tiff",
+      "spotlight",
+      "festivals"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt2345153",
+      "https://letterboxd.com/film/midsommar",
+      "https://en.wikipedia.org/wiki/Midsommar"
+    ],
+    "editor_pick": false,
+    "byline": "Sara McNamara"
+  },
+  {
+    "canonical_id": "mention_blog_0029",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2021/04/django-unchained",
+    "subject_movie": null,
+    "subject_person": "p_michaelfass",
+    "text_excerpt": "Michael Fassbender has always made films about loneliness. Django Unchained extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2021/04/django-unchained",
+    "author": "Anya R.",
+    "headline": "Why Django Unchained is the best film of 2021",
+    "body_html_stripped": "Michael Fassbender has always made films about loneliness. Django Unchained extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2021-10-14",
+    "tags": [
+      "tiff"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt2467456",
+      "https://letterboxd.com/film/django-unchained",
+      "https://en.wikipedia.org/wiki/Django_Unchained"
+    ],
+    "score_out_of_10": "7.5/10",
+    "editor_pick": true
+  },
+  {
+    "canonical_id": "mention_blog_0030",
+    "source_identifier": "https://indiewire-clone.example.com/2021/03/the-return",
+    "subject_movie": "m_thereturn",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think The Return is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "positive",
+    "url": "https://indiewire-clone.example.com/2021/03/the-return",
+    "author": "JD Marlowe",
+    "headline": "On The Return: a love letter",
+    "body_html_stripped": "I want to be clear: I don't think The Return is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1613429854",
+    "tags": [
+      "cannes",
+      "video-essay"
+    ],
+    "score_out_of_10": 7.0
+  },
+  {
+    "canonical_id": "mention_blog_0031",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2020/08/civil-war",
+    "subject_movie": "m_civilwar2024",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Civil War is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://screen-anarchy-archive.example.com/2020/08/civil-war",
+    "author": "Marcus T. Whitfield",
+    "headline": "Listen: our podcast on Civil War is up",
+    "body_html_stripped": "I want to be clear: I don't think Civil War is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1637102614",
+    "tags": [
+      "cannes",
+      "festivals",
+      "review"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3384410",
+      "https://letterboxd.com/film/civil-war"
+    ],
+    "score_out_of_10": "N/A",
+    "word_count": 4045,
+    "read_time_minutes": 14,
+    "editor_pick": true
+  },
+  {
+    "canonical_id": "mention_blog_0032",
+    "source_identifier": "https://highbrowcinema.example.io/2025/01/joker",
+    "subject_movie": "m_jokerphoenix",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Joker without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://highbrowcinema.example.io/2025/01/joker",
+    "author": "the editorial team",
+    "headline": "Joker is the 2025 film I keep returning to",
+    "body_html_stripped": "It's hard to write about Joker without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2025-09-05",
+    "tags": [
+      "criticism",
+      "interview",
+      "essay"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt8730586",
+      "https://letterboxd.com/film/joker"
+    ],
+    "word_count": 2445,
+    "share_count": 4947,
+    "paywalled": true
+  },
+  {
+    "canonical_id": "mention_blog_0033",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2025/03/the-empire-strikes-back",
+    "subject_movie": "m_starwars_empire",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Empire Strikes Back without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2025/03/the-empire-strikes-back",
+    "author": "Lee Park",
+    "headline": "Re-evaluating The Empire Strikes Back ten years on",
+    "body_html_stripped": "It's hard to write about The Empire Strikes Back without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2025/03/06",
+    "external_links": [
+      "https://imdb.com/title/tt8160839",
+      "https://letterboxd.com/film/the-empire-strikes-back"
+    ],
+    "word_count": 1576,
+    "share_count": 3011
+  },
+  {
+    "canonical_id": "mention_blog_0034",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2024/02/apocalypse-now",
+    "subject_movie": "m_apocalypsenow",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Apocalypse Now is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://screen-anarchy-archive.example.com/2024/02/apocalypse-now",
+    "author": "EditorialDesk",
+    "headline": "The cinematography of Apocalypse Now, breakdown",
+    "body_html_stripped": "I want to be clear: I don't think Apocalypse Now is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2024-03-28",
+    "external_links": [
+      "https://imdb.com/title/tt5562048"
+    ],
+    "share_count": 3652
+  },
+  {
+    "canonical_id": "mention_blog_0035",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2023/02/moonlight",
+    "subject_movie": "m_moonlight",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Moonlight, about 47 minutes in, where the camera holds on David Fincher's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the ",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2023/02/moonlight",
+    "author": "Sara McNamara",
+    "headline": "Moonlight is the 2023 film I keep returning to",
+    "body_html_stripped": "There's a moment in Moonlight, about 47 minutes in, where the camera holds on David Fincher's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2023-11-06",
+    "score_out_of_10": 9.2
+  },
+  {
+    "canonical_id": "mention_blog_0036",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2020/08/a-clockwork-orange",
+    "subject_movie": "m_clockworkorange",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think A Clockwork Orange is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://thefilmstage-mirror.example.net/2020/08/a-clockwork-orange",
+    "author": "the editorial team",
+    "headline": "Why everyone is wrong about A Clockwork Orange",
+    "body_html_stripped": "I want to be clear: I don't think A Clockwork Orange is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1673592794",
+    "score_out_of_10": 9
+  },
+  {
+    "canonical_id": "mention_blog_0037",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2021/06/fight-club",
+    "subject_movie": "m_fightclub",
+    "subject_person": null,
+    "text_excerpt": "Watching Fight Club again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2021/06/fight-club",
+    "author": "Kira Jefferson",
+    "headline": "Jake Gyllenhaal's Fight Club doesn't quite work — and that's interesting",
+    "body_html_stripped": "Watching Fight Club again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "1735628300",
+    "tags": [
+      "cannes",
+      "berlinale",
+      "video-essay",
+      "spotlight",
+      "list"
+    ],
+    "score_out_of_10": 9,
+    "word_count": 1508,
+    "read_time_minutes": 16,
+    "share_count": 15985,
+    "byline": "Kira Jefferson"
+  },
+  {
+    "canonical_id": "mention_blog_0038",
+    "source_identifier": "https://indiewire-clone.example.com/2023/01/donnie-darko",
+    "subject_movie": "m_donnie_darko",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Donnie Darko is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://indiewire-clone.example.com/2023/01/donnie-darko",
+    "author": "Camille Reyes",
+    "headline": "Why Donnie Darko is the best film of 2023",
+    "body_html_stripped": "I want to be clear: I don't think Donnie Darko is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2023-01-19",
+    "tags": [
+      "review",
+      "best-of-year"
+    ],
+    "read_time_minutes": 6,
+    "share_count": 16937
+  },
+  {
+    "canonical_id": "mention_blog_0039",
+    "source_identifier": "https://longreads-film.example.org/2022/01/the-substance",
+    "subject_movie": "m_thesubstance",
+    "subject_person": null,
+    "text_excerpt": "Watching The Substance again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2022/01/the-substance",
+    "author": "Vikram Patel",
+    "headline": "Re-evaluating The Substance ten years on",
+    "body_html_stripped": "Watching The Substance again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2022-02-18",
+    "tags": [
+      "venice",
+      "criticism",
+      "berlinale"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt1065296",
+      "https://letterboxd.com/film/the-substance",
+      "https://en.wikipedia.org/wiki/The_Substance"
+    ],
+    "share_count": 11550
+  },
+  {
+    "canonical_id": "mention_blog_0040",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2022/04/stalker",
+    "subject_movie": "m_stalker1979",
+    "subject_person": null,
+    "text_excerpt": "Watching Stalker again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "positive",
+    "url": "https://screen-anarchy-archive.example.com/2022/04/stalker",
+    "author": "Anonymous",
+    "headline": "Stalker review: a flawed masterpiece",
+    "body_html_stripped": "Watching Stalker again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2022/05/24",
+    "tags": [
+      "venice",
+      "best-of-year",
+      "longform"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt1548492",
+      "https://letterboxd.com/film/stalker",
+      "https://en.wikipedia.org/wiki/Stalker"
+    ],
+    "score_out_of_10": 7.0
+  },
+  {
+    "canonical_id": "mention_blog_0041",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2021/03/moonlight",
+    "subject_movie": "m_moonlight",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Moonlight is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://thefilmstage-mirror.example.net/2021/03/moonlight",
+    "author": "Kira Jefferson",
+    "headline": "The cinematography of Moonlight, breakdown",
+    "body_html_stripped": "I want to be clear: I don't think Moonlight is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2021/01/25",
+    "tags": [
+      "interview"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt6489215",
+      "https://letterboxd.com/film/moonlight",
+      "https://en.wikipedia.org/wiki/Moonlight"
+    ],
+    "word_count": 2774
+  },
+  {
+    "canonical_id": "mention_blog_0042",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2020/10/terminator-2-judgment-day",
+    "subject_movie": "m_terminator2",
+    "subject_person": null,
+    "text_excerpt": "Daniel Day-Lewis has always made films about loneliness. Terminator 2: Judgment Day extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "positive",
+    "url": "https://filmschoolrejects-mirror.example.net/2020/10/terminator-2-judgment-day",
+    "author": "Camille Reyes",
+    "headline": "Terminator 2: Judgment Day review: a flawed masterpiece",
+    "body_html_stripped": "Daniel Day-Lewis has always made films about loneliness. Terminator 2: Judgment Day extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "July 27, 2020",
+    "external_links": [
+      "https://imdb.com/title/tt1734966"
+    ],
+    "score_out_of_10": 8,
+    "word_count": 1110,
+    "share_count": 6520
+  },
+  {
+    "canonical_id": "mention_blog_0043",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2022/03/anatomy-of-a-fall",
+    "subject_movie": "m_anatomyfall",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Anatomy of a Fall without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2022/03/anatomy-of-a-fall",
+    "author": "Vikram Patel",
+    "headline": "Anatomy of a Fall is the 2022 film I keep returning to",
+    "body_html_stripped": "It's hard to write about Anatomy of a Fall without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2022-05-21",
+    "tags": [
+      "criticism",
+      "video-essay",
+      "tiff",
+      "berlinale",
+      "interview"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt9212458",
+      "https://letterboxd.com/film/anatomy-of-a-fall",
+      "https://en.wikipedia.org/wiki/Anatomy_of_a_Fall"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0044",
+    "source_identifier": "https://rogerebert-mirror.example.org/2021/03/the-godfather-part-ii",
+    "subject_movie": "m_godfather2",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Godfather Part II without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2021/03/the-godfather-part-ii",
+    "author": "Tomasz Krol",
+    "headline": "Why The Godfather Part II is the best film of 2021",
+    "body_html_stripped": "It's hard to write about The Godfather Part II without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2021-10-07",
+    "read_time_minutes": 9
+  },
+  {
+    "canonical_id": "mention_blog_0045",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2023/11/anora",
+    "subject_movie": "m_anora",
+    "subject_person": null,
+    "text_excerpt": "Leonardo DiCaprio has always made films about loneliness. Anora extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2023/11/anora",
+    "author": "Tomasz Krol",
+    "headline": "Anora is the 2023 film I keep returning to",
+    "body_html_stripped": "Leonardo DiCaprio has always made films about loneliness. Anora extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2023-09-03",
+    "external_links": [
+      "https://imdb.com/title/tt7944980"
+    ],
+    "score_out_of_10": "N/A",
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0046",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2024/05/the-hateful-eight",
+    "subject_movie": "m_thehatefuleight",
+    "subject_person": "p_michaelfass",
+    "text_excerpt": "I want to be clear: I don't think The Hateful Eight is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://thefilmstage-mirror.example.net/2024/05/the-hateful-eight",
+    "author": "Tomasz Krol",
+    "headline": "The Hateful Eight is the 2024 film I keep returning to",
+    "body_html_stripped": "I want to be clear: I don't think The Hateful Eight is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1650643724",
+    "external_links": [
+      "https://imdb.com/title/tt1344458",
+      "https://letterboxd.com/film/the-hateful-eight",
+      "https://en.wikipedia.org/wiki/The_Hateful_Eight"
+    ],
+    "score_out_of_10": "N/A",
+    "share_count": 12867,
+    "byline": [
+      "Tomasz Krol",
+      "Anya R."
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0047",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2024/10/jaws",
+    "subject_movie": "m_jaws",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Jaws, about 47 minutes in, where the camera holds on Christopher Nolan's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the w",
+    "sentiment": "positive",
+    "url": "https://thefilmstage-mirror.example.net/2024/10/jaws",
+    "author": "the editorial team",
+    "headline": "Jaws review: a flawed masterpiece",
+    "body_html_stripped": "There's a moment in Jaws, about 47 minutes in, where the camera holds on Christopher Nolan's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "October 21, 2024",
+    "tags": [
+      "spotlight",
+      "essay",
+      "video-essay",
+      "interview"
+    ],
+    "score_out_of_10": 8,
+    "word_count": 2819,
+    "read_time_minutes": 10
+  },
+  {
+    "canonical_id": "mention_blog_0048",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2021/07/et-the-extra-terrestrial",
+    "subject_movie": "m_e.t.",
+    "subject_person": "p_mcgregor",
+    "text_excerpt": "Watching E.T. the Extra-Terrestrial again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2021/07/et-the-extra-terrestrial",
+    "author": "F. Beaumont",
+    "headline": "Listen: our podcast on E.T. the Extra-Terrestrial is up",
+    "body_html_stripped": "Watching E.T. the Extra-Terrestrial again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "tags": [
+      "review",
+      "interview",
+      "berlinale",
+      "best-of-year"
+    ],
+    "score_out_of_10": 9.2,
+    "share_count": 3512
+  },
+  {
+    "canonical_id": "mention_blog_0049",
+    "source_identifier": "https://longreads-film.example.org/2022/10/birdman",
+    "subject_movie": "m_birdman",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Birdman is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": null,
+    "url": "https://longreads-film.example.org/2022/10/birdman",
+    "author": "Camille Reyes",
+    "headline": "Paul Thomas Anderson's Birdman doesn't quite work — and that's interesting",
+    "body_html_stripped": "I want to be clear: I don't think Birdman is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1666560887",
+    "tags": [
+      "cannes",
+      "venice",
+      "list",
+      "festivals",
+      "longform"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3037473",
+      "https://letterboxd.com/film/birdman"
+    ],
+    "score_out_of_10": 6.5
+  },
+  {
+    "canonical_id": "mention_blog_0050",
+    "source_identifier": "https://rogerebert-mirror.example.org/2023/07/moonlight",
+    "subject_movie": "m_moonlight",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Moonlight is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://rogerebert-mirror.example.org/2023/07/moonlight",
+    "author": "Sara McNamara",
+    "headline": "The cinematography of Moonlight, breakdown",
+    "body_html_stripped": "I want to be clear: I don't think Moonlight is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "tags": [
+      "festivals",
+      "spotlight",
+      "interview",
+      "review"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt6349485",
+      "https://letterboxd.com/film/moonlight"
+    ],
+    "score_out_of_10": 8,
+    "share_count": 5723
+  },
+  {
+    "canonical_id": "mention_blog_0051",
+    "source_identifier": "https://highbrowcinema.example.io/2021/08/the-batman",
+    "subject_movie": "m_thebatman2022",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Batman without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://highbrowcinema.example.io/2021/08/the-batman",
+    "author": "Owen Hewitt",
+    "headline": "The Batman is the 2021 film I keep returning to",
+    "body_html_stripped": "It's hard to write about The Batman without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2021-09-25",
+    "tags": [
+      "festivals",
+      "criticism"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt4737469",
+      "https://letterboxd.com/film/the-batman",
+      "https://en.wikipedia.org/wiki/The_Batman"
+    ],
+    "score_out_of_10": "9/10"
+  },
+  {
+    "canonical_id": "mention_blog_0052",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2021/07/the-batman",
+    "subject_movie": "m_thebatman2022",
+    "subject_person": null,
+    "text_excerpt": "Watching The Batman again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2021/07/the-batman",
+    "author": "Vikram Patel",
+    "headline": "Re-evaluating The Batman ten years on",
+    "body_html_stripped": "Watching The Batman again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "March 15, 2021",
+    "tags": [
+      "longform"
+    ],
+    "score_out_of_10": 6.5
+  },
+  {
+    "canonical_id": "mention_blog_0053",
+    "source_identifier": "https://highbrowcinema.example.io/2025/08/blade-runner",
+    "subject_movie": "m_blade_runner",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Blade Runner, about 47 minutes in, where the camera holds on Steven Spielberg's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlock",
+    "sentiment": "neutral",
+    "url": "https://highbrowcinema.example.io/2025/08/blade-runner",
+    "author": "Camille Reyes",
+    "headline": "Why Blade Runner is the best film of 2025",
+    "body_html_stripped": "There's a moment in Blade Runner, about 47 minutes in, where the camera holds on Steven Spielberg's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "September 20, 2025",
+    "byline": "Camille Reyes"
+  },
+  {
+    "canonical_id": "mention_blog_0054",
+    "source_identifier": "https://longreads-film.example.org/2020/05/the-witch",
+    "subject_movie": "m_thevvitch",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Witch without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2020/05/the-witch",
+    "author": "Anya R.",
+    "headline": "The cinematography of The Witch, breakdown",
+    "body_html_stripped": "It's hard to write about The Witch without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "February 19, 2020",
+    "tags": [
+      "venice",
+      "criticism",
+      "berlinale",
+      "festivals",
+      "list"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt4542109",
+      "https://letterboxd.com/film/the-witch",
+      "https://en.wikipedia.org/wiki/The_Witch"
+    ],
+    "word_count": 4320,
+    "paywalled": false,
+    "editor_pick": true
+  },
+  {
+    "canonical_id": "mention_blog_0055",
+    "source_identifier": "https://indiewire-clone.example.com/2020/06/jaws",
+    "subject_movie": "m_jaws",
+    "subject_person": null,
+    "text_excerpt": "Watching Jaws again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2020/06/jaws",
+    "author": "the editorial team",
+    "headline": "The cinematography of Jaws, breakdown",
+    "body_html_stripped": "Watching Jaws again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "tags": [
+      "berlinale",
+      "best-of-year"
+    ],
+    "score_out_of_10": 6.5
+  },
+  {
+    "canonical_id": "mention_blog_0056",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2025/04/dunkirk",
+    "subject_movie": "m_dunkirk",
+    "subject_person": null,
+    "text_excerpt": "Watching Dunkirk again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2025/04/dunkirk",
+    "author": "EditorialDesk",
+    "headline": "Why everyone is wrong about Dunkirk",
+    "body_html_stripped": "Watching Dunkirk again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "December 28, 2025",
+    "tags": [
+      "interview",
+      "festivals",
+      "best-of-year",
+      "venice",
+      "longform"
+    ],
+    "read_time_minutes": 17,
+    "share_count": 6128,
+    "paywalled": true
+  },
+  {
+    "canonical_id": "mention_blog_0057",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2022/08/the-godfather",
+    "subject_movie": "m_godfather",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Godfather without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2022/08/the-godfather",
+    "author": "F. Beaumont",
+    "headline": "Why everyone is wrong about The Godfather",
+    "body_html_stripped": "It's hard to write about The Godfather without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "1729814270",
+    "tags": [
+      "cannes",
+      "berlinale",
+      "video-essay",
+      "interview"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3868275",
+      "https://letterboxd.com/film/the-godfather",
+      "https://en.wikipedia.org/wiki/The_Godfather"
+    ],
+    "word_count": 4151,
+    "editor_pick": true
+  },
+  {
+    "canonical_id": "mention_blog_0058",
+    "source_identifier": "https://highbrowcinema.example.io/2019/12/donnie-darko",
+    "subject_movie": "m_donnie_darko",
+    "subject_person": "p_coppola_fran",
+    "text_excerpt": "Francis Ford Coppola has always made films about loneliness. Donnie Darko extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://highbrowcinema.example.io/2019/12/donnie-darko",
+    "author": "JD Marlowe",
+    "headline": "The 25 best films of the decade: Donnie Darko at #3",
+    "body_html_stripped": "Francis Ford Coppola has always made films about loneliness. Donnie Darko extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2019/05/20",
+    "external_links": [
+      "https://imdb.com/title/tt3433226",
+      "https://letterboxd.com/film/donnie-darko"
+    ],
+    "score_out_of_10": 9.2,
+    "word_count": 4143,
+    "read_time_minutes": 13,
+    "byline": [
+      "JD Marlowe",
+      "Camille Reyes"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0059",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2025/11/perfect-days",
+    "subject_movie": "m_perfectdays",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Perfect Days without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://filmschoolrejects-mirror.example.net/2025/11/perfect-days",
+    "author": "Anya R.",
+    "headline": "Perfect Days is the 2025 film I keep returning to",
+    "body_html_stripped": "It's hard to write about Perfect Days without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "tags": [
+      "video-essay"
+    ],
+    "read_time_minutes": 20,
+    "share_count": 10916
+  },
+  {
+    "canonical_id": "mention_blog_0060",
+    "source_identifier": "https://rogerebert-mirror.example.org/2023/09/blade-runner-2049",
+    "subject_movie": "m_blade_runner_2049",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Blade Runner 2049 without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://rogerebert-mirror.example.org/2023/09/blade-runner-2049",
+    "author": "Marcus T. Whitfield",
+    "headline": "On Blade Runner 2049: a love letter",
+    "body_html_stripped": "It's hard to write about Blade Runner 2049 without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2023/12/18",
+    "tags": [
+      "festivals"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt8715492"
+    ],
+    "score_out_of_10": "9/10"
+  },
+  {
+    "canonical_id": "mention_blog_0061",
+    "source_identifier": "https://longreads-film.example.org/2020/05/andrei-rublev",
+    "subject_movie": "m_andreirublev",
+    "subject_person": null,
+    "text_excerpt": "Watching Andrei Rublev again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2020/05/andrei-rublev",
+    "author": "@filmpolicy",
+    "headline": "Re-evaluating Andrei Rublev ten years on",
+    "body_html_stripped": "Watching Andrei Rublev again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2020/11/24",
+    "word_count": 3357,
+    "byline": [
+      "@filmpolicy",
+      "Hannah Engh"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0062",
+    "source_identifier": "https://rogerebert-mirror.example.org/2021/08/tenet",
+    "subject_movie": "m_tenet",
+    "subject_person": null,
+    "text_excerpt": "Watching Tenet again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "positive",
+    "url": "https://rogerebert-mirror.example.org/2021/08/tenet",
+    "author": "Tomasz Krol",
+    "headline": "On Tenet: a love letter",
+    "body_html_stripped": "Watching Tenet again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "1739412388",
+    "tags": [
+      "spotlight",
+      "essay"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt6054746",
+      "https://letterboxd.com/film/tenet"
+    ],
+    "word_count": 525
+  },
+  {
+    "canonical_id": "mention_blog_0063",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2022/03/kill-bill-vol-1",
+    "subject_movie": "m_killbill1",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Kill Bill: Vol. 1, about 47 minutes in, where the camera holds on Florence Pugh's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlo",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2022/03/kill-bill-vol-1",
+    "author": "EditorialDesk",
+    "headline": "Florence Pugh's Kill Bill: Vol. 1 doesn't quite work — and that's interesting",
+    "body_html_stripped": "There's a moment in Kill Bill: Vol. 1, about 47 minutes in, where the camera holds on Florence Pugh's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2022/02/25",
+    "external_links": [
+      "https://imdb.com/title/tt4039191"
+    ],
+    "word_count": 3683
+  },
+  {
+    "canonical_id": "mention_blog_0064",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2020/11/whiplash",
+    "subject_movie": "m_whiplash",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Whiplash, about 47 minutes in, where the camera holds on David Lynch's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the who",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2020/11/whiplash",
+    "author": "Anonymous",
+    "headline": "The cinematography of Whiplash, breakdown",
+    "body_html_stripped": "There's a moment in Whiplash, about 47 minutes in, where the camera holds on David Lynch's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "tags": [
+      "tiff"
+    ],
+    "read_time_minutes": 21
+  },
+  {
+    "canonical_id": "mention_blog_0065",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2020/04/dune-part-two",
+    "subject_movie": "m_dune2_2024",
+    "subject_person": "p_jenkins_barry",
+    "text_excerpt": "Watching Dune: Part Two again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2020/04/dune-part-two",
+    "author": "Lee Park",
+    "headline": "Barry Jenkins's Dune: Part Two doesn't quite work — and that's interesting",
+    "body_html_stripped": "Watching Dune: Part Two again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2020/08/06",
+    "external_links": [
+      "https://imdb.com/title/tt5597313"
+    ],
+    "word_count": 4347,
+    "share_count": 8855
+  },
+  {
+    "canonical_id": "mention_blog_0066",
+    "source_identifier": "https://indiewire-clone.example.com/2023/09/kill-bill-vol-2",
+    "subject_movie": "m_killbill2",
+    "subject_person": null,
+    "text_excerpt": "Watching Kill Bill: Vol. 2 again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2023/09/kill-bill-vol-2",
+    "author": "Anya R.",
+    "headline": "Why everyone is wrong about Kill Bill: Vol. 2",
+    "body_html_stripped": "Watching Kill Bill: Vol. 2 again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023/12/13",
+    "tags": [
+      "cannes",
+      "tiff",
+      "berlinale"
+    ],
+    "share_count": 14548
+  },
+  {
+    "canonical_id": "mention_blog_0067",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2022/10/tenet",
+    "subject_movie": "m_tenet",
+    "subject_person": "p_gerwig",
+    "text_excerpt": "I want to be clear: I don't think Tenet is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://filmschoolrejects-mirror.example.net/2022/10/tenet",
+    "author": "Owen Hewitt",
+    "headline": "Why everyone is wrong about Tenet",
+    "body_html_stripped": "I want to be clear: I don't think Tenet is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2022-07-07",
+    "external_links": [
+      "https://imdb.com/title/tt5132845",
+      "https://letterboxd.com/film/tenet",
+      "https://en.wikipedia.org/wiki/Tenet"
+    ],
+    "score_out_of_10": 9,
+    "read_time_minutes": 22,
+    "share_count": 13627
+  },
+  {
+    "canonical_id": "mention_blog_0068",
+    "source_identifier": "https://rogerebert-mirror.example.org/2022/12/blade-runner",
+    "subject_movie": "m_blade_runner",
+    "subject_person": null,
+    "text_excerpt": "Oscar Isaac has always made films about loneliness. Blade Runner extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2022/12/blade-runner",
+    "author": "F. Beaumont",
+    "headline": "Re-evaluating Blade Runner ten years on",
+    "body_html_stripped": "Oscar Isaac has always made films about loneliness. Blade Runner extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "1739765798",
+    "tags": [
+      "review",
+      "essay",
+      "list"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt6665203",
+      "https://letterboxd.com/film/blade-runner"
+    ],
+    "score_out_of_10": 9,
+    "share_count": 8357,
+    "byline": "F. Beaumont"
+  },
+  {
+    "canonical_id": "mention_blog_0069",
+    "source_identifier": "https://rogerebert-mirror.example.org/2019/07/the-shining",
+    "subject_movie": "m_shining",
+    "subject_person": null,
+    "text_excerpt": "Watching The Shining again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "positive",
+    "url": "https://rogerebert-mirror.example.org/2019/07/the-shining",
+    "author": "F. Beaumont",
+    "headline": "The Shining review: a flawed masterpiece",
+    "body_html_stripped": "Watching The Shining again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "May 11, 2019",
+    "tags": [
+      "video-essay"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt5402373",
+      "https://letterboxd.com/film/the-shining"
+    ],
+    "score_out_of_10": 7.0,
+    "paywalled": true
+  },
+  {
+    "canonical_id": "mention_blog_0070",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2023/03/the-witch",
+    "subject_movie": "m_thevvitch",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in The Witch, about 47 minutes in, where the camera holds on Adam Driver's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the wh",
+    "sentiment": "neutral",
+    "url": "https://thefilmstage-mirror.example.net/2023/03/the-witch",
+    "author": "Hannah Engh",
+    "headline": "Why The Witch is the best film of 2023",
+    "body_html_stripped": "There's a moment in The Witch, about 47 minutes in, where the camera holds on Adam Driver's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2023/11/26",
+    "tags": [
+      "tiff",
+      "list",
+      "essay",
+      "spotlight",
+      "best-of-year"
+    ],
+    "word_count": 2207
+  },
+  {
+    "canonical_id": "mention_blog_0071",
+    "source_identifier": "https://rogerebert-mirror.example.org/2023/10/the-shining",
+    "subject_movie": "m_shining",
+    "subject_person": null,
+    "text_excerpt": "Watching The Shining again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": null,
+    "url": "https://rogerebert-mirror.example.org/2023/10/the-shining",
+    "author": "the editorial team",
+    "headline": "The Shining is the 2023 film I keep returning to",
+    "body_html_stripped": "Watching The Shining again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023/10/22",
+    "tags": [
+      "best-of-year",
+      "longform",
+      "berlinale",
+      "video-essay"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3790141",
+      "https://letterboxd.com/film/the-shining"
+    ],
+    "read_time_minutes": 11
+  },
+  {
+    "canonical_id": "mention_blog_0072",
+    "source_identifier": "https://rogerebert-mirror.example.org/2024/05/interstellar",
+    "subject_movie": "m_interstellar",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Interstellar, about 47 minutes in, where the camera holds on Christopher Nolan's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unloc",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2024/05/interstellar",
+    "author": "Lee Park",
+    "headline": "Interstellar is the 2024 film I keep returning to",
+    "body_html_stripped": "There's a moment in Interstellar, about 47 minutes in, where the camera holds on Christopher Nolan's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "external_links": [
+      "https://imdb.com/title/tt7458406",
+      "https://letterboxd.com/film/interstellar"
+    ],
+    "score_out_of_10": "9/10",
+    "word_count": 716,
+    "read_time_minutes": 10
+  },
+  {
+    "canonical_id": "mention_blog_0073",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2022/11/the-lord-of-the-rings-the-fellowship-of-the-ring",
+    "subject_movie": null,
+    "subject_person": "p_dayLewis",
+    "text_excerpt": "It's hard to write about The Lord of the Rings: The Fellowship of the Ring without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://filmschoolrejects-mirror.example.net/2022/11/the-lord-of-the-rings-the-fellowship-of-the-ring",
+    "author": "Tomasz Krol",
+    "headline": "The Lord of the Rings: The Fellowship of the Ring review: a flawed masterpiece",
+    "body_html_stripped": "It's hard to write about The Lord of the Rings: The Fellowship of the Ring without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2022-06-22",
+    "tags": [
+      "longform",
+      "festivals",
+      "review",
+      "interview"
+    ],
+    "score_out_of_10": 8.5,
+    "word_count": 3797
+  },
+  {
+    "canonical_id": "mention_blog_0074",
+    "source_identifier": "https://indiewire-clone.example.com/2023/07/arrival",
+    "subject_movie": "m_arrival",
+    "subject_person": "p_coppola_fran",
+    "text_excerpt": "Watching Arrival again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": null,
+    "url": "https://indiewire-clone.example.com/2023/07/arrival",
+    "author": "Owen Hewitt",
+    "headline": "Why Arrival is the best film of 2023",
+    "body_html_stripped": "Watching Arrival again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023-02-16",
+    "word_count": 4779,
+    "paywalled": true,
+    "byline": [
+      "Owen Hewitt",
+      "Lee Park"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0075",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2023/07/birdman",
+    "subject_movie": "m_birdman",
+    "subject_person": "p_bongjoonho",
+    "text_excerpt": "Watching Birdman again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": null,
+    "url": "https://filmschoolrejects-mirror.example.net/2023/07/birdman",
+    "author": "Vikram Patel",
+    "headline": "Bong Joon-ho's Birdman doesn't quite work — and that's interesting",
+    "body_html_stripped": "Watching Birdman again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2023/12/13",
+    "tags": [
+      "cannes",
+      "interview",
+      "longform",
+      "list",
+      "review"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt8165105",
+      "https://letterboxd.com/film/birdman",
+      "https://en.wikipedia.org/wiki/Birdman"
+    ],
+    "word_count": 2896,
+    "byline": [
+      "Vikram Patel",
+      "Tomasz Krol"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0076",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2024/07/blue-eyed-boy",
+    "subject_movie": "m_blueeyedboy",
+    "subject_person": null,
+    "text_excerpt": "Watching Blue Eyed Boy again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2024/07/blue-eyed-boy",
+    "author": "EditorialDesk",
+    "headline": "Why everyone is wrong about Blue Eyed Boy",
+    "body_html_stripped": "Watching Blue Eyed Boy again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2024/10/01",
+    "tags": [
+      "interview",
+      "essay"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt1289444",
+      "https://letterboxd.com/film/blue-eyed-boy"
+    ],
+    "paywalled": true,
+    "byline": [
+      "EditorialDesk",
+      "Marcus T. Whitfield"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0077",
+    "source_identifier": "https://highbrowcinema.example.io/2022/09/the-brutalist",
+    "subject_movie": "m_thebrutalist",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think The Brutalist is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": null,
+    "url": "https://highbrowcinema.example.io/2022/09/the-brutalist",
+    "author": "Vikram Patel",
+    "headline": "The Brutalist is the 2022 film I keep returning to",
+    "body_html_stripped": "I want to be clear: I don't think The Brutalist is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "external_links": [
+      "https://imdb.com/title/tt3105368",
+      "https://letterboxd.com/film/the-brutalist"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0078",
+    "source_identifier": "https://highbrowcinema.example.io/2022/12/civil-war",
+    "subject_movie": "m_civilwar2024",
+    "subject_person": "p_jonathanglazer",
+    "text_excerpt": "There's a moment in Civil War, about 47 minutes in, where the camera holds on Jonathan Glazer's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks th",
+    "sentiment": "neutral",
+    "url": "https://highbrowcinema.example.io/2022/12/civil-war",
+    "author": "Marcus T. Whitfield",
+    "headline": "Jonathan Glazer's Civil War doesn't quite work — and that's interesting",
+    "body_html_stripped": "There's a moment in Civil War, about 47 minutes in, where the camera holds on Jonathan Glazer's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "August 12, 2022",
+    "tags": [
+      "tiff",
+      "interview"
+    ],
+    "score_out_of_10": 6.5
+  },
+  {
+    "canonical_id": "mention_blog_0079",
+    "source_identifier": "https://indiewire-clone.example.com/2025/04/memento",
+    "subject_movie": "m_memento",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Memento, about 47 minutes in, where the camera holds on Quentin Tarantino's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks th",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2025/04/memento",
+    "author": "Owen Hewitt",
+    "headline": "Why everyone is wrong about Memento",
+    "body_html_stripped": "There's a moment in Memento, about 47 minutes in, where the camera holds on Quentin Tarantino's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2025/01/06",
+    "external_links": [
+      "https://imdb.com/title/tt8332284",
+      "https://letterboxd.com/film/memento",
+      "https://en.wikipedia.org/wiki/Memento"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0080",
+    "source_identifier": "https://indiewire-clone.example.com/2025/09/the-substance",
+    "subject_movie": "m_thesubstance",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Substance without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2025/09/the-substance",
+    "author": "Marcus T. Whitfield",
+    "headline": "The Substance is the 2025 film I keep returning to",
+    "body_html_stripped": "It's hard to write about The Substance without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2025/08/04",
+    "tags": [
+      "best-of-year"
+    ],
+    "score_out_of_10": "8/10",
+    "word_count": 1381,
+    "read_time_minutes": 12,
+    "byline": [
+      "Marcus T. Whitfield",
+      "Camille Reyes"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0081",
+    "source_identifier": "https://highbrowcinema.example.io/2025/10/the-shawshank-redemption",
+    "subject_movie": "m_shawshank",
+    "subject_person": "p_pugh_florence",
+    "text_excerpt": "Florence Pugh has always made films about loneliness. The Shawshank Redemption extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "positive",
+    "url": "https://highbrowcinema.example.io/2025/10/the-shawshank-redemption",
+    "author": "Vikram Patel",
+    "headline": "The Shawshank Redemption review: a flawed masterpiece",
+    "body_html_stripped": "Florence Pugh has always made films about loneliness. The Shawshank Redemption extends that preoccupation to its logical, devastating endpoint.",
+    "tags": [
+      "essay"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3153821"
+    ],
+    "score_out_of_10": 8.5,
+    "read_time_minutes": 24
+  },
+  {
+    "canonical_id": "mention_blog_0082",
+    "source_identifier": "https://longreads-film.example.org/2019/09/the-brutalist",
+    "subject_movie": "m_thebrutalist",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in The Brutalist, about 47 minutes in, where the camera holds on Jennifer Lawrence's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlo",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2019/09/the-brutalist",
+    "author": "Hannah Engh",
+    "headline": "Listen: our podcast on The Brutalist is up",
+    "body_html_stripped": "There's a moment in The Brutalist, about 47 minutes in, where the camera holds on Jennifer Lawrence's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "tags": [
+      "cannes",
+      "essay",
+      "review",
+      "festivals",
+      "spotlight"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt3970599"
+    ],
+    "read_time_minutes": 16
+  },
+  {
+    "canonical_id": "mention_blog_0083",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2024/06/apocalypse-now",
+    "subject_movie": "m_apocalypsenow",
+    "subject_person": "p_phoenix",
+    "text_excerpt": "Joaquin Phoenix has always made films about loneliness. Apocalypse Now extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2024/06/apocalypse-now",
+    "author": "Anya R.",
+    "headline": "Why everyone is wrong about Apocalypse Now",
+    "body_html_stripped": "Joaquin Phoenix has always made films about loneliness. Apocalypse Now extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2024/11/01",
+    "external_links": [
+      "https://imdb.com/title/tt9745003"
+    ],
+    "word_count": 827
+  },
+  {
+    "canonical_id": "mention_blog_0084",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2025/06/moonlight",
+    "subject_movie": "m_moonlight",
+    "subject_person": null,
+    "text_excerpt": "Oscar Isaac has always made films about loneliness. Moonlight extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://screen-anarchy-archive.example.com/2025/06/moonlight",
+    "author": "the editorial team",
+    "headline": "Why everyone is wrong about Moonlight",
+    "body_html_stripped": "Oscar Isaac has always made films about loneliness. Moonlight extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "July 1, 2025",
+    "tags": [
+      "essay",
+      "auteurism",
+      "berlinale",
+      "tiff"
+    ],
+    "word_count": 2956
+  },
+  {
+    "canonical_id": "mention_blog_0085",
+    "source_identifier": "https://rogerebert-mirror.example.org/2023/07/dune-part-two",
+    "subject_movie": "m_dune2_2024",
+    "subject_person": "p_robbiemargot",
+    "text_excerpt": "It's hard to write about Dune: Part Two without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2023/07/dune-part-two",
+    "author": "Anonymous",
+    "headline": "Dune: Part Two is the 2023 film I keep returning to",
+    "body_html_stripped": "It's hard to write about Dune: Part Two without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "October 4, 2023",
+    "word_count": 4177,
+    "paywalled": true
+  },
+  {
+    "canonical_id": "mention_blog_0086",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2025/02/citizen-kane",
+    "subject_movie": "m_citizenkane",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Citizen Kane is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://thefilmstage-mirror.example.net/2025/02/citizen-kane",
+    "author": "Lee Park",
+    "headline": "The cinematography of Citizen Kane, breakdown",
+    "body_html_stripped": "I want to be clear: I don't think Citizen Kane is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "share_count": 16872
+  },
+  {
+    "canonical_id": "mention_blog_0087",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2019/08/memento",
+    "subject_movie": "m_memento",
+    "subject_person": null,
+    "text_excerpt": "Florence Pugh has always made films about loneliness. Memento extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://thefilmstage-mirror.example.net/2019/08/memento",
+    "author": "F. Beaumont",
+    "headline": "Why Memento is the best film of 2019",
+    "body_html_stripped": "Florence Pugh has always made films about loneliness. Memento extends that preoccupation to its logical, devastating endpoint.",
+    "tags": [
+      "cannes",
+      "best-of-year",
+      "review",
+      "festivals",
+      "interview"
+    ],
+    "word_count": 1396,
+    "read_time_minutes": 16
+  },
+  {
+    "canonical_id": "mention_blog_0088",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2021/10/once-upon-a-time-in-hollywood",
+    "subject_movie": "m_oncetimehollywood",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Once Upon a Time in Hollywood is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "positive",
+    "url": "https://filmschoolrejects-mirror.example.net/2021/10/once-upon-a-time-in-hollywood",
+    "author": "Vikram Patel",
+    "headline": "On Once Upon a Time in Hollywood: a love letter",
+    "body_html_stripped": "I want to be clear: I don't think Once Upon a Time in Hollywood is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1701310112",
+    "score_out_of_10": "9/10",
+    "read_time_minutes": 6
+  },
+  {
+    "canonical_id": "mention_blog_0089",
+    "source_identifier": "https://longreads-film.example.org/2020/12/the-brutalist",
+    "subject_movie": "m_thebrutalist",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in The Brutalist, about 47 minutes in, where the camera holds on Ryan Gosling's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks t",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2020/12/the-brutalist",
+    "author": "Camille Reyes",
+    "headline": "Why everyone is wrong about The Brutalist",
+    "body_html_stripped": "There's a moment in The Brutalist, about 47 minutes in, where the camera holds on Ryan Gosling's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2020-12-08",
+    "external_links": [
+      "https://imdb.com/title/tt4654095"
+    ],
+    "score_out_of_10": 7.0
+  },
+  {
+    "canonical_id": "mention_blog_0090",
+    "source_identifier": "https://rogerebert-mirror.example.org/2021/03/goodfellas",
+    "subject_movie": "m_goodfellas",
+    "subject_person": null,
+    "text_excerpt": "Guillermo del Toro has always made films about loneliness. Goodfellas extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2021/03/goodfellas",
+    "author": "F. Beaumont",
+    "headline": "Listen: our podcast on Goodfellas is up",
+    "body_html_stripped": "Guillermo del Toro has always made films about loneliness. Goodfellas extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "November 7, 2021",
+    "tags": [
+      "criticism",
+      "review"
+    ],
+    "word_count": 709
+  },
+  {
+    "canonical_id": "mention_blog_0091",
+    "source_identifier": "https://longreads-film.example.org/2020/12/terminator-2-judgment-day",
+    "subject_movie": "m_terminator2",
+    "subject_person": "p_fincher",
+    "text_excerpt": "David Fincher has always made films about loneliness. Terminator 2: Judgment Day extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://longreads-film.example.org/2020/12/terminator-2-judgment-day",
+    "author": "Owen Hewitt",
+    "headline": "Terminator 2: Judgment Day is the 2020 film I keep returning to",
+    "body_html_stripped": "David Fincher has always made films about loneliness. Terminator 2: Judgment Day extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "February 16, 2020",
+    "tags": [
+      "cannes",
+      "video-essay",
+      "longform",
+      "best-of-year"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt6686072",
+      "https://letterboxd.com/film/terminator-2-judgment-day",
+      "https://en.wikipedia.org/wiki/Terminator_2:_Judgment_Day"
+    ],
+    "read_time_minutes": 15,
+    "paywalled": true,
+    "byline": [
+      "Owen Hewitt",
+      "Kira Jefferson"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0092",
+    "source_identifier": "https://longreads-film.example.org/2021/04/the-lord-of-the-rings-the-return-of-the-king",
+    "subject_movie": "m_lotr_rotk",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think The Lord of the Rings: The Return of the King is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://longreads-film.example.org/2021/04/the-lord-of-the-rings-the-return-of-the-king",
+    "author": "Marcus T. Whitfield",
+    "headline": "The cinematography of The Lord of the Rings: The Return of the King, breakdown",
+    "body_html_stripped": "I want to be clear: I don't think The Lord of the Rings: The Return of the King is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1683708064",
+    "share_count": 1932
+  },
+  {
+    "canonical_id": "mention_blog_0093",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2019/11/inglourious-basterds",
+    "subject_movie": "m_inglourious",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Inglourious Basterds is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://screen-anarchy-archive.example.com/2019/11/inglourious-basterds",
+    "author": "Tomasz Krol",
+    "headline": "The cinematography of Inglourious Basterds, breakdown",
+    "body_html_stripped": "I want to be clear: I don't think Inglourious Basterds is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "external_links": [
+      "https://imdb.com/title/tt2784146"
+    ],
+    "word_count": 2082
+  },
+  {
+    "canonical_id": "mention_blog_0094",
+    "source_identifier": "https://longreads-film.example.org/2022/12/jurassic-park",
+    "subject_movie": "m_jurassicpark",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Jurassic Park without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": null,
+    "url": "https://longreads-film.example.org/2022/12/jurassic-park",
+    "author": "Hannah Engh",
+    "headline": "Jurassic Park is the 2022 film I keep returning to",
+    "body_html_stripped": "It's hard to write about Jurassic Park without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "1658583973",
+    "tags": [
+      "video-essay",
+      "festivals",
+      "spotlight",
+      "criticism"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt9251247",
+      "https://letterboxd.com/film/jurassic-park",
+      "https://en.wikipedia.org/wiki/Jurassic_Park"
+    ],
+    "word_count": 3693
+  },
+  {
+    "canonical_id": "mention_blog_0095",
+    "source_identifier": "https://indiewire-clone.example.com/2023/02/the-substance",
+    "subject_movie": "m_thesubstance",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about The Substance without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://indiewire-clone.example.com/2023/02/the-substance",
+    "author": "Camille Reyes",
+    "headline": "The Substance review: a flawed masterpiece",
+    "body_html_stripped": "It's hard to write about The Substance without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "October 21, 2023",
+    "tags": [
+      "criticism",
+      "spotlight",
+      "list",
+      "tiff"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt7572570",
+      "https://letterboxd.com/film/the-substance"
+    ],
+    "byline": "Camille Reyes"
+  },
+  {
+    "canonical_id": "mention_blog_0096",
+    "source_identifier": "https://longreads-film.example.org/2020/01/schindlers-list",
+    "subject_movie": "m_schindlerslist",
+    "subject_person": "p_zendaya",
+    "text_excerpt": "Zendaya has always made films about loneliness. Schindler's List extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": null,
+    "url": "https://longreads-film.example.org/2020/01/schindlers-list",
+    "author": "JD Marlowe",
+    "headline": "Listen: our podcast on Schindler's List is up",
+    "body_html_stripped": "Zendaya has always made films about loneliness. Schindler's List extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2020/05/17",
+    "tags": [
+      "auteurism",
+      "review",
+      "list"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt8656670",
+      "https://letterboxd.com/film/schindlers-list",
+      "https://en.wikipedia.org/wiki/Schindler's_List"
+    ],
+    "read_time_minutes": 6,
+    "editor_pick": true
+  },
+  {
+    "canonical_id": "mention_blog_0097",
+    "source_identifier": "https://indiewire-clone.example.com/2021/02/sicario",
+    "subject_movie": "m_sicario",
+    "subject_person": null,
+    "text_excerpt": "Greta Gerwig has always made films about loneliness. Sicario extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2021/02/sicario",
+    "author": "Anya R.",
+    "headline": "The cinematography of Sicario, breakdown",
+    "body_html_stripped": "Greta Gerwig has always made films about loneliness. Sicario extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2021/03/04",
+    "external_links": [
+      "https://imdb.com/title/tt8410722"
+    ],
+    "word_count": 2094
+  },
+  {
+    "canonical_id": "mention_blog_0098",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2024/10/everything-everywhere-all-at-once",
+    "subject_movie": "m_everythingeverywhere",
+    "subject_person": "p_chastain",
+    "text_excerpt": "It's hard to write about Everything Everywhere All at Once without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://thefilmstage-mirror.example.net/2024/10/everything-everywhere-all-at-once",
+    "author": "JD Marlowe",
+    "headline": "Everything Everywhere All at Once review: a flawed masterpiece",
+    "body_html_stripped": "It's hard to write about Everything Everywhere All at Once without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "1743716759",
+    "tags": [
+      "video-essay",
+      "best-of-year",
+      "cannes"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt2733345",
+      "https://letterboxd.com/film/everything-everywhere-all-at-once"
+    ],
+    "word_count": 2999,
+    "share_count": 15737,
+    "byline": "JD Marlowe"
+  },
+  {
+    "canonical_id": "mention_blog_0099",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2020/03/the-brutalist",
+    "subject_movie": "m_thebrutalist",
+    "subject_person": "p_jonathanglazer",
+    "text_excerpt": "I want to be clear: I don't think The Brutalist is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "positive",
+    "url": "https://filmschoolrejects-mirror.example.net/2020/03/the-brutalist",
+    "author": "@filmpolicy",
+    "headline": "On The Brutalist: a love letter",
+    "body_html_stripped": "I want to be clear: I don't think The Brutalist is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "tags": [
+      "interview"
+    ],
+    "score_out_of_10": 9.2,
+    "read_time_minutes": 5,
+    "share_count": 16904,
+    "editor_pick": false
+  },
+  {
+    "canonical_id": "mention_blog_0100",
+    "source_identifier": "https://indiewire-clone.example.com/2025/10/the-godfather-part-ii",
+    "subject_movie": "m_godfather2",
+    "subject_person": null,
+    "text_excerpt": "Watching The Godfather Part II again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2025/10/the-godfather-part-ii",
+    "author": "Lee Park",
+    "headline": "Listen: our podcast on The Godfather Part II is up",
+    "body_html_stripped": "Watching The Godfather Part II again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "1690415010",
+    "tags": [
+      "interview",
+      "spotlight",
+      "longform",
+      "criticism",
+      "video-essay"
+    ],
+    "word_count": 2436
+  },
+  {
+    "canonical_id": "mention_blog_0101",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2020/08/blade-runner",
+    "subject_movie": "m_blade_runner",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Blade Runner without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2020/08/blade-runner",
+    "author": "the editorial team",
+    "headline": "The cinematography of Blade Runner, breakdown",
+    "body_html_stripped": "It's hard to write about Blade Runner without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "2020/10/17",
+    "tags": [
+      "list",
+      "video-essay",
+      "interview"
+    ],
+    "byline": [
+      "the editorial team",
+      "Hannah Engh"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0102",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2022/08/the-hateful-eight",
+    "subject_movie": "m_thehatefuleight",
+    "subject_person": null,
+    "text_excerpt": "Watching The Hateful Eight again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://thefilmstage-mirror.example.net/2022/08/the-hateful-eight",
+    "author": "Marcus T. Whitfield",
+    "headline": "Why The Hateful Eight is the best film of 2022",
+    "body_html_stripped": "Watching The Hateful Eight again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "1673683213",
+    "tags": [
+      "list",
+      "review",
+      "festivals",
+      "spotlight"
+    ],
+    "score_out_of_10": 7.0,
+    "word_count": 3986
+  },
+  {
+    "canonical_id": "mention_blog_0103",
+    "source_identifier": "https://rogerebert-mirror.example.org/2021/01/dune-part-two",
+    "subject_movie": "m_dune2_2024",
+    "subject_person": "p_chalamet",
+    "text_excerpt": "There's a moment in Dune: Part Two, about 47 minutes in, where the camera holds on Timothée Chalamet's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unl",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2021/01/dune-part-two",
+    "author": "the editorial team",
+    "headline": "Timothée Chalamet's Dune: Part Two doesn't quite work — and that's interesting",
+    "body_html_stripped": "There's a moment in Dune: Part Two, about 47 minutes in, where the camera holds on Timothée Chalamet's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "October 23, 2021",
+    "score_out_of_10": "8/10",
+    "editor_pick": false
+  },
+  {
+    "canonical_id": "mention_blog_0104",
+    "source_identifier": "https://highbrowcinema.example.io/2021/09/taxi-driver",
+    "subject_movie": "m_taxidriver",
+    "subject_person": null,
+    "text_excerpt": "Watching Taxi Driver again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://highbrowcinema.example.io/2021/09/taxi-driver",
+    "author": "the editorial team",
+    "headline": "Why everyone is wrong about Taxi Driver",
+    "body_html_stripped": "Watching Taxi Driver again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2021-09-01",
+    "tags": [
+      "review"
+    ],
+    "share_count": 11787
+  },
+  {
+    "canonical_id": "mention_blog_0105",
+    "source_identifier": "https://rogerebert-mirror.example.org/2020/12/a-clockwork-orange",
+    "subject_movie": "m_clockworkorange",
+    "subject_person": "p_cuarón",
+    "text_excerpt": "It's hard to write about A Clockwork Orange without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2020/12/a-clockwork-orange",
+    "author": "@filmpolicy",
+    "headline": "The cinematography of A Clockwork Orange, breakdown",
+    "body_html_stripped": "It's hard to write about A Clockwork Orange without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "1744356114",
+    "tags": [
+      "berlinale",
+      "criticism",
+      "video-essay",
+      "cannes",
+      "venice"
+    ],
+    "score_out_of_10": 7.0,
+    "word_count": 701
+  },
+  {
+    "canonical_id": "mention_blog_0106",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2020/03/petite-maman",
+    "subject_movie": "m_petitemaman",
+    "subject_person": "p_wesanderson",
+    "text_excerpt": "I want to be clear: I don't think Petite Maman is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://filmschoolrejects-mirror.example.net/2020/03/petite-maman",
+    "author": "Lee Park",
+    "headline": "Why everyone is wrong about Petite Maman",
+    "body_html_stripped": "I want to be clear: I don't think Petite Maman is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "2020-09-27",
+    "tags": [
+      "venice",
+      "review",
+      "video-essay"
+    ],
+    "word_count": 1264,
+    "read_time_minutes": 20,
+    "share_count": 16612,
+    "byline": "Lee Park"
+  },
+  {
+    "canonical_id": "mention_blog_0107",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2025/09/inception",
+    "subject_movie": "m_inception",
+    "subject_person": "p_jenkins_barry",
+    "text_excerpt": "Barry Jenkins has always made films about loneliness. Inception extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2025/09/inception",
+    "author": "Vikram Patel",
+    "headline": "Barry Jenkins's Inception doesn't quite work — and that's interesting",
+    "body_html_stripped": "Barry Jenkins has always made films about loneliness. Inception extends that preoccupation to its logical, devastating endpoint.",
+    "tags": [
+      "cannes",
+      "video-essay",
+      "interview",
+      "review",
+      "spotlight"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt2424141",
+      "https://letterboxd.com/film/inception"
+    ],
+    "score_out_of_10": "N/A",
+    "word_count": 1499
+  },
+  {
+    "canonical_id": "mention_blog_0108",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2019/10/zodiac",
+    "subject_movie": "m_zodiac",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Zodiac, about 47 minutes in, where the camera holds on Park Chan-wook's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the wh",
+    "sentiment": "neutral",
+    "url": "https://filmschoolrejects-mirror.example.net/2019/10/zodiac",
+    "author": "Owen Hewitt",
+    "headline": "Re-evaluating Zodiac ten years on",
+    "body_html_stripped": "There's a moment in Zodiac, about 47 minutes in, where the camera holds on Park Chan-wook's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2019/09/10",
+    "external_links": [
+      "https://imdb.com/title/tt3389241",
+      "https://letterboxd.com/film/zodiac"
+    ],
+    "score_out_of_10": "7.5/10"
+  },
+  {
+    "canonical_id": "mention_blog_0109",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2020/04/satantango",
+    "subject_movie": "m_satantango",
+    "subject_person": null,
+    "text_excerpt": "It's hard to write about Satantango without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "sentiment": "positive",
+    "url": "https://screen-anarchy-archive.example.com/2020/04/satantango",
+    "author": "Anonymous",
+    "headline": "On Satantango: a love letter",
+    "body_html_stripped": "It's hard to write about Satantango without sounding hyperbolic. It is a film that demands hyperbole — or, alternatively, refusal.",
+    "published_date": "1685738396",
+    "tags": [
+      "tiff",
+      "interview"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt7768577"
+    ],
+    "word_count": 957,
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0110",
+    "source_identifier": "https://rogerebert-mirror.example.org/2022/07/arrival",
+    "subject_movie": "m_arrival",
+    "subject_person": null,
+    "text_excerpt": "Watching Arrival again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": "neutral",
+    "url": "https://rogerebert-mirror.example.org/2022/07/arrival",
+    "author": "@filmpolicy",
+    "headline": "Arrival is the 2022 film I keep returning to",
+    "body_html_stripped": "Watching Arrival again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "2022-10-17",
+    "tags": [
+      "best-of-year",
+      "auteurism",
+      "festivals",
+      "venice"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt7090106"
+    ],
+    "score_out_of_10": 7.0,
+    "read_time_minutes": 15
+  },
+  {
+    "canonical_id": "mention_blog_0111",
+    "source_identifier": "https://thefilmstage-mirror.example.net/2023/09/the-godfather",
+    "subject_movie": "m_godfather",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think The Godfather is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://thefilmstage-mirror.example.net/2023/09/the-godfather",
+    "author": "Hannah Engh",
+    "headline": "The Godfather review: a flawed masterpiece",
+    "body_html_stripped": "I want to be clear: I don't think The Godfather is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1655161622",
+    "tags": [
+      "criticism",
+      "venice",
+      "festivals",
+      "list"
+    ],
+    "external_links": [
+      "https://imdb.com/title/tt7488670"
+    ],
+    "score_out_of_10": 8,
+    "word_count": 3829,
+    "read_time_minutes": 7,
+    "byline": [
+      "Hannah Engh",
+      "Marcus T. Whitfield"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0112",
+    "source_identifier": "https://indiewire-clone.example.com/2021/03/the-witch",
+    "subject_movie": "m_thevvitch",
+    "subject_person": null,
+    "text_excerpt": "Daniel Day-Lewis has always made films about loneliness. The Witch extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": "neutral",
+    "url": "https://indiewire-clone.example.com/2021/03/the-witch",
+    "author": "Camille Reyes",
+    "headline": "The Witch is the 2021 film I keep returning to",
+    "body_html_stripped": "Daniel Day-Lewis has always made films about loneliness. The Witch extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "2021-05-01",
+    "tags": [
+      "auteurism"
+    ],
+    "word_count": 1270,
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0113",
+    "source_identifier": "https://indiewire-clone.example.com/2020/04/reservoir-dogs",
+    "subject_movie": "m_reservoirdogs",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Reservoir Dogs is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://indiewire-clone.example.com/2020/04/reservoir-dogs",
+    "author": "EditorialDesk",
+    "headline": "Re-evaluating Reservoir Dogs ten years on",
+    "body_html_stripped": "I want to be clear: I don't think Reservoir Dogs is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "tags": [
+      "berlinale",
+      "review",
+      "list",
+      "longform"
+    ],
+    "score_out_of_10": "8/10"
+  },
+  {
+    "canonical_id": "mention_blog_0114",
+    "source_identifier": "https://rogerebert-mirror.example.org/2019/11/schindlers-list",
+    "subject_movie": "m_schindlerslist",
+    "subject_person": null,
+    "text_excerpt": "I want to be clear: I don't think Schindler's List is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "sentiment": "negative",
+    "url": "https://rogerebert-mirror.example.org/2019/11/schindlers-list",
+    "author": "Lee Park",
+    "headline": "Re-evaluating Schindler's List ten years on",
+    "body_html_stripped": "I want to be clear: I don't think Schindler's List is bad. I think it is exactly what it set out to be, and that what it set out to be is not very interesting.",
+    "published_date": "1609483429",
+    "score_out_of_10": 6.5,
+    "byline": [
+      "Lee Park",
+      "JD Marlowe"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0115",
+    "source_identifier": "https://rogerebert-mirror.example.org/2024/02/drive-my-car",
+    "subject_movie": "m_drivemycar",
+    "subject_person": null,
+    "text_excerpt": "Watching Drive My Car again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "sentiment": null,
+    "url": "https://rogerebert-mirror.example.org/2024/02/drive-my-car",
+    "author": "F. Beaumont",
+    "headline": "On Drive My Car: a love letter",
+    "body_html_stripped": "Watching Drive My Car again, on a much smaller screen than the one I first encountered it on, I was struck by how much its power survives the format change.",
+    "published_date": "1673403451",
+    "tags": [
+      "festivals",
+      "longform"
+    ]
+  },
+  {
+    "canonical_id": "mention_blog_0116",
+    "source_identifier": "https://screen-anarchy-archive.example.com/2019/06/satantango",
+    "subject_movie": "m_satantango",
+    "subject_person": null,
+    "text_excerpt": "There's a moment in Satantango, about 47 minutes in, where the camera holds on Paul Thomas Anderson's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlo",
+    "sentiment": "positive",
+    "url": "https://screen-anarchy-archive.example.com/2019/06/satantango",
+    "author": "Owen Hewitt",
+    "headline": "Satantango review: a flawed masterpiece",
+    "body_html_stripped": "There's a moment in Satantango, about 47 minutes in, where the camera holds on Paul Thomas Anderson's framing for what feels like an unreasonable amount of time. It's the kind of choice that either annoys you or unlocks the whole film. For this critic, it unlocks the whole film.",
+    "published_date": "2019-06-12",
+    "paywalled": false
+  },
+  {
+    "canonical_id": "mention_blog_0117",
+    "source_identifier": "https://filmschoolrejects-mirror.example.net/2019/07/petite-maman",
+    "subject_movie": "m_petitemaman",
+    "subject_person": "p_tarantino",
+    "text_excerpt": "Quentin Tarantino has always made films about loneliness. Petite Maman extends that preoccupation to its logical, devastating endpoint.",
+    "sentiment": null,
+    "url": "https://filmschoolrejects-mirror.example.net/2019/07/petite-maman",
+    "author": "F. Beaumont",
+    "headline": "Re-evaluating Petite Maman ten years on",
+    "body_html_stripped": "Quentin Tarantino has always made films about loneliness. Petite Maman extends that preoccupation to its logical, devastating endpoint.",
+    "published_date": "1623625879",
+    "external_links": [
+      "https://imdb.com/title/tt7652018",
+      "https://letterboxd.com/film/petite-maman"
+    ],
+    "score_out_of_10": "N/A",
+    "word_count": 1804
+  }
+]

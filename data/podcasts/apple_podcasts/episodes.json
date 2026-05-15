@@ -1,0 +1,2093 @@
+[
+  {
+    "canonical_id": "ep_jre_2120",
+    "source_identifier": "apple:ep:5210367216",
+    "podcast": "pod_jre",
+    "episode_number": 2120,
+    "title": "Andrew Huberman",
+    "air_date": "2024-03-12",
+    "duration_minutes": 178,
+    "apple_id": 5210367216,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2120/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2099",
+    "source_identifier": "apple:ep:2554709331",
+    "podcast": "pod_jre",
+    "episode_number": 2099,
+    "title": "Elon Musk",
+    "air_date": "2024-02-06",
+    "duration_minutes": 191,
+    "apple_id": 2554709331,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2099/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2050",
+    "source_identifier": "apple:ep:2042408043",
+    "podcast": "pod_jre",
+    "episode_number": 2050,
+    "title": "Neil deGrasse Tyson",
+    "air_date": "2023-11-21",
+    "duration_minutes": 165,
+    "apple_id": 2042408043,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2050/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2008",
+    "source_identifier": "apple:ep:1947484241",
+    "podcast": "pod_jre",
+    "episode_number": 2008,
+    "title": "Sam Altman",
+    "air_date": "2023-09-05",
+    "duration_minutes": 142,
+    "apple_id": 1947484241,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2008/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_1999",
+    "source_identifier": "apple:ep:1374497839",
+    "podcast": "pod_jre",
+    "episode_number": 1999,
+    "title": "Dave Chappelle",
+    "air_date": "2023-08-22",
+    "duration_minutes": 156,
+    "apple_id": 1374497839,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_1999/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_812",
+    "source_identifier": "apple:ep:1024585449",
+    "podcast": "pod_tal",
+    "episode_number": 812,
+    "title": "The Other Mr. President",
+    "air_date": "2024-01-19",
+    "duration_minutes": 60,
+    "apple_id": 1024585449,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_812/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_805",
+    "source_identifier": "apple:ep:3032452744",
+    "podcast": "pod_tal",
+    "episode_number": 805,
+    "title": "Got You",
+    "air_date": "2023-11-10",
+    "duration_minutes": 59,
+    "apple_id": 3032452744,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_805/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_797",
+    "source_identifier": "apple:ep:5090240198",
+    "podcast": "pod_tal",
+    "episode_number": 797,
+    "title": "The Pink House at the Center of the World",
+    "air_date": "2023-08-25",
+    "duration_minutes": 62,
+    "apple_id": 5090240198,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_797/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_790",
+    "source_identifier": "apple:ep:3768998618",
+    "podcast": "pod_tal",
+    "episode_number": 790,
+    "title": "Beach Lawyer",
+    "air_date": "2023-07-07",
+    "duration_minutes": 60,
+    "apple_id": 3768998618,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_790/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_serial_s4e1",
+    "source_identifier": "apple:ep:3087331132",
+    "podcast": "pod_serial",
+    "episode_number": 1,
+    "title": "The System Inside the System",
+    "air_date": "2024-03-28",
+    "duration_minutes": 47,
+    "apple_id": 3087331132,
+    "feed_url": "https://feeds.example.com/serial.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_serial_s4e1/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_serial_s4e2",
+    "source_identifier": "apple:ep:5181261691",
+    "podcast": "pod_serial",
+    "episode_number": 2,
+    "title": "It Could Happen to Anyone",
+    "air_date": "2024-04-04",
+    "duration_minutes": 51,
+    "apple_id": 5181261691,
+    "feed_url": "https://feeds.example.com/serial.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_serial_s4e2/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_radiolab_dust",
+    "source_identifier": "apple:ep:1878660511",
+    "podcast": "pod_radiolab",
+    "episode_number": null,
+    "title": "Dust",
+    "air_date": "2024-02-09",
+    "duration_minutes": 38,
+    "apple_id": 1878660511,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_radiolab_dust/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_radiolab_swimmer",
+    "source_identifier": "apple:ep:1903989700",
+    "podcast": "pod_radiolab",
+    "episode_number": null,
+    "title": "The Marathon Swimmer",
+    "air_date": "2024-01-12",
+    "duration_minutes": 44,
+    "apple_id": 1903989700,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_radiolab_swimmer/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_radiolab_smarty",
+    "source_identifier": "apple:ep:1482996412",
+    "podcast": "pod_radiolab",
+    "episode_number": null,
+    "title": "Smarty Plants",
+    "air_date": "2023-11-17",
+    "duration_minutes": 41,
+    "apple_id": 1482996412,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_radiolab_smarty/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_daily_240115",
+    "source_identifier": "apple:ep:4787355411",
+    "podcast": "pod_daily",
+    "episode_number": null,
+    "title": "The Headlines: Week of Jan 15",
+    "air_date": "2024-01-15",
+    "duration_minutes": 28,
+    "apple_id": 4787355411,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_daily_240115/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_daily_240201",
+    "source_identifier": "apple:ep:2180446883",
+    "podcast": "pod_daily",
+    "episode_number": null,
+    "title": "A New Front in the A.I. Boom",
+    "air_date": "2024-02-01",
+    "duration_minutes": 31,
+    "apple_id": 2180446883,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_daily_240201/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_daily_240220",
+    "source_identifier": "apple:ep:4048994744",
+    "podcast": "pod_daily",
+    "episode_number": null,
+    "title": "The Cease-Fire Vote at the U.N.",
+    "air_date": "2024-02-20",
+    "duration_minutes": 27,
+    "apple_id": 4048994744,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_daily_240220/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_smartless_obama",
+    "source_identifier": "apple:ep:1008241424",
+    "podcast": "pod_smartless",
+    "episode_number": null,
+    "title": "Barack Obama",
+    "air_date": "2023-11-13",
+    "duration_minutes": 75,
+    "apple_id": 1008241424,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_smartless_obama/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_smartless_selena",
+    "source_identifier": "apple:ep:3528584401",
+    "podcast": "pod_smartless",
+    "episode_number": null,
+    "title": "Selena Gomez",
+    "air_date": "2024-02-12",
+    "duration_minutes": 68,
+    "apple_id": 3528584401,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_smartless_selena/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_smartless_hader",
+    "source_identifier": "apple:ep:4348939743",
+    "podcast": "pod_smartless",
+    "episode_number": null,
+    "title": "Bill Hader",
+    "air_date": "2024-03-25",
+    "duration_minutes": 72,
+    "apple_id": 4348939743,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_smartless_hader/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_freshair_pinker",
+    "source_identifier": "apple:ep:4853721973",
+    "podcast": "pod_freshair",
+    "episode_number": null,
+    "title": "Steven Pinker on Rationality",
+    "air_date": "2023-09-15",
+    "duration_minutes": 45,
+    "apple_id": 4853721973,
+    "feed_url": "https://feeds.example.com/freshair.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_freshair_pinker/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_freshair_dawkins",
+    "source_identifier": "apple:ep:1068530007",
+    "podcast": "pod_freshair",
+    "episode_number": null,
+    "title": "Richard Dawkins on Evolution",
+    "air_date": "2023-10-20",
+    "duration_minutes": 47,
+    "apple_id": 1068530007,
+    "feed_url": "https://feeds.example.com/freshair.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_freshair_dawkins/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_hardcore_60",
+    "source_identifier": "apple:ep:4834081757",
+    "podcast": "pod_hardcore",
+    "episode_number": 60,
+    "title": "Twilight of the Aesir I",
+    "air_date": "2023-12-22",
+    "duration_minutes": 312,
+    "apple_id": 4834081757,
+    "feed_url": "https://feeds.example.com/hardcore.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_hardcore_60/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_hardcore_59",
+    "source_identifier": "apple:ep:1763301729",
+    "podcast": "pod_hardcore",
+    "episode_number": 59,
+    "title": "The Celtic Holocaust",
+    "air_date": "2023-04-15",
+    "duration_minutes": 285,
+    "apple_id": 1763301729,
+    "feed_url": "https://feeds.example.com/hardcore.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_hardcore_59/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_410",
+    "source_identifier": "apple:ep:1655149901",
+    "podcast": "pod_lex",
+    "episode_number": 410,
+    "title": "Geoffrey Hinton: AI and the Future of Humanity",
+    "air_date": "2024-01-08",
+    "duration_minutes": 218,
+    "apple_id": 1655149901,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_410/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_405",
+    "source_identifier": "apple:ep:3021191719",
+    "podcast": "pod_lex",
+    "episode_number": 405,
+    "title": "Yann LeCun: Open Source AI",
+    "air_date": "2023-12-15",
+    "duration_minutes": 198,
+    "apple_id": 3021191719,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_405/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_398",
+    "source_identifier": "apple:ep:3839090145",
+    "podcast": "pod_lex",
+    "episode_number": 398,
+    "title": "Andrej Karpathy: Software 2.0",
+    "air_date": "2023-11-09",
+    "duration_minutes": 240,
+    "apple_id": 3839090145,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_398/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_388",
+    "source_identifier": "apple:ep:5152878599",
+    "podcast": "pod_lex",
+    "episode_number": 388,
+    "title": "Sam Altman: OpenAI",
+    "air_date": "2023-09-23",
+    "duration_minutes": 195,
+    "apple_id": 5152878599,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_388/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_372",
+    "source_identifier": "apple:ep:3427919628",
+    "podcast": "pod_lex",
+    "episode_number": 372,
+    "title": "Mark Zuckerberg: Meta and the Metaverse",
+    "air_date": "2023-06-08",
+    "duration_minutes": 202,
+    "apple_id": 3427919628,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_372/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_acquired_nvidia",
+    "source_identifier": "apple:ep:1897254485",
+    "podcast": "pod_acquired",
+    "episode_number": null,
+    "title": "Nvidia, Part III: The Dawn of the AI Era",
+    "air_date": "2023-09-06",
+    "duration_minutes": 257,
+    "apple_id": 1897254485,
+    "feed_url": "https://feeds.example.com/acquired.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_acquired_nvidia/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_acquired_lvmh",
+    "source_identifier": "apple:ep:3409559020",
+    "podcast": "pod_acquired",
+    "episode_number": null,
+    "title": "LVMH",
+    "air_date": "2024-01-22",
+    "duration_minutes": 240,
+    "apple_id": 3409559020,
+    "feed_url": "https://feeds.example.com/acquired.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_acquired_lvmh/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_acquired_costco",
+    "source_identifier": "apple:ep:4663605663",
+    "podcast": "pod_acquired",
+    "episode_number": null,
+    "title": "Costco",
+    "air_date": "2024-02-26",
+    "duration_minutes": 238,
+    "apple_id": 4663605663,
+    "feed_url": "https://feeds.example.com/acquired.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_acquired_costco/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ezra_klein_thiel",
+    "source_identifier": "apple:ep:1886705579",
+    "podcast": "pod_ezra",
+    "episode_number": null,
+    "title": "Peter Thiel on the End of the Future",
+    "air_date": "2024-01-12",
+    "duration_minutes": 73,
+    "apple_id": 1886705579,
+    "feed_url": "https://feeds.example.com/ezra.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ezra_klein_thiel/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ezra_klein_ai",
+    "source_identifier": "apple:ep:4097753516",
+    "podcast": "pod_ezra",
+    "episode_number": null,
+    "title": "What I Think About the A.I. Debate Now",
+    "air_date": "2024-03-08",
+    "duration_minutes": 65,
+    "apple_id": 4097753516,
+    "feed_url": "https://feeds.example.com/ezra.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ezra_klein_ai/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_99pi_504",
+    "source_identifier": "apple:ep:2696929996",
+    "podcast": "pod_99pi",
+    "episode_number": 504,
+    "title": "The Country of the Blind",
+    "air_date": "2024-01-30",
+    "duration_minutes": 36,
+    "apple_id": 2696929996,
+    "feed_url": "https://feeds.example.com/99pi.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_99pi_504/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_99pi_510",
+    "source_identifier": "apple:ep:4378241988",
+    "podcast": "pod_99pi",
+    "episode_number": 510,
+    "title": "The Doors of Dudley",
+    "air_date": "2024-03-12",
+    "duration_minutes": 32,
+    "apple_id": 4378241988,
+    "feed_url": "https://feeds.example.com/99pi.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_99pi_510/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_99pi_488",
+    "source_identifier": "apple:ep:1843539606",
+    "podcast": "pod_99pi",
+    "episode_number": 488,
+    "title": "The Future of the Sea",
+    "air_date": "2023-10-03",
+    "duration_minutes": 39,
+    "apple_id": 1843539606,
+    "feed_url": "https://feeds.example.com/99pi.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_99pi_488/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_replyall_185",
+    "source_identifier": "apple:ep:3696501680",
+    "podcast": "pod_replyall",
+    "episode_number": 185,
+    "title": "The Real World",
+    "air_date": "2022-05-12",
+    "duration_minutes": 58,
+    "apple_id": 3696501680,
+    "feed_url": "https://feeds.example.com/replyall.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_replyall_185/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_replyall_158",
+    "source_identifier": "apple:ep:5040228031",
+    "podcast": "pod_replyall",
+    "episode_number": 158,
+    "title": "The Case of the Missing Hit",
+    "air_date": "2020-02-13",
+    "duration_minutes": 54,
+    "apple_id": 5040228031,
+    "feed_url": "https://feeds.example.com/replyall.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_replyall_158/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_stown_1",
+    "source_identifier": "apple:ep:1234658626",
+    "podcast": "pod_stown",
+    "episode_number": 1,
+    "title": "Chapter I: If You Keep Your Mouth Shut",
+    "air_date": "2017-03-28",
+    "duration_minutes": 60,
+    "apple_id": 1234658626,
+    "feed_url": "https://feeds.example.com/stown.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_stown_1/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_stown_2",
+    "source_identifier": "apple:ep:1399966986",
+    "podcast": "pod_stown",
+    "episode_number": 2,
+    "title": "Chapter II: Town with No Cheer",
+    "air_date": "2017-03-28",
+    "duration_minutes": 56,
+    "apple_id": 1399966986,
+    "feed_url": "https://feeds.example.com/stown.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_stown_2/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_inthedark_s3e1",
+    "source_identifier": "apple:ep:1166808936",
+    "podcast": "pod_inthedark",
+    "episode_number": 1,
+    "title": "An American Outpost",
+    "air_date": "2024-04-10",
+    "duration_minutes": 52,
+    "apple_id": 1166808936,
+    "feed_url": "https://feeds.example.com/inthedark.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_inthedark_s3e1/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_inthedark_s3e2",
+    "source_identifier": "apple:ep:4818084372",
+    "podcast": "pod_inthedark",
+    "episode_number": 2,
+    "title": "The Last to Hear",
+    "air_date": "2024-04-17",
+    "duration_minutes": 49,
+    "apple_id": 4818084372,
+    "feed_url": "https://feeds.example.com/inthedark.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_inthedark_s3e2/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_bearbrook_s2e1",
+    "source_identifier": "apple:ep:4788646457",
+    "podcast": "pod_bearbrook",
+    "episode_number": 1,
+    "title": "The DNA Hunter",
+    "air_date": "2022-06-21",
+    "duration_minutes": 35,
+    "apple_id": 4788646457,
+    "feed_url": "https://feeds.example.com/bearbrook.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_bearbrook_s2e1/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_bearbrook_s2e2",
+    "source_identifier": "apple:ep:4706109028",
+    "podcast": "pod_bearbrook",
+    "episode_number": 2,
+    "title": "The Trial",
+    "air_date": "2022-06-28",
+    "duration_minutes": 38,
+    "apple_id": 4706109028,
+    "feed_url": "https://feeds.example.com/bearbrook.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_bearbrook_s2e2/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_vergecast_240315",
+    "source_identifier": "apple:ep:1630339028",
+    "podcast": "pod_vergecast",
+    "episode_number": null,
+    "title": "Apple's Vision Pro Reality Check",
+    "air_date": "2024-03-15",
+    "duration_minutes": 84,
+    "apple_id": 1630339028,
+    "feed_url": "https://feeds.example.com/vergecast.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_vergecast_240315/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_vergecast_240208",
+    "source_identifier": "apple:ep:2054885986",
+    "podcast": "pod_vergecast",
+    "episode_number": null,
+    "title": "Open Source AI and the Future of Phones",
+    "air_date": "2024-02-08",
+    "duration_minutes": 79,
+    "apple_id": 2054885986,
+    "feed_url": "https://feeds.example.com/vergecast.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_vergecast_240208/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_decoder_huang",
+    "source_identifier": "apple:ep:3577385673",
+    "podcast": "pod_decoder",
+    "episode_number": null,
+    "title": "Jensen Huang on the AI Revolution",
+    "air_date": "2024-03-25",
+    "duration_minutes": 65,
+    "apple_id": 3577385673,
+    "feed_url": "https://feeds.example.com/decoder.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_decoder_huang/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_decoder_chesky",
+    "source_identifier": "apple:ep:1781863431",
+    "podcast": "pod_decoder",
+    "episode_number": null,
+    "title": "Brian Chesky on rebuilding Airbnb",
+    "air_date": "2023-10-09",
+    "duration_minutes": 73,
+    "apple_id": 1781863431,
+    "feed_url": "https://feeds.example.com/decoder.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_decoder_chesky/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_armchair_obama",
+    "source_identifier": "apple:ep:1216889095",
+    "podcast": "pod_armchair",
+    "episode_number": null,
+    "title": "Barack Obama",
+    "air_date": "2020-11-30",
+    "duration_minutes": 105,
+    "apple_id": 1216889095,
+    "feed_url": "https://feeds.example.com/armchair.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_armchair_obama/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_armchair_reynolds",
+    "source_identifier": "apple:ep:5023915144",
+    "podcast": "pod_armchair",
+    "episode_number": null,
+    "title": "Ryan Reynolds",
+    "air_date": "2024-02-19",
+    "duration_minutes": 98,
+    "apple_id": 5023915144,
+    "feed_url": "https://feeds.example.com/armchair.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_armchair_reynolds/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_huberman_sleep",
+    "source_identifier": "apple:ep:1287684632",
+    "podcast": "pod_huberman",
+    "episode_number": 87,
+    "title": "Toolkit for Sleep",
+    "air_date": "2022-04-04",
+    "duration_minutes": 89,
+    "apple_id": 1287684632,
+    "feed_url": "https://feeds.example.com/huberman.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_huberman_sleep/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_huberman_attia",
+    "source_identifier": "apple:ep:4138766412",
+    "podcast": "pod_huberman",
+    "episode_number": 102,
+    "title": "Dr. Peter Attia: Improve Longevity",
+    "air_date": "2022-07-25",
+    "duration_minutes": 156,
+    "apple_id": 4138766412,
+    "feed_url": "https://feeds.example.com/huberman.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_huberman_attia/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_pivot_240301",
+    "source_identifier": "apple:ep:1126720357",
+    "podcast": "pod_pivot",
+    "episode_number": null,
+    "title": "Apple's Antitrust Reckoning",
+    "air_date": "2024-03-01",
+    "duration_minutes": 62,
+    "apple_id": 1126720357,
+    "feed_url": "https://feeds.example.com/pivot.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_pivot_240301/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_pivot_240315",
+    "source_identifier": "apple:ep:4119400177",
+    "podcast": "pod_pivot",
+    "episode_number": null,
+    "title": "TikTok on the Brink",
+    "air_date": "2024-03-15",
+    "duration_minutes": 58,
+    "apple_id": 4119400177,
+    "feed_url": "https://feeds.example.com/pivot.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_pivot_240315/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_planetmoney_1700",
+    "source_identifier": "apple:ep:4967675818",
+    "podcast": "pod_planetmoney",
+    "episode_number": 1700,
+    "title": "How the FDIC Made Bank Runs Less Scary",
+    "air_date": "2024-03-15",
+    "duration_minutes": 26,
+    "apple_id": 4967675818,
+    "feed_url": "https://feeds.example.com/planetmoney.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_planetmoney_1700/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_planetmoney_1689",
+    "source_identifier": "apple:ep:3537449588",
+    "podcast": "pod_planetmoney",
+    "episode_number": 1689,
+    "title": "The Two Companies Powering AI",
+    "air_date": "2024-02-14",
+    "duration_minutes": 28,
+    "apple_id": 3537449588,
+    "feed_url": "https://feeds.example.com/planetmoney.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_planetmoney_1689/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_revisionist_s8e1",
+    "source_identifier": "apple:ep:1028124098",
+    "podcast": "pod_revisionist",
+    "episode_number": 1,
+    "title": "Lord of the Rankings",
+    "air_date": "2023-06-15",
+    "duration_minutes": 39,
+    "apple_id": 1028124098,
+    "feed_url": "https://feeds.example.com/revisionist.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_revisionist_s8e1/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_normgossip_office",
+    "source_identifier": "apple:ep:4435033594",
+    "podcast": "pod_normgossip",
+    "episode_number": null,
+    "title": "Office Politics Gone Wild",
+    "air_date": "2024-02-13",
+    "duration_minutes": 42,
+    "apple_id": 4435033594,
+    "feed_url": "https://feeds.example.com/normgossip.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_normgossip_office/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_maintenance_bmi",
+    "source_identifier": "apple:ep:3954979487",
+    "podcast": "pod_maintenance",
+    "episode_number": null,
+    "title": "The Body Mass Index",
+    "air_date": "2021-11-30",
+    "duration_minutes": 64,
+    "apple_id": 3954979487,
+    "feed_url": "https://feeds.example.com/maintenance.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_maintenance_bmi/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_maintenance_keto",
+    "source_identifier": "apple:ep:4254029977",
+    "podcast": "pod_maintenance",
+    "episode_number": null,
+    "title": "The Keto Diet",
+    "air_date": "2022-03-15",
+    "duration_minutes": 71,
+    "apple_id": 4254029977,
+    "feed_url": "https://feeds.example.com/maintenance.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_maintenance_keto/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ifbooks_secret",
+    "source_identifier": "apple:ep:1213563152",
+    "podcast": "pod_ifbookspod",
+    "episode_number": null,
+    "title": "The Secret",
+    "air_date": "2023-04-25",
+    "duration_minutes": 76,
+    "apple_id": 1213563152,
+    "feed_url": "https://feeds.example.com/ifbookspod.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ifbooks_secret/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ifbooks_men",
+    "source_identifier": "apple:ep:1355919601",
+    "podcast": "pod_ifbookspod",
+    "episode_number": null,
+    "title": "Men Are from Mars, Women Are from Venus",
+    "air_date": "2023-08-29",
+    "duration_minutes": 69,
+    "apple_id": 1355919601,
+    "feed_url": "https://feeds.example.com/ifbookspod.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ifbooks_men/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_wtf_obama",
+    "source_identifier": "apple:ep:3513258346",
+    "podcast": "pod_search",
+    "episode_number": null,
+    "title": "Episode 613 - President Barack Obama",
+    "air_date": "2015-06-22",
+    "duration_minutes": 64,
+    "apple_id": 3513258346,
+    "feed_url": "https://feeds.example.com/search.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_wtf_obama/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2200",
+    "source_identifier": "apple:ep:1924316676",
+    "podcast": "pod_jre",
+    "episode_number": 2200,
+    "title": "Andrew Huberman Returns",
+    "air_date": "2024-07-09",
+    "duration_minutes": 174,
+    "apple_id": 1924316676,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2200/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2175",
+    "source_identifier": "apple:ep:2956804455",
+    "podcast": "pod_jre",
+    "episode_number": 2175,
+    "title": "Marc Andreessen",
+    "air_date": "2024-05-30",
+    "duration_minutes": 188,
+    "apple_id": 2956804455,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2175/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2150",
+    "source_identifier": "apple:ep:1602392442",
+    "podcast": "pod_jre",
+    "episode_number": 2150,
+    "title": "Jordan Peterson",
+    "air_date": "2024-04-18",
+    "duration_minutes": 195,
+    "apple_id": 1602392442,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2150/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_2080",
+    "source_identifier": "apple:ep:5059499967",
+    "podcast": "pod_jre",
+    "episode_number": 2080,
+    "title": "Sam Harris",
+    "air_date": "2024-01-09",
+    "duration_minutes": 162,
+    "apple_id": 5059499967,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_2080/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_1965",
+    "source_identifier": "apple:ep:2359776550",
+    "podcast": "pod_jre",
+    "episode_number": 1965,
+    "title": "Vitalik Buterin",
+    "air_date": "2023-06-12",
+    "duration_minutes": 148,
+    "apple_id": 2359776550,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_1965/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_jre_1900",
+    "source_identifier": "apple:ep:5229989151",
+    "podcast": "pod_jre",
+    "episode_number": 1900,
+    "title": "Mark Zuckerberg",
+    "air_date": "2022-08-25",
+    "duration_minutes": 145,
+    "apple_id": 5229989151,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_jre_1900/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_820",
+    "source_identifier": "apple:ep:4561869171",
+    "podcast": "pod_tal",
+    "episode_number": 820,
+    "title": "Ten Sessions",
+    "air_date": "2024-03-22",
+    "duration_minutes": 61,
+    "apple_id": 4561869171,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_820/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_815",
+    "source_identifier": "apple:ep:4362734640",
+    "podcast": "pod_tal",
+    "episode_number": 815,
+    "title": "The Run-Up",
+    "air_date": "2024-02-16",
+    "duration_minutes": 60,
+    "apple_id": 4362734640,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_815/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_tal_808",
+    "source_identifier": "apple:ep:4608027696",
+    "podcast": "pod_tal",
+    "episode_number": 808,
+    "title": "The Audacity",
+    "air_date": "2023-12-08",
+    "duration_minutes": 59,
+    "apple_id": 4608027696,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_tal_808/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_radiolab_oceans",
+    "source_identifier": "apple:ep:1777881736",
+    "podcast": "pod_radiolab",
+    "episode_number": null,
+    "title": "The Beauty Premium",
+    "air_date": "2024-03-15",
+    "duration_minutes": 42,
+    "apple_id": 1777881736,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_radiolab_oceans/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_radiolab_brain",
+    "source_identifier": "apple:ep:2909639285",
+    "podcast": "pod_radiolab",
+    "episode_number": null,
+    "title": "Mixed Feelings",
+    "air_date": "2024-04-12",
+    "duration_minutes": 40,
+    "apple_id": 2909639285,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_radiolab_brain/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_radiolab_color",
+    "source_identifier": "apple:ep:1073445578",
+    "podcast": "pod_radiolab",
+    "episode_number": null,
+    "title": "Colors",
+    "air_date": "2023-09-22",
+    "duration_minutes": 56,
+    "apple_id": 1073445578,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_radiolab_color/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_daily_240310",
+    "source_identifier": "apple:ep:2523440287",
+    "podcast": "pod_daily",
+    "episode_number": null,
+    "title": "The Sunday Read: 'My Goldendoodle'",
+    "air_date": "2024-03-10",
+    "duration_minutes": 36,
+    "apple_id": 2523440287,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_daily_240310/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_daily_240412",
+    "source_identifier": "apple:ep:1168870677",
+    "podcast": "pod_daily",
+    "episode_number": null,
+    "title": "How NPR Lost America's Trust",
+    "air_date": "2024-04-12",
+    "duration_minutes": 30,
+    "apple_id": 1168870677,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_daily_240412/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_daily_240502",
+    "source_identifier": "apple:ep:3052810561",
+    "podcast": "pod_daily",
+    "episode_number": null,
+    "title": "The Crackdown on Student Protesters",
+    "air_date": "2024-05-02",
+    "duration_minutes": 27,
+    "apple_id": 3052810561,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_daily_240502/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_smartless_chappelle",
+    "source_identifier": "apple:ep:1188167033",
+    "podcast": "pod_smartless",
+    "episode_number": null,
+    "title": "Dave Chappelle",
+    "air_date": "2023-12-04",
+    "duration_minutes": 78,
+    "apple_id": 1188167033,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_smartless_chappelle/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_smartless_obrien",
+    "source_identifier": "apple:ep:3177524201",
+    "podcast": "pod_smartless",
+    "episode_number": null,
+    "title": "Conan O'Brien",
+    "air_date": "2024-01-22",
+    "duration_minutes": 75,
+    "apple_id": 3177524201,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_smartless_obrien/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_smartless_ferrell",
+    "source_identifier": "apple:ep:2273823500",
+    "podcast": "pod_smartless",
+    "episode_number": null,
+    "title": "Will Ferrell",
+    "air_date": "2023-09-25",
+    "duration_minutes": 72,
+    "apple_id": 2273823500,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_smartless_ferrell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_freshair_grant",
+    "source_identifier": "apple:ep:2602647542",
+    "podcast": "pod_freshair",
+    "episode_number": null,
+    "title": "Adam Grant on Hidden Potential",
+    "air_date": "2023-10-30",
+    "duration_minutes": 44,
+    "apple_id": 2602647542,
+    "feed_url": "https://feeds.example.com/freshair.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_freshair_grant/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_freshair_brown",
+    "source_identifier": "apple:ep:3917192586",
+    "podcast": "pod_freshair",
+    "episode_number": null,
+    "title": "Brene Brown on Vulnerability",
+    "air_date": "2024-01-15",
+    "duration_minutes": 46,
+    "apple_id": 3917192586,
+    "feed_url": "https://feeds.example.com/freshair.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_freshair_brown/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_freshair_iger",
+    "source_identifier": "apple:ep:5051578381",
+    "podcast": "pod_freshair",
+    "episode_number": null,
+    "title": "Bob Iger on Disney's Future",
+    "air_date": "2024-04-08",
+    "duration_minutes": 48,
+    "apple_id": 5051578381,
+    "feed_url": "https://feeds.example.com/freshair.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_freshair_iger/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_hardcore_58",
+    "source_identifier": "apple:ep:3917851017",
+    "podcast": "pod_hardcore",
+    "episode_number": 58,
+    "title": "Kings of Kings III",
+    "air_date": "2022-08-20",
+    "duration_minutes": 295,
+    "apple_id": 3917851017,
+    "feed_url": "https://feeds.example.com/hardcore.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_hardcore_58/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_hardcore_57",
+    "source_identifier": "apple:ep:2624385487",
+    "podcast": "pod_hardcore",
+    "episode_number": 57,
+    "title": "Supernova in the East VI",
+    "air_date": "2021-11-30",
+    "duration_minutes": 320,
+    "apple_id": 2624385487,
+    "feed_url": "https://feeds.example.com/hardcore.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_hardcore_57/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_420",
+    "source_identifier": "apple:ep:3323408082",
+    "podcast": "pod_lex",
+    "episode_number": 420,
+    "title": "Andrew Ng: Advice on Building AI Startups",
+    "air_date": "2024-02-29",
+    "duration_minutes": 175,
+    "apple_id": 3323408082,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_420/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_415",
+    "source_identifier": "apple:ep:3892859446",
+    "podcast": "pod_lex",
+    "episode_number": 415,
+    "title": "Tim Cook: Apple, Privacy and AI",
+    "air_date": "2024-01-30",
+    "duration_minutes": 192,
+    "apple_id": 3892859446,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_415/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_355",
+    "source_identifier": "apple:ep:4641111389",
+    "podcast": "pod_lex",
+    "episode_number": 355,
+    "title": "Elon Musk: SpaceX, Mars",
+    "air_date": "2023-02-08",
+    "duration_minutes": 215,
+    "apple_id": 4641111389,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_355/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_lex_330",
+    "source_identifier": "apple:ep:4694173265",
+    "podcast": "pod_lex",
+    "episode_number": 330,
+    "title": "Yann LeCun: Dark Matter of Intelligence",
+    "air_date": "2022-10-12",
+    "duration_minutes": 198,
+    "apple_id": 4694173265,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_lex_330/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_acquired_microsoft",
+    "source_identifier": "apple:ep:1792800639",
+    "podcast": "pod_acquired",
+    "episode_number": null,
+    "title": "Microsoft Part I",
+    "air_date": "2024-03-12",
+    "duration_minutes": 244,
+    "apple_id": 1792800639,
+    "feed_url": "https://feeds.example.com/acquired.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_acquired_microsoft/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_acquired_visa",
+    "source_identifier": "apple:ep:4386684157",
+    "podcast": "pod_acquired",
+    "episode_number": null,
+    "title": "Visa",
+    "air_date": "2023-12-04",
+    "duration_minutes": 251,
+    "apple_id": 4386684157,
+    "feed_url": "https://feeds.example.com/acquired.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_acquired_visa/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ezra_haidt",
+    "source_identifier": "apple:ep:4409602493",
+    "podcast": "pod_ezra",
+    "episode_number": null,
+    "title": "Jonathan Haidt on the Anxious Generation",
+    "air_date": "2024-04-02",
+    "duration_minutes": 71,
+    "apple_id": 4409602493,
+    "feed_url": "https://feeds.example.com/ezra.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ezra_haidt/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ezra_lewis",
+    "source_identifier": "apple:ep:2851031957",
+    "podcast": "pod_ezra",
+    "episode_number": null,
+    "title": "Michael Lewis on SBF",
+    "air_date": "2023-10-06",
+    "duration_minutes": 68,
+    "apple_id": 2851031957,
+    "feed_url": "https://feeds.example.com/ezra.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ezra_lewis/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_99pi_512",
+    "source_identifier": "apple:ep:5193191303",
+    "podcast": "pod_99pi",
+    "episode_number": 512,
+    "title": "The Real Book",
+    "air_date": "2024-03-26",
+    "duration_minutes": 38,
+    "apple_id": 5193191303,
+    "feed_url": "https://feeds.example.com/99pi.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_99pi_512/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_99pi_500",
+    "source_identifier": "apple:ep:1588205683",
+    "podcast": "pod_99pi",
+    "episode_number": 500,
+    "title": "500: An Update on The Show",
+    "air_date": "2023-12-12",
+    "duration_minutes": 31,
+    "apple_id": 1588205683,
+    "feed_url": "https://feeds.example.com/99pi.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_99pi_500/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_replyall_171",
+    "source_identifier": "apple:ep:2694292386",
+    "podcast": "pod_replyall",
+    "episode_number": 171,
+    "title": "Account Suspended",
+    "air_date": "2020-12-17",
+    "duration_minutes": 49,
+    "apple_id": 2694292386,
+    "feed_url": "https://feeds.example.com/replyall.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_replyall_171/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_stown_3",
+    "source_identifier": "apple:ep:2947212419",
+    "podcast": "pod_stown",
+    "episode_number": 3,
+    "title": "Chapter III: Tedious and Brief",
+    "air_date": "2017-03-28",
+    "duration_minutes": 58,
+    "apple_id": 2947212419,
+    "feed_url": "https://feeds.example.com/stown.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_stown_3/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_stown_4",
+    "source_identifier": "apple:ep:2810342964",
+    "podcast": "pod_stown",
+    "episode_number": 4,
+    "title": "Chapter IV: One Big Lifeboat",
+    "air_date": "2017-03-28",
+    "duration_minutes": 63,
+    "apple_id": 2810342964,
+    "feed_url": "https://feeds.example.com/stown.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_stown_4/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_inthedark_s3e3",
+    "source_identifier": "apple:ep:1037962144",
+    "podcast": "pod_inthedark",
+    "episode_number": 3,
+    "title": "Inheritance",
+    "air_date": "2024-04-24",
+    "duration_minutes": 51,
+    "apple_id": 1037962144,
+    "feed_url": "https://feeds.example.com/inthedark.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_inthedark_s3e3/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_bearbrook_s2e3",
+    "source_identifier": "apple:ep:4209507924",
+    "podcast": "pod_bearbrook",
+    "episode_number": 3,
+    "title": "The Confession",
+    "air_date": "2022-07-05",
+    "duration_minutes": 36,
+    "apple_id": 4209507924,
+    "feed_url": "https://feeds.example.com/bearbrook.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_bearbrook_s2e3/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_vergecast_240501",
+    "source_identifier": "apple:ep:3242478452",
+    "podcast": "pod_vergecast",
+    "episode_number": null,
+    "title": "AI Phones, AI PCs",
+    "air_date": "2024-05-01",
+    "duration_minutes": 81,
+    "apple_id": 3242478452,
+    "feed_url": "https://feeds.example.com/vergecast.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_vergecast_240501/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_decoder_pichai",
+    "source_identifier": "apple:ep:2219011327",
+    "podcast": "pod_decoder",
+    "episode_number": null,
+    "title": "Sundar Pichai on the Future of Google",
+    "air_date": "2024-01-15",
+    "duration_minutes": 70,
+    "apple_id": 2219011327,
+    "feed_url": "https://feeds.example.com/decoder.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_decoder_pichai/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_decoder_fadell",
+    "source_identifier": "apple:ep:2271442190",
+    "podcast": "pod_decoder",
+    "episode_number": null,
+    "title": "Tony Fadell on Building Nest",
+    "air_date": "2023-05-22",
+    "duration_minutes": 66,
+    "apple_id": 2271442190,
+    "feed_url": "https://feeds.example.com/decoder.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_decoder_fadell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_armchair_grant",
+    "source_identifier": "apple:ep:4302890362",
+    "podcast": "pod_armchair",
+    "episode_number": null,
+    "title": "Adam Grant",
+    "air_date": "2023-08-10",
+    "duration_minutes": 92,
+    "apple_id": 4302890362,
+    "feed_url": "https://feeds.example.com/armchair.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_armchair_grant/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_armchair_bell",
+    "source_identifier": "apple:ep:3560798791",
+    "podcast": "pod_armchair",
+    "episode_number": null,
+    "title": "Kristen Bell",
+    "air_date": "2024-01-29",
+    "duration_minutes": 88,
+    "apple_id": 3560798791,
+    "feed_url": "https://feeds.example.com/armchair.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_armchair_bell/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_huberman_dopamine",
+    "source_identifier": "apple:ep:4449823278",
+    "podcast": "pod_huberman",
+    "episode_number": 39,
+    "title": "Controlling Your Dopamine",
+    "air_date": "2021-09-27",
+    "duration_minutes": 119,
+    "apple_id": 4449823278,
+    "feed_url": "https://feeds.example.com/huberman.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_huberman_dopamine/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_huberman_focus",
+    "source_identifier": "apple:ep:1635039900",
+    "podcast": "pod_huberman",
+    "episode_number": 60,
+    "title": "Tools for Focus and Concentration",
+    "air_date": "2022-01-31",
+    "duration_minutes": 96,
+    "apple_id": 1635039900,
+    "feed_url": "https://feeds.example.com/huberman.rss",
+    "track_count": 2,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_huberman_focus/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_pivot_240412",
+    "source_identifier": "apple:ep:2766007090",
+    "podcast": "pod_pivot",
+    "episode_number": null,
+    "title": "Trump's Truth Social Mess",
+    "air_date": "2024-04-12",
+    "duration_minutes": 64,
+    "apple_id": 2766007090,
+    "feed_url": "https://feeds.example.com/pivot.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_pivot_240412/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_pivot_240501",
+    "source_identifier": "apple:ep:5111170367",
+    "podcast": "pod_pivot",
+    "episode_number": null,
+    "title": "Tesla Layoffs",
+    "air_date": "2024-05-01",
+    "duration_minutes": 60,
+    "apple_id": 5111170367,
+    "feed_url": "https://feeds.example.com/pivot.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_pivot_240501/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_planetmoney_1715",
+    "source_identifier": "apple:ep:4769298307",
+    "podcast": "pod_planetmoney",
+    "episode_number": 1715,
+    "title": "The Maine Lobster Crisis",
+    "air_date": "2024-04-26",
+    "duration_minutes": 25,
+    "apple_id": 4769298307,
+    "feed_url": "https://feeds.example.com/planetmoney.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_planetmoney_1715/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_revisionist_s8e3",
+    "source_identifier": "apple:ep:2208426181",
+    "podcast": "pod_revisionist",
+    "episode_number": 3,
+    "title": "The Imaginary Crimes of Margit Hamosh",
+    "air_date": "2023-07-13",
+    "duration_minutes": 41,
+    "apple_id": 2208426181,
+    "feed_url": "https://feeds.example.com/revisionist.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_revisionist_s8e3/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_uptofirst_240315",
+    "source_identifier": "apple:ep:1773276552",
+    "podcast": "pod_uptofirst",
+    "episode_number": null,
+    "title": "Friday, March 15, 2024",
+    "air_date": "2024-03-15",
+    "duration_minutes": 14,
+    "apple_id": 1773276552,
+    "feed_url": "https://feeds.example.com/uptofirst.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_uptofirst_240315/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_uptofirst_240502",
+    "source_identifier": "apple:ep:5067871640",
+    "podcast": "pod_uptofirst",
+    "episode_number": null,
+    "title": "Thursday, May 2, 2024",
+    "air_date": "2024-05-02",
+    "duration_minutes": 13,
+    "apple_id": 5067871640,
+    "feed_url": "https://feeds.example.com/uptofirst.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_uptofirst_240502/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_codeswitch_2402",
+    "source_identifier": "apple:ep:3803783935",
+    "podcast": "pod_codeswitch",
+    "episode_number": null,
+    "title": "What's in a Name?",
+    "air_date": "2024-02-21",
+    "duration_minutes": 32,
+    "apple_id": 3803783935,
+    "feed_url": "https://feeds.example.com/codeswitch.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_codeswitch_2402/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_codeswitch_2310",
+    "source_identifier": "apple:ep:3561236481",
+    "podcast": "pod_codeswitch",
+    "episode_number": null,
+    "title": "The Asian-American Vote",
+    "air_date": "2023-10-25",
+    "duration_minutes": 35,
+    "apple_id": 3561236481,
+    "feed_url": "https://feeds.example.com/codeswitch.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_codeswitch_2310/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_normgossip_party",
+    "source_identifier": "apple:ep:3701582080",
+    "podcast": "pod_normgossip",
+    "episode_number": null,
+    "title": "The Birthday Party Heist",
+    "air_date": "2024-04-09",
+    "duration_minutes": 44,
+    "apple_id": 3701582080,
+    "feed_url": "https://feeds.example.com/normgossip.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_normgossip_party/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_maintenance_pe",
+    "source_identifier": "apple:ep:5108068030",
+    "podcast": "pod_maintenance",
+    "episode_number": null,
+    "title": "The President's Physical",
+    "air_date": "2023-02-14",
+    "duration_minutes": 67,
+    "apple_id": 5108068030,
+    "feed_url": "https://feeds.example.com/maintenance.rss",
+    "track_count": 5,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_maintenance_pe/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_ifbooks_rules",
+    "source_identifier": "apple:ep:2500275667",
+    "podcast": "pod_ifbookspod",
+    "episode_number": null,
+    "title": "The Rules",
+    "air_date": "2024-02-13",
+    "duration_minutes": 73,
+    "apple_id": 2500275667,
+    "feed_url": "https://feeds.example.com/ifbookspod.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_ifbooks_rules/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_wtf_obrien",
+    "source_identifier": "apple:ep:1387881034",
+    "podcast": "pod_search",
+    "episode_number": null,
+    "title": "Episode 1300 - Conan O'Brien",
+    "air_date": "2022-03-14",
+    "duration_minutes": 78,
+    "apple_id": 1387881034,
+    "feed_url": "https://feeds.example.com/search.rss",
+    "track_count": 3,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_wtf_obrien/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_kara_musk",
+    "source_identifier": "apple:ep:1711430941",
+    "podcast": "pod_kara",
+    "episode_number": null,
+    "title": "Elon Musk on Free Speech & Twitter",
+    "air_date": "2023-04-06",
+    "duration_minutes": 58,
+    "apple_id": 1711430941,
+    "feed_url": "https://feeds.example.com/kara.rss",
+    "track_count": 4,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_kara_musk/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  },
+  {
+    "canonical_id": "ep_kara_altman",
+    "source_identifier": "apple:ep:3260186087",
+    "podcast": "pod_kara",
+    "episode_number": null,
+    "title": "Sam Altman and the AI Reckoning",
+    "air_date": "2024-01-25",
+    "duration_minutes": 54,
+    "apple_id": 3260186087,
+    "feed_url": "https://feeds.example.com/kara.rss",
+    "track_count": 1,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ep_kara_altman/300x300.jpg",
+    "genre_ids": [
+      1304
+    ]
+  }
+]

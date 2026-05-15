@@ -1,0 +1,512 @@
+[
+  {
+    "canonical_id": "pod_jre",
+    "source_identifier": "apple:9106185",
+    "title": "The Joe Rogan Experience",
+    "publisher": "Joe Rogan",
+    "language": "en-US",
+    "category": "Comedy",
+    "start_year": 2009,
+    "apple_id": 108106185,
+    "feed_url": "https://feeds.example.com/jre.rss",
+    "track_count": 421,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/jre/600x600.jpg",
+    "genre_ids": [
+      1303
+    ]
+  },
+  {
+    "canonical_id": "pod_tal",
+    "source_identifier": "apple:2478426",
+    "title": "This American Life",
+    "publisher": "WBEZ Chicago",
+    "language": "en-US",
+    "category": "Society & Culture",
+    "start_year": 1995,
+    "apple_id": 101478426,
+    "feed_url": "https://feeds.example.com/tal.rss",
+    "track_count": 250,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/tal/600x600.jpg",
+    "genre_ids": [
+      1324
+    ]
+  },
+  {
+    "canonical_id": "pod_serial",
+    "source_identifier": "apple:13794593",
+    "title": "Serial",
+    "publisher": "Serial Productions",
+    "language": "en-US",
+    "category": "True Crime",
+    "start_year": 2014,
+    "apple_id": 112794593,
+    "feed_url": "https://feeds.example.com/serial.rss",
+    "track_count": 397,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/serial/600x600.jpg",
+    "genre_ids": [
+      1488
+    ]
+  },
+  {
+    "canonical_id": "pod_radiolab",
+    "source_identifier": "apple:5797792",
+    "title": "Radiolab",
+    "publisher": "WNYC Studios",
+    "language": "en-US",
+    "category": "Science",
+    "start_year": 2002,
+    "apple_id": 104797792,
+    "feed_url": "https://feeds.example.com/radiolab.rss",
+    "track_count": 372,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/radiolab/600x600.jpg",
+    "genre_ids": [
+      1533
+    ]
+  },
+  {
+    "canonical_id": "pod_daily",
+    "source_identifier": "apple:1262258",
+    "title": "The Daily",
+    "publisher": "The New York Times",
+    "language": "en-US",
+    "category": "News",
+    "start_year": 2017,
+    "apple_id": 100262258,
+    "feed_url": "https://feeds.example.com/daily.rss",
+    "track_count": 1406,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/daily/600x600.jpg",
+    "genre_ids": [
+      1489
+    ]
+  },
+  {
+    "canonical_id": "pod_smartless",
+    "source_identifier": "apple:4457690",
+    "title": "SmartLess",
+    "publisher": "Wondery",
+    "language": "en-US",
+    "category": "Comedy",
+    "start_year": 2020,
+    "apple_id": 103457690,
+    "feed_url": "https://feeds.example.com/smartless.rss",
+    "track_count": 350,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/smartless/600x600.jpg",
+    "genre_ids": [
+      1303
+    ]
+  },
+  {
+    "canonical_id": "pod_freshair",
+    "source_identifier": "apple:15417252",
+    "title": "Fresh Air",
+    "publisher": "NPR",
+    "language": "en-US",
+    "category": "Society & Culture",
+    "start_year": 1985,
+    "apple_id": 114417252,
+    "feed_url": "https://feeds.example.com/freshair.rss",
+    "track_count": 532,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/freshair/600x600.jpg",
+    "genre_ids": [
+      1324
+    ]
+  },
+  {
+    "canonical_id": "pod_hardcore",
+    "source_identifier": "apple:6902738",
+    "title": "Hardcore History",
+    "publisher": "Dan Carlin",
+    "language": "en-US",
+    "category": "History",
+    "start_year": 2006,
+    "apple_id": 105902738,
+    "feed_url": "https://feeds.example.com/hardcore.rss",
+    "track_count": 1482,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/hardcore/600x600.jpg",
+    "genre_ids": [
+      1487
+    ]
+  },
+  {
+    "canonical_id": "pod_lex",
+    "source_identifier": "apple:6902663",
+    "title": "Lex Fridman Podcast",
+    "publisher": "Lex Fridman",
+    "language": "en-US",
+    "category": "Tech",
+    "start_year": 2018,
+    "apple_id": 105902663,
+    "feed_url": "https://feeds.example.com/lex.rss",
+    "track_count": 615,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/lex/600x600.jpg",
+    "genre_ids": [
+      1318
+    ]
+  },
+  {
+    "canonical_id": "pod_acquired",
+    "source_identifier": "apple:17667531",
+    "title": "Acquired",
+    "publisher": "Acquired LLC",
+    "language": "en-US",
+    "category": "Business",
+    "start_year": 2015,
+    "apple_id": 116667531,
+    "feed_url": "https://feeds.example.com/acquired.rss",
+    "track_count": 703,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/acquired/600x600.jpg",
+    "genre_ids": [
+      1321
+    ]
+  },
+  {
+    "canonical_id": "pod_ezra",
+    "source_identifier": "apple:13047019",
+    "title": "The Ezra Klein Show",
+    "publisher": "The New York Times",
+    "language": "en-US",
+    "category": "Society & Culture",
+    "start_year": 2018,
+    "apple_id": 112047019,
+    "feed_url": "https://feeds.example.com/ezra.rss",
+    "track_count": 731,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ezra/600x600.jpg",
+    "genre_ids": [
+      1324
+    ]
+  },
+  {
+    "canonical_id": "pod_99pi",
+    "source_identifier": "apple:1395317",
+    "title": "99% Invisible",
+    "publisher": "SiriusXM",
+    "language": "en-US",
+    "category": "Design",
+    "start_year": 2010,
+    "apple_id": 100395317,
+    "feed_url": "https://feeds.example.com/99pi.rss",
+    "track_count": 1033,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/99pi/600x600.jpg",
+    "genre_ids": [
+      1402
+    ]
+  },
+  {
+    "canonical_id": "pod_replyall",
+    "source_identifier": "apple:5626948",
+    "title": "Reply All",
+    "publisher": "Gimlet Media",
+    "language": "en-US",
+    "category": "Tech",
+    "start_year": 2014,
+    "apple_id": 104626948,
+    "feed_url": "https://feeds.example.com/replyall.rss",
+    "track_count": 1084,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/replyall/600x600.jpg",
+    "genre_ids": [
+      1318
+    ]
+  },
+  {
+    "canonical_id": "pod_stown",
+    "source_identifier": "apple:11759825",
+    "title": "S-Town",
+    "publisher": "Serial Productions",
+    "language": "en-US",
+    "category": "True Crime",
+    "start_year": 2017,
+    "apple_id": 110759825,
+    "feed_url": "https://feeds.example.com/stown.rss",
+    "track_count": 973,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/stown/600x600.jpg",
+    "genre_ids": [
+      1488
+    ]
+  },
+  {
+    "canonical_id": "pod_inthedark",
+    "source_identifier": "apple:13786345",
+    "title": "In the Dark",
+    "publisher": "American Public Media",
+    "language": "en-US",
+    "category": "True Crime",
+    "start_year": 2016,
+    "apple_id": 112786345,
+    "feed_url": "https://feeds.example.com/inthedark.rss",
+    "track_count": 1389,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/inthedark/600x600.jpg",
+    "genre_ids": [
+      1488
+    ]
+  },
+  {
+    "canonical_id": "pod_bearbrook",
+    "source_identifier": "apple:14041935",
+    "title": "Bear Brook",
+    "publisher": "New Hampshire Public Radio",
+    "language": "en-US",
+    "category": "True Crime",
+    "start_year": 2018,
+    "apple_id": 113041935,
+    "feed_url": "https://feeds.example.com/bearbrook.rss",
+    "track_count": 971,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/bearbrook/600x600.jpg",
+    "genre_ids": [
+      1488
+    ]
+  },
+  {
+    "canonical_id": "pod_vergecast",
+    "source_identifier": "apple:17741582",
+    "title": "The Vergecast",
+    "publisher": "The Verge",
+    "language": "en-US",
+    "category": "Tech",
+    "start_year": 2010,
+    "apple_id": 116741582,
+    "feed_url": "https://feeds.example.com/vergecast.rss",
+    "track_count": 1326,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/vergecast/600x600.jpg",
+    "genre_ids": [
+      1318
+    ]
+  },
+  {
+    "canonical_id": "pod_decoder",
+    "source_identifier": "apple:1664884",
+    "title": "Decoder with Nilay Patel",
+    "publisher": "The Verge",
+    "language": "en-US",
+    "category": "Tech",
+    "start_year": 2020,
+    "apple_id": 100664884,
+    "feed_url": "https://feeds.example.com/decoder.rss",
+    "track_count": 1080,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/decoder/600x600.jpg",
+    "genre_ids": [
+      1318
+    ]
+  },
+  {
+    "canonical_id": "pod_armchair",
+    "source_identifier": "apple:12335516",
+    "title": "Armchair Expert",
+    "publisher": "Armchair Umbrella",
+    "language": "en-US",
+    "category": "Comedy",
+    "start_year": 2018,
+    "apple_id": 111335516,
+    "feed_url": "https://feeds.example.com/armchair.rss",
+    "track_count": 504,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/armchair/600x600.jpg",
+    "genre_ids": [
+      1303
+    ]
+  },
+  {
+    "canonical_id": "pod_huberman",
+    "source_identifier": "apple:12984738",
+    "title": "Huberman Lab",
+    "publisher": "Scicomm Media",
+    "language": "en-US",
+    "category": "Health & Fitness",
+    "start_year": 2021,
+    "apple_id": 111984738,
+    "feed_url": "https://feeds.example.com/huberman.rss",
+    "track_count": 1594,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/huberman/600x600.jpg",
+    "genre_ids": [
+      1512
+    ]
+  },
+  {
+    "canonical_id": "pod_pivot",
+    "source_identifier": "apple:13581233",
+    "title": "Pivot",
+    "publisher": "New York Magazine",
+    "language": "en-US",
+    "category": "News",
+    "start_year": 2018,
+    "apple_id": 112581233,
+    "feed_url": "https://feeds.example.com/pivot.rss",
+    "track_count": 465,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/pivot/600x600.jpg",
+    "genre_ids": [
+      1489
+    ]
+  },
+  {
+    "canonical_id": "pod_planetmoney",
+    "source_identifier": "apple:16970137",
+    "title": "Planet Money",
+    "publisher": "NPR",
+    "language": "en-US",
+    "category": "Business",
+    "start_year": 2008,
+    "apple_id": 115970137,
+    "feed_url": "https://feeds.example.com/planetmoney.rss",
+    "track_count": 301,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/planetmoney/600x600.jpg",
+    "genre_ids": [
+      1321
+    ]
+  },
+  {
+    "canonical_id": "pod_revisionist",
+    "source_identifier": "apple:9374578",
+    "title": "Revisionist History",
+    "publisher": "Pushkin Industries",
+    "language": "en-US",
+    "category": "History",
+    "start_year": 2016,
+    "apple_id": 108374578,
+    "feed_url": "https://feeds.example.com/revisionist.rss",
+    "track_count": 1026,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/revisionist/600x600.jpg",
+    "genre_ids": [
+      1487
+    ]
+  },
+  {
+    "canonical_id": "pod_uptofirst",
+    "source_identifier": "apple:8079966",
+    "title": "Up First",
+    "publisher": "NPR",
+    "language": "en-US",
+    "category": "News",
+    "start_year": 2017,
+    "apple_id": 107079966,
+    "feed_url": "https://feeds.example.com/uptofirst.rss",
+    "track_count": 750,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/uptofirst/600x600.jpg",
+    "genre_ids": [
+      1489
+    ]
+  },
+  {
+    "canonical_id": "pod_codeswitch",
+    "source_identifier": "apple:14346439",
+    "title": "Code Switch",
+    "publisher": "NPR",
+    "language": "en-US",
+    "category": "Society & Culture",
+    "start_year": 2016,
+    "apple_id": 113346439,
+    "feed_url": "https://feeds.example.com/codeswitch.rss",
+    "track_count": 679,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/codeswitch/600x600.jpg",
+    "genre_ids": [
+      1324
+    ]
+  },
+  {
+    "canonical_id": "pod_kara",
+    "source_identifier": "apple:2126296",
+    "title": "On with Kara Swisher",
+    "publisher": "Vox Media",
+    "language": "en-US",
+    "category": "News",
+    "start_year": 2022,
+    "apple_id": 101126296,
+    "feed_url": "https://feeds.example.com/kara.rss",
+    "track_count": 1576,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/kara/600x600.jpg",
+    "genre_ids": [
+      1489
+    ]
+  },
+  {
+    "canonical_id": "pod_normgossip",
+    "source_identifier": "apple:4970083",
+    "title": "Normal Gossip",
+    "publisher": "Defector Media",
+    "language": "en-US",
+    "category": "Comedy",
+    "start_year": 2022,
+    "apple_id": 103970083,
+    "feed_url": "https://feeds.example.com/normgossip.rss",
+    "track_count": 783,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/normgossip/600x600.jpg",
+    "genre_ids": [
+      1303
+    ]
+  },
+  {
+    "canonical_id": "pod_maintenance",
+    "source_identifier": "apple:10699587",
+    "title": "Maintenance Phase",
+    "publisher": "Aubrey Gordon & Michael Hobbes",
+    "language": "en-US",
+    "category": "Health & Fitness",
+    "start_year": 2020,
+    "apple_id": 109699587,
+    "feed_url": "https://feeds.example.com/maintenance.rss",
+    "track_count": 207,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/maintenance/600x600.jpg",
+    "genre_ids": [
+      1512
+    ]
+  },
+  {
+    "canonical_id": "pod_ifbookspod",
+    "source_identifier": "apple:5691507",
+    "title": "If Books Could Kill",
+    "publisher": "Michael Hobbes & Peter Shamshiri",
+    "language": "en-US",
+    "category": "Society & Culture",
+    "start_year": 2022,
+    "apple_id": 104691507,
+    "feed_url": "https://feeds.example.com/ifbookspod.rss",
+    "track_count": 767,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/ifbookspod/600x600.jpg",
+    "genre_ids": [
+      1324
+    ]
+  },
+  {
+    "canonical_id": "pod_search",
+    "source_identifier": "apple:10241514",
+    "title": "WTF with Marc Maron",
+    "publisher": "Marc Maron",
+    "language": "en-US",
+    "category": "Comedy",
+    "start_year": 2009,
+    "apple_id": 109241514,
+    "feed_url": "https://feeds.example.com/search.rss",
+    "track_count": 1578,
+    "country": "USA",
+    "artwork_url": "https://is1-ssl.mzstatic.com/image/thumb/Podcasts/search/600x600.jpg",
+    "genre_ids": [
+      1303
+    ]
+  }
+]

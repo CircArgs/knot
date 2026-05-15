@@ -1,0 +1,1199 @@
+[
+  {
+    "canonical_id": "c_pulpfiction_d_tarantino",
+    "source_identifier": "pulp_fiction::quentin_tarantino::director",
+    "role": "director",
+    "movie": "m_pulpfiction",
+    "person": "p_tarantino",
+    "billing_position": 17,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_pulpfiction_w_tarantino",
+    "source_identifier": "pulp_fiction::quentin_tarantino::writer",
+    "role": "writer",
+    "movie": "m_pulpfiction",
+    "person": "p_tarantino",
+    "billing_position": 2,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_pulpfiction_w_avary",
+    "source_identifier": "pulp_fiction::roger_avary::writer",
+    "role": "writer",
+    "movie": "m_pulpfiction",
+    "person": "p_avary",
+    "billing_position": 13,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_pulpfiction_a_travolta",
+    "source_identifier": "pulp_fiction::john_travolta::actor",
+    "role": "actor",
+    "movie": "m_pulpfiction",
+    "person": "p_travolta",
+    "billing_position": 1,
+    "character_name": "Character 920"
+  },
+  {
+    "canonical_id": "c_pulpfiction_a_jackson",
+    "source_identifier": "pulp_fiction::samuel_l_jackson::actor",
+    "role": "actor",
+    "movie": "m_pulpfiction",
+    "person": "p_jackson_sl",
+    "billing_position": 5,
+    "character_name": "Character 106"
+  },
+  {
+    "canonical_id": "c_pulpfiction_a_thurman",
+    "source_identifier": "pulp_fiction::uma_thurman::actor",
+    "role": "actor",
+    "movie": "m_pulpfiction",
+    "person": "p_thurman",
+    "billing_position": 16,
+    "character_name": "Character 957"
+  },
+  {
+    "canonical_id": "c_pulpfiction_a_willis",
+    "source_identifier": "pulp_fiction::bruce_willis::actor",
+    "role": "actor",
+    "movie": "m_pulpfiction",
+    "person": "p_willis",
+    "billing_position": 11,
+    "character_name": "Character 401"
+  },
+  {
+    "canonical_id": "c_pulpfiction_a_keitel",
+    "source_identifier": "pulp_fiction::harvey_keitel::actor",
+    "role": "actor",
+    "movie": "m_pulpfiction",
+    "person": "p_keitel",
+    "billing_position": 2,
+    "character_name": "Character 300"
+  },
+  {
+    "canonical_id": "c_pulpfiction_dp_richardson",
+    "source_identifier": "pulp_fiction::robert_richardson::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_pulpfiction",
+    "person": "p_richardson",
+    "billing_position": 2,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_killbill1_d_tarantino",
+    "source_identifier": "kill_bill_vol_1::quentin_tarantino::director",
+    "role": "director",
+    "movie": "m_killbill1",
+    "person": "p_tarantino",
+    "billing_position": 11,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_killbill1_a_thurman",
+    "source_identifier": "kill_bill_vol_1::uma_thurman::actor",
+    "role": "actor",
+    "movie": "m_killbill1",
+    "person": "p_thurman",
+    "billing_position": 6,
+    "character_name": "Character 494"
+  },
+  {
+    "canonical_id": "c_inglourious_d_tarantino",
+    "source_identifier": "inglourious_basterds::quentin_tarantino::director",
+    "role": "director",
+    "movie": "m_inglourious",
+    "person": "p_tarantino",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_inglourious_a_pitt",
+    "source_identifier": "inglourious_basterds::brad_pitt::actor",
+    "role": "actor",
+    "movie": "m_inglourious",
+    "person": "p_pitt",
+    "billing_position": 8,
+    "character_name": "Character 019"
+  },
+  {
+    "canonical_id": "c_djangounchained_d_tarantino",
+    "source_identifier": "django_unchained::quentin_tarantino::director",
+    "role": "director",
+    "movie": "m_djangounchained",
+    "person": "p_tarantino",
+    "billing_position": 1,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_djangounchained_a_dicaprio",
+    "source_identifier": "django_unchained::leonardo_dicaprio::actor",
+    "role": "actor",
+    "movie": "m_djangounchained",
+    "person": "p_dicaprio",
+    "billing_position": 4,
+    "character_name": "Character 084"
+  },
+  {
+    "canonical_id": "c_djangounchained_a_jackson",
+    "source_identifier": "django_unchained::samuel_l_jackson::actor",
+    "role": "actor",
+    "movie": "m_djangounchained",
+    "person": "p_jackson_sl",
+    "billing_position": 18,
+    "character_name": "Character 070"
+  },
+  {
+    "canonical_id": "c_oncehollywood_d_tarantino",
+    "source_identifier": "once_upon_a_time_in_hollywood::quentin_tarantino::director",
+    "role": "director",
+    "movie": "m_oncehollywood",
+    "person": "p_tarantino",
+    "billing_position": 8,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_oncehollywood_a_dicaprio",
+    "source_identifier": "once_upon_a_time_in_hollywood::leonardo_dicaprio::actor",
+    "role": "actor",
+    "movie": "m_oncehollywood",
+    "person": "p_dicaprio",
+    "billing_position": 4,
+    "character_name": "Character 600"
+  },
+  {
+    "canonical_id": "c_oncehollywood_a_pitt",
+    "source_identifier": "once_upon_a_time_in_hollywood::brad_pitt::actor",
+    "role": "actor",
+    "movie": "m_oncehollywood",
+    "person": "p_pitt",
+    "billing_position": 19,
+    "character_name": "Character 556"
+  },
+  {
+    "canonical_id": "c_oncehollywood_a_robbie",
+    "source_identifier": "once_upon_a_time_in_hollywood::margot_robbie::actor",
+    "role": "actor",
+    "movie": "m_oncehollywood",
+    "person": "p_robbie",
+    "billing_position": 6,
+    "character_name": "Character 166"
+  },
+  {
+    "canonical_id": "c_oncehollywood_dp_richardson",
+    "source_identifier": "once_upon_a_time_in_hollywood::robert_richardson::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_oncehollywood",
+    "person": "p_richardson",
+    "billing_position": 13,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_sevensamurai_d_kurosawa",
+    "source_identifier": "seven_samurai::akira_kurosawa::director",
+    "role": "director",
+    "movie": "m_sevensamurai",
+    "person": "p_kurosawa",
+    "billing_position": 10,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_sevensamurai_a_mifune",
+    "source_identifier": "seven_samurai::toshiro_mifune::actor",
+    "role": "actor",
+    "movie": "m_sevensamurai",
+    "person": "p_mifune",
+    "billing_position": 2,
+    "character_name": "Character 227"
+  },
+  {
+    "canonical_id": "c_yojimbo_d_kurosawa",
+    "source_identifier": "yojimbo::akira_kurosawa::director",
+    "role": "director",
+    "movie": "m_yojimbo",
+    "person": "p_kurosawa",
+    "billing_position": 13,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_yojimbo_a_mifune",
+    "source_identifier": "yojimbo::toshiro_mifune::actor",
+    "role": "actor",
+    "movie": "m_yojimbo",
+    "person": "p_mifune",
+    "billing_position": 2,
+    "character_name": "Character 730"
+  },
+  {
+    "canonical_id": "c_totoro_d_miyazaki",
+    "source_identifier": "my_neighbor_totoro::hayao_miyazaki::director",
+    "role": "director",
+    "movie": "m_totoro",
+    "person": "p_miyazaki",
+    "billing_position": 3,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_totoro_co_hisaishi",
+    "source_identifier": "my_neighbor_totoro::joe_hisaishi::composer",
+    "role": "composer",
+    "movie": "m_totoro",
+    "person": "p_hisaishi",
+    "billing_position": 10,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_princessmononoke_d_miyazaki",
+    "source_identifier": "princess_mononoke::hayao_miyazaki::director",
+    "role": "director",
+    "movie": "m_princessmononoke",
+    "person": "p_miyazaki",
+    "billing_position": 4,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_princessmononoke_co_hisaishi",
+    "source_identifier": "princess_mononoke::joe_hisaishi::composer",
+    "role": "composer",
+    "movie": "m_princessmononoke",
+    "person": "p_hisaishi",
+    "billing_position": 15,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_goodfellas_d_scorsese",
+    "source_identifier": "goodfellas::martin_scorsese::director",
+    "role": "director",
+    "movie": "m_goodfellas",
+    "person": "p_scorsese",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_goodfellas_a_deniro",
+    "source_identifier": "goodfellas::robert_de_niro::actor",
+    "role": "actor",
+    "movie": "m_goodfellas",
+    "person": "p_deniro",
+    "billing_position": 1,
+    "character_name": "Character 192"
+  },
+  {
+    "canonical_id": "c_raginbull_d_scorsese",
+    "source_identifier": "raging_bull::martin_scorsese::director",
+    "role": "director",
+    "movie": "m_raginbull",
+    "person": "p_scorsese",
+    "billing_position": 16,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_raginbull_a_deniro",
+    "source_identifier": "raging_bull::robert_de_niro::actor",
+    "role": "actor",
+    "movie": "m_raginbull",
+    "person": "p_deniro",
+    "billing_position": 2,
+    "character_name": "Character 082"
+  },
+  {
+    "canonical_id": "c_wolfwallstreet_d_scorsese",
+    "source_identifier": "the_wolf_of_wall_street::martin_scorsese::director",
+    "role": "director",
+    "movie": "m_wolfwallstreet",
+    "person": "p_scorsese",
+    "billing_position": 5,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_wolfwallstreet_a_dicaprio",
+    "source_identifier": "the_wolf_of_wall_street::leonardo_dicaprio::actor",
+    "role": "actor",
+    "movie": "m_wolfwallstreet",
+    "person": "p_dicaprio",
+    "billing_position": 2,
+    "character_name": "Character 498"
+  },
+  {
+    "canonical_id": "c_wolfwallstreet_a_robbie",
+    "source_identifier": "the_wolf_of_wall_street::margot_robbie::actor",
+    "role": "actor",
+    "movie": "m_wolfwallstreet",
+    "person": "p_robbie",
+    "billing_position": 15,
+    "character_name": "Character 244"
+  },
+  {
+    "canonical_id": "c_killersmoon_d_scorsese",
+    "source_identifier": "killers_of_the_flower_moon::martin_scorsese::director",
+    "role": "director",
+    "movie": "m_killersmoon",
+    "person": "p_scorsese",
+    "billing_position": 1,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_killersmoon_a_dicaprio",
+    "source_identifier": "killers_of_the_flower_moon::leonardo_dicaprio::actor",
+    "role": "actor",
+    "movie": "m_killersmoon",
+    "person": "p_dicaprio",
+    "billing_position": 5,
+    "character_name": "Character 070"
+  },
+  {
+    "canonical_id": "c_killersmoon_a_deniro",
+    "source_identifier": "killers_of_the_flower_moon::robert_de_niro::actor",
+    "role": "actor",
+    "movie": "m_killersmoon",
+    "person": "p_deniro",
+    "billing_position": 10,
+    "character_name": "Character 448"
+  },
+  {
+    "canonical_id": "c_2001_d_kubrick",
+    "source_identifier": "2001_a_space_odyssey::stanley_kubrick::director",
+    "role": "director",
+    "movie": "m_2001",
+    "person": "p_kubrick",
+    "billing_position": 10,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_2001_co_williams",
+    "source_identifier": "2001_a_space_odyssey::john_williams::composer",
+    "role": "composer",
+    "movie": "m_2001",
+    "person": "p_williams_jh",
+    "billing_position": 15,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_fullmetal_d_kubrick",
+    "source_identifier": "full_metal_jacket::stanley_kubrick::director",
+    "role": "director",
+    "movie": "m_fullmetal",
+    "person": "p_kubrick",
+    "billing_position": 20,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_jaws_d_spielberg",
+    "source_identifier": "jaws::steven_spielberg::director",
+    "role": "director",
+    "movie": "m_jaws",
+    "person": "p_spielberg",
+    "billing_position": 2,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_jaws_co_williams",
+    "source_identifier": "jaws::john_williams::composer",
+    "role": "composer",
+    "movie": "m_jaws",
+    "person": "p_williams_jh",
+    "billing_position": 9,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_et_d_spielberg",
+    "source_identifier": "et_the_extra-terrestrial::steven_spielberg::director",
+    "role": "director",
+    "movie": "m_et",
+    "person": "p_spielberg",
+    "billing_position": 6,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_et_co_williams",
+    "source_identifier": "et_the_extra-terrestrial::john_williams::composer",
+    "role": "composer",
+    "movie": "m_et",
+    "person": "p_williams_jh",
+    "billing_position": 16,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_savingprivate_d_spielberg",
+    "source_identifier": "saving_private_ryan::steven_spielberg::director",
+    "role": "director",
+    "movie": "m_savingprivate",
+    "person": "p_spielberg",
+    "billing_position": 3,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_godfather_d_coppola",
+    "source_identifier": "the_godfather::francis_ford_coppola::director",
+    "role": "director",
+    "movie": "m_godfather",
+    "person": "p_coppola",
+    "billing_position": 20,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_godfather_a_brando",
+    "source_identifier": "the_godfather::marlon_brando::actor",
+    "role": "actor",
+    "movie": "m_godfather",
+    "person": "p_brando",
+    "billing_position": 15,
+    "character_name": "Character 214"
+  },
+  {
+    "canonical_id": "c_godfather_a_pacino",
+    "source_identifier": "the_godfather::al_pacino::actor",
+    "role": "actor",
+    "movie": "m_godfather",
+    "person": "p_pacino",
+    "billing_position": 3,
+    "character_name": "Character 315"
+  },
+  {
+    "canonical_id": "c_apocalypsenow_d_coppola",
+    "source_identifier": "apocalypse_now::francis_ford_coppola::director",
+    "role": "director",
+    "movie": "m_apocalypsenow",
+    "person": "p_coppola",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_apocalypsenow_a_brando",
+    "source_identifier": "apocalypse_now::marlon_brando::actor",
+    "role": "actor",
+    "movie": "m_apocalypsenow",
+    "person": "p_brando",
+    "billing_position": 7,
+    "character_name": "Character 170"
+  },
+  {
+    "canonical_id": "c_apocalypsenow_dp_storaro",
+    "source_identifier": "apocalypse_now::vittorio_storaro::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_apocalypsenow",
+    "person": "p_storaro",
+    "billing_position": 4,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_memento_d_nolan",
+    "source_identifier": "memento::christopher_nolan::director",
+    "role": "director",
+    "movie": "m_memento",
+    "person": "p_nolan",
+    "billing_position": 19,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_darkknight_d_nolan",
+    "source_identifier": "the_dark_knight::christopher_nolan::director",
+    "role": "director",
+    "movie": "m_darkknight",
+    "person": "p_nolan",
+    "billing_position": 11,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_darkknight_co_zimmer",
+    "source_identifier": "the_dark_knight::hans_zimmer::composer",
+    "role": "composer",
+    "movie": "m_darkknight",
+    "person": "p_zimmer",
+    "billing_position": 17,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_darkknight_dp_pfister",
+    "source_identifier": "the_dark_knight::wally_pfister::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_darkknight",
+    "person": "p_pfister",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_dunkirk_d_nolan",
+    "source_identifier": "dunkirk::christopher_nolan::director",
+    "role": "director",
+    "movie": "m_dunkirk",
+    "person": "p_nolan",
+    "billing_position": 11,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_dunkirk_co_zimmer",
+    "source_identifier": "dunkirk::hans_zimmer::composer",
+    "role": "composer",
+    "movie": "m_dunkirk",
+    "person": "p_zimmer",
+    "billing_position": 17,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_oppenheimer_d_nolan",
+    "source_identifier": "oppenheimer::christopher_nolan::director",
+    "role": "director",
+    "movie": "m_oppenheimer",
+    "person": "p_nolan",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_oppenheimer_a_pugh",
+    "source_identifier": "oppenheimer::florence_pugh::actor",
+    "role": "actor",
+    "movie": "m_oppenheimer",
+    "person": "p_pugh",
+    "billing_position": 6,
+    "character_name": "Character 594"
+  },
+  {
+    "canonical_id": "c_oppenheimer_dp_hoytema",
+    "source_identifier": "oppenheimer::roger_deakins::cinematographer",
+    "role": "cinematographer",
+    "movie": "m_oppenheimer",
+    "person": "p_deakins",
+    "billing_position": 2,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_dune_d_villeneuve",
+    "source_identifier": "dune::denis_villeneuve::director",
+    "role": "director",
+    "movie": "m_dune",
+    "person": "p_villeneuve",
+    "billing_position": 20,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_dune_a_chalamet",
+    "source_identifier": "dune::timothee_chalamet::actor",
+    "role": "actor",
+    "movie": "m_dune",
+    "person": "p_chalamet",
+    "billing_position": 10,
+    "character_name": "Character 375"
+  },
+  {
+    "canonical_id": "c_dune_a_zendaya",
+    "source_identifier": "dune::zendaya::actor",
+    "role": "actor",
+    "movie": "m_dune",
+    "person": "p_zendaya",
+    "billing_position": 2,
+    "character_name": "Character 566"
+  },
+  {
+    "canonical_id": "c_dune_a_isaac",
+    "source_identifier": "dune::oscar_isaac::actor",
+    "role": "actor",
+    "movie": "m_dune",
+    "person": "p_isaac",
+    "billing_position": 14,
+    "character_name": "Character 839"
+  },
+  {
+    "canonical_id": "c_dunept2_d_villeneuve",
+    "source_identifier": "dune_part_two::denis_villeneuve::director",
+    "role": "director",
+    "movie": "m_dunept2",
+    "person": "p_villeneuve",
+    "billing_position": 1,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_dunept2_a_chalamet",
+    "source_identifier": "dune_part_two::timothee_chalamet::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_chalamet",
+    "billing_position": 7,
+    "character_name": "Character 403"
+  },
+  {
+    "canonical_id": "c_dunept2_a_zendaya",
+    "source_identifier": "dune_part_two::zendaya::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_zendaya",
+    "billing_position": 4,
+    "character_name": "Character 953"
+  },
+  {
+    "canonical_id": "c_dunept2_a_pugh",
+    "source_identifier": "dune_part_two::florence_pugh::actor",
+    "role": "actor",
+    "movie": "m_dunept2",
+    "person": "p_pugh",
+    "billing_position": 1,
+    "character_name": "Character 208"
+  },
+  {
+    "canonical_id": "c_thereblood_d_anderson",
+    "source_identifier": "there_will_be_blood::paul_thomas_anderson::director",
+    "role": "director",
+    "movie": "m_thereblood",
+    "person": "p_anderson_pt",
+    "billing_position": 2,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_thereblood_a_dayl",
+    "source_identifier": "there_will_be_blood::joaquin_phoenix::actor",
+    "role": "actor",
+    "movie": "m_thereblood",
+    "person": "p_phoenix",
+    "billing_position": 10,
+    "character_name": "Character 205"
+  },
+  {
+    "canonical_id": "c_thereblood_co_greenwood",
+    "source_identifier": "there_will_be_blood::jonny_greenwood::composer",
+    "role": "composer",
+    "movie": "m_thereblood",
+    "person": "p_greenwood",
+    "billing_position": 8,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_themaster_d_anderson",
+    "source_identifier": "the_master::paul_thomas_anderson::director",
+    "role": "director",
+    "movie": "m_themaster",
+    "person": "p_anderson_pt",
+    "billing_position": 16,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_themaster_a_phoenix",
+    "source_identifier": "the_master::joaquin_phoenix::actor",
+    "role": "actor",
+    "movie": "m_themaster",
+    "person": "p_phoenix",
+    "billing_position": 13,
+    "character_name": "Character 116"
+  },
+  {
+    "canonical_id": "c_phantomthread_d_anderson",
+    "source_identifier": "phantom_thread::paul_thomas_anderson::director",
+    "role": "director",
+    "movie": "m_phantomthread",
+    "person": "p_anderson_pt",
+    "billing_position": 12,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_phantomthread_co_greenwood",
+    "source_identifier": "phantom_thread::jonny_greenwood::composer",
+    "role": "composer",
+    "movie": "m_phantomthread",
+    "person": "p_greenwood",
+    "billing_position": 8,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_grandbudapest_d_anderson",
+    "source_identifier": "the_grand_budapest_hotel::wes_anderson::director",
+    "role": "director",
+    "movie": "m_grandbudapest",
+    "person": "p_anderson_wes",
+    "billing_position": 2,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_moonrise_d_anderson",
+    "source_identifier": "moonrise_kingdom::wes_anderson::director",
+    "role": "director",
+    "movie": "m_moonrise",
+    "person": "p_anderson_wes",
+    "billing_position": 11,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_asteroidcity_d_anderson",
+    "source_identifier": "asteroid_city::wes_anderson::director",
+    "role": "director",
+    "movie": "m_asteroidcity",
+    "person": "p_anderson_wes",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_fightclub_d_finch",
+    "source_identifier": "fight_club::david_fincher::director",
+    "role": "director",
+    "movie": "m_fightclub",
+    "person": "p_finch",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_fightclub_a_pitt",
+    "source_identifier": "fight_club::brad_pitt::actor",
+    "role": "actor",
+    "movie": "m_fightclub",
+    "person": "p_pitt",
+    "billing_position": 9,
+    "character_name": "Character 824"
+  },
+  {
+    "canonical_id": "c_sevenfilm_d_finch",
+    "source_identifier": "se7en::david_fincher::director",
+    "role": "director",
+    "movie": "m_sevenfilm",
+    "person": "p_finch",
+    "billing_position": 4,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_sevenfilm_a_pitt",
+    "source_identifier": "se7en::brad_pitt::actor",
+    "role": "actor",
+    "movie": "m_sevenfilm",
+    "person": "p_pitt",
+    "billing_position": 3,
+    "character_name": "Character 478"
+  },
+  {
+    "canonical_id": "c_sevenfilm_a_freeman",
+    "source_identifier": "se7en::morgan_freeman::actor",
+    "role": "actor",
+    "movie": "m_sevenfilm",
+    "person": "p_freeman",
+    "billing_position": 16,
+    "character_name": "Character 605"
+  },
+  {
+    "canonical_id": "c_socialnetwork_d_finch",
+    "source_identifier": "the_social_network::david_fincher::director",
+    "role": "director",
+    "movie": "m_socialnetwork",
+    "person": "p_finch",
+    "billing_position": 1,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_socialnetwork_a_garfield",
+    "source_identifier": "the_social_network::andrew_garfield::actor",
+    "role": "actor",
+    "movie": "m_socialnetwork",
+    "person": "p_garfield",
+    "billing_position": 10,
+    "character_name": "Character 259"
+  },
+  {
+    "canonical_id": "c_socialnetwork_w_sorkin",
+    "source_identifier": "the_social_network::aaron_sorkin::writer",
+    "role": "writer",
+    "movie": "m_socialnetwork",
+    "person": "p_sorkin",
+    "billing_position": 15,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_blueVelvet_d_lynch",
+    "source_identifier": "blue_velvet::david_lynch::director",
+    "role": "director",
+    "movie": "m_blueVelvet",
+    "person": "p_lynch",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_blueVelvet_a_dafoe",
+    "source_identifier": "blue_velvet::willem_dafoe::actor",
+    "role": "actor",
+    "movie": "m_blueVelvet",
+    "person": "p_dafoe",
+    "billing_position": 7,
+    "character_name": "Character 465"
+  },
+  {
+    "canonical_id": "c_paterson_d_jarmusch",
+    "source_identifier": "paterson::jim_jarmusch::director",
+    "role": "director",
+    "movie": "m_paterson",
+    "person": "p_jarmusch",
+    "billing_position": 11,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_paterson_a_driver",
+    "source_identifier": "paterson::adam_driver::actor",
+    "role": "actor",
+    "movie": "m_paterson",
+    "person": "p_driver",
+    "billing_position": 9,
+    "character_name": "Character 218"
+  },
+  {
+    "canonical_id": "c_parasite_d_bong",
+    "source_identifier": "parasite::bong_joon-ho::director",
+    "role": "director",
+    "movie": "m_parasite",
+    "person": "p_bong",
+    "billing_position": 17,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_memoriesmurder_d_bong",
+    "source_identifier": "memories_of_murder::bong_joon-ho::director",
+    "role": "director",
+    "movie": "m_memoriesmurder",
+    "person": "p_bong",
+    "billing_position": 1,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_thehost_d_bong",
+    "source_identifier": "the_host::bong_joon-ho::director",
+    "role": "director",
+    "movie": "m_thehost",
+    "person": "p_bong",
+    "billing_position": 13,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_decisiontoleave_d_park",
+    "source_identifier": "decision_to_leave::park_chan-wook::director",
+    "role": "director",
+    "movie": "m_decisiontoleave",
+    "person": "p_park",
+    "billing_position": 4,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_allaboutmother_d_almodovar",
+    "source_identifier": "all_about_my_mother::pedro_almodovar::director",
+    "role": "director",
+    "movie": "m_allaboutmother",
+    "person": "p_almodovar",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_allaboutmother_a_cruz",
+    "source_identifier": "all_about_my_mother::penelope_cruz::actor",
+    "role": "actor",
+    "movie": "m_allaboutmother",
+    "person": "p_cruz",
+    "billing_position": 17,
+    "character_name": "Character 899"
+  },
+  {
+    "canonical_id": "c_paindglory_d_almodovar",
+    "source_identifier": "pain_and_glory::pedro_almodovar::director",
+    "role": "director",
+    "movie": "m_paindglory",
+    "person": "p_almodovar",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_paindglory_a_bardem",
+    "source_identifier": "pain_and_glory::javier_bardem::actor",
+    "role": "actor",
+    "movie": "m_paindglory",
+    "person": "p_bardem",
+    "billing_position": 12,
+    "character_name": "Character 817"
+  },
+  {
+    "canonical_id": "c_paindglory_a_cruz",
+    "source_identifier": "pain_and_glory::penelope_cruz::actor",
+    "role": "actor",
+    "movie": "m_paindglory",
+    "person": "p_cruz",
+    "billing_position": 3,
+    "character_name": "Character 604"
+  },
+  {
+    "canonical_id": "c_amour_d_haneke",
+    "source_identifier": "amour::michael_haneke::director",
+    "role": "director",
+    "movie": "m_amour",
+    "person": "p_haneke",
+    "billing_position": 6,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_amour_a_huppert",
+    "source_identifier": "amour::isabelle_huppert::actor",
+    "role": "actor",
+    "movie": "m_amour",
+    "person": "p_huppert",
+    "billing_position": 2,
+    "character_name": "Character 323"
+  },
+  {
+    "canonical_id": "c_whiplash_d_chazelle",
+    "source_identifier": "whiplash::damien_chazelle::director",
+    "role": "director",
+    "movie": "m_whiplash",
+    "person": "p_chazelle",
+    "billing_position": 9,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_ladybird_d_gerwig",
+    "source_identifier": "lady_bird::greta_gerwig::director",
+    "role": "director",
+    "movie": "m_ladybird",
+    "person": "p_gerwig",
+    "billing_position": 20,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_ladybird_a_ronan",
+    "source_identifier": "lady_bird::saoirse_ronan::actor",
+    "role": "actor",
+    "movie": "m_ladybird",
+    "person": "p_ronan",
+    "billing_position": 19,
+    "character_name": "Character 694"
+  },
+  {
+    "canonical_id": "c_littlewomen_d_gerwig",
+    "source_identifier": "little_women::greta_gerwig::director",
+    "role": "director",
+    "movie": "m_littlewomen",
+    "person": "p_gerwig",
+    "billing_position": 6,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_littlewomen_a_ronan",
+    "source_identifier": "little_women::saoirse_ronan::actor",
+    "role": "actor",
+    "movie": "m_littlewomen",
+    "person": "p_ronan",
+    "billing_position": 14,
+    "character_name": "Character 673"
+  },
+  {
+    "canonical_id": "c_littlewomen_a_pugh",
+    "source_identifier": "little_women::florence_pugh::actor",
+    "role": "actor",
+    "movie": "m_littlewomen",
+    "person": "p_pugh",
+    "billing_position": 9,
+    "character_name": "Character 308"
+  },
+  {
+    "canonical_id": "c_littlewomen_a_chalamet",
+    "source_identifier": "little_women::timothee_chalamet::actor",
+    "role": "actor",
+    "movie": "m_littlewomen",
+    "person": "p_chalamet",
+    "billing_position": 8,
+    "character_name": "Character 025"
+  },
+  {
+    "canonical_id": "c_barbie_d_gerwig",
+    "source_identifier": "barbie::greta_gerwig::director",
+    "role": "director",
+    "movie": "m_barbie",
+    "person": "p_gerwig",
+    "billing_position": 12,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_barbie_a_robbie",
+    "source_identifier": "barbie::margot_robbie::actor",
+    "role": "actor",
+    "movie": "m_barbie",
+    "person": "p_robbie",
+    "billing_position": 11,
+    "character_name": "Character 694"
+  },
+  {
+    "canonical_id": "c_barbie_a_gosling",
+    "source_identifier": "barbie::ryan_gosling::actor",
+    "role": "actor",
+    "movie": "m_barbie",
+    "person": "p_gosling",
+    "billing_position": 20,
+    "character_name": "Character 971"
+  },
+  {
+    "canonical_id": "c_moonlight_d_jenkins",
+    "source_identifier": "moonlight::barry_jenkins::director",
+    "role": "director",
+    "movie": "m_moonlight",
+    "person": "p_jenkins",
+    "billing_position": 6,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_getout_d_peele",
+    "source_identifier": "get_out::jordan_peele::director",
+    "role": "director",
+    "movie": "m_getout",
+    "person": "p_peele",
+    "billing_position": 19,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_nope_d_peele",
+    "source_identifier": "nope::jordan_peele::director",
+    "role": "director",
+    "movie": "m_nope",
+    "person": "p_peele",
+    "billing_position": 11,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_hereditary_d_aster",
+    "source_identifier": "hereditary::ari_aster::director",
+    "role": "director",
+    "movie": "m_hereditary",
+    "person": "p_aster",
+    "billing_position": 10,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_lobster_d_lanthimos",
+    "source_identifier": "the_lobster::yorgos_lanthimos::director",
+    "role": "director",
+    "movie": "m_lobster",
+    "person": "p_lanthimos",
+    "billing_position": 3,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_favourite_d_lanthimos",
+    "source_identifier": "the_favourite::yorgos_lanthimos::director",
+    "role": "director",
+    "movie": "m_favourite",
+    "person": "p_lanthimos",
+    "billing_position": 4,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_favourite_a_stone",
+    "source_identifier": "the_favourite::emma_stone::actor",
+    "role": "actor",
+    "movie": "m_favourite",
+    "person": "p_stone_em",
+    "billing_position": 9,
+    "character_name": "Character 675"
+  },
+  {
+    "canonical_id": "c_poorthings_d_lanthimos",
+    "source_identifier": "poor_things::yorgos_lanthimos::director",
+    "role": "director",
+    "movie": "m_poorthings",
+    "person": "p_lanthimos",
+    "billing_position": 14,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_poorthings_a_stone",
+    "source_identifier": "poor_things::emma_stone::actor",
+    "role": "actor",
+    "movie": "m_poorthings",
+    "person": "p_stone_em",
+    "billing_position": 13,
+    "character_name": "Character 396"
+  },
+  {
+    "canonical_id": "c_poorthings_a_dafoe",
+    "source_identifier": "poor_things::willem_dafoe::actor",
+    "role": "actor",
+    "movie": "m_poorthings",
+    "person": "p_dafoe",
+    "billing_position": 3,
+    "character_name": "Character 968"
+  },
+  {
+    "canonical_id": "c_nomadland_d_zhao",
+    "source_identifier": "nomadland::chloe_zhao::director",
+    "role": "director",
+    "movie": "m_nomadland",
+    "person": "p_zhao",
+    "billing_position": 7,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_goldrush_d_chaplin",
+    "source_identifier": "the_gold_rush::charlie_chaplin::director",
+    "role": "director",
+    "movie": "m_goldrush",
+    "person": "p_chaplin",
+    "billing_position": 15,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_goldrush_a_chaplin",
+    "source_identifier": "the_gold_rush::charlie_chaplin::actor",
+    "role": "actor",
+    "movie": "m_goldrush",
+    "person": "p_chaplin",
+    "billing_position": 20,
+    "character_name": "Character 422"
+  },
+  {
+    "canonical_id": "c_metropolis_d_lang",
+    "source_identifier": "metropolis::fritz_lang::director",
+    "role": "director",
+    "movie": "m_metropolis",
+    "person": "p_lang",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_psycho_d_hitchcock",
+    "source_identifier": "psycho::alfred_hitchcock::director",
+    "role": "director",
+    "movie": "m_psycho",
+    "person": "p_hitchcock",
+    "billing_position": 8,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_breathless_d_godard",
+    "source_identifier": "breathless::jean-luc_godard::director",
+    "role": "director",
+    "movie": "m_breathless",
+    "person": "p_godard",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_ladolce_d_fellini",
+    "source_identifier": "la_dolce_vita::federico_fellini::director",
+    "role": "director",
+    "movie": "m_ladolce",
+    "person": "p_fellini",
+    "billing_position": 18,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_ladolce_a_mastroianni",
+    "source_identifier": "la_dolce_vita::marcello_mastroianni::actor",
+    "role": "actor",
+    "movie": "m_ladolce",
+    "person": "p_mastroianni",
+    "billing_position": 3,
+    "character_name": "Character 875"
+  },
+  {
+    "canonical_id": "c_stalker_d_tarkovsky",
+    "source_identifier": "stalker::andrei_tarkovsky::director",
+    "role": "director",
+    "movie": "m_stalker",
+    "person": "p_tarkovsky",
+    "billing_position": 17,
+    "character_name": null
+  },
+  {
+    "canonical_id": "c_mirror_d_tarkovsky",
+    "source_identifier": "mirror::andrei_tarkovsky::director",
+    "role": "director",
+    "movie": "m_mirror",
+    "person": "p_tarkovsky",
+    "billing_position": 3,
+    "character_name": null
+  }
+]

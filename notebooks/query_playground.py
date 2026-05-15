@@ -14,87 +14,39 @@ def _():
 @app.cell
 def _(mo):
     mo.md(r"""
-    # knot — query playground
+    # knot — end-to-end walkthrough
 
-    End-to-end walkthrough:
+    Four stages:
 
-    1. Build a `Spec` (Movie / Person / Credit with FK slots)
-    2. Compile DDL + deploy to a throwaway schema in the live postgres on `:5433`
-    3. Ingest sample data through `emit_batch_write`
-    4. **Play with queries** using the read substrate
+    1. **Basic spec.** Movie + Person, one source (imdb). Deploy. Ingest. Query.
+    2. **Add a second source.** tmdb publishes some of the same Movies with
+       different values. Spec evolves; ``init_sql`` emits only the delta.
+       Trust resolves per-slot winners.
+    3. **Evolve the spec.** Add the Credit reified relation + a third source
+       (rottentomatoes). Spec grows; ``init_sql`` adds the new table without
+       touching the existing data.
+    4. **Final.** Full spec + all data. Run the queries we sketched on paper.
 
-    Restart the kernel to start fresh — each run gets a unique schema and
-    drops it on cleanup.
-    """)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 1. Spec
-    """)
-    return
-
-
-@app.cell
-def _():
-    from knot import Spec, this, types
-
-    spec = Spec(id="movies_play", version="0.1")
-
-    person = spec.add_class("Person", description="A real human.")
-    person.slot("canonical_id", types.TEXT, identifier=True)
-    person.slot("name", types.TEXT, required=True)
-    person.slot("birth_country", types.TEXT)
-
-    movie = spec.add_class("Movie", description="A theatrical release.")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
-    movie.slot("title", types.TEXT, required=True)
-    movie.slot("year", types.INTEGER)
-    movie.slot("director", person)
-
-    credit = spec.add_class("Credit", description="A person's role in a movie.")
-    credit.slot("canonical_id", types.TEXT, identifier=True)
-    credit.slot("role", types.TEXT, required=True)
-    credit.slot("movie", movie)
-    credit.slot("person", person)
-
-    # Single source for simplicity. Multi-source resolution + trust
-    # arbitration still happens — there's just one contributor here.
-    imdb = spec.add_source("imdb", description="IMDb canonical.")
-    imdb.bind(person, base_trust=0.95)
-    imdb.bind(movie, base_trust=0.95)
-    imdb.bind(credit, base_trust=0.95)
-
-    errs = spec.validate()
-    assert not errs, errs
-    return credit, movie, person, spec, this
-
-
-@app.cell
-def _(mo, spec):
-    mo.md(f"""
-    **Classes:** {", ".join(c.name for c in spec.classes)}
-
-    **Source bindings:** {len(spec.source_bindings)} — {", ".join(f"{b.source.name}→{b.class_.name}" for b in spec.source_bindings)}
-    """)
-    return
-
-
-@app.cell
-def _(mo):
-    mo.md(r"""
-    ## 2. Deploy DDL to postgres
+    Data is real (well, real-ish) — sample multi-source data lives in
+    ``data/movies/{imdb,tmdb,rottentomatoes}/`` and gets loaded
+    incrementally per stage. No hardcoded rows in this notebook.
     """)
     return
 
 
 @app.cell
 def _():
+    import json
     import uuid
+    from pathlib import Path
 
     import psycopg
+
+    DATA = Path("/mnt/main/code/knot/data/movies")
+
+    def load(source: str, entity: str) -> list[dict]:
+        """Read ``data/movies/<source>/<entity>.json`` as a list of dicts."""
+        return json.loads((DATA / source / f"{entity}.json").read_text())
 
     pg = psycopg.connect(
         host="localhost",
@@ -106,266 +58,419 @@ def _():
     )
     schema = f"knot_play_{uuid.uuid4().hex[:8]}"
     pg.execute(f"CREATE SCHEMA {schema}")
-    return pg, schema
+    return DATA, load, pg, schema
 
 
 @app.cell
-def _(mo, pg, schema, spec):
-    # One call. ``init_sql`` validates the spec, then emits a single SQL
-    # script — DDL + bindings + indexes + FKs + resolved views + trust
-    # seed — that brings the schema into alignment. With no query_fn it
-    # assumes an empty schema (full create); pass a query_fn to introspect
-    # a live DB and emit only the migration delta.
-    pg.execute(spec.init_sql(schema=schema))
-    mo.md(f"Schema **`{schema}`** deployed.")
+def _(load, mo):
+    # Quick sanity check on the data layout.
+    counts = {
+        ("imdb", "persons"): len(load("imdb", "persons")),
+        ("imdb", "movies"): len(load("imdb", "movies")),
+        ("imdb", "credits"): len(load("imdb", "credits")),
+        ("tmdb", "persons"): len(load("tmdb", "persons")),
+        ("tmdb", "movies"): len(load("tmdb", "movies")),
+        ("tmdb", "credits"): len(load("tmdb", "credits")),
+        ("rottentomatoes", "persons"): len(load("rottentomatoes", "persons")),
+        ("rottentomatoes", "movies"): len(load("rottentomatoes", "movies")),
+        ("rottentomatoes", "credits"): len(load("rottentomatoes", "credits")),
+    }
+    rows = "\n".join(f"| `{src}` | {ent} | {n} |" for (src, ent), n in counts.items())
+    mo.md(
+        "**Source data on disk:**\n\n| source | entity | rows |\n|---|---|---|\n" + rows
+    )
     return
 
 
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 3. Ingest sample data
+    ## Stage 1 — basic spec (Movie + Person, imdb only)
     """)
     return
 
 
 @app.cell
 def _():
-    person_rows = [
-        {
-            "source_identifier": "nm_tarantino",
-            "canonical_id": "p_tarantino",
-            "name": "Quentin Tarantino",
-            "birth_country": "USA",
-        },
-        {
-            "source_identifier": "nm_kurosawa",
-            "canonical_id": "p_kurosawa",
-            "name": "Akira Kurosawa",
-            "birth_country": "Japan",
-        },
-        {
-            "source_identifier": "nm_miyazaki",
-            "canonical_id": "p_miyazaki",
-            "name": "Hayao Miyazaki",
-            "birth_country": "Japan",
-        },
-        {
-            "source_identifier": "nm_scorsese",
-            "canonical_id": "p_scorsese",
-            "name": "Martin Scorsese",
-            "birth_country": "USA",
-        },
-        {
-            "source_identifier": "nm_ozu",
-            "canonical_id": "p_ozu",
-            "name": "Yasujirō Ozu",
-            "birth_country": "Japan",
-        },
-        {
-            "source_identifier": "nm_thurman",
-            "canonical_id": "p_thurman",
-            "name": "Uma Thurman",
-            "birth_country": "USA",
-        },
-        {
-            "source_identifier": "nm_mifune",
-            "canonical_id": "p_mifune",
-            "name": "Toshirō Mifune",
-            "birth_country": "Japan",
-        },
-    ]
+    from knot import Spec, types
 
-    movie_rows = [
-        {
-            "source_identifier": "tt_pulpfiction",
-            "canonical_id": "m_pulpfiction",
-            "title": "Pulp Fiction",
-            "year": 1994,
-            "director": "p_tarantino",
-        },
-        {
-            "source_identifier": "tt_killbill1",
-            "canonical_id": "m_killbill1",
-            "title": "Kill Bill: Vol. 1",
-            "year": 2003,
-            "director": "p_tarantino",
-        },
-        {
-            "source_identifier": "tt_oncetime",
-            "canonical_id": "m_oncetime",
-            "title": "Once Upon a Time in Hollywood",
-            "year": 2019,
-            "director": "p_tarantino",
-        },
-        {
-            "source_identifier": "tt_django",
-            "canonical_id": "m_djangounchained",
-            "title": "Django Unchained",
-            "year": 2012,
-            "director": "p_tarantino",
-        },
-        {
-            "source_identifier": "tt_inglourious",
-            "canonical_id": "m_inglourious",
-            "title": "Inglourious Basterds",
-            "year": 2009,
-            "director": "p_tarantino",
-        },
-        {
-            "source_identifier": "tt_reservoir",
-            "canonical_id": "m_reservoirdogs",
-            "title": "Reservoir Dogs",
-            "year": 1992,
-            "director": "p_tarantino",
-        },
-        {
-            "source_identifier": "tt_7samurai",
-            "canonical_id": "m_sevensamurai",
-            "title": "Seven Samurai",
-            "year": 1954,
-            "director": "p_kurosawa",
-        },
-        {
-            "source_identifier": "tt_rashomon",
-            "canonical_id": "m_rashomon",
-            "title": "Rashomon",
-            "year": 1950,
-            "director": "p_kurosawa",
-        },
-        {
-            "source_identifier": "tt_yojimbo",
-            "canonical_id": "m_yojimbo",
-            "title": "Yojimbo",
-            "year": 1961,
-            "director": "p_kurosawa",
-        },
-        {
-            "source_identifier": "tt_spirited",
-            "canonical_id": "m_spiritedaway",
-            "title": "Spirited Away",
-            "year": 2001,
-            "director": "p_miyazaki",
-        },
-        {
-            "source_identifier": "tt_totoro",
-            "canonical_id": "m_totoro",
-            "title": "My Neighbor Totoro",
-            "year": 1988,
-            "director": "p_miyazaki",
-        },
-        {
-            "source_identifier": "tt_tokyo",
-            "canonical_id": "m_tokyostory",
-            "title": "Tokyo Story",
-            "year": 1953,
-            "director": "p_ozu",
-        },
-        {
-            "source_identifier": "tt_taxi",
-            "canonical_id": "m_taxidriver",
-            "title": "Taxi Driver",
-            "year": 1976,
-            "director": "p_scorsese",
-        },
-        {
-            "source_identifier": "tt_goodfellas",
-            "canonical_id": "m_goodfellas",
-            "title": "Goodfellas",
-            "year": 1990,
-            "director": "p_scorsese",
-        },
-    ]
+    spec_v1 = Spec(id="movies_play", version="0.1")
 
-    credit_rows = [
-        {
-            "source_identifier": "c1",
-            "canonical_id": "c1",
-            "role": "actor",
-            "movie": "m_pulpfiction",
-            "person": "p_thurman",
-        },
-        {
-            "source_identifier": "c2",
-            "canonical_id": "c2",
-            "role": "actor",
-            "movie": "m_killbill1",
-            "person": "p_thurman",
-        },
-        {
-            "source_identifier": "c3",
-            "canonical_id": "c3",
-            "role": "actor",
-            "movie": "m_sevensamurai",
-            "person": "p_mifune",
-        },
-        {
-            "source_identifier": "c4",
-            "canonical_id": "c4",
-            "role": "actor",
-            "movie": "m_yojimbo",
-            "person": "p_mifune",
-        },
-        {
-            "source_identifier": "c5",
-            "canonical_id": "c5",
-            "role": "actor",
-            "movie": "m_rashomon",
-            "person": "p_mifune",
-        },
-    ]
-    return credit_rows, movie_rows, person_rows
+    person_v1 = spec_v1.add_class("Person")
+    person_v1.slot("canonical_id", types.TEXT, identifier=True)
+    person_v1.slot("name", types.TEXT, required=True)
+    person_v1.slot("birth_country", types.TEXT)
+    person_v1.slot("birth_year", types.INTEGER)
+
+    movie_v1 = spec_v1.add_class("Movie")
+    movie_v1.slot("canonical_id", types.TEXT, identifier=True)
+    movie_v1.slot("title", types.TEXT, required=True)
+    movie_v1.slot("year", types.INTEGER)
+    movie_v1.slot("runtime_minutes", types.INTEGER)
+    movie_v1.slot("director", person_v1)  # FK to Person
+
+    imdb_v1 = spec_v1.add_source("imdb")
+    imdb_v1.bind(person_v1, base_trust=0.85)
+    imdb_v1.bind(movie_v1, base_trust=0.85)
+
+    spec_v1.validate()
+    return Spec, imdb_v1, movie_v1, person_v1, spec_v1, types
 
 
 @app.cell
-def _(
-    credit,
-    credit_rows,
-    movie,
-    movie_rows,
-    person,
-    person_rows,
-    pg,
-    schema,
-    spec,
-):
-    from knot.compile.data_io import ClassWrites
+def _(mo, pg, schema, spec_v1):
+    # One call. ``init_sql`` validates the spec, then emits a single SQL
+    # script — DDL + bindings + indexes + FKs + resolved views + trust
+    # seed. With no query_fn it assumes an empty schema.
+    pg.execute(spec_v1.init_sql(schema=schema))
+    mo.md(f"Stage 1 deployed in **`{schema}`**.")
+    return
 
-    imdb_person_b = next(
-        b
-        for b in spec.source_bindings
-        if b.source.name == "imdb" and b.class_ is person
-    )
-    imdb_movie_b = next(
-        b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is movie
-    )
-    imdb_credit_b = next(
-        b
-        for b in spec.source_bindings
-        if b.source.name == "imdb" and b.class_ is credit
-    )
 
-    bw = spec.emit_batch_write(
+@app.cell
+def _(load, pg, schema, spec_v1):
+    from knot.compile import ClassWrites
+
+    # Ingest from imdb only. Pass row dicts straight through.
+    movie_b = next(b for b in spec_v1.source_bindings if b.class_.name == "Movie")
+    person_b = next(b for b in spec_v1.source_bindings if b.class_.name == "Person")
+
+    bw = spec_v1.emit_batch_write(
         [
-            ClassWrites(binding=imdb_person_b, rows=person_rows),
-            ClassWrites(binding=imdb_movie_b, rows=movie_rows),
-            ClassWrites(binding=imdb_credit_b, rows=credit_rows),
+            ClassWrites(binding=person_b, rows=load("imdb", "persons")),
+            ClassWrites(binding=movie_b, rows=load("imdb", "movies")),
         ],
         schema=schema,
         enforce=False,
     )
-
-    # BatchWrite.statements is a list of (sql, params) tuples — each is
-    # one already-parameterized statement. Run them in order.
     with pg.cursor() as cur:
         for sql, params in bw.statements:
             cur.execute(sql, params)
 
-    counts = {}
     with pg.cursor() as cur:
-        for c in (person, movie, credit):
-            cur.execute(f"SELECT COUNT(*) FROM {schema}.{c.name.lower()}_resolved")
-            counts[c.name] = cur.fetchone()[0]
+        cur.execute(f"SELECT count(*) FROM {schema}.person_resolved")
+        person_count = cur.fetchone()[0]
+        cur.execute(f"SELECT count(*) FROM {schema}.movie_resolved")
+        movie_count = cur.fetchone()[0]
+    f"Stage 1 ingest: {person_count} persons, {movie_count} movies (imdb only)."
+    return (ClassWrites,)
+
+
+@app.cell
+def _(movie_v1, pg, schema, spec_v1):
+    # Smoke test — five most recent movies + their directors.
+    q = (
+        movie_v1.order_by(movie_v1.col.year, "desc")
+        .limit(5)
+        .select(movie_v1.col.title, movie_v1.col.year, movie_v1.col.director.name)
+    )
+    sql, params = spec_v1.compile_query(q, schema=schema)
+    with pg.cursor() as cur:
+        cur.execute(sql, params or None)
+        rows = [dict(zip([d.name for d in cur.description], r)) for r in cur.fetchall()]
+    rows
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Stage 2 — add tmdb as a second source
+
+    Same spec shape, plus a `tmdb` source binding. ``init_sql(query_fn=…)``
+    introspects the live DB and emits only the delta — no `CREATE TABLE`
+    churn, just a couple of trust-seed `INSERT`s for the new source. Then
+    ingest tmdb's overlapping rows and watch the resolver pick winners
+    per-slot.
+    """)
+    return
+
+
+@app.cell
+def _(Spec, movie_v1, person_v1, spec_v1, types):
+    # Build the v2 spec — same shape + tmdb source. Done as a fresh Spec
+    # rather than mutating spec_v1 so the two are inspectable side-by-side.
+    spec_v2 = Spec(id="movies_play", version="0.2")
+
+    person_v2 = spec_v2.add_class("Person")
+    person_v2.slot("canonical_id", types.TEXT, identifier=True)
+    person_v2.slot("name", types.TEXT, required=True)
+    person_v2.slot("birth_country", types.TEXT)
+    person_v2.slot("birth_year", types.INTEGER)
+
+    movie_v2 = spec_v2.add_class("Movie")
+    movie_v2.slot("canonical_id", types.TEXT, identifier=True)
+    movie_v2.slot("title", types.TEXT, required=True)
+    movie_v2.slot("year", types.INTEGER)
+    movie_v2.slot("runtime_minutes", types.INTEGER)
+    movie_v2.slot("director", person_v2)
+
+    # imdb already deployed and seeded; tmdb is new.
+    imdb_v2 = spec_v2.add_source("imdb")
+    imdb_v2.bind(person_v2, base_trust=0.85)
+    imdb_v2.bind(movie_v2, base_trust=0.85)
+
+    tmdb_v2 = spec_v2.add_source("tmdb")
+    tmdb_v2.bind(person_v2, base_trust=0.75)
+    tmdb_v2.bind(movie_v2, base_trust=0.75)
+
+    spec_v2.validate()
+    return movie_v2, person_v2, spec_v2, tmdb_v2
+
+
+@app.cell
+def _(mo, pg, schema, spec_v2):
+    # Diff against the live DB — only the trust-seed deltas for tmdb
+    # should appear, plus idempotent CREATE OR REPLACE VIEW for the
+    # resolved views. The DDL for tables/indexes is already in place.
+    def query_fn(sql: str, params: tuple) -> list:
+        with pg.cursor() as cur:
+            cur.execute(sql, params)
+            return cur.fetchall()
+
+    delta_sql = spec_v2.init_sql(query_fn=query_fn, schema=schema)
+    op_count = len([line for line in delta_sql.split(";\n\n") if line.strip()])
+    pg.execute(delta_sql)
+    mo.md(f"Stage 2 evolve: ran **{op_count}** delta ops.")
+    return (query_fn,)
+
+
+@app.cell
+def _(ClassWrites, load, pg, schema, spec_v2):
+    # Ingest tmdb's overlapping rows. Many of these are about the SAME
+    # canonical Movies and Persons that imdb already wrote — but with
+    # tmdb's own source_identifier and occasionally different field values.
+    person_b = next(
+        b
+        for b in spec_v2.source_bindings
+        if b.source.name == "tmdb" and b.class_.name == "Person"
+    )
+    movie_b = next(
+        b
+        for b in spec_v2.source_bindings
+        if b.source.name == "tmdb" and b.class_.name == "Movie"
+    )
+
+    bw = spec_v2.emit_batch_write(
+        [
+            ClassWrites(binding=person_b, rows=load("tmdb", "persons")),
+            ClassWrites(binding=movie_b, rows=load("tmdb", "movies")),
+        ],
+        schema=schema,
+        enforce=False,
+    )
+    with pg.cursor() as cur:
+        for sql, params in bw.statements:
+            cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(f"SELECT count(*) FROM {schema}.movie_bindings")
+        binding_count = cur.fetchone()[0]
+        cur.execute(f"SELECT count(*) FROM {schema}.movie_resolved")
+        resolved_count = cur.fetchone()[0]
+    (
+        f"Stage 2 ingest: {binding_count} movie bindings rows "
+        f"(imdb + tmdb), {resolved_count} resolved movies."
+    )
+    return
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### See trust at work
+
+    Two sources, one of them more trusted (imdb 0.85 > tmdb 0.75). Where
+    their values disagree, the per-slot resolver picks imdb's value
+    automatically. The bindings table still preserves both.
+    """)
+    return
+
+
+@app.cell
+def _(pg, schema):
+    # Pick movies where imdb and tmdb disagree on year.
+    with pg.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+              i.canonical_id,
+              i.year AS imdb_year,
+              t.year AS tmdb_year,
+              r.year AS resolved_year
+            FROM {schema}.movie_bindings i
+            JOIN {schema}.movie_bindings t
+              ON t.canonical_id = i.canonical_id
+            JOIN {schema}.movie_resolved r
+              ON r.canonical_id = i.canonical_id
+            WHERE i.source_name = 'imdb' AND t.source_name = 'tmdb'
+              AND i.year <> t.year
+              AND i.valid_to IS NULL AND t.valid_to IS NULL
+            ORDER BY i.canonical_id
+            LIMIT 10
+            """
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ### Operator tunes trust at runtime
+
+    No spec edit, no redeploy. Just `UPDATE source_trust` and the resolver
+    picks up the new value on its next query.
+    """)
+    return
+
+
+@app.cell
+def _(pg, schema):
+    with pg.cursor() as cur:
+        # Bump tmdb's trust on `year` above imdb's. The next query against
+        # movie_resolved.year will return tmdb's value where they disagree.
+        cur.execute(
+            f"UPDATE {schema}.source_trust SET trust = 0.95 "
+            f"WHERE source_name = 'tmdb' AND class_name = 'Movie' "
+            f"AND slot_name = 'year'"
+        )
+    return
+
+
+@app.cell
+def _(pg, schema):
+    # Same query as above — resolved_year flips to tmdb's where they disagreed.
+    with pg.cursor() as cur:
+        cur.execute(
+            f"""
+            SELECT
+              i.canonical_id,
+              i.year AS imdb_year,
+              t.year AS tmdb_year,
+              r.year AS resolved_year
+            FROM {schema}.movie_bindings i
+            JOIN {schema}.movie_bindings t
+              ON t.canonical_id = i.canonical_id
+            JOIN {schema}.movie_resolved r
+              ON r.canonical_id = i.canonical_id
+            WHERE i.source_name = 'imdb' AND t.source_name = 'tmdb'
+              AND i.year <> t.year
+              AND i.valid_to IS NULL AND t.valid_to IS NULL
+            ORDER BY i.canonical_id
+            LIMIT 10
+            """
+        )
+        cols = [d.name for d in cur.description]
+        return [dict(zip(cols, row)) for row in cur.fetchall()]
+
+
+@app.cell
+def _(mo):
+    mo.md(r"""
+    ## Stage 3 — evolve the spec: add Credit + rottentomatoes
+
+    The spec gains a reified relation: ``Credit`` records (movie, person,
+    role) triples. We add ``rottentomatoes`` as a third source.
+
+    ``init_sql(query_fn=…)`` emits exactly what's missing: a new
+    ``credit`` canonical table, a ``credit_bindings`` table, a
+    ``credit_resolved`` view, FK constraints, indexes, and trust-seed
+    rows for the new (rottentomatoes, *, *) and (*, Credit, *) triples.
+    Existing data is untouched.
+    """)
+    return
+
+
+@app.cell
+def _(Spec, types):
+    spec_v3 = Spec(id="movies_play", version="0.3")
+
+    person_v3 = spec_v3.add_class("Person")
+    person_v3.slot("canonical_id", types.TEXT, identifier=True)
+    person_v3.slot("name", types.TEXT, required=True)
+    person_v3.slot("birth_country", types.TEXT)
+    person_v3.slot("birth_year", types.INTEGER)
+
+    movie_v3 = spec_v3.add_class("Movie")
+    movie_v3.slot("canonical_id", types.TEXT, identifier=True)
+    movie_v3.slot("title", types.TEXT, required=True)
+    movie_v3.slot("year", types.INTEGER)
+    movie_v3.slot("runtime_minutes", types.INTEGER)
+    movie_v3.slot("director", person_v3)
+
+    credit_v3 = spec_v3.add_class("Credit", description="A person's role on a movie.")
+    credit_v3.slot("canonical_id", types.TEXT, identifier=True)
+    credit_v3.slot("role", types.TEXT, required=True)
+    credit_v3.slot("movie", movie_v3)
+    credit_v3.slot("person", person_v3)
+
+    imdb_v3 = spec_v3.add_source("imdb")
+    imdb_v3.bind(person_v3, base_trust=0.85)
+    imdb_v3.bind(movie_v3, base_trust=0.85)
+    imdb_v3.bind(credit_v3, base_trust=0.85)
+
+    tmdb_v3 = spec_v3.add_source("tmdb")
+    tmdb_v3.bind(person_v3, base_trust=0.75)
+    tmdb_v3.bind(movie_v3, base_trust=0.75)
+    tmdb_v3.bind(credit_v3, base_trust=0.75)
+
+    rt_v3 = spec_v3.add_source("rottentomatoes")
+    rt_v3.bind(person_v3, base_trust=0.70)
+    rt_v3.bind(movie_v3, base_trust=0.70)
+    rt_v3.bind(credit_v3, base_trust=0.70)
+
+    spec_v3.validate()
+    return credit_v3, movie_v3, person_v3, spec_v3
+
+
+@app.cell
+def _(mo, pg, query_fn, schema, spec_v3):
+    delta_sql = spec_v3.init_sql(query_fn=query_fn, schema=schema)
+    op_count = len([line for line in delta_sql.split(";\n\n") if line.strip()])
+    pg.execute(delta_sql)
+    mo.md(
+        f"Stage 3 evolve: ran **{op_count}** delta ops (new Credit class + rottentomatoes source)."
+    )
+    return
+
+
+@app.cell
+def _(ClassWrites, load, pg, schema, spec_v3):
+    # Ingest the remaining data — rottentomatoes for everything, plus
+    # credits from all three sources.
+    writes = []
+    for source_name in ("imdb", "tmdb", "rottentomatoes"):
+        # rottentomatoes is brand new — persons/movies from it.
+        # imdb/tmdb persons/movies already ingested, but their credits
+        # are new (Credit class wasn't in the spec until now).
+        if source_name == "rottentomatoes":
+            for entity in ("persons", "movies", "credits"):
+                cls_name = entity[:-1].capitalize()
+                b = next(
+                    b
+                    for b in spec_v3.source_bindings
+                    if b.source.name == source_name and b.class_.name == cls_name
+                )
+                writes.append(ClassWrites(binding=b, rows=load(source_name, entity)))
+        else:
+            b = next(
+                b
+                for b in spec_v3.source_bindings
+                if b.source.name == source_name and b.class_.name == "Credit"
+            )
+            writes.append(ClassWrites(binding=b, rows=load(source_name, "credits")))
+
+    bw = spec_v3.emit_batch_write(writes, schema=schema, enforce=False)
+    with pg.cursor() as cur:
+        for sql, params in bw.statements:
+            cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        counts = {}
+        for cls in ("person", "movie", "credit"):
+            cur.execute(f"SELECT count(*) FROM {schema}.{cls}_resolved")
+            counts[cls] = cur.fetchone()[0]
     counts
     return
 
@@ -373,133 +478,103 @@ def _(
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 4. Query playground
+    ## Stage 4 — queries against the final state
 
-    The `qf(q)` helper compiles a knot `Query` to SQL and runs it against
-    the deployed schema. Returns rows as a list of dicts. `qsql(q)` returns
-    the compiled SQL without running it — handy for understanding the
-    compilation.
-
-    Substrate cheatsheet:
-
-    - `Class.where(predicate)` — filter
-    - `Class.col.<slot>` — slot ref; for FKs, navigable: `Movie.col.director.name`
-    - `Class.col.<fk> == this.OtherClass` — outer-scope correlation
-    - `predicate.any()` / `.none()` / `.count()` / `.all(cond)` — set quantifiers
-    - `Class.select(*refs).order_by(ref, "desc").limit(N).offset(M)` — terminal shape
+    The substrate at full strength: predicates, FK walks, correlated
+    aggregates. Edit any cell, run it, inspect the SQL.
     """)
     return
 
 
 @app.cell
-def _(pg, schema, spec):
+def _(pg, schema, spec_v3):
     def qf(q):
         """Compile + run a knot Query; return list of dict rows."""
-        sql, params = spec.compile_query(q, schema=schema)
+        sql, params = spec_v3.compile_query(q, schema=schema)
         with pg.cursor() as cur:
             cur.execute(sql, params or None)
             cols = [d.name for d in cur.description]
             return [dict(zip(cols, r)) for r in cur.fetchall()]
 
     def qsql(q):
-        """Just show the compiled SQL without executing."""
-        s, _ = spec.compile_query(q, schema=schema)
+        """Show the compiled SQL without executing."""
+        s, _ = spec_v3.compile_query(q, schema=schema)
         return s
 
     return qf, qsql
 
 
 @app.cell
-def _(mo):
-    mo.md(r"""
-    ### Example queries (edit cells and re-run)
-    """)
-    return
-
-
-@app.cell
-def _(movie, qf):
-    # Q1 — 5 most recent movies
+def _(movie_v3, qf):
+    # Q1 — 10 most recent movies + their directors (FK walk via .director.name)
     qf(
-        movie.order_by(movie.col.year, "desc")
-        .limit(5)
-        .select(movie.col.title, movie.col.year)
+        movie_v3.order_by(movie_v3.col.year, "desc")
+        .limit(10)
+        .select(movie_v3.col.title, movie_v3.col.year, movie_v3.col.director.name)
     )
     return
 
 
 @app.cell
-def _(movie, qf):
-    # Q2 — 1990s movies with their directors
+def _(movie_v3, qf):
+    # Q2 — Movies directed by someone born in the USA
     qf(
-        movie.where(movie.col.year >= 1990)
-        .where(movie.col.year < 2000)
-        .order_by(movie.col.year)
-        .select(movie.col.title, movie.col.year, movie.col.director.name)
+        movie_v3.where(movie_v3.col.director.birth_country == "USA")
+        .order_by(movie_v3.col.year)
+        .select(movie_v3.col.title, movie_v3.col.year, movie_v3.col.director.name)
     )
     return
 
 
 @app.cell
-def _(movie, person, qf, this):
+def _(movie_v3, person_v3, qf):
+    from knot import this
+
     # Q3 — Persons who have directed at least one movie
     qf(
-        person.where((movie.col.director == this.Person).any()).select(
-            person.col.name, person.col.birth_country
-        )
+        person_v3.where((movie_v3.col.director == this.Person).any())
+        .order_by(person_v3.col.name)
+        .select(person_v3.col.name, person_v3.col.birth_country)
+    )
+    return (this,)
+
+
+@app.cell
+def _(movie_v3, person_v3, qf, this):
+    # Q4 — Directors with more than 3 movies in the dataset
+    qf(
+        person_v3.where((movie_v3.col.director == this.Person).count() > 3)
+        .order_by(person_v3.col.name)
+        .select(person_v3.col.name, person_v3.col.birth_country)
     )
     return
 
 
 @app.cell
-def _(movie, person, qf, this):
-    # Q4 — Directors with more than 2 movies
+def _(movie_v3, person_v3, qf, this):
+    # Q5 — People who appear in the dataset but never directed
     qf(
-        person.where((movie.col.director == this.Person).count() > 2).select(
-            person.col.name, person.col.birth_country
-        )
-    )
-    return
-
-
-@app.cell
-def _(movie, person, qf, this):
-    # Q5 — People who have NEVER directed a movie
-    qf(
-        person.where((movie.col.director == this.Person).none()).select(
-            person.col.name, person.col.birth_country
-        )
-    )
-    return
-
-
-@app.cell
-def _(movie, qf):
-    # Q6 — Movies whose director was born in Japan
-    qf(
-        movie.where(movie.col.director.birth_country == "Japan")
-        .order_by(movie.col.year)
-        .select(movie.col.title, movie.col.year, movie.col.director.name)
+        person_v3.where((movie_v3.col.director == this.Person).none())
+        .order_by(person_v3.col.name)
+        .limit(15)
+        .select(person_v3.col.name, person_v3.col.birth_country)
     )
     return
 
 
 @app.cell
 def _(mo):
-    mo.md(r"""
-    ### Inspect the compiled SQL
-    """)
+    mo.md(r"### Inspect a compiled query")
     return
 
 
 @app.cell
-def _(movie, qsql):
-    # Print the SQL for any query without running it.
+def _(movie_v3, qsql, this):
     print(
         qsql(
-            movie.where(movie.col.director.birth_country == "Japan")
-            .order_by(movie.col.year)
-            .select(movie.col.title, movie.col.director.name)
+            movie_v3.where(movie_v3.col.director.birth_country == "Japan")
+            .order_by(movie_v3.col.year)
+            .select(movie_v3.col.title, movie_v3.col.director.name)
         )
     )
     return
@@ -508,19 +583,19 @@ def _(movie, qsql):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ## 5. Cleanup (run this when you're done)
+    ## Cleanup
 
-    Drops the playground schema and closes the connection. Re-run the
-    notebook from cell 1 to start fresh.
+    Uncomment to drop the schema when you're done. Re-running the notebook
+    from the top picks a fresh schema name.
     """)
     return
 
 
 @app.cell
-def _(schema):
+def _(pg, schema):
     # pg.execute(f"DROP SCHEMA {schema} CASCADE")
     # pg.close()
-    f"To clean up: uncomment the lines above and re-run. Schema is `{schema}`."
+    f"To clean up: uncomment the lines above. Schema is `{schema}`."
     return
 
 
