@@ -2,18 +2,20 @@
 
 Single-file dataclass-based spec construction. Bodies and view
 predicates are authored through the semantic builder (``knot.expr``);
-no raw SQL strings cross knot's user surface.
+no raw SQL strings cross knot's user surface. Slot types come from
+``knot.types`` (the one canonical surface — ``types.TEXT``,
+``types.ARRAY(types.TEXT)``, ``types.FK(other_class)``).
 
-The type system is structural — a ``TypeExpression`` is one of:
+Under the hood the type AST is one of:
 
   - ``Primitive``           — enum of the closed primitive set
   - ``Array(of=…)``         — homogeneous container over another TypeExpression
   - ``ClassRef(target=…)``  — FK to another class (stored as canonical_id)
 
-Builder methods accept either a ``TypeExpression`` or a primitive name
-string (``"text"`` → ``Primitive.TEXT``). All entities are plain
-``@dataclass(slots=True)`` records so a future Java port maps 1:1 to ``record`` /
-``sealed interface`` / ``enum``.
+These are internal — callers go through ``knot.types`` rather than
+constructing them directly. All entities are plain
+``@dataclass(slots=True)`` records so a future Java port maps 1:1 to
+``record`` / ``sealed interface`` / ``enum``.
 
 Validation happens at two levels:
 
@@ -98,21 +100,15 @@ class ClassRef:
 TypeExpression = Primitive | Array | ClassRef
 
 
-def _coerce_type(t: TypeExpression | str) -> TypeExpression:
-    """Builder helper — accept ``"text"`` as shorthand for ``Primitive.TEXT``."""
+def _coerce_type(t: TypeExpression) -> TypeExpression:
+    """Validate a slot type. Canonical type API only — use the ``knot.types``
+    module (``types.TEXT``, ``types.ARRAY(types.TEXT)``, ``types.FK(cls)``).
+    No string shorthand, no enum direct access."""
     if isinstance(t, (Primitive, Array, ClassRef)):
         return t
-    if isinstance(t, str):
-        try:
-            return Primitive(t)
-        except ValueError as e:
-            raise ValueError(
-                f"Unknown primitive type {t!r}. Valid: "
-                f"{[p.value for p in Primitive]}; "
-                f"for FK use .fk(to=...) or pass ClassRef(target=...) directly."
-            ) from e
     raise TypeError(
-        f"Slot type must be a TypeExpression or primitive name string, got {type(t).__name__}"
+        f"Slot type must be a value from knot.types (TEXT/INTEGER/FLOAT/"
+        f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)/FK(...)); got {type(t).__name__}"
     )
 
 
@@ -222,7 +218,7 @@ class OntologyClass:
     def slot(
         self,
         name: str,
-        type: TypeExpression | str,
+        type: TypeExpression,
         *,
         identifier: bool = False,
         required: bool = False,
@@ -234,25 +230,6 @@ class OntologyClass:
             name=name,
             type=_coerce_type(type),
             identifier=identifier,
-            required=required,
-            description=description,
-        )
-        self.slots.append(s)
-        return s
-
-    def fk(
-        self,
-        name: str,
-        *,
-        to: OntologyClass,
-        required: bool = False,
-        description: str | None = None,
-    ) -> Slot:
-        if any(s.name == name for s in self.slots):
-            raise ValueError(f"OntologyClass {self.name!r} already has a slot named {name!r}")
-        s = Slot(
-            name=name,
-            type=ClassRef(target=to),
             required=required,
             description=description,
         )

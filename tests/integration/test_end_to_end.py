@@ -15,8 +15,8 @@ from __future__ import annotations
 
 from knot import (
     CORRECTIONS_SOURCE_NAME,
-    Primitive,
     Spec,
+    types,
 )
 from knot.compile import (
     ClassWrites,
@@ -48,10 +48,10 @@ def _movies_only_spec() -> Spec:
     """Single class Movie with year + runtime, IMDB + TMDB sources."""
     spec = Spec(id="movies", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("name", Primitive.TEXT, required=True)
-    movie.slot("year", Primitive.INTEGER)
-    movie.slot("runtime_minutes", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("name", types.TEXT, required=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime_minutes", types.INTEGER)
 
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
@@ -529,7 +529,7 @@ def test_evolve_add_slot_preserves_existing_data(pg, schema, query_fn):
     # Evolve: add `original_language` slot.
     spec2 = _movies_only_spec()
     movie = next(c for c in spec2.classes if c.name == "Movie")
-    movie.slot("original_language", Primitive.TEXT)
+    movie.slot("original_language", types.TEXT)
 
     ops = diff_against_db(spec2, query_fn, schema=schema)
     assert any(op.description == "add_column_movie_original_language" for op in ops)
@@ -630,10 +630,10 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     # Evolve: rename runtime_minutes → length_min.
     spec2 = Spec(id="movies", version="0.2")
     movie = spec2.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("name", Primitive.TEXT, required=True)
-    movie.slot("year", Primitive.INTEGER)
-    movie.slot("length_min", Primitive.INTEGER)  # was runtime_minutes
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("name", types.TEXT, required=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("length_min", types.INTEGER)  # was runtime_minutes
     imdb = spec2.add_source("imdb")
     tmdb = spec2.add_source("tmdb")
     spec2.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
@@ -663,9 +663,9 @@ def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
     # Drop `runtime_minutes` from the spec.
     spec2 = Spec(id="movies", version="0.2")
     movie = spec2.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("name", Primitive.TEXT, required=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("name", types.TEXT, required=True)
+    movie.slot("year", types.INTEGER)
     imdb = spec2.add_source("imdb")
     spec2.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
 

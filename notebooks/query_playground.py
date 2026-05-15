@@ -39,26 +39,26 @@ def _(mo):
 
 @app.cell
 def _():
-    from knot import Spec, this
+    from knot import Spec, this, types
 
     spec = Spec(id="movies_play", version="0.1")
 
     person = spec.add_class("Person", description="A real human.")
-    person.slot("canonical_id", "text", identifier=True)
-    person.slot("name", "text", required=True)
-    person.slot("birth_country", "text")
+    person.slot("canonical_id", types.TEXT, identifier=True)
+    person.slot("name", types.TEXT, required=True)
+    person.slot("birth_country", types.TEXT)
 
     movie = spec.add_class("Movie", description="A theatrical release.")
-    movie.slot("canonical_id", "text", identifier=True)
-    movie.slot("title", "text", required=True)
-    movie.slot("year", "integer")
-    movie.fk("director", to=person)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("title", types.TEXT, required=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("director", types.FK(person))
 
     credit = spec.add_class("Credit", description="A person's role in a movie.")
-    credit.slot("canonical_id", "text", identifier=True)
-    credit.slot("role", "text", required=True)
-    credit.fk("movie", to=movie)
-    credit.fk("person", to=person)
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("role", types.TEXT, required=True)
+    credit.slot("movie", types.FK(movie))
+    credit.slot("person", types.FK(person))
 
     # Single source for simplicity. Multi-source resolution + trust
     # arbitration still happens — there's just one contributor here.
@@ -138,65 +138,187 @@ def _(mo):
 @app.cell
 def _():
     person_rows = [
-        {"source_identifier": "nm_tarantino", "canonical_id": "p_tarantino",
-         "name": "Quentin Tarantino", "birth_country": "USA"},
-        {"source_identifier": "nm_kurosawa", "canonical_id": "p_kurosawa",
-         "name": "Akira Kurosawa", "birth_country": "Japan"},
-        {"source_identifier": "nm_miyazaki", "canonical_id": "p_miyazaki",
-         "name": "Hayao Miyazaki", "birth_country": "Japan"},
-        {"source_identifier": "nm_scorsese", "canonical_id": "p_scorsese",
-         "name": "Martin Scorsese", "birth_country": "USA"},
-        {"source_identifier": "nm_ozu", "canonical_id": "p_ozu",
-         "name": "Yasujirō Ozu", "birth_country": "Japan"},
-        {"source_identifier": "nm_thurman", "canonical_id": "p_thurman",
-         "name": "Uma Thurman", "birth_country": "USA"},
-        {"source_identifier": "nm_mifune", "canonical_id": "p_mifune",
-         "name": "Toshirō Mifune", "birth_country": "Japan"},
+        {
+            "source_identifier": "nm_tarantino",
+            "canonical_id": "p_tarantino",
+            "name": "Quentin Tarantino",
+            "birth_country": "USA",
+        },
+        {
+            "source_identifier": "nm_kurosawa",
+            "canonical_id": "p_kurosawa",
+            "name": "Akira Kurosawa",
+            "birth_country": "Japan",
+        },
+        {
+            "source_identifier": "nm_miyazaki",
+            "canonical_id": "p_miyazaki",
+            "name": "Hayao Miyazaki",
+            "birth_country": "Japan",
+        },
+        {
+            "source_identifier": "nm_scorsese",
+            "canonical_id": "p_scorsese",
+            "name": "Martin Scorsese",
+            "birth_country": "USA",
+        },
+        {
+            "source_identifier": "nm_ozu",
+            "canonical_id": "p_ozu",
+            "name": "Yasujirō Ozu",
+            "birth_country": "Japan",
+        },
+        {
+            "source_identifier": "nm_thurman",
+            "canonical_id": "p_thurman",
+            "name": "Uma Thurman",
+            "birth_country": "USA",
+        },
+        {
+            "source_identifier": "nm_mifune",
+            "canonical_id": "p_mifune",
+            "name": "Toshirō Mifune",
+            "birth_country": "Japan",
+        },
     ]
 
     movie_rows = [
-        {"source_identifier": "tt_pulpfiction", "canonical_id": "m_pulpfiction",
-         "title": "Pulp Fiction", "year": 1994, "director": "p_tarantino"},
-        {"source_identifier": "tt_killbill1", "canonical_id": "m_killbill1",
-         "title": "Kill Bill: Vol. 1", "year": 2003, "director": "p_tarantino"},
-        {"source_identifier": "tt_oncetime", "canonical_id": "m_oncetime",
-         "title": "Once Upon a Time in Hollywood", "year": 2019,
-         "director": "p_tarantino"},
-        {"source_identifier": "tt_django", "canonical_id": "m_djangounchained",
-         "title": "Django Unchained", "year": 2012, "director": "p_tarantino"},
-        {"source_identifier": "tt_inglourious", "canonical_id": "m_inglourious",
-         "title": "Inglourious Basterds", "year": 2009, "director": "p_tarantino"},
-        {"source_identifier": "tt_reservoir", "canonical_id": "m_reservoirdogs",
-         "title": "Reservoir Dogs", "year": 1992, "director": "p_tarantino"},
-        {"source_identifier": "tt_7samurai", "canonical_id": "m_sevensamurai",
-         "title": "Seven Samurai", "year": 1954, "director": "p_kurosawa"},
-        {"source_identifier": "tt_rashomon", "canonical_id": "m_rashomon",
-         "title": "Rashomon", "year": 1950, "director": "p_kurosawa"},
-        {"source_identifier": "tt_yojimbo", "canonical_id": "m_yojimbo",
-         "title": "Yojimbo", "year": 1961, "director": "p_kurosawa"},
-        {"source_identifier": "tt_spirited", "canonical_id": "m_spiritedaway",
-         "title": "Spirited Away", "year": 2001, "director": "p_miyazaki"},
-        {"source_identifier": "tt_totoro", "canonical_id": "m_totoro",
-         "title": "My Neighbor Totoro", "year": 1988, "director": "p_miyazaki"},
-        {"source_identifier": "tt_tokyo", "canonical_id": "m_tokyostory",
-         "title": "Tokyo Story", "year": 1953, "director": "p_ozu"},
-        {"source_identifier": "tt_taxi", "canonical_id": "m_taxidriver",
-         "title": "Taxi Driver", "year": 1976, "director": "p_scorsese"},
-        {"source_identifier": "tt_goodfellas", "canonical_id": "m_goodfellas",
-         "title": "Goodfellas", "year": 1990, "director": "p_scorsese"},
+        {
+            "source_identifier": "tt_pulpfiction",
+            "canonical_id": "m_pulpfiction",
+            "title": "Pulp Fiction",
+            "year": 1994,
+            "director": "p_tarantino",
+        },
+        {
+            "source_identifier": "tt_killbill1",
+            "canonical_id": "m_killbill1",
+            "title": "Kill Bill: Vol. 1",
+            "year": 2003,
+            "director": "p_tarantino",
+        },
+        {
+            "source_identifier": "tt_oncetime",
+            "canonical_id": "m_oncetime",
+            "title": "Once Upon a Time in Hollywood",
+            "year": 2019,
+            "director": "p_tarantino",
+        },
+        {
+            "source_identifier": "tt_django",
+            "canonical_id": "m_djangounchained",
+            "title": "Django Unchained",
+            "year": 2012,
+            "director": "p_tarantino",
+        },
+        {
+            "source_identifier": "tt_inglourious",
+            "canonical_id": "m_inglourious",
+            "title": "Inglourious Basterds",
+            "year": 2009,
+            "director": "p_tarantino",
+        },
+        {
+            "source_identifier": "tt_reservoir",
+            "canonical_id": "m_reservoirdogs",
+            "title": "Reservoir Dogs",
+            "year": 1992,
+            "director": "p_tarantino",
+        },
+        {
+            "source_identifier": "tt_7samurai",
+            "canonical_id": "m_sevensamurai",
+            "title": "Seven Samurai",
+            "year": 1954,
+            "director": "p_kurosawa",
+        },
+        {
+            "source_identifier": "tt_rashomon",
+            "canonical_id": "m_rashomon",
+            "title": "Rashomon",
+            "year": 1950,
+            "director": "p_kurosawa",
+        },
+        {
+            "source_identifier": "tt_yojimbo",
+            "canonical_id": "m_yojimbo",
+            "title": "Yojimbo",
+            "year": 1961,
+            "director": "p_kurosawa",
+        },
+        {
+            "source_identifier": "tt_spirited",
+            "canonical_id": "m_spiritedaway",
+            "title": "Spirited Away",
+            "year": 2001,
+            "director": "p_miyazaki",
+        },
+        {
+            "source_identifier": "tt_totoro",
+            "canonical_id": "m_totoro",
+            "title": "My Neighbor Totoro",
+            "year": 1988,
+            "director": "p_miyazaki",
+        },
+        {
+            "source_identifier": "tt_tokyo",
+            "canonical_id": "m_tokyostory",
+            "title": "Tokyo Story",
+            "year": 1953,
+            "director": "p_ozu",
+        },
+        {
+            "source_identifier": "tt_taxi",
+            "canonical_id": "m_taxidriver",
+            "title": "Taxi Driver",
+            "year": 1976,
+            "director": "p_scorsese",
+        },
+        {
+            "source_identifier": "tt_goodfellas",
+            "canonical_id": "m_goodfellas",
+            "title": "Goodfellas",
+            "year": 1990,
+            "director": "p_scorsese",
+        },
     ]
 
     credit_rows = [
-        {"source_identifier": "c1", "canonical_id": "c1", "role": "actor",
-         "movie": "m_pulpfiction", "person": "p_thurman"},
-        {"source_identifier": "c2", "canonical_id": "c2", "role": "actor",
-         "movie": "m_killbill1", "person": "p_thurman"},
-        {"source_identifier": "c3", "canonical_id": "c3", "role": "actor",
-         "movie": "m_sevensamurai", "person": "p_mifune"},
-        {"source_identifier": "c4", "canonical_id": "c4", "role": "actor",
-         "movie": "m_yojimbo", "person": "p_mifune"},
-        {"source_identifier": "c5", "canonical_id": "c5", "role": "actor",
-         "movie": "m_rashomon", "person": "p_mifune"},
+        {
+            "source_identifier": "c1",
+            "canonical_id": "c1",
+            "role": "actor",
+            "movie": "m_pulpfiction",
+            "person": "p_thurman",
+        },
+        {
+            "source_identifier": "c2",
+            "canonical_id": "c2",
+            "role": "actor",
+            "movie": "m_killbill1",
+            "person": "p_thurman",
+        },
+        {
+            "source_identifier": "c3",
+            "canonical_id": "c3",
+            "role": "actor",
+            "movie": "m_sevensamurai",
+            "person": "p_mifune",
+        },
+        {
+            "source_identifier": "c4",
+            "canonical_id": "c4",
+            "role": "actor",
+            "movie": "m_yojimbo",
+            "person": "p_mifune",
+        },
+        {
+            "source_identifier": "c5",
+            "canonical_id": "c5",
+            "role": "actor",
+            "movie": "m_rashomon",
+            "person": "p_mifune",
+        },
     ]
     return credit_rows, movie_rows, person_rows
 
@@ -217,16 +339,13 @@ def _(
     from knot.compile.data_io import ClassWrites
 
     imdb_person_b = next(
-        b for b in spec.source_bindings
-        if b.source.name == "imdb" and b.class_ is person
+        b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is person
     )
     imdb_movie_b = next(
-        b for b in spec.source_bindings
-        if b.source.name == "imdb" and b.class_ is movie
+        b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is movie
     )
     imdb_credit_b = next(
-        b for b in spec.source_bindings
-        if b.source.name == "imdb" and b.class_ is credit
+        b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is credit
     )
 
     bw = emit_batch_write(
@@ -311,11 +430,7 @@ def _(mo):
 @app.cell
 def _(movie, qf):
     # Q1 — 5 most recent movies
-    qf(
-        movie.order_by(movie.col.year, "desc")
-        .limit(5)
-        .select(movie.col.title, movie.col.year)
-    )
+    qf(movie.order_by(movie.col.year, "desc").limit(5).select(movie.col.title, movie.col.year))
     return
 
 
@@ -335,8 +450,9 @@ def _(movie, qf):
 def _(movie, person, qf, this):
     # Q3 — Persons who have directed at least one movie
     qf(
-        person.where((movie.col.director == this.Person).any())
-        .select(person.col.name, person.col.birth_country)
+        person.where((movie.col.director == this.Person).any()).select(
+            person.col.name, person.col.birth_country
+        )
     )
     return
 
@@ -345,8 +461,9 @@ def _(movie, person, qf, this):
 def _(movie, person, qf, this):
     # Q4 — Directors with more than 2 movies
     qf(
-        person.where((movie.col.director == this.Person).count() > 2)
-        .select(person.col.name, person.col.birth_country)
+        person.where((movie.col.director == this.Person).count() > 2).select(
+            person.col.name, person.col.birth_country
+        )
     )
     return
 
@@ -355,8 +472,9 @@ def _(movie, person, qf, this):
 def _(movie, person, qf, this):
     # Q5 — People who have NEVER directed a movie
     qf(
-        person.where((movie.col.director == this.Person).none())
-        .select(person.col.name, person.col.birth_country)
+        person.where((movie.col.director == this.Person).none()).select(
+            person.col.name, person.col.birth_country
+        )
     )
     return
 

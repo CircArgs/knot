@@ -2,7 +2,7 @@
 
 import sqlglot
 
-from knot import Primitive, Spec
+from knot import Spec, types
 from knot.compile import emit_ddl, emit_trust_seed
 
 
@@ -51,7 +51,7 @@ def test_seed_emits_one_upsert_per_binding(movie_spec):
 def test_seed_multi_source_one_class():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
     spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)

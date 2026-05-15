@@ -3,7 +3,7 @@
 import pytest
 import sqlglot
 
-from knot import CORRECTIONS_SOURCE_NAME, Primitive, Spec
+from knot import CORRECTIONS_SOURCE_NAME, Spec, types
 from knot.compile import (
     ClassWrites,
     emit_batch_write,
@@ -19,9 +19,9 @@ from knot.compile import (
 def test_enable_corrections_registers_source_and_per_class_bindings():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     person = spec.add_class("Person")
-    person.slot("canonical_id", Primitive.TEXT, identifier=True)
+    person.slot("canonical_id", types.TEXT, identifier=True)
 
     src = spec.enable_corrections(accuracy=0.99)
     assert src.name == CORRECTIONS_SOURCE_NAME
@@ -33,7 +33,7 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
 def test_enable_corrections_skips_abstract_and_virtual_classes():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", Primitive.TEXT, identifier=True)
+    title.slot("canonical_id", types.TEXT, identifier=True)
     movie = spec.add_class("Movie", is_a=title)
     spec.add_virtual_class("DirectedMovie", base=movie, where=movie.col.canonical_id.is_not_null())
 
@@ -47,7 +47,7 @@ def test_enable_corrections_skips_abstract_and_virtual_classes():
 def test_enable_corrections_is_idempotent():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     src1 = spec.enable_corrections()
     src2 = spec.enable_corrections()
     assert src1 is src2  # second call returns the same Source
@@ -64,7 +64,7 @@ def test_corrections_source_name_is_reserved():
 def test_corrections_default_accuracy_is_high():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections()
     b = spec.corrections_binding_for(movie)
     assert b.accuracy == 0.99
@@ -73,7 +73,7 @@ def test_corrections_default_accuracy_is_high():
 def test_corrections_custom_accuracy():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections(accuracy=0.8)
     b = spec.corrections_binding_for(movie)
     assert b.accuracy == 0.8
@@ -82,7 +82,7 @@ def test_corrections_custom_accuracy():
 def test_corrections_binding_for_raises_when_disabled():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(KeyError, match="enable_corrections"):
         spec.corrections_binding_for(movie)
 
@@ -95,7 +95,7 @@ def test_corrections_binding_for_raises_when_disabled():
 def test_emit_close_out_targets_correct_table_and_source():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     sql = emit_close_out(
         spec,
         class_name="Movie",
@@ -112,7 +112,7 @@ def test_emit_close_out_targets_correct_table_and_source():
 def test_emit_close_out_parses_postgres():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     sql = emit_close_out(spec, class_name="Movie", source_name="imdb")
     sqlglot.parse_one(sql, dialect="postgres")
 
@@ -120,7 +120,7 @@ def test_emit_close_out_parses_postgres():
 def test_emit_close_out_uses_class_identifier_column_name():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("imdb_id", Primitive.TEXT, identifier=True)  # non-default ident
+    movie.slot("imdb_id", types.TEXT, identifier=True)  # non-default ident
     sql = emit_close_out(spec, class_name="Movie", source_name="imdb")
     # The WHERE clause uses the actual identifier slot's column name,
     # not the literal "canonical_id".
@@ -130,7 +130,7 @@ def test_emit_close_out_uses_class_identifier_column_name():
 def test_emit_close_out_escapes_apostrophe_in_source_name():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     sql = emit_close_out(spec, class_name="Movie", source_name="o'brien")
     assert "'o''brien'" in sql
 
@@ -138,7 +138,7 @@ def test_emit_close_out_escapes_apostrophe_in_source_name():
 def test_emit_close_out_rejects_abstract_class():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", Primitive.TEXT, identifier=True)
+    title.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(ValueError, match="abstract"):
         emit_close_out(spec, class_name="Title", source_name="imdb")
 
@@ -157,8 +157,8 @@ def test_emit_close_out_rejects_unknown_class():
 def test_corrections_write_uses_batch_write():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     spec.enable_corrections()
     b = spec.corrections_binding_for(movie)
     bw = emit_batch_write(
@@ -183,7 +183,7 @@ def test_corrections_write_uses_batch_write():
 def test_corrections_appear_in_trust_seed():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections(accuracy=0.95)
     seeds = emit_trust_seed(spec)
     correction_seed = next((sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME)

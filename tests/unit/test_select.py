@@ -8,15 +8,16 @@ import pytest
 
 from knot.compile.query_sql import compile_query
 from knot.select import OrderBy, Query
-from knot.spec import Primitive, Spec
+from knot import types
+from knot.spec import Spec
 
 
 def _make_movie_spec() -> tuple[Spec, "OntologyClass"]:  # noqa: F821
     spec = Spec(id="test", version="0.0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("title", Primitive.TEXT)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("title", types.TEXT)
+    movie.slot("year", types.INTEGER)
     return spec, movie
 
 
@@ -122,14 +123,14 @@ def _make_movie_director_spec():
     """Movie with a `director` FK pointing at Person."""
     spec = Spec(id="test", version="0.0.1")
     person = spec.add_class("Person")
-    person.slot("canonical_id", Primitive.TEXT, identifier=True)
-    person.slot("name", Primitive.TEXT)
-    person.slot("birth_country", Primitive.TEXT)
+    person.slot("canonical_id", types.TEXT, identifier=True)
+    person.slot("name", types.TEXT)
+    person.slot("birth_country", types.TEXT)
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("title", Primitive.TEXT)
-    movie.slot("year", Primitive.INTEGER)
-    movie.fk("director", to=person)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("title", types.TEXT)
+    movie.slot("year", types.INTEGER)
+    movie.slot("director", types.FK(person))
     return spec, movie, person
 
 

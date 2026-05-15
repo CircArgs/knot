@@ -24,33 +24,33 @@ def _(mo):
 
 @app.cell
 def _():
-    from knot import Array, Primitive, SourceMap, Spec, VirtualClass
+    from knot import SourceMap, Spec, VirtualClass, types
 
-    return Array, Primitive, SourceMap, Spec, VirtualClass
+    return SourceMap, Spec, VirtualClass, types
 
 
 @app.cell
-def _(Array, Primitive, SourceMap, Spec):
+def _(SourceMap, Spec, types):
     spec = Spec(id="movies", version="0.1")
 
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", Primitive.TEXT, identifier=True)
-    title.slot("name", Primitive.TEXT, required=True)
+    title.slot("canonical_id", types.TEXT, identifier=True)
+    title.slot("name", types.TEXT, required=True)
 
     movie = spec.add_class("Movie", is_a=title)
-    movie.slot("year", "integer")  # string shorthand still works
-    movie.slot("runtime_minutes", Primitive.INTEGER)
-    movie.slot("genres", Array(of=Primitive.TEXT))  # typed container
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime_minutes", types.INTEGER)
+    movie.slot("genres", types.ARRAY(types.TEXT))
 
     person = spec.add_class("Person")
-    person.slot("canonical_id", Primitive.TEXT, identifier=True)
-    person.slot("name", Primitive.TEXT, required=True)
+    person.slot("canonical_id", types.TEXT, identifier=True)
+    person.slot("name", types.TEXT, required=True)
 
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
-    credit.slot("role", Primitive.TEXT, required=True)
-    credit.fk("movie", to=movie)
-    credit.fk("person", to=person)
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("role", types.TEXT, required=True)
+    credit.slot("movie", types.FK(movie))
+    credit.slot("person", types.FK(person))
 
     spec.add_virtual_class(
         "DirectedMovie",
@@ -113,9 +113,7 @@ def _(VirtualClass, mo, spec):
             if not cls.slots:
                 class_lines.append("_no own slots_\n")
             else:
-                class_lines.append(
-                    "| slot | type | identifier | required |\n| - | - | - | - |\n"
-                )
+                class_lines.append("| slot | type | identifier | required |\n| - | - | - | - |\n")
                 for s in cls.slots:
                     class_lines.append(
                         f"| `{s.name}` | `{s.type}` | "
@@ -181,7 +179,7 @@ def _(mo):
     Things to try in the build cell above:
 
     - Tune the binding's `accuracy=...` (0.0 - 1.0) — `b.beta_prior` re-derives.
-    - Mix type syntaxes: `Primitive.INTEGER`, `"integer"`, `Array(of=Primitive.TEXT)`, `ClassRef(target=movie)` (or use `.fk(to=...)`).
+    - Slot types come from `knot.types`: `types.INTEGER`, `types.ARRAY(types.TEXT)`, `types.FK(movie)`.
     - Add another class + binding for `tmdb`.
     - Add another constraint with a SQL body of your choice.
     """)

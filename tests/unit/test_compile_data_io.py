@@ -5,7 +5,7 @@ import json
 import pytest
 import sqlglot
 
-from knot import Primitive, Severity, SourceBinding, Spec
+from knot import Severity, SourceBinding, Spec, types
 from knot.compile import BatchWrite, ClassWrites, emit_batch_write
 
 # ---------------------------------------------------------------------------
@@ -337,8 +337,8 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
 def test_enforce_skips_warning_severity():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     spec.add_constraint(
         "warn_only", primary=movie, body=movie.col.year > 1900, severity=Severity.WARNING
     )
@@ -366,7 +366,7 @@ def test_enforce_skips_warning_severity():
 def test_enforce_no_constraints_at_all_no_do_block():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("imdb")
     b = spec.bind(src, movie, identifier=movie["canonical_id"])
     bw = emit_batch_write(
@@ -419,7 +419,7 @@ def test_schema_and_suffix_kwargs(movie_spec):
 def test_source_name_apostrophe_escaped():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("o_brien")
     src.name = "o'brien"  # simulate an unescaped apostrophe
     b = spec.bind(src, movie, identifier=movie["canonical_id"])
@@ -447,7 +447,7 @@ def test_source_name_apostrophe_escaped():
 def test_abstract_class_rejected():
     spec = Spec(id="m", version="0.1")
     abstract = spec.add_class("A", kind="abstract")
-    abstract.slot("canonical_id", Primitive.TEXT, identifier=True)
+    abstract.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("s")
     b = SourceBinding(source=src, class_=abstract, identifier_slot=abstract["canonical_id"])
     spec.source_bindings.append(b)

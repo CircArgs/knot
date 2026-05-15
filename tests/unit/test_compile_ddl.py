@@ -2,7 +2,7 @@
 
 import sqlglot
 
-from knot import Primitive, Spec
+from knot import Spec, types
 from knot.compile import emit_ddl
 
 
@@ -105,10 +105,10 @@ def test_fk_alters_emitted_for_classref_slots(movie_spec):
 def test_fk_alters_use_target_identifier_slot_name():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("imdb_id", Primitive.TEXT, identifier=True)  # non-default identifier name
+    movie.slot("imdb_id", types.TEXT, identifier=True)  # non-default identifier name
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
-    credit.fk("movie", to=movie)
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("movie", types.FK(movie))
     stmts = emit_ddl(spec)
     fk = next(s for s in stmts if s.startswith("ALTER TABLE knot_data.credit"))
     assert "REFERENCES knot_data.movie(imdb_id)" in fk
@@ -144,11 +144,11 @@ def test_fk_alters_only_for_concrete_classes():
     # Abstract classes don't get a canonical table → no ALTER TABLE.
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", Primitive.TEXT, identifier=True)
+    title.slot("canonical_id", types.TEXT, identifier=True)
     movie = spec.add_class("Movie", is_a=title)
     other = spec.add_class("Other")
-    other.slot("canonical_id", Primitive.TEXT, identifier=True)
-    other.fk("title", to=title)  # FK to abstract — questionable but allowed
+    other.slot("canonical_id", types.TEXT, identifier=True)
+    other.slot("title", types.FK(title))  # FK to abstract — questionable but allowed
     stmts = emit_ddl(spec)
     # No FK alter should reference an abstract class's nonexistent table.
     # Currently we DO emit one (FK to title) — that would fail at run time

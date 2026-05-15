@@ -2,15 +2,15 @@
 
 import sqlglot
 
-from knot import Primitive, Spec
+from knot import Spec, types
 from knot.compile import MigrationOp, diff_against_db, emit_flyway_files
 
 
 def _ops_for_empty_db() -> list[MigrationOp]:
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
     return diff_against_db(spec, lambda sql, params: [])

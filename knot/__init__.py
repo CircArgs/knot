@@ -1,14 +1,16 @@
 """knot — reflective ontology compiler (Python prototype).
 
 Spec construction via dataclass builders + a semantic expression
-language for constraint bodies and virtual-class predicates. No raw
-SQL strings cross knot's user surface (see ``knot.expr``).
+language for constraint bodies and virtual-class predicates. Slot
+types come from ``knot.types`` (the canonical surface); no raw SQL
+strings cross knot's user surface (see ``knot.expr``).
 
 Entity-local validation runs in each dataclass's ``__post_init__``;
 cross-entity well-formedness via ``Spec.validate()`` (returns errors)
 or ``Spec.validate_strict()`` (raises ``SpecError``).
 """
 
+from knot import types
 from knot.expr import (
     Aggregate,
     Between,
@@ -34,12 +36,9 @@ from knot.select import OrderBy, Query
 from knot.spec import (
     BINDING_PRIOR_STRENGTH,
     CORRECTIONS_SOURCE_NAME,
-    Array,
     ClassKind,
-    ClassRef,
     Constraint,
     OntologyClass,
-    Primitive,
     Severity,
     Slot,
     Source,
@@ -52,13 +51,12 @@ from knot.spec import (
 )
 
 __all__ = [
+    # type API
+    "types",
+    "TypeExpression",
     # core spec entities
-    "Primitive",
     "ClassKind",
     "Severity",
-    "Array",
-    "ClassRef",
-    "TypeExpression",
     "Slot",
     "OntologyClass",
     "VirtualClass",

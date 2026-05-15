@@ -6,7 +6,7 @@ builder directly (e.g. ``movie.col.year`` → ``Ref("Movie", "year")``);
 
 import sqlglot
 
-from knot import Primitive, Spec
+from knot import Spec, types
 from knot.compile import emit_validation, emit_validation_union
 
 
@@ -25,8 +25,8 @@ def test_message_null_when_unset(movie_spec):
 def test_message_literal_when_set():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     spec.add_constraint(
         "y",
         primary=movie,
@@ -40,8 +40,8 @@ def test_message_literal_when_set():
 def test_apostrophe_in_message_escaped():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     spec.add_constraint(
         "y",
         primary=movie,
@@ -63,11 +63,11 @@ def test_bare_column_unchanged(movie_spec):
 def test_class_ref_renders_qualified():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
-    credit.slot("role", Primitive.TEXT, required=True)
-    credit.fk("movie", to=movie)
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("role", types.TEXT, required=True)
+    credit.slot("movie", types.FK(movie))
     spec.add_constraint(
         "has_director",
         primary=movie,
@@ -93,10 +93,10 @@ def test_class_ref_renders_qualified():
 def test_has_count_in_predicate():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
-    credit.fk("movie", to=movie)
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("movie", types.FK(movie))
     spec.add_constraint(
         "min_three_credits",
         primary=movie,
@@ -111,9 +111,9 @@ def test_has_count_in_predicate():
 def test_boolean_composition():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
-    movie.slot("runtime", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime", types.INTEGER)
     spec.add_constraint(
         "year_and_runtime",
         primary=movie,
@@ -134,5 +134,5 @@ def test_emit_validation_union_for_non_empty_spec(movie_spec):
 
 def test_emit_validation_union_empty_spec():
     spec = Spec(id="e", version="0.1")
-    spec.add_class("Movie").slot("canonical_id", Primitive.TEXT, identifier=True)
+    spec.add_class("Movie").slot("canonical_id", types.TEXT, identifier=True)
     assert emit_validation_union(spec) is None

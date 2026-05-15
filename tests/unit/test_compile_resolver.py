@@ -3,7 +3,7 @@
 import pytest
 import sqlglot
 
-from knot import Primitive, Spec
+from knot import Spec, types
 from knot.compile import emit_resolved_view, emit_resolved_views
 
 
@@ -43,8 +43,8 @@ def test_resolved_view_no_inline_case_when():
     moved accuracy values into source_accuracy at runtime."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
     spec.bind(imdb, movie, identifier=movie["canonical_id"], accuracy=0.85)
@@ -109,7 +109,7 @@ def test_resolved_view_kwargs_threading(movie_spec):
 def test_resolved_view_rejects_abstract_class():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", Primitive.TEXT, identifier=True)
+    title.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(ValueError, match="concrete classes"):
         emit_resolved_view(spec, title)
 
@@ -120,8 +120,8 @@ def test_resolved_view_unbound_sources_fall_to_zero_via_coalesce():
     # source that DOES have a row.
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", Primitive.TEXT, identifier=True)
-    movie.slot("year", Primitive.INTEGER)
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("year", types.INTEGER)
     v = emit_resolved_view(spec, movie)
     assert "COALESCE(a.accuracy, 0)" in v
     sqlglot.parse_one(v, dialect="postgres")

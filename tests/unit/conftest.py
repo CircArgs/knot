@@ -2,7 +2,7 @@
 
 import pytest
 
-from knot import Array, Primitive, SourceMap, Spec
+from knot import SourceMap, Spec, types
 
 
 @pytest.fixture
@@ -16,23 +16,23 @@ def movie_spec() -> Spec:
     spec = Spec(id="movies", version="0.1")
 
     title = spec.add_class("Title", kind="abstract", description="title hierarchy root")
-    title.slot("canonical_id", Primitive.TEXT, identifier=True)
-    title.slot("name", Primitive.TEXT, required=True)
+    title.slot("canonical_id", types.TEXT, identifier=True)
+    title.slot("name", types.TEXT, required=True)
 
     movie = spec.add_class("Movie", is_a=title, description="a film")
-    movie.slot("year", Primitive.INTEGER)
-    movie.slot("runtime_minutes", Primitive.INTEGER)
-    movie.slot("genres", Array(of=Primitive.TEXT))
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime_minutes", types.INTEGER)
+    movie.slot("genres", types.ARRAY(types.TEXT))
 
     person = spec.add_class("Person")
-    person.slot("canonical_id", Primitive.TEXT, identifier=True)
-    person.slot("name", Primitive.TEXT, required=True)
+    person.slot("canonical_id", types.TEXT, identifier=True)
+    person.slot("name", types.TEXT, required=True)
 
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", Primitive.TEXT, identifier=True)
-    credit.slot("role", Primitive.TEXT, required=True)
-    credit.fk("movie", to=movie)
-    credit.fk("person", to=person)
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("role", types.TEXT, required=True)
+    credit.slot("movie", types.FK(movie))
+    credit.slot("person", types.FK(person))
 
     spec.add_virtual_class(
         "DirectedMovie",
