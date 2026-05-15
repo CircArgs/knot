@@ -279,24 +279,29 @@ def _emit_bindings_table(
     ]
     for slot in cls.effective_slots():
         # All slots are nullable in bindings — including the identifier.
-        # Bronze-layer ingest writes source rows BEFORE ER assigns a
-        # canonical_id; the resolved view filters those rows out via
-        # ``WHERE <ident> IS NOT NULL`` until ER claims them. A source
-        # may also only project some non-identifier slots; those are
-        # nullable for the same reason.
+        # Ingest writes source rows BEFORE ER assigns a canonical_id;
+        # the resolved view filters those rows out via ``WHERE <ident>
+        # IS NOT NULL`` until ER claims them. A source may also only
+        # project some non-identifier slots; those are nullable for the
+        # same reason.
         col = f"    {slot.name} {_pg_type(slot.type)}"
         columns.append(col)
-    # Bronze-layer raw payload — the full row as ingested, preserved
-    # for backfilling new slots later without re-ingesting from the
-    # source. Always populated by emit_batch_write; default '{}' lets
-    # legacy bindings rows satisfy NOT NULL after an ALTER.
+    # raw_payload — the full row as ingested, preserved for backfilling
+    # new slots later without re-ingesting from the source. Always
+    # populated by emit_batch_write; default '{}' lets legacy bindings
+    # rows satisfy NOT NULL after an ALTER.
     columns.append("    raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb")
+    # er_metadata — caller-defined audit payload stamped at ER time
+    # (run id, method, confidence, …). Empty by default; set by
+    # emit_assign_canonical / emit_recanonicalize when callers pass
+    # ``er_metadata={...}``. Same shape as raw_payload, different author.
+    columns.append("    er_metadata jsonb NOT NULL DEFAULT '{}'::jsonb")
     columns.append("    valid_from timestamptz NOT NULL DEFAULT now()")
     columns.append("    valid_to timestamptz")
     # PK is (source_name, source_identifier, valid_from) — one open row
     # per source/source_identifier at any moment, and history tracked
     # via SCD2 valid_from/valid_to. canonical_id is NOT part of the PK
-    # so it can start NULL and be assigned later by an async ER worker.
+    # so it can start NULL and be assigned later by ER.
     columns.append("    PRIMARY KEY (source_name, source_identifier, valid_from)")
     body = ",\n".join(columns)
     return (

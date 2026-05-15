@@ -232,18 +232,26 @@ def test_indexes_suppressed_when_bindings_suppressed(movie_spec):
     assert not any(s.startswith("CREATE INDEX") for s in stmts)
 
 
+def test_bindings_table_has_er_metadata_jsonb_default_empty(movie_spec):
+    """er_metadata is the per-row ER audit stamp — same shape as
+    raw_payload (jsonb NOT NULL DEFAULT '{}'::jsonb), different author."""
+    stmts = emit_ddl(movie_spec)
+    bindings = next(s for s in stmts if "movie_bindings" in s)
+    assert "er_metadata jsonb NOT NULL DEFAULT '{}'::jsonb" in bindings
+
+
 def test_bindings_table_slots_nullable_pk_drops_canonical(movie_spec):
     """Bindings allow NULL on every slot, including the identifier —
-    bronze-layer ingest writes source rows before ER assigns a
-    canonical_id. The resolved view filters NULL identifier rows out.
-    PK is (source_name, source_identifier, valid_from)."""
+    ingest writes source rows before ER assigns a canonical_id. The
+    resolved view filters NULL identifier rows out. PK is
+    (source_name, source_identifier, valid_from)."""
     stmts = emit_ddl(movie_spec)
     bindings = next(s for s in stmts if "movie_bindings" in s)
     # canonical_id is the identifier — NULLABLE in bindings (no NOT NULL)
     assert "canonical_id text NOT NULL" not in bindings
     assert "canonical_id text" in bindings
-    # source_name, source_identifier always NOT NULL — they're the bronze-
-    # layer identity (which source published which natural id).
+    # source_name, source_identifier always NOT NULL — they're the
+    # ingest-layer identity (which source published which natural id).
     assert "source_name text NOT NULL" in bindings
     assert "source_identifier text NOT NULL" in bindings
     # year is a regular slot — NULLABLE (partial claim allowed)

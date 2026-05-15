@@ -95,3 +95,66 @@ def test_recanonicalize_parses_postgres():
         source_identifier="tt1",
     )
     sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_assign_canonical_without_er_metadata_does_not_touch_column():
+    """When er_metadata is omitted, the SET list mentions canonical_id only."""
+    spec, movie = _basic_spec()
+    sql, params = emit_assign_canonical(
+        movie,
+        "m_x",
+        source_name="imdb",
+        source_identifier="tt1",
+    )
+    assert "er_metadata" not in sql
+    assert "er_metadata" not in params
+
+
+def test_assign_canonical_stamps_er_metadata_when_provided():
+    """When er_metadata is provided, it lands in the SET list as a
+    jsonb-cast bind param."""
+    spec, movie = _basic_spec()
+    sql, params = emit_assign_canonical(
+        movie,
+        "m_x",
+        source_name="imdb",
+        source_identifier="tt1",
+        er_metadata={"run_id": "r123", "method": "exact_title", "confidence": 0.97},
+    )
+    assert "er_metadata = %(er_metadata)s::jsonb" in sql
+    # Param is JSON-encoded so psycopg can pass it as a text bind.
+    assert params["er_metadata"].startswith("{")
+    assert '"run_id": "r123"' in params["er_metadata"]
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_recanonicalize_inherits_er_metadata_when_omitted():
+    """recanonicalize without er_metadata carries the closed row's
+    er_metadata forward unchanged."""
+    spec, movie = _basic_spec()
+    sql, params = emit_recanonicalize(
+        movie,
+        "m_v2",
+        source_name="imdb",
+        source_identifier="tt1",
+    )
+    # Insert projects the closed row's er_metadata column as-is.
+    assert "er_metadata" in sql
+    assert "%(er_metadata)s" not in sql
+    assert "er_metadata" not in params
+
+
+def test_recanonicalize_overrides_er_metadata_when_provided():
+    """recanonicalize with er_metadata stamps the new row with the
+    provided payload instead of inheriting the closed row's."""
+    spec, movie = _basic_spec()
+    sql, params = emit_recanonicalize(
+        movie,
+        "m_v2",
+        source_name="imdb",
+        source_identifier="tt1",
+        er_metadata={"run_id": "r999", "method": "merged"},
+    )
+    assert "%(er_metadata)s::jsonb AS er_metadata" in sql
+    assert '"run_id": "r999"' in params["er_metadata"]
+    sqlglot.parse_one(sql, dialect="postgres")

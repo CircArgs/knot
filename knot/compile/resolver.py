@@ -100,9 +100,8 @@ def emit_resolved_view(
 
     # The outer FROM enumerates each canonical_id that has at least one
     # currently-open binding. The ``IS NOT NULL`` filter excludes
-    # bronze-layer bindings whose canonical_id hasn't been assigned by
-    # ER yet — they stay invisible to the resolved view until ER claims
-    # them.
+    # bindings whose canonical_id hasn't been assigned by ER yet — they
+    # stay invisible to the resolved view until ER claims them.
     return (
         f"{create} {view_name} AS\n"
         "SELECT\n" + ",\n".join(select_lines) + "\n"

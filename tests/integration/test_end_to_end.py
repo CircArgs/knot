@@ -841,11 +841,11 @@ def test_init_sql_diff_mode_emits_only_changes(pg, schema, query_fn):
 
 
 # ---------------------------------------------------------------------------
-# Bronze → silver async ER flow
+# ER helpers — assign_canonical, recanonicalize, er_metadata
 # ---------------------------------------------------------------------------
 
 
-def test_bronze_ingest_invisible_until_canonical_assigned(pg, schema):
+def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
     """Ingest a binding row with canonical_id=NULL; resolved view skips
     it; assign_canonical makes it visible."""
     spec = _movies_only_spec()
@@ -854,7 +854,7 @@ def test_bronze_ingest_invisible_until_canonical_assigned(pg, schema):
     movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
-    # Land in bronze — no canonical_id yet.
+    # No canonical_id yet — ER hasn't claimed it.
     _write_claim(
         pg,
         spec,
@@ -992,3 +992,176 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
     with pg.cursor() as cur:
         cur.execute(f"SELECT canonical_id, name FROM {schema}.movie_resolved")
         assert cur.fetchall() == [("m_correct", "X")]
+
+
+def test_assign_canonical_stamps_er_metadata(pg, schema):
+    """assign_canonical with er_metadata writes the dict into the
+    binding row's er_metadata jsonb column."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "source_identifier": "tt001",
+                "canonical_id": None,
+                "name": "Reservoir Dogs",
+                "year": 1992,
+                "runtime_minutes": 99,
+            }
+        ],
+        schema=schema,
+    )
+
+    sql, params = spec.assign_canonical(
+        movie,
+        "m_reservoirdogs",
+        source_name="imdb",
+        source_identifier="tt001",
+        er_metadata={
+            "run_id": "r42",
+            "method": "exact_title_year",
+            "confidence": 0.93,
+        },
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT canonical_id, er_metadata FROM {schema}.movie_bindings "
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001'"
+        )
+        canonical_id, er_metadata = cur.fetchone()
+    assert canonical_id == "m_reservoirdogs"
+    assert er_metadata == {
+        "run_id": "r42",
+        "method": "exact_title_year",
+        "confidence": 0.93,
+    }
+
+
+def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
+    """When recanonicalize is called without er_metadata, the new row
+    inherits the closed row's er_metadata verbatim."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "source_identifier": "tt001",
+                "canonical_id": None,
+                "name": "Reservoir Dogs",
+                "year": 1992,
+                "runtime_minutes": 99,
+            }
+        ],
+        schema=schema,
+    )
+
+    # First stamp: ER assigns + writes metadata
+    sql, params = spec.assign_canonical(
+        movie,
+        "m_wrong",
+        source_name="imdb",
+        source_identifier="tt001",
+        er_metadata={"run_id": "r1", "method": "exact_title_year"},
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    # Recanonicalize without er_metadata kwarg — new row inherits.
+    sql, params = spec.recanonicalize(
+        movie,
+        "m_correct",
+        source_name="imdb",
+        source_identifier="tt001",
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT canonical_id, er_metadata FROM {schema}.movie_bindings "
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001' "
+            f"ORDER BY valid_from"
+        )
+        rows = cur.fetchall()
+    assert rows == [
+        ("m_wrong", {"run_id": "r1", "method": "exact_title_year"}),
+        ("m_correct", {"run_id": "r1", "method": "exact_title_year"}),
+    ]
+
+
+def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
+    """Recanonicalize with er_metadata stamps the new row with a
+    fresh payload; the closed row keeps the original."""
+    spec = _movies_only_spec()
+    pg.execute(spec.init_sql(schema=schema))
+
+    movie = next(c for c in spec.classes if c.name == "Movie")
+    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
+
+    _write_claim(
+        pg,
+        spec,
+        imdb_b,
+        [
+            {
+                "source_identifier": "tt001",
+                "canonical_id": None,
+                "name": "Reservoir Dogs",
+                "year": 1992,
+            }
+        ],
+        schema=schema,
+    )
+    sql, params = spec.assign_canonical(
+        movie,
+        "m_wrong",
+        source_name="imdb",
+        source_identifier="tt001",
+        er_metadata={"run_id": "r1", "method": "exact"},
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    sql, params = spec.recanonicalize(
+        movie,
+        "m_correct",
+        source_name="imdb",
+        source_identifier="tt001",
+        er_metadata={"run_id": "r2", "method": "human_review"},
+        schema=schema,
+    )
+    with pg.cursor() as cur:
+        cur.execute(sql, params)
+
+    with pg.cursor() as cur:
+        cur.execute(
+            f"SELECT canonical_id, er_metadata FROM {schema}.movie_bindings "
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001' "
+            f"ORDER BY valid_from"
+        )
+        rows = cur.fetchall()
+    assert rows == [
+        ("m_wrong", {"run_id": "r1", "method": "exact"}),
+        ("m_correct", {"run_id": "r2", "method": "human_review"}),
+    ]

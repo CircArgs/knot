@@ -160,7 +160,7 @@ def _emit_raw_subquery(
     by any effective mapping (explicit or implicit-passthrough) as a
     text alias. ``r`` itself passes through as ``__raw_payload`` so
     the outer SELECT can populate the bindings table's ``raw_payload``
-    column with the full ingested shape (bronze layer)."""
+    column with the full ingested shape."""
     raw_fields: list[str] = ["source_identifier"]
     seen = set(raw_fields)
     for slot in binding.class_.effective_slots():
@@ -458,7 +458,7 @@ def _find_concrete(spec: Spec, name: str) -> OntologyClass:
 
 
 # ---------------------------------------------------------------------------
-# Async ER helpers — bronze→silver canonical_id assignment
+# ER helpers — canonical_id assignment + reassignment
 # ---------------------------------------------------------------------------
 
 
@@ -468,6 +468,7 @@ def emit_assign_canonical(
     *,
     source_name: str,
     source_identifier: str,
+    er_metadata: dict[str, Any] | None = None,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
 ) -> tuple[str, dict[str, Any]]:
@@ -478,24 +479,35 @@ def emit_assign_canonical(
     includes ``<ident> IS NULL``, so re-running is a no-op. To change
     an already-assigned canonical_id, call ``emit_recanonicalize``.
 
+    ``er_metadata`` (optional) is a free-form dict stamped onto the
+    binding row's ``er_metadata jsonb`` column — caller-defined
+    payload typically containing the ER run id, method, confidence,
+    or any other audit detail. When omitted, the column is left
+    untouched (defaults to ``'{}'::jsonb`` for fresh rows).
+
     Returns ``(sql, params)`` with named ``%(...)s`` placeholders.
     """
     _check_concrete(cls)
     ident_name = cls.identifier_slot().name
     bindings_table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    set_clauses = [f"{ident_name} = %(canonical_id)s"]
+    params: dict[str, Any] = {
+        "canonical_id": canonical_id,
+        "source_name": source_name,
+        "source_identifier": source_identifier,
+    }
+    if er_metadata is not None:
+        set_clauses.append("er_metadata = %(er_metadata)s::jsonb")
+        params["er_metadata"] = json.dumps(er_metadata)
     sql = (
         f"UPDATE {bindings_table}\n"
-        f"SET {ident_name} = %(canonical_id)s\n"
+        f"SET {', '.join(set_clauses)}\n"
         f"WHERE source_name = %(source_name)s\n"
         f"  AND source_identifier = %(source_identifier)s\n"
         f"  AND {ident_name} IS NULL\n"
         f"  AND valid_to IS NULL;"
     )
-    return sql, {
-        "canonical_id": canonical_id,
-        "source_name": source_name,
-        "source_identifier": source_identifier,
-    }
+    return sql, params
 
 
 def emit_recanonicalize(
@@ -504,6 +516,7 @@ def emit_recanonicalize(
     *,
     source_name: str,
     source_identifier: str,
+    er_metadata: dict[str, Any] | None = None,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
 ) -> tuple[str, dict[str, Any]]:
@@ -519,6 +532,10 @@ def emit_recanonicalize(
     One atomic statement via a writable CTE — ``now()`` is the same
     instant on both halves of the close-out / re-insert.
 
+    ``er_metadata`` (optional) overrides the closed row's value on
+    the new row; when omitted, the new row inherits the closed row's
+    ``er_metadata`` verbatim.
+
     Returns ``(sql, params)`` with named ``%(...)s`` placeholders.
     """
     _check_concrete(cls)
@@ -529,7 +546,7 @@ def emit_recanonicalize(
     insert_cols = (
         ["source_name", "source_identifier"]
         + [s.name for s in eff_slots]
-        + ["raw_payload", "valid_from"]
+        + ["raw_payload", "er_metadata", "valid_from"]
     )
     select_cols: list[str] = ["source_name", "source_identifier"]
     for slot in eff_slots:
@@ -537,7 +554,12 @@ def emit_recanonicalize(
             select_cols.append(f"%(new_canonical_id)s AS {ident_name}")
         else:
             select_cols.append(slot.name)
-    select_cols.extend(["raw_payload", "now() AS valid_from"])
+    select_cols.append("raw_payload")
+    if er_metadata is not None:
+        select_cols.append("%(er_metadata)s::jsonb AS er_metadata")
+    else:
+        select_cols.append("er_metadata")
+    select_cols.append("now() AS valid_from")
 
     sql = (
         f"WITH closed AS (\n"
@@ -551,8 +573,11 @@ def emit_recanonicalize(
         f"SELECT {', '.join(select_cols)}\n"
         f"FROM closed;"
     )
-    return sql, {
+    params: dict[str, Any] = {
         "new_canonical_id": new_canonical_id,
         "source_name": source_name,
         "source_identifier": source_identifier,
     }
+    if er_metadata is not None:
+        params["er_metadata"] = json.dumps(er_metadata)
+    return sql, params

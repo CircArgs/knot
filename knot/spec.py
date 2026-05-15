@@ -1028,8 +1028,7 @@ class Spec:
         **kwargs: Any,
     ) -> Any:
         """SQL to assign a ``canonical_id`` to one previously-unresolved
-        binding row. First half of the bronze→silver flow. Refuses to
-        clobber existing assignments. See
+        binding row. Refuses to clobber existing assignments. See
         ``knot.compile.write.emit_assign_canonical``."""
         self.validate()
         from knot.compile.write import emit_assign_canonical

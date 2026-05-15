@@ -459,6 +459,7 @@ def _diff_drops(
         "source_name",
         "source_identifier",
         "raw_payload",
+        "er_metadata",
         "valid_from",
         "valid_to",
     }
@@ -651,7 +652,7 @@ def _diff_concrete_class(
                         expected_nullable=expected_nullable,
                     )
                 )
-        # Bronze layer: ensure raw_payload exists.
+        # Ensure raw_payload + er_metadata framework columns exist.
         if "raw_payload" not in existing_bdetails:
             ops.append(
                 MigrationOp(
@@ -659,6 +660,18 @@ def _diff_concrete_class(
                     sql=(
                         f"ALTER TABLE {schema}.{bindings_name}\n"
                         "    ADD COLUMN IF NOT EXISTS raw_payload "
+                        "jsonb NOT NULL DEFAULT '{}'::jsonb;"
+                    ),
+                    target="bindings",
+                )
+            )
+        if "er_metadata" not in existing_bdetails:
+            ops.append(
+                MigrationOp(
+                    description=f"add_column_{bindings_name}_er_metadata",
+                    sql=(
+                        f"ALTER TABLE {schema}.{bindings_name}\n"
+                        "    ADD COLUMN IF NOT EXISTS er_metadata "
                         "jsonb NOT NULL DEFAULT '{}'::jsonb;"
                     ),
                     target="bindings",
