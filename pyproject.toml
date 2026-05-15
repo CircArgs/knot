@@ -14,6 +14,7 @@ dependencies = []
 dev = [
     "pytest>=8",
     "ruff>=0.4",
+    "mypy>=1.10",
     "sqlglot>=25.0",
     "psycopg[binary]>=3.1",
 ]
@@ -38,7 +39,9 @@ markers = [
 
 [tool.ruff]
 target-version = "py311"
-line-length = 100
+# Match black's default. Override per-file with # noqa: E501 when truly
+# unavoidable (long string literals etc).
+line-length = 88
 
 [tool.ruff.lint]
 select = [
@@ -50,9 +53,61 @@ select = [
     "UP",  # pyupgrade
 ]
 ignore = [
-    "E501",  # line too long — formatter handles wrapping
+    "E501",  # line too long — formatter wraps; manual long lines are fine
 ]
 
+[tool.ruff.lint.isort]
+# isort profile=black parity:
+#   * combine ``from X import a as A, b as B`` into one line
+#   * sort within sections, alphabetical
+#   * knot is first-party — its own block, after stdlib + third-party
+known-first-party = ["knot"]
+combine-as-imports = true
+force-sort-within-sections = false
+order-by-type = true
+
 [tool.ruff.format]
+# Black-compatible defaults made explicit so config drift is obvious.
 quote-style = "double"
 indent-style = "space"
+skip-magic-trailing-comma = false
+line-ending = "auto"
+docstring-code-format = false
+
+# ---------------------------------------------------------------------------
+# Type checker
+# ---------------------------------------------------------------------------
+
+[tool.mypy]
+python_version = "3.11"
+files = ["knot"]
+# Pragmatic strictness: catch real bugs without forcing every dynamic
+# accessor (``_ColAccess.__getattr__``, ``FkRef.__getattr__``,
+# ``_ThisAccess.__getattr__``) to invent return types it can't promise.
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+# Singledispatch-registered handlers in expr_sql.py / query_sql.py are
+# intentionally untyped on the first arg (dispatch happens via the
+# decorator's class argument). Mypy can see through them but not all
+# the way; the relaxed default keeps it quiet on those.
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+# Tests use the dataclasses directly; we don't ship type-checked tests.
+module = "tests.*"
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+# sqlglot doesn't ship a py.typed marker.
+module = "sqlglot"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+# Marimo notebooks use untyped cells; not in the lib surface.
+module = "marimo"
+ignore_missing_imports = true

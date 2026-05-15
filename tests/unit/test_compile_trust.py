@@ -8,7 +8,9 @@ from knot.compile import emit_ddl, emit_trust_seed
 
 def test_trust_table_emitted_by_default(movie_spec):
     stmts = emit_ddl(movie_spec)
-    trust = next(s for s in stmts if s.startswith("CREATE TABLE") and "source_trust" in s)
+    trust = next(
+        s for s in stmts if s.startswith("CREATE TABLE") and "source_trust" in s
+    )
     assert "source_name text NOT NULL" in trust
     assert "class_name" in trust
     assert "slot_name" in trust
@@ -25,13 +27,17 @@ def test_trust_table_can_be_disabled(movie_spec):
 
 def test_trust_table_idempotent_with_if_not_exists(movie_spec):
     stmts = emit_ddl(movie_spec, if_not_exists=True)
-    trust = next(s for s in stmts if "source_trust" in s and s.startswith("CREATE TABLE"))
+    trust = next(
+        s for s in stmts if "source_trust" in s and s.startswith("CREATE TABLE")
+    )
     assert trust.startswith("CREATE TABLE IF NOT EXISTS")
 
 
 def test_trust_table_name_kwarg(movie_spec):
     stmts = emit_ddl(movie_spec, trust_table_name="custom_trust")
-    trust = next(s for s in stmts if "custom_trust" in s and s.startswith("CREATE TABLE"))
+    trust = next(
+        s for s in stmts if "custom_trust" in s and s.startswith("CREATE TABLE")
+    )
     assert "knot_data.custom_trust" in trust
     # Resolver views should also reference the renamed table.
     view = next(s for s in stmts if "_resolved AS" in s)

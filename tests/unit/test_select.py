@@ -6,13 +6,13 @@ from dataclasses import replace
 
 import pytest
 
+from knot import types
 from knot.compile.query_sql import compile_query
 from knot.select import OrderBy, Query
-from knot import types
 from knot.spec import Spec
 
 
-def _make_movie_spec() -> tuple[Spec, "OntologyClass"]:  # noqa: F821
+def _make_movie_spec() -> tuple[Spec, OntologyClass]:  # noqa: F821
     spec = Spec(id="test", version="0.0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
@@ -164,7 +164,9 @@ def test_fk_walk_in_projection():
     spec, movie, person = _make_movie_director_spec()
     q = movie.select(movie.col.title, movie.col.director.name)
     sql, _ = compile_query(q, spec=spec, schema="knot_data")
-    assert "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
+    assert (
+        "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
+    )
     assert "JOIN knot_data.person_resolved" in sql
 
 
@@ -195,7 +197,9 @@ def test_full_query_with_fk_walk():
         .select(movie.col.title, movie.col.director.name)
     )
     sql, _ = compile_query(q, spec=spec, schema="knot_data")
-    assert "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
+    assert (
+        "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
+    )
     assert "FROM knot_data.movie_resolved" in sql
     assert "JOIN knot_data.person_resolved" in sql
     assert "ORDER BY knot_data.movie_resolved.year DESC" in sql
@@ -225,7 +229,10 @@ def test_any_existence():
     sql, _ = compile_query(q, spec=spec, schema="knot_data")
     assert "FROM knot_data.person_resolved" in sql
     assert "EXISTS (SELECT 1 FROM knot_data.movie_resolved WHERE" in sql
-    assert "knot_data.movie_resolved.director = knot_data.person_resolved.canonical_id" in sql
+    assert (
+        "knot_data.movie_resolved.director = knot_data.person_resolved.canonical_id"
+        in sql
+    )
 
 
 def test_none_non_existence():

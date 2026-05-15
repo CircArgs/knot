@@ -33,7 +33,11 @@ def test_returns_batch_write_dataclass(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[{"canonical_id": "m1", "source_identifier": "i1"}])],
+        [
+            ClassWrites(
+                binding=b, rows=[{"canonical_id": "m1", "source_identifier": "i1"}]
+            )
+        ],
     )
     assert isinstance(bw, BatchWrite)
 
@@ -42,7 +46,11 @@ def test_affected_classes_reports_each_class(movie_spec):
     b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
         movie_spec,
-        [ClassWrites(binding=b, rows=[{"canonical_id": "m1", "source_identifier": "i1"}])],
+        [
+            ClassWrites(
+                binding=b, rows=[{"canonical_id": "m1", "source_identifier": "i1"}]
+            )
+        ],
     )
     assert bw.affected_classes == ("Movie",)
 
@@ -59,7 +67,13 @@ def test_mapped_single_row_emits_close_out_and_insert(movie_spec):
         [
             ClassWrites(
                 binding=b,
-                rows=[{"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020}],
+                rows=[
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    }
+                ],
             )
         ],
         enforce=False,
@@ -92,7 +106,11 @@ def test_mapped_sql_shape_independent_of_row_count(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -127,7 +145,11 @@ def test_mapped_unmapped_slot_lands_null(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -145,7 +167,11 @@ def test_mapped_insert_includes_raw_payload_column_and_projection(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -231,7 +257,11 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
             ClassWrites(
                 binding=movie_b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             ),
             ClassWrites(
@@ -261,8 +291,12 @@ def test_duplicate_class_in_batch_rejected(movie_spec):
         emit_batch_write(
             movie_spec,
             [
-                ClassWrites(binding=b, rows=[{"canonical_id": "m1", "source_identifier": "i1"}]),
-                ClassWrites(binding=b, rows=[{"canonical_id": "m2", "source_identifier": "i2"}]),
+                ClassWrites(
+                    binding=b, rows=[{"canonical_id": "m1", "source_identifier": "i1"}]
+                ),
+                ClassWrites(
+                    binding=b, rows=[{"canonical_id": "m2", "source_identifier": "i2"}]
+                ),
             ],
             enforce=False,
         )
@@ -287,7 +321,11 @@ def test_enforce_true_appends_do_block(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -306,7 +344,11 @@ def test_enforce_false_omits_do_block(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -319,7 +361,9 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
     # Add a constraint on Credit; batch only writes Movie; Credit constraint
     # should NOT appear in the DO block.
     credit = next(c for c in movie_spec.classes if c.name == "Credit")
-    movie_spec.add_constraint("role_present", primary=credit, body=credit.col.role.is_not_null())
+    movie_spec.add_constraint(
+        "role_present", primary=credit, body=credit.col.role.is_not_null()
+    )
 
     movie_b = movie_spec.source_bindings[0]
     bw = emit_batch_write(
@@ -328,7 +372,11 @@ def test_enforce_only_runs_constraints_for_affected_classes(movie_spec):
             ClassWrites(
                 binding=movie_b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -344,7 +392,10 @@ def test_enforce_skips_warning_severity():
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     spec.add_constraint(
-        "warn_only", primary=movie, body=movie.col.year > 1900, severity=Severity.WARNING
+        "warn_only",
+        primary=movie,
+        body=movie.col.year > 1900,
+        severity=Severity.WARNING,
     )
     src = spec.add_source("imdb")
     b = src.bind(movie)
@@ -400,7 +451,11 @@ def test_schema_and_suffix_kwargs(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "i1", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "i1",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],
@@ -479,7 +534,11 @@ def test_emitted_sql_parses_postgres(movie_spec):
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "tt001", "release_year": 2020},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "tt001",
+                        "release_year": 2020,
+                    },
                 ],
             )
         ],

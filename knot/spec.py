@@ -237,7 +237,9 @@ class OntologyClass:
         description: str | None = None,
     ) -> Slot:
         if any(s.name == name for s in self.slots):
-            raise ValueError(f"OntologyClass {self.name!r} already has a slot named {name!r}")
+            raise ValueError(
+                f"OntologyClass {self.name!r} already has a slot named {name!r}"
+            )
         s = Slot(
             name=name,
             type=_coerce_type(type),
@@ -531,8 +533,12 @@ class Source:
                 f"Source {self.name!r} not attached to a Spec — create via "
                 f"spec.add_source() rather than constructing directly"
             )
-        if any(b.source is self and b.class_ is cls for b in self._spec.source_bindings):
-            raise ValueError(f"Spec already has a binding for {self.name!r} → {cls.name!r}")
+        if any(
+            b.source is self and b.class_ is cls for b in self._spec.source_bindings
+        ):
+            raise ValueError(
+                f"Spec already has a binding for {self.name!r} → {cls.name!r}"
+            )
         b = SourceBinding(
             source=self,
             class_=cls,
@@ -573,10 +579,16 @@ class SlotMapping:
     trust: float | None = None
 
     def __post_init__(self) -> None:
-        if isinstance(self.source_slot, str):
-            self.source_slot = (self.source_slot,)
+        # Tolerate ``source_slot=`` passed as bare string or any iterable
+        # at construction time; coerce to the declared tuple shape. The
+        # field is typed as tuple, so mypy can't see the bare-string
+        # case at the type level — runtime check is real, ignore the
+        # ``unreachable`` flag.
+        raw: Any = self.source_slot
+        if isinstance(raw, str):
+            self.source_slot = (raw,)
         else:
-            self.source_slot = tuple(self.source_slot)
+            self.source_slot = tuple(raw)
         if not self.source_slot:
             raise ValueError(
                 f"SlotMapping for {self.class_slot!r} requires at least one source_slot"
@@ -616,7 +628,9 @@ class SourceBinding:
 
     def __post_init__(self) -> None:
         if not (0.0 <= self.base_trust <= 1.0):
-            raise ValueError(f"SourceBinding base_trust must be in [0, 1]; got {self.base_trust}")
+            raise ValueError(
+                f"SourceBinding base_trust must be in [0, 1]; got {self.base_trust}"
+            )
 
     @property
     def identifier_slot(self) -> Slot:
@@ -806,7 +820,9 @@ class Spec:
         )
         if existing is not None:
             return existing
-        source = Source(name=CORRECTIONS_SOURCE_NAME, description=description, _spec=self)
+        source = Source(
+            name=CORRECTIONS_SOURCE_NAME, description=description, _spec=self
+        )
         self.sources.append(source)
         for cls in self.concrete_classes():
             source.bind(cls, base_trust=base_trust)
@@ -835,7 +851,9 @@ class Spec:
         ``VirtualClass``. Used everywhere the emitters loop over
         "classes that materialize a table"."""
         return [
-            c for c in self.classes if isinstance(c, OntologyClass) and c.kind == ClassKind.CONCRETE
+            c
+            for c in self.classes
+            if isinstance(c, OntologyClass) and c.kind == ClassKind.CONCRETE
         ]
 
     def virtual_classes(self) -> list[VirtualClass]:
@@ -871,15 +889,21 @@ class Spec:
             match c:
                 case OntologyClass():
                     if c.is_a is not None and c.is_a.name not in concrete_or_abstract:
-                        errs.append(f"class {c.name!r}.is_a → {c.is_a.name!r}: not in spec")
+                        errs.append(
+                            f"class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
+                        )
                     for m in c.mixins:
                         if m.name not in concrete_or_abstract:
-                            errs.append(f"class {c.name!r} mixin {m.name!r}: not in spec")
+                            errs.append(
+                                f"class {c.name!r} mixin {m.name!r}: not in spec"
+                            )
                     # Slot name uniqueness within the class
                     seen_slots: set[str] = set()
                     for sl in c.slots:
                         if sl.name in seen_slots:
-                            errs.append(f"class {c.name!r} has duplicate slot {sl.name!r}")
+                            errs.append(
+                                f"class {c.name!r} has duplicate slot {sl.name!r}"
+                            )
                         seen_slots.add(sl.name)
                         # ClassRef target must exist
                         if isinstance(sl.type, ClassRef):
@@ -893,7 +917,9 @@ class Spec:
                     if c.kind == ClassKind.CONCRETE:
                         ids = [s for s in c.effective_slots() if s.identifier]
                         if len(ids) == 0:
-                            errs.append(f"concrete class {c.name!r} has no identifier slot")
+                            errs.append(
+                                f"concrete class {c.name!r} has no identifier slot"
+                            )
                         elif len(ids) > 1:
                             names = ", ".join(s.name for s in ids)
                             errs.append(
@@ -901,16 +927,20 @@ class Spec:
                             )
                 case VirtualClass():
                     if c.is_a.name not in concrete_or_abstract:
-                        errs.append(f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: not in spec")
+                        errs.append(
+                            f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
+                        )
 
         # Constraint references
         constraint_names: set[str] = set()
-        for c in self.constraints:
-            if c.name in constraint_names:
-                errs.append(f"duplicate constraint name {c.name!r}")
-            constraint_names.add(c.name)
-            if c.primary.name not in concrete_or_abstract:
-                errs.append(f"constraint {c.name!r}.primary → {c.primary.name!r}: not in spec")
+        for con in self.constraints:
+            if con.name in constraint_names:
+                errs.append(f"duplicate constraint name {con.name!r}")
+            constraint_names.add(con.name)
+            if con.primary.name not in concrete_or_abstract:
+                errs.append(
+                    f"constraint {con.name!r}.primary → {con.primary.name!r}: not in spec"
+                )
 
         # Source name uniqueness
         sources_by_name: dict[str, Source] = {}
@@ -924,7 +954,9 @@ class Spec:
         for b in self.source_bindings:
             key = (b.source.name, b.class_.name)
             if key in binding_keys:
-                errs.append(f"duplicate binding source={b.source.name!r} class={b.class_.name!r}")
+                errs.append(
+                    f"duplicate binding source={b.source.name!r} class={b.class_.name!r}"
+                )
             binding_keys.add(key)
             if b.source.name not in sources_by_name:
                 errs.append(
@@ -990,7 +1022,7 @@ class Spec:
 
     def init_sql(
         self,
-        query_fn=None,
+        query_fn: Any = None,
         *,
         schema: str = "knot_data",
         allow_destructive: bool = False,
@@ -1010,13 +1042,16 @@ class Spec:
         """
         self.validate()
         if query_fn is None:
-            query_fn = lambda _sql, _params: []  # empty DB
+            def query_fn(_sql: str, _params: tuple) -> list:  # empty DB
+                return []
         from knot.compile.migrate import diff_against_db
 
-        ops = diff_against_db(self, query_fn, schema=schema, allow_destructive=allow_destructive)
+        ops = diff_against_db(
+            self, query_fn, schema=schema, allow_destructive=allow_destructive
+        )
         return "\n\n".join(op.sql for op in ops)
 
-    def emit_batch_write(self, writes, **kwargs):
+    def emit_batch_write(self, writes: Any, **kwargs: Any) -> Any:
         """Transactional SCD2 batch write. Validates the spec first.
         See ``knot.compile.data_io.emit_batch_write``."""
         self.validate()
@@ -1024,7 +1059,7 @@ class Spec:
 
         return emit_batch_write(self, writes, **kwargs)
 
-    def emit_validation(self, **kwargs):
+    def emit_validation(self, **kwargs: Any) -> Any:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates
         the spec first. See ``knot.compile.constraints.emit_validation``."""
         self.validate()
@@ -1032,7 +1067,7 @@ class Spec:
 
         return emit_validation(self, **kwargs)
 
-    def compile_query(self, query_node, **kwargs):
+    def compile_query(self, query_node: Any, **kwargs: Any) -> Any:
         """Compile a ``Query`` AST to ``(sql, params)``. Validates the
         spec first. See ``knot.compile.query_sql.compile_query``."""
         self.validate()
@@ -1087,8 +1122,7 @@ __all__ = [
     "Constraint",
     "Source",
     "SourceBinding",
-    "SourceMap",
-    "BINDING_PRIOR_STRENGTH",
+    "SlotMapping",
     "CORRECTIONS_SOURCE_NAME",
     "Spec",
     "SpecError",

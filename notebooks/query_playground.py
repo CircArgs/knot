@@ -332,13 +332,17 @@ def _(
     from knot.compile.data_io import ClassWrites
 
     imdb_person_b = next(
-        b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is person
+        b
+        for b in spec.source_bindings
+        if b.source.name == "imdb" and b.class_ is person
     )
     imdb_movie_b = next(
         b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is movie
     )
     imdb_credit_b = next(
-        b for b in spec.source_bindings if b.source.name == "imdb" and b.class_ is credit
+        b
+        for b in spec.source_bindings
+        if b.source.name == "imdb" and b.class_ is credit
     )
 
     bw = spec.emit_batch_write(
@@ -416,7 +420,11 @@ def _(mo):
 @app.cell
 def _(movie, qf):
     # Q1 — 5 most recent movies
-    qf(movie.order_by(movie.col.year, "desc").limit(5).select(movie.col.title, movie.col.year))
+    qf(
+        movie.order_by(movie.col.year, "desc")
+        .limit(5)
+        .select(movie.col.title, movie.col.year)
+    )
     return
 
 

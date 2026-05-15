@@ -224,7 +224,9 @@ def _emit_class_insert(
     # raw_payload always trails the slot columns; preserves the full
     # ingested row so unmapped fields are recoverable later.
     insert_columns = (
-        ["source_name", "source_identifier"] + [s.name for s in eff_slots] + ["raw_payload"]
+        ["source_name", "source_identifier"]
+        + [s.name for s in eff_slots]
+        + ["raw_payload"]
     )
     columns_csv = ", ".join(insert_columns)
 
@@ -302,20 +304,20 @@ def _emit_enforcement_block(
     directly. Retargeting validation to the bindings-current view is a
     separate follow-up item.
     """
-    relevant: list[tuple[str, str]] = []
+    relevant_names: list[str] = []
     for c in spec.constraints:
         if c.primary.name not in affected_classes:
             continue
         if c.severity.value != "error":
             continue
-        relevant.append((c.name, c.body))
-    if not relevant:
+        relevant_names.append(c.name)
+    if not relevant_names:
         return None
 
     # Reuse emit_validation to get fully-rewritten SELECTs, then filter.
     all_v = dict(emit_validation(spec, schema=schema))
     union_parts = []
-    for name, _body in relevant:
+    for name in relevant_names:
         if name not in all_v:
             continue
         # Strip the trailing ';' for UNION ALL composition.

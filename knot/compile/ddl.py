@@ -113,7 +113,9 @@ def emit_ddl(
     for cls in spec.classes:
         match cls:
             case OntologyClass(kind=ClassKind.CONCRETE):
-                stmts.append(_emit_table(cls, schema=schema, if_not_exists=if_not_exists))
+                stmts.append(
+                    _emit_table(cls, schema=schema, if_not_exists=if_not_exists)
+                )
                 if emit_descriptions:
                     stmts.extend(_emit_class_comments(cls, schema=schema))
                 if emit_bindings:
@@ -148,7 +150,9 @@ def emit_ddl(
                         )
                     )
             case VirtualClass():
-                stmts.append(_emit_view(cls, schema=schema, if_not_exists=if_not_exists))
+                stmts.append(
+                    _emit_view(cls, schema=schema, if_not_exists=if_not_exists)
+                )
                 if emit_descriptions and cls.description:
                     stmts.append(
                         _comment_on(
@@ -164,7 +168,9 @@ def emit_ddl(
     # spec.classes order.
     if emit_fk_references:
         for cls in spec.concrete_classes():
-            stmts.extend(_emit_fk_alters(cls, schema=schema, if_not_exists=if_not_exists))
+            stmts.extend(
+                _emit_fk_alters(cls, schema=schema, if_not_exists=if_not_exists)
+            )
 
     return stmts
 
@@ -300,7 +306,9 @@ def _emit_class_comments(cls: OntologyClass, *, schema: str) -> list[str]:
         out.append(_comment_on("TABLE", table_id, cls.description))
     for slot in cls.effective_slots():
         if slot.description:
-            out.append(_comment_on("COLUMN", f"{table_id}.{slot.name}", slot.description))
+            out.append(
+                _comment_on("COLUMN", f"{table_id}.{slot.name}", slot.description)
+            )
     return out
 
 

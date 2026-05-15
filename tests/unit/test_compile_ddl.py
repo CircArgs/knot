@@ -16,7 +16,9 @@ def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
     canonical = [
         s
         for s in stmts
-        if s.startswith("CREATE TABLE") and "_bindings" not in s and "source_trust" not in s
+        if s.startswith("CREATE TABLE")
+        and "_bindings" not in s
+        and "source_trust" not in s
     ]
     bindings = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" in s]
     trust = [s for s in stmts if s.startswith("CREATE TABLE") and "source_trust" in s]
@@ -42,7 +44,9 @@ def test_abstract_class_has_no_table(movie_spec):
 
 def test_concrete_inherits_slots_from_abstract(movie_spec):
     stmts = emit_ddl(movie_spec)
-    movie_table = next(s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s)
+    movie_table = next(
+        s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
+    )
     # year is Movie's own; name + canonical_id come from Title
     assert "year integer" in movie_table
     assert "name text" in movie_table
@@ -51,13 +55,17 @@ def test_concrete_inherits_slots_from_abstract(movie_spec):
 
 def test_array_renders_as_postgres_array(movie_spec):
     stmts = emit_ddl(movie_spec)
-    movie_table = next(s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s)
+    movie_table = next(
+        s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
+    )
     assert "genres text[]" in movie_table
 
 
 def test_classref_renders_as_text(movie_spec):
     stmts = emit_ddl(movie_spec)
-    credit_table = next(s for s in stmts if "knot_data.credit (" in s and "_bindings" not in s)
+    credit_table = next(
+        s for s in stmts if "knot_data.credit (" in s and "_bindings" not in s
+    )
     assert "movie text" in credit_table
     assert "person text" in credit_table
 
@@ -94,7 +102,8 @@ def test_fk_alters_emitted_for_classref_slots(movie_spec):
     # Credit has two FK slots (movie, person). Title/Movie/Person have none.
     assert len(fk_stmts) == 2
     assert any(
-        "fk_credit_movie" in s and "REFERENCES knot_data.movie(canonical_id)" in s for s in fk_stmts
+        "fk_credit_movie" in s and "REFERENCES knot_data.movie(canonical_id)" in s
+        for s in fk_stmts
     )
     assert any(
         "fk_credit_person" in s and "REFERENCES knot_data.person(canonical_id)" in s
@@ -136,7 +145,9 @@ def test_fk_alters_not_emitted_for_bindings_table(movie_spec):
     # carry REFERENCES — bindings may claim about canonicals that don't
     # exist yet.
     stmts = emit_ddl(movie_spec)
-    bindings_alters = [s for s in stmts if s.startswith("ALTER TABLE") and "_bindings" in s]
+    bindings_alters = [
+        s for s in stmts if s.startswith("ALTER TABLE") and "_bindings" in s
+    ]
     assert bindings_alters == []
 
 
@@ -145,7 +156,7 @@ def test_fk_alters_only_for_concrete_classes():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
     title.slot("canonical_id", types.TEXT, identifier=True)
-    movie = spec.add_class("Movie", is_a=title)
+    spec.add_class("Movie", is_a=title)
     other = spec.add_class("Other")
     other.slot("canonical_id", types.TEXT, identifier=True)
     other.slot("title", title)  # FK to abstract — questionable but allowed
@@ -161,7 +172,9 @@ def test_fk_alters_only_for_concrete_classes():
 
 def test_bindings_carry_raw_payload_jsonb_column(movie_spec):
     stmts = emit_ddl(movie_spec)
-    bindings = next(s for s in stmts if s.startswith("CREATE TABLE") and "movie_bindings" in s)
+    bindings = next(
+        s for s in stmts if s.startswith("CREATE TABLE") and "movie_bindings" in s
+    )
     # Bronze layer: every bindings row preserves the ingested shape.
     assert "raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb" in bindings
 
@@ -227,4 +240,7 @@ def test_bindings_table_identifier_not_null_others_nullable(movie_spec):
     # year is a regular slot — NULLABLE in bindings (partial claim allowed)
     assert "year integer," in bindings or "year integer\n" in bindings
     # Composite PK with valid_from
-    assert "PRIMARY KEY (canonical_id, source_name, source_identifier, valid_from)" in bindings
+    assert (
+        "PRIMARY KEY (canonical_id, source_name, source_identifier, valid_from)"
+        in bindings
+    )

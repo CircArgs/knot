@@ -340,7 +340,7 @@ def test_col_access_rejects_unknown_slot_at_construction():
     # Builder catches the typo at the point of construction — no
     # validation pass needed, no SQL parsing involved.
     with pytest.raises(KeyError, match="nonexistent_slot"):
-        movie.col.nonexistent_slot
+        movie.col.nonexistent_slot  # noqa: B018 — attribute access triggers the validation
 
 
 def test_col_access_resolves_inherited_slot():

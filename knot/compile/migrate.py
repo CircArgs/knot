@@ -324,11 +324,11 @@ def diff_against_db(
         )
 
     # 8. Virtual class views
-    for cls in spec.virtual_classes():
-        sql = _emit_view(cls, schema=schema, if_not_exists=True)
+    for vc in spec.virtual_classes():
+        sql = _emit_view(vc, schema=schema, if_not_exists=True)
         ops.append(
             MigrationOp(
-                description=f"replace_view_{cls.name.lower()}",
+                description=f"replace_view_{vc.name.lower()}",
                 sql=sql,
                 target="virtual_view",
             )
@@ -397,7 +397,9 @@ def _diff_renames(
                     ops.append(
                         MigrationOp(
                             description=(f"rename_column_{canonical}_{old}_to_{new}"),
-                            sql=(f"ALTER TABLE {schema}.{canonical} RENAME COLUMN {old} TO {new};"),
+                            sql=(
+                                f"ALTER TABLE {schema}.{canonical} RENAME COLUMN {old} TO {new};"
+                            ),
                             target="canonical",
                         )
                     )
@@ -407,7 +409,9 @@ def _diff_renames(
                     ops.append(
                         MigrationOp(
                             description=(f"rename_column_{bindings}_{old}_to_{new}"),
-                            sql=(f"ALTER TABLE {schema}.{bindings} RENAME COLUMN {old} TO {new};"),
+                            sql=(
+                                f"ALTER TABLE {schema}.{bindings} RENAME COLUMN {old} TO {new};"
+                            ),
                             target="bindings",
                         )
                     )
@@ -415,9 +419,9 @@ def _diff_renames(
 
 
 def _apply_rename_translation(
-    cols: dict[str, _ColInfo] | set[str],
+    cols: Any,
     rename_map: dict[str, str],
-):
+) -> Any:
     """Translate column names from the pre-rename DB shape to the
     post-rename target shape so the rest of the diff sees a consistent
     world. Works for either dict (column details) or set (names only)."""
@@ -463,11 +467,15 @@ def _diff_drops(
             for slot in cls.effective_slots()
             if isinstance(slot.type, ClassRef)
         }
-        for fk in sorted(_existing_fk_constraints(query, schema, canonical_name) - expected_fks):
+        for fk in sorted(
+            _existing_fk_constraints(query, schema, canonical_name) - expected_fks
+        ):
             ops.append(
                 MigrationOp(
                     description=f"drop_fk_{fk}",
-                    sql=(f"ALTER TABLE {schema}.{canonical_name} DROP CONSTRAINT IF EXISTS {fk};"),
+                    sql=(
+                        f"ALTER TABLE {schema}.{canonical_name} DROP CONSTRAINT IF EXISTS {fk};"
+                    ),
                     target="fk",
                 )
             )
@@ -572,7 +580,9 @@ def _diff_drops(
                 ops.append(
                     MigrationOp(
                         description=f"drop_column_{canonical_name}_{col}",
-                        sql=(f"ALTER TABLE {schema}.{canonical_name} DROP COLUMN IF EXISTS {col};"),
+                        sql=(
+                            f"ALTER TABLE {schema}.{canonical_name} DROP COLUMN IF EXISTS {col};"
+                        ),
                         destructive=True,
                         target="canonical",
                     )
@@ -586,7 +596,9 @@ def _diff_drops(
                 ops.append(
                     MigrationOp(
                         description=f"drop_column_{bindings_name}_{col}",
-                        sql=(f"ALTER TABLE {schema}.{bindings_name} DROP COLUMN IF EXISTS {col};"),
+                        sql=(
+                            f"ALTER TABLE {schema}.{bindings_name} DROP COLUMN IF EXISTS {col};"
+                        ),
                         destructive=True,
                         target="bindings",
                     )
@@ -724,7 +736,9 @@ def _diff_concrete_class(
                     MigrationOp(
                         description=(f"add_column_{bindings_name}_{slot.name}"),
                         # Bindings columns are nullable (partial claims).
-                        sql=_add_column_sql(schema, bindings_name, slot, force_nullable=True),
+                        sql=_add_column_sql(
+                            schema, bindings_name, slot, force_nullable=True
+                        ),
                         target="bindings",
                     )
                 )
@@ -785,7 +799,7 @@ def _diff_column_type_and_nullability(
     *,
     schema: str,
     table: str,
-    slot,
+    slot: Any,
     existing: _ColInfo,
     expected_nullable: bool,
 ) -> list[MigrationOp]:
@@ -824,7 +838,9 @@ def _diff_column_type_and_nullability(
         ops.append(
             MigrationOp(
                 description=f"set_not_null_{table}_{slot.name}",
-                sql=(f"ALTER TABLE {schema}.{table}\n    ALTER COLUMN {slot.name} SET NOT NULL;"),
+                sql=(
+                    f"ALTER TABLE {schema}.{table}\n    ALTER COLUMN {slot.name} SET NOT NULL;"
+                ),
                 destructive=True,
                 target="canonical" if not table.endswith("_bindings") else "bindings",
             )
@@ -833,7 +849,9 @@ def _diff_column_type_and_nullability(
         ops.append(
             MigrationOp(
                 description=f"drop_not_null_{table}_{slot.name}",
-                sql=(f"ALTER TABLE {schema}.{table}\n    ALTER COLUMN {slot.name} DROP NOT NULL;"),
+                sql=(
+                    f"ALTER TABLE {schema}.{table}\n    ALTER COLUMN {slot.name} DROP NOT NULL;"
+                ),
                 target="canonical" if not table.endswith("_bindings") else "bindings",
             )
         )
@@ -843,7 +861,7 @@ def _diff_column_type_and_nullability(
 def _add_column_sql(
     schema: str,
     table: str,
-    slot,
+    slot: Any,
     *,
     force_nullable: bool = False,
 ) -> str:

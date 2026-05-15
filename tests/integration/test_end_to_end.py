@@ -27,7 +27,7 @@ from knot.compile import (
     emit_trust_seed,
     emit_validation,
 )
-from tests.integration.conftest import exec_many, exec_script, exec_with_params
+from tests.integration.conftest import exec_many, exec_with_params
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -157,7 +157,6 @@ def test_resolved_view_picks_higher_accuracy_source(pg, schema):
     spec = _movies_only_spec()
     _deploy(pg, spec, schema)
 
-    movie = next(c for c in spec.classes if c.name == "Movie")
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
     tmdb_b = next(b for b in spec.source_bindings if b.source.name == "tmdb")
 
@@ -340,7 +339,9 @@ def test_scd2_close_out_on_repeated_write(pg, schema):
 
     # Resolved view sees only the current row.
     with pg.cursor() as cur:
-        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
+        cur.execute(
+            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+        )
         assert cur.fetchone()[0] == 1926
 
 
@@ -355,7 +356,9 @@ def test_user_correction_wins_over_declared_sources(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    corr_b = spec.corrections_binding_for(next(c for c in spec.classes if c.name == "Movie"))
+    corr_b = spec.corrections_binding_for(
+        next(c for c in spec.classes if c.name == "Movie")
+    )
 
     _write_claim(
         pg,
@@ -455,7 +458,9 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
     )
 
     with pg.cursor() as cur:
-        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
+        cur.execute(
+            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+        )
         assert cur.fetchone()[0] == 1925  # back to IMDB
 
 
@@ -596,7 +601,9 @@ def test_operator_tunes_trust_changes_winner(pg, schema, query_fn):
 
     # Before: IMDB wins (0.85 > 0.7) → year=1925.
     with pg.cursor() as cur:
-        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
+        cur.execute(
+            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+        )
         assert cur.fetchone()[0] == 1925
 
     # Operator decides TMDB's `year` is more reliable than IMDB's —
@@ -609,7 +616,9 @@ def test_operator_tunes_trust_changes_winner(pg, schema, query_fn):
 
     # After: TMDB wins → year=1928.
     with pg.cursor() as cur:
-        cur.execute(f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
+        cur.execute(
+            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+        )
         assert cur.fetchone()[0] == 1928
 
 
@@ -687,7 +696,9 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
 
     # Data preserved under the new name.
     with pg.cursor() as cur:
-        cur.execute(f"SELECT length_min FROM {schema}.movie_resolved WHERE canonical_id = 'm1'")
+        cur.execute(
+            f"SELECT length_min FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
+        )
         assert cur.fetchone()[0] == 75
 
 

@@ -35,7 +35,9 @@ def test_enable_corrections_skips_abstract_and_virtual_classes():
     title = spec.add_class("Title", kind="abstract")
     title.slot("canonical_id", types.TEXT, identifier=True)
     movie = spec.add_class("Movie", is_a=title)
-    spec.add_virtual_class("DirectedMovie", base=movie, where=movie.col.canonical_id.is_not_null())
+    spec.add_virtual_class(
+        "DirectedMovie", base=movie, where=movie.col.canonical_id.is_not_null()
+    )
 
     spec.enable_corrections()
     binding_classes = {b.class_.name for b in spec.source_bindings}
@@ -52,7 +54,10 @@ def test_enable_corrections_is_idempotent():
     src2 = spec.enable_corrections()
     assert src1 is src2  # second call returns the same Source
     # Bindings count unchanged on second call.
-    assert sum(1 for b in spec.source_bindings if b.source.name == CORRECTIONS_SOURCE_NAME) == 1
+    assert (
+        sum(1 for b in spec.source_bindings if b.source.name == CORRECTIONS_SOURCE_NAME)
+        == 1
+    )
 
 
 def test_corrections_source_name_is_reserved():
@@ -167,18 +172,26 @@ def test_corrections_write_uses_batch_write():
             ClassWrites(
                 binding=b,
                 rows=[
-                    {"canonical_id": "m1", "source_identifier": "curator-42", "year": 1925},
+                    {
+                        "canonical_id": "m1",
+                        "source_identifier": "curator-42",
+                        "year": 1925,
+                    },
                 ],
             )
         ],
         enforce=False,
     )
     # Same SCD2 machinery as any other binding write.
-    assert "source_name = '_user_corrections'" in "\n\n".join(s for s, _ in bw.statements)
+    assert "source_name = '_user_corrections'" in "\n\n".join(
+        s for s, _ in bw.statements
+    )
     assert "UPDATE knot_data.movie_bindings" in "\n\n".join(
         s for s, _ in bw.statements
     )  # close-out
-    assert "INSERT INTO knot_data.movie_bindings" in "\n\n".join(s for s, _ in bw.statements)
+    assert "INSERT INTO knot_data.movie_bindings" in "\n\n".join(
+        s for s, _ in bw.statements
+    )
 
 
 def test_corrections_appear_in_trust_seed():
@@ -191,5 +204,7 @@ def test_corrections_appear_in_trust_seed():
     # One row per (source, class, non-identifier-slot). Corrections binds
     # to every concrete class with the same base_trust applied to every
     # non-identifier slot.
-    correction_seed = next((sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME)
+    correction_seed = next(
+        (sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME
+    )
     assert correction_seed[1] == [CORRECTIONS_SOURCE_NAME, "Movie", "year", 0.95]

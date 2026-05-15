@@ -38,9 +38,12 @@ class MockDB:
         schemas: set[str] | None = None,
         tables: dict[str, set[str]] | None = None,  # schema → table names
         views: dict[str, set[str]] | None = None,  # schema → view names
-        columns: dict[tuple[str, str], set[str]] | None = None,  # (schema, table) → cols
-        indexes: dict[tuple[str, str], set[str]] | None = None,  # (schema, table) → indexes
-        fks: dict[tuple[str, str], set[str]] | None = None,  # (schema, table) → fk names
+        columns: dict[tuple[str, str], set[str]]
+        | None = None,  # (schema, table) → cols
+        indexes: dict[tuple[str, str], set[str]]
+        | None = None,  # (schema, table) → indexes
+        fks: dict[tuple[str, str], set[str]]
+        | None = None,  # (schema, table) → fk names
         trust_rows: list[tuple[str, str, str, float]] | None = None,
     ):
         self.schemas = schemas or set()
@@ -446,7 +449,15 @@ def test_extra_table_in_db_emits_drop_when_allowed():
     # Old class (Show) lingers in the database.
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings", "show", "show_bindings"}},
+        tables={
+            "knot_data": {
+                "source_trust",
+                "movie",
+                "movie_bindings",
+                "show",
+                "show_bindings",
+            }
+        },
     )
     ops = diff_against_db(spec, db, allow_destructive=True)
     drops = [op for op in ops if op.description.startswith("drop_table_")]
@@ -493,7 +504,9 @@ def test_extra_column_emits_drop_when_allowed():
         op for op in drops if op.description == "drop_column_movie_deprecated_col"
     )
     bindings_drop = next(
-        op for op in drops if op.description == "drop_column_movie_bindings_deprecated_bindings_col"
+        op
+        for op in drops
+        if op.description == "drop_column_movie_bindings_deprecated_bindings_col"
     )
     assert canonical_drop.destructive is True
     assert bindings_drop.destructive is True
@@ -523,9 +536,17 @@ def test_bindings_framework_columns_never_dropped():
         },
     )
     ops = diff_against_db(spec, db, allow_destructive=True)
-    framework = {"source_name", "source_identifier", "raw_payload", "valid_from", "valid_to"}
+    framework = {
+        "source_name",
+        "source_identifier",
+        "raw_payload",
+        "valid_from",
+        "valid_to",
+    }
     for fc in framework:
-        assert not any(f"drop_column_movie_bindings_{fc}" == op.description for op in ops)
+        assert not any(
+            f"drop_column_movie_bindings_{fc}" == op.description for op in ops
+        )
 
 
 def test_extra_view_drop_is_not_destructive():
@@ -673,7 +694,9 @@ def test_drops_precede_adds():
     )
     # All drops should appear before the first add.
     for op in ops[:first_add_idx]:
-        assert op.description.startswith("drop_") or op.description.startswith("create_schema_")
+        assert op.description.startswith("drop_") or op.description.startswith(
+            "create_schema_"
+        )
 
 
 def test_drop_all_sql_parses_postgres():
@@ -949,7 +972,9 @@ def test_rename_runs_before_drops_and_adds():
         renames={"Movie": {"yr": "year"}},
     )
     descriptions = [op.description for op in ops]
-    rename_idx = next(i for i, d in enumerate(descriptions) if d.startswith("rename_column_"))
+    rename_idx = next(
+        i for i, d in enumerate(descriptions) if d.startswith("rename_column_")
+    )
     # No drops or adds before the first rename.
     for d in descriptions[:rename_idx]:
         assert not d.startswith("drop_")

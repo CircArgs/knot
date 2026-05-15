@@ -32,7 +32,9 @@ class OrderBy:
 
     def __post_init__(self) -> None:
         if self.direction not in ("asc", "desc"):
-            raise ValueError(f"OrderBy direction must be 'asc' or 'desc', got {self.direction!r}")
+            raise ValueError(
+                f"OrderBy direction must be 'asc' or 'desc', got {self.direction!r}"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +56,9 @@ class Query:
 
     def where(self, predicate: Expr) -> Query:
         """AND ``predicate`` into the existing WHERE clause."""
-        combined = predicate if self.where_clause is None else self.where_clause & predicate
+        combined = (
+            predicate if self.where_clause is None else self.where_clause & predicate
+        )
         return replace(self, where_clause=combined)
 
     def order_by(self, ref: Expr, direction: str = "asc") -> Query:

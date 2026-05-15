@@ -113,7 +113,9 @@ def _(VirtualClass, mo, spec):
             if not cls.slots:
                 class_lines.append("_no own slots_\n")
             else:
-                class_lines.append("| slot | type | identifier | required |\n| - | - | - | - |\n")
+                class_lines.append(
+                    "| slot | type | identifier | required |\n| - | - | - | - |\n"
+                )
                 for s in cls.slots:
                     class_lines.append(
                         f"| `{s.name}` | `{s.type}` | "
@@ -164,7 +166,11 @@ def _(movie):
     chain = [c.name for c in movie.chain()]
     {
         "chain": chain,
-        "inherited (Title.name)": (inherited.name, str(inherited.type), inherited.required),
+        "inherited (Title.name)": (
+            inherited.name,
+            str(inherited.type),
+            inherited.required,
+        ),
         "own (Movie.year)": (own.name, str(own.type), own.required),
         "array (Movie.genres)": (genres.name, str(genres.type), genres.is_fk),
     }

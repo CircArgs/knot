@@ -73,6 +73,14 @@ def _as_expr(v: Any) -> Expr:
 # ---------------------------------------------------------------------------
 
 
+# ``_ValueExpr`` is a mixin combined with ``Expr`` in concrete classes
+# (Ref, FkRef, FkChainRef, Literal, CountRel, Aggregate). The operator
+# methods build ``Compare`` / ``InList`` / ``IsNull`` / ``Between``
+# nodes passing ``self`` where an ``Expr`` is expected — at runtime
+# ``self`` IS an Expr via the concrete class's MRO, but mypy can't see
+# that. The ``arg-type`` ignores are explicit annotations of that gap.
+
+
 class _ValueExpr:
     """Mixin for Expr nodes that produce a SQL value (slot ref, literal,
     count-of-relation). Defines comparison + null + range operators that
@@ -80,41 +88,41 @@ class _ValueExpr:
 
     __slots__ = ()
 
-    def __gt__(self, other: Any) -> Compare:  # type: ignore[misc]
-        return Compare(op=">", left=self, right=_as_expr(other))
+    def __gt__(self, other: Any) -> Compare:
+        return Compare(op=">", left=self, right=_as_expr(other))  # type: ignore[arg-type]
 
-    def __ge__(self, other: Any) -> Compare:  # type: ignore[misc]
-        return Compare(op=">=", left=self, right=_as_expr(other))
+    def __ge__(self, other: Any) -> Compare:
+        return Compare(op=">=", left=self, right=_as_expr(other))  # type: ignore[arg-type]
 
-    def __lt__(self, other: Any) -> Compare:  # type: ignore[misc]
-        return Compare(op="<", left=self, right=_as_expr(other))
+    def __lt__(self, other: Any) -> Compare:
+        return Compare(op="<", left=self, right=_as_expr(other))  # type: ignore[arg-type]
 
-    def __le__(self, other: Any) -> Compare:  # type: ignore[misc]
-        return Compare(op="<=", left=self, right=_as_expr(other))
+    def __le__(self, other: Any) -> Compare:
+        return Compare(op="<=", left=self, right=_as_expr(other))  # type: ignore[arg-type]
 
     def __eq__(self, other: Any) -> Compare:  # type: ignore[override]
-        return Compare(op="=", left=self, right=_as_expr(other))
+        return Compare(op="=", left=self, right=_as_expr(other))  # type: ignore[arg-type]
 
     def __ne__(self, other: Any) -> Compare:  # type: ignore[override]
-        return Compare(op="<>", left=self, right=_as_expr(other))
+        return Compare(op="<>", left=self, right=_as_expr(other))  # type: ignore[arg-type]
 
-    def __hash__(self) -> int:  # type: ignore[override]
+    def __hash__(self) -> int:
         return id(self)
 
     def in_(self, values: list[Any]) -> InList:
-        return InList(left=self, values=tuple(values), negated=False)
+        return InList(left=self, values=tuple(values), negated=False)  # type: ignore[arg-type]
 
     def not_in(self, values: list[Any]) -> InList:
-        return InList(left=self, values=tuple(values), negated=True)
+        return InList(left=self, values=tuple(values), negated=True)  # type: ignore[arg-type]
 
     def is_null(self) -> IsNull:
-        return IsNull(expr=self, negated=False)
+        return IsNull(expr=self, negated=False)  # type: ignore[arg-type]
 
     def is_not_null(self) -> IsNull:
-        return IsNull(expr=self, negated=True)
+        return IsNull(expr=self, negated=True)  # type: ignore[arg-type]
 
     def between(self, low: Any, high: Any) -> Between:
-        return Between(left=self, low=low, high=high)
+        return Between(left=self, low=low, high=high)  # type: ignore[arg-type]
 
 
 # ---------------------------------------------------------------------------
@@ -309,11 +317,15 @@ class Aggregate(Expr, _ValueExpr):
 
     def __post_init__(self) -> None:
         if self.kind not in ("any", "none", "count", "all"):
-            raise ValueError(f"Aggregate.kind must be one of any/none/count/all, got {self.kind!r}")
+            raise ValueError(
+                f"Aggregate.kind must be one of any/none/count/all, got {self.kind!r}"
+            )
         if self.kind == "all" and self.condition is None:
             raise ValueError("Aggregate.all requires a condition")
         if self.kind != "all" and self.condition is not None:
-            raise ValueError(f"Aggregate.condition only used with kind='all', not {self.kind!r}")
+            raise ValueError(
+                f"Aggregate.condition only used with kind='all', not {self.kind!r}"
+            )
 
 
 class _ThisAccess:

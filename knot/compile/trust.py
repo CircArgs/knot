@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from knot.spec import OntologyClass, Spec
+from knot.spec import Spec
 
 
 def emit_trust_seed(
@@ -49,8 +49,6 @@ def emit_trust_seed(
     out: list[tuple[str, list[Any]]] = []
     for b in spec.source_bindings:
         cls = b.class_
-        if not isinstance(cls, OntologyClass):
-            continue
         ident_name = b.identifier_slot.name
         for slot in cls.effective_slots():
             if slot.name == ident_name:

@@ -42,7 +42,7 @@ from knot.spec import Spec
 
 
 @singledispatch
-def compile_query(node, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
+def compile_query(node: Any, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
     """Render ``node`` as a full postgres SQL statement + parameter list."""
     raise NotImplementedError(f"no query compiler registered for {type(node).__name__}")
 
@@ -57,7 +57,9 @@ def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
         select_sql = "*"
     else:
         select_sql = ", ".join(
-            compile_sql(r, schema=schema, target_suffix=suffix, outer_class=node.class_name)
+            compile_sql(
+                r, schema=schema, target_suffix=suffix, outer_class=node.class_name
+            )
             for r in node.projection
         )
 
@@ -125,7 +127,7 @@ def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
     return "\n".join(parts) + ";", []
 
 
-def _lookup_class(spec: Spec, name: str):
+def _lookup_class(spec: Spec, name: str) -> Any:
     """Resolve a class name in ``spec``. Raises if missing."""
     for c in spec.classes:
         if c.name == name:
