@@ -7,8 +7,8 @@ from dataclasses import replace
 import pytest
 
 from knot import types
+from knot.ast.select import OrderBy, Query
 from knot.compile.query_sql import compile_query
-from knot.select import OrderBy, Query
 from knot.spec import Spec
 
 
@@ -136,8 +136,8 @@ def _make_movie_director_spec():
 
 def test_fk_ref_as_value():
     """Movie.col.director used standalone renders as the FK column."""
+    from knot.ast.expr import FkRef
     from knot.compile.expr_sql import compile_sql
-    from knot.expr import FkRef
 
     spec, movie, person = _make_movie_director_spec()
     ref = movie.col.director
@@ -213,8 +213,8 @@ def test_full_query_with_fk_walk():
 
 def test_this_outside_aggregate_raises():
     """A bare this.X reference outside an Aggregate context is an error."""
+    from knot.ast.expr import this
     from knot.compile.expr_sql import compile_sql
-    from knot.expr import this
 
     with pytest.raises(ValueError, match="this.Person used outside"):
         compile_sql(this.Person, schema="knot_data", target_suffix="_resolved")
@@ -222,7 +222,7 @@ def test_this_outside_aggregate_raises():
 
 def test_any_existence():
     """Persons who have directed at least one movie since 2020."""
-    from knot.expr import this
+    from knot.ast.expr import this
 
     spec, movie, person = _make_movie_director_spec()
     q = person.where((movie.col.director == this.Person).any())
@@ -237,7 +237,7 @@ def test_any_existence():
 
 def test_none_non_existence():
     """Persons who have never directed a movie."""
-    from knot.expr import this
+    from knot.ast.expr import this
 
     spec, movie, person = _make_movie_director_spec()
     q = person.where((movie.col.director == this.Person).none())
@@ -247,7 +247,7 @@ def test_none_non_existence():
 
 def test_count_threshold():
     """Directors who have directed more than 5 movies."""
-    from knot.expr import this
+    from knot.ast.expr import this
 
     spec, movie, person = _make_movie_director_spec()
     q = person.where((movie.col.director == this.Person).count() > 5)
@@ -258,7 +258,7 @@ def test_count_threshold():
 
 def test_count_equals_zero():
     """Equivalent to .none() — count == 0."""
-    from knot.expr import this
+    from knot.ast.expr import this
 
     spec, movie, person = _make_movie_director_spec()
     q = person.where((movie.col.director == this.Person).count() == 0)
@@ -269,7 +269,7 @@ def test_count_equals_zero():
 
 def test_all_universal():
     """Universal quantification via .all() — emitted as NOT EXISTS of counter-example."""
-    from knot.expr import this
+    from knot.ast.expr import this
 
     spec, movie, person = _make_movie_director_spec()
     # Hypothetical: movies whose director's birth_country == "Japan" — but
@@ -285,7 +285,7 @@ def test_all_universal():
 
 def test_this_wrong_class_raises():
     """this.Movie used inside a Person.where(...) should raise."""
-    from knot.expr import this
+    from knot.ast.expr import this
 
     spec, movie, person = _make_movie_director_spec()
     q = person.where((movie.col.director == this.Movie).any())
@@ -294,14 +294,14 @@ def test_this_wrong_class_raises():
 
 
 def test_aggregate_invalid_kind():
-    from knot.expr import Aggregate, Ref
+    from knot.ast.expr import Aggregate, Ref
 
     with pytest.raises(ValueError, match="kind must be"):
         Aggregate(kind="sum", predicate=Ref(class_name="X", slot_name="y"))
 
 
 def test_aggregate_all_requires_condition():
-    from knot.expr import Aggregate, Ref
+    from knot.ast.expr import Aggregate, Ref
 
     with pytest.raises(ValueError, match="requires a condition"):
         Aggregate(kind="all", predicate=Ref(class_name="X", slot_name="y"))

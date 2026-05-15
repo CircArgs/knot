@@ -22,7 +22,7 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import Any
 
-from knot.expr import (
+from knot.ast.expr import (
     Aggregate,
     Between,
     BoolOp,

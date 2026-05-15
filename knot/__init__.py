@@ -10,8 +10,8 @@ cross-entity well-formedness via ``Spec.validate()`` (raises
 ``SpecError``).
 """
 
-from knot import types
-from knot.expr import (
+from knot.ast import types
+from knot.ast.expr import (
     Aggregate,
     Between,
     BoolOp,
@@ -32,7 +32,7 @@ from knot.expr import (
     raw,
     this,
 )
-from knot.select import OrderBy, Query
+from knot.ast.select import OrderBy, Query
 from knot.spec import (
     CORRECTIONS_SOURCE_NAME,
     ClassKind,

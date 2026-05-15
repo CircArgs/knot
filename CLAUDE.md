@@ -38,13 +38,15 @@ knot/
   spec.py              # Spec, OntologyClass, VirtualClass, Slot,
                        # Source, SourceBinding, SlotMapping,
                        # Constraint, Severity, ClassKind
-  types.py             # types.TEXT, types.INTEGER, …, types.ARRAY(…)
-                       # — THE canonical type surface
-  expr.py              # Expr AST: Ref, FkRef, FkChainRef, Compare,
-                       # BoolOp, Not, IsNull, InList, Between,
-                       # Exists, CountRel, Raw, This, Aggregate
-                       # + `this` magic accessor for outer-scope refs
-  select.py            # read substrate: Query, OrderBy
+  ast/                 # spec-layer primitives — no SQL knowledge
+    __init__.py
+    types.py           # types.TEXT, …, types.ARRAY(…) — the canonical
+                       # type surface
+    expr.py            # Expr AST: Ref, FkRef, FkChainRef, Compare,
+                       # BoolOp, Not, IsNull, InList, Between, Exists,
+                       # CountRel, Raw, This, Aggregate + ``this``
+                       # magic accessor for outer-scope refs
+    select.py          # read substrate: Query, OrderBy
   compile/
     __init__.py
     ddl.py             # canonical tables + bindings tables + indexes

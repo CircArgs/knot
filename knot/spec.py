@@ -1,10 +1,11 @@
 """knot — spec builder.
 
 Single-file dataclass-based spec construction. Bodies and view
-predicates are authored through the semantic builder (``knot.expr``);
-no raw SQL strings cross knot's user surface. Slot types come from
-``knot.types`` (the one canonical surface — ``types.TEXT``,
-``types.ARRAY(types.TEXT)``, ``types.FK(other_class)``).
+predicates are authored through the semantic builder
+(``knot.ast.expr``); no raw SQL strings cross knot's user surface.
+Slot types come from ``knot.ast.types`` (the one canonical surface —
+``types.TEXT``, ``types.ARRAY(types.TEXT)``, FK by passing an
+``OntologyClass`` directly to ``slot()``).
 
 Under the hood the type AST is one of:
 
@@ -12,7 +13,7 @@ Under the hood the type AST is one of:
   - ``Array(of=…)``         — homogeneous container over another TypeExpression
   - ``ClassRef(target=…)``  — FK to another class (stored as canonical_id)
 
-These are internal — callers go through ``knot.types`` rather than
+These are internal — callers go through ``knot.ast.types`` rather than
 constructing them directly. All entities are plain
 ``@dataclass(slots=True)`` records so a future Java port maps 1:1 to
 ``record`` / ``sealed interface`` / ``enum``.
@@ -38,8 +39,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from knot.expr import CountRel, Exists, Expr, FkRef, Ref
-from knot.select import Query
+from knot.ast.expr import CountRel, Exists, Expr, FkRef, Ref
+from knot.ast.select import Query
 
 # ---------------------------------------------------------------------------
 # Enums
@@ -118,7 +119,7 @@ def _coerce_type(t):
     if isinstance(t, OntologyClass):
         return ClassRef(target=t)
     raise TypeError(
-        f"Slot type must be a value from knot.types (TEXT/INTEGER/FLOAT/"
+        f"Slot type must be a value from knot.ast.types (TEXT/INTEGER/FLOAT/"
         f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)) or an OntologyClass instance; "
         f"got {type(t).__name__}"
     )
@@ -1042,8 +1043,10 @@ class Spec:
         """
         self.validate()
         if query_fn is None:
+
             def query_fn(_sql: str, _params: tuple) -> list:  # empty DB
                 return []
+
         from knot.compile.migrate import diff_against_db
 
         ops = diff_against_db(

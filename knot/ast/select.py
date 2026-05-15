@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from knot.expr import Expr
+from knot.ast.expr import Expr
 
 
 @dataclass(frozen=True, slots=True)

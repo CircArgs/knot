@@ -23,8 +23,7 @@ from __future__ import annotations
 from functools import singledispatch
 from typing import Any
 
-from knot.compile.expr_sql import compile_sql
-from knot.expr import (
+from knot.ast.expr import (
     Aggregate,
     Between,
     BoolOp,
@@ -37,7 +36,8 @@ from knot.expr import (
     IsNull,
     Not,
 )
-from knot.select import Query
+from knot.ast.select import Query
+from knot.compile.expr_sql import compile_sql
 from knot.spec import Spec
 
 
