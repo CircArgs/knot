@@ -80,6 +80,67 @@ scheduler, no ER policy, no auth, no response shape. It is a
 This is the design intent behind every "the host owns this" line in
 the rest of this document. The library's job ends at `(sql, params)`.
 
+## Constraint enforcement
+
+knot doesn't bundle constraint checks into the write SQL. There are
+three independent primitives:
+
+1. `binding.write_sql()` — close-out + insert SQL templates. No
+   constraint awareness.
+2. `spec.emit_validation()` — one SELECT per constraint. No writes.
+3. `pg.transaction()` — host opens it, runs (1), runs (2), decides
+   whether to commit or rollback.
+
+The host composes them. The canonical "ingest with enforcement"
+shape is ~10 lines:
+
+```python
+def ingest_with_enforcement(binding, rows, *, spec, pg, schema):
+    close_out, insert = binding.write_sql(schema=schema)
+    payload = json.dumps(rows)
+    severity = {c.name: c.severity for c in spec.constraints}
+
+    with pg.transaction(), pg.cursor() as cur:
+        cur.execute(close_out, {"rows": payload})
+        cur.execute(insert,    {"rows": payload})
+        for rule, vsql in spec.emit_validation(schema=schema):
+            if severity[rule].value != "error":
+                continue
+            cur.execute(vsql)
+            bad = cur.fetchall()
+            if bad:
+                raise ConstraintViolation(rule, bad)
+    # got here ⇒ committed; ERROR-severity constraints held.
+```
+
+Knot exposes the primitives because **the host owns the enforcement
+policy**. Five common shapes from the same three primitives:
+
+| policy | shape |
+|---|---|
+| **Block on any violation** | raise on first non-empty SELECT → rollback (above) |
+| **Block on new violations only** | snapshot baseline counts before write, post-write count after, raise iff `post > pre` |
+| **Block on specific rules** | filter by name or severity (above filters to ERROR; WARNINGs are informational) |
+| **Don't block** | commit the write, run validation asynchronously, post violations to a `data_quality` table or page oncall |
+| **Soft-fail per row** | bucket the batch into clean + violating, commit the clean subset, route violators to a review queue |
+
+All five are the same primitives composed differently. If knot
+bundled (1) + (2) into one SQL script with a hardcoded "any
+violation → rollback" policy, only the first option would be
+possible without escape hatches.
+
+**Gotcha:** `emit_validation()` SELECTs run against the whole
+`*_resolved` view, so pre-existing violations in unrelated rows
+would also block your write under the simple "block on any
+violation" policy. Production deployments usually pick one of:
+scope to just-touched canonical_ids (knot doesn't emit that variant
+today — would need a `scope_to=` kwarg), delta-only blocking
+(baseline vs post-write counts), or fully decoupled validation
+(separate scheduled workflow, never blocks ingest). In a Temporal
+deployment, the "decoupled scheduled sweep" pattern is usually the
+right default with delta-only blocking layered in for the rules
+where blocking is genuinely required.
+
 ## Layout
 
 ```
