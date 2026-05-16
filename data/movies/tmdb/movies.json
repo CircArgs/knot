@@ -1,6 +1,5 @@
 [
   {
-    "canonical_id": "m_pulpfiction",
     "source_identifier": "822588",
     "title": "Pulp Fiction",
     "year": 1994,
@@ -20,7 +19,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_killbill1",
     "source_identifier": "323006",
     "title": "Kill Bill: Volume 1",
     "year": 2003,
@@ -39,7 +37,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_inglourious",
     "source_identifier": "705177",
     "title": "Inglourious Basterds",
     "year": 2009,
@@ -58,7 +55,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_djangounchained",
     "source_identifier": "413638",
     "title": "Django Unchained",
     "year": 2012,
@@ -77,7 +73,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_oncehollywood",
     "source_identifier": "492532",
     "title": "Once Upon a Time... in Hollywood",
     "year": 2019,
@@ -97,7 +92,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_yojimbo",
     "source_identifier": "205699",
     "title": "Yojimbo",
     "year": 1961,
@@ -116,7 +110,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_ikiru",
     "source_identifier": "400814",
     "title": "Ikiru",
     "year": 1952,
@@ -135,7 +128,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_spiritedaway",
     "source_identifier": "897238",
     "title": "Spirited Away",
     "year": 2001,
@@ -155,7 +147,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_howlsmoving",
     "source_identifier": "369157",
     "title": "Howl's Moving Castle",
     "year": 2004,
@@ -175,7 +166,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_boyandheron",
     "source_identifier": "661535",
     "title": "The Boy and the Heron",
     "year": 2023,
@@ -195,7 +185,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_taxidriver",
     "source_identifier": "464270",
     "title": "Taxi Driver",
     "year": 1976,
@@ -215,7 +204,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_departed",
     "source_identifier": "365590",
     "title": "The Departed",
     "year": 2006,
@@ -235,7 +223,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_killersmoon",
     "source_identifier": "769296",
     "title": "Killers of the Flower Moon",
     "year": 2023,
@@ -255,7 +242,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_2001",
     "source_identifier": "836592",
     "title": "2001: A Space Odyssey",
     "year": 1968,
@@ -275,7 +261,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_clockworkorange",
     "source_identifier": "617235",
     "title": "A Clockwork Orange",
     "year": 1971,
@@ -295,7 +280,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_fullmetal",
     "source_identifier": "566218",
     "title": "Full Metal Jacket",
     "year": 1987,
@@ -315,7 +299,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_drstrangelove",
     "source_identifier": "572819",
     "title": "Dr. Strangelove",
     "year": 1964,
@@ -335,7 +318,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_jaws",
     "source_identifier": "560763",
     "title": "Jaws",
     "year": 1975,
@@ -355,7 +337,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_savingprivate",
     "source_identifier": "588557",
     "title": "Saving Private Ryan",
     "year": 1998,
@@ -375,7 +356,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_godfather",
     "source_identifier": "654537",
     "title": "The Godfather",
     "year": 1972,
@@ -395,7 +375,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_godfatherii",
     "source_identifier": "457803",
     "title": "The Godfather Part II",
     "year": 1974,
@@ -415,7 +394,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_inception",
     "source_identifier": "240031",
     "title": "Inception",
     "year": 2010,
@@ -435,7 +413,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_interstellar",
     "source_identifier": "228912",
     "title": "Interstellar",
     "year": 2014,
@@ -455,7 +432,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_dunkirk",
     "source_identifier": "234618",
     "title": "Dunkirk",
     "year": 2017,
@@ -474,7 +450,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_oppenheimer",
     "source_identifier": "745052",
     "title": "Oppenheimer",
     "year": 2023,
@@ -494,7 +469,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_arrival",
     "source_identifier": "353840",
     "title": "Arrival",
     "year": 2016,
@@ -514,7 +488,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_bladerunner2049",
     "source_identifier": "221699",
     "title": "Blade Runner 2049",
     "year": 2017,
@@ -534,7 +507,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_thereblood",
     "source_identifier": "756115",
     "title": "There Will Be Blood",
     "year": 2007,
@@ -554,7 +526,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_themaster",
     "source_identifier": "44287",
     "title": "The Master",
     "year": 2012,
@@ -574,7 +545,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_phantomthread",
     "source_identifier": "338164",
     "title": "Phantom Thread",
     "year": 2017,
@@ -594,7 +564,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_moonrise",
     "source_identifier": "152292",
     "title": "Moonrise Kingdom",
     "year": 2012,
@@ -613,7 +582,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_fightclub",
     "source_identifier": "586684",
     "title": "Fight Club",
     "year": 1999,
@@ -633,7 +601,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_sevenfilm",
     "source_identifier": "474042",
     "title": "Se7en",
     "year": 1995,
@@ -653,7 +620,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_socialnetwork",
     "source_identifier": "163906",
     "title": "The Social Network",
     "year": 2010,
@@ -673,7 +639,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_zodiac",
     "source_identifier": "654807",
     "title": "Zodiac",
     "year": 2007,
@@ -693,7 +658,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_mulhollanddrive",
     "source_identifier": "402867",
     "title": "Mulholland Drive",
     "year": 2001,
@@ -713,7 +677,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_blueVelvet",
     "source_identifier": "71117",
     "title": "Blue Velvet",
     "year": 1986,
@@ -732,7 +695,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_paterson",
     "source_identifier": "591520",
     "title": "Paterson",
     "year": 2016,
@@ -752,7 +714,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_deadman",
     "source_identifier": "218922",
     "title": "Dead Man",
     "year": 1995,
@@ -772,7 +733,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_memoriesmurder",
     "source_identifier": "231587",
     "title": "Memories of Murder",
     "year": 2003,
@@ -792,7 +752,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_thehost",
     "source_identifier": "2869",
     "title": "The Host",
     "year": 2006,
@@ -811,7 +770,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_oldboy",
     "source_identifier": "93995",
     "title": "Oldboy",
     "year": 2003,
@@ -831,7 +789,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_decisiontoleave",
     "source_identifier": "337323",
     "title": "Decision to Leave",
     "year": 2022,
@@ -851,7 +808,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_allaboutmother",
     "source_identifier": "192219",
     "title": "All About My Mother",
     "year": 1999,
@@ -870,7 +826,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_paindglory",
     "source_identifier": "536995",
     "title": "Pain and Glory",
     "year": 2019,
@@ -889,7 +844,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_amour",
     "source_identifier": "634319",
     "title": "Amour",
     "year": 2012,
@@ -909,7 +863,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_whiteribbon",
     "source_identifier": "545454",
     "title": "The White Ribbon",
     "year": 2009,
@@ -929,7 +882,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_ladybird",
     "source_identifier": "448459",
     "title": "Lady Bird",
     "year": 2017,
@@ -949,7 +901,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_moonlight",
     "source_identifier": "563793",
     "title": "Moonlight",
     "year": 2016,
@@ -969,7 +920,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_ifbeale",
     "source_identifier": "28231",
     "title": "If Beale Street Could Talk",
     "year": 2018,
@@ -989,7 +939,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_getout",
     "source_identifier": "149025",
     "title": "Get Out",
     "year": 2017,
@@ -1009,7 +958,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_lighthouse",
     "source_identifier": "733477",
     "title": "The Lighthouse",
     "year": 2019,
@@ -1029,7 +977,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_northman",
     "source_identifier": "189212",
     "title": "The Northman",
     "year": 2022,
@@ -1048,7 +995,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_hereditary",
     "source_identifier": "543164",
     "title": "Hereditary",
     "year": 2018,
@@ -1068,7 +1014,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_favourite",
     "source_identifier": "167060",
     "title": "The Favourite",
     "year": 2018,
@@ -1087,7 +1032,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_closeup",
     "source_identifier": "504782",
     "title": "Close-Up",
     "year": 1990,
@@ -1107,7 +1051,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_generalkeaton",
     "source_identifier": "365812",
     "title": "The General",
     "year": 1927,
@@ -1127,7 +1070,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_metropolis",
     "source_identifier": "831642",
     "title": "Metropolis",
     "year": 1927,
@@ -1147,7 +1089,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_citizenkane",
     "source_identifier": "717468",
     "title": "Citizen Kane",
     "year": 1941,
@@ -1167,7 +1108,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_vertigo",
     "source_identifier": "310696",
     "title": "Vertigo",
     "year": 1958,
@@ -1187,7 +1127,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_psycho",
     "source_identifier": "120573",
     "title": "Psycho",
     "year": 1960,
@@ -1207,7 +1146,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_breathless",
     "source_identifier": "635069",
     "title": "A bout de souffle",
     "year": 1960,
@@ -1227,7 +1165,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_seventhseal",
     "source_identifier": "599805",
     "title": "The Seventh Seal",
     "year": 1957,
@@ -1247,7 +1184,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_personabergman",
     "source_identifier": "128926",
     "title": "Persona",
     "year": 1966,
@@ -1267,7 +1203,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_eightandahalf",
     "source_identifier": "21347",
     "title": "8 1/2",
     "year": 1963,
@@ -1287,7 +1222,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_ladolce",
     "source_identifier": "686512",
     "title": "La Dolce Vita",
     "year": 1960,
@@ -1307,7 +1241,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_mirror",
     "source_identifier": "136783",
     "title": "Mirror",
     "year": 1975,
@@ -1326,7 +1259,6 @@
     "status": "Released"
   },
   {
-    "canonical_id": "m_tokyostory",
     "source_identifier": "694525",
     "title": "Tokyo Story",
     "year": 1953,

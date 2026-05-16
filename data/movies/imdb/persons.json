@@ -1,6 +1,5 @@
 [
   {
-    "canonical_id": "p_tarantino",
     "source_identifier": "nm3029921",
     "name": "Quentin Tarantino",
     "birth_country": "USA",
@@ -18,7 +17,6 @@
     "height_cm": 165
   },
   {
-    "canonical_id": "p_kurosawa",
     "source_identifier": "nm1482525",
     "name": "Akira Kurosawa",
     "birth_country": "Japan",
@@ -34,7 +32,6 @@
     "height_cm": 199
   },
   {
-    "canonical_id": "p_miyazaki",
     "source_identifier": "nm3050865",
     "name": "Hayao Miyazaki",
     "birth_country": "Japan",
@@ -50,7 +47,6 @@
     "height_cm": 176
   },
   {
-    "canonical_id": "p_scorsese",
     "source_identifier": "nm8150931",
     "name": "Martin Scorsese",
     "birth_country": "USA",
@@ -67,7 +63,6 @@
     "height_cm": 157
   },
   {
-    "canonical_id": "p_spielberg",
     "source_identifier": "nm7546264",
     "name": "Steven Spielberg",
     "birth_country": "USA",
@@ -84,7 +79,6 @@
     "height_cm": 183
   },
   {
-    "canonical_id": "p_coppola",
     "source_identifier": "nm4939212",
     "name": "Francis Ford Coppola",
     "birth_country": "USA",
@@ -100,7 +94,6 @@
     "height_cm": 178
   },
   {
-    "canonical_id": "p_nolan",
     "source_identifier": "nm7801353",
     "name": "Christopher Nolan",
     "birth_country": "UK",
@@ -116,7 +109,6 @@
     "height_cm": 174
   },
   {
-    "canonical_id": "p_villeneuve",
     "source_identifier": "nm1015343",
     "name": "Denis Villeneuve",
     "birth_country": "Canada",
@@ -133,7 +125,6 @@
     "height_cm": 199
   },
   {
-    "canonical_id": "p_anderson_pt",
     "source_identifier": "nm4585079",
     "name": "Paul Thomas Anderson",
     "birth_country": "USA",
@@ -151,7 +142,6 @@
     "height_cm": 195
   },
   {
-    "canonical_id": "p_anderson_wes",
     "source_identifier": "nm3390069",
     "name": "Wes Anderson",
     "birth_country": "USA",
@@ -167,7 +157,6 @@
     "height_cm": 198
   },
   {
-    "canonical_id": "p_finch",
     "source_identifier": "nm3759722",
     "name": "David Fincher",
     "birth_country": "USA",
@@ -183,7 +172,6 @@
     "height_cm": 196
   },
   {
-    "canonical_id": "p_lynch",
     "source_identifier": "nm7674260",
     "name": "David Lynch",
     "birth_country": "USA",
@@ -199,7 +187,6 @@
     "height_cm": 191
   },
   {
-    "canonical_id": "p_jarmusch",
     "source_identifier": "nm8207718",
     "name": "Jim Jarmusch",
     "birth_country": "USA",
@@ -216,7 +203,6 @@
     "height_cm": 159
   },
   {
-    "canonical_id": "p_bong",
     "source_identifier": "nm5394935",
     "name": "Bong Joon-ho",
     "birth_country": "South Korea",
@@ -233,7 +219,6 @@
     "height_cm": 161
   },
   {
-    "canonical_id": "p_park",
     "source_identifier": "nm2066232",
     "name": "Park Chan-wook",
     "birth_country": "South Korea",
@@ -250,9 +235,8 @@
     "height_cm": 161
   },
   {
-    "canonical_id": "p_almodovar",
     "source_identifier": "nm8592597",
-    "name": "Pedro Almodóvar",
+    "name": "Pedro Almod\u00f3var",
     "birth_country": "Spain",
     "birth_year": 1949,
     "primary_profession": [
@@ -268,7 +252,6 @@
     "height_cm": 197
   },
   {
-    "canonical_id": "p_haneke",
     "source_identifier": "nm8302542",
     "name": "Michael Haneke",
     "birth_country": "Austria",
@@ -285,7 +268,6 @@
     "height_cm": 178
   },
   {
-    "canonical_id": "p_chazelle",
     "source_identifier": "nm5312400",
     "name": "Damien Chazelle",
     "birth_country": "USA",
@@ -302,7 +284,6 @@
     "height_cm": 190
   },
   {
-    "canonical_id": "p_gerwig",
     "source_identifier": "nm2369824",
     "name": "Greta Gerwig",
     "birth_country": "USA",
@@ -319,7 +300,6 @@
     "height_cm": 173
   },
   {
-    "canonical_id": "p_peele",
     "source_identifier": "nm3686395",
     "name": "Jordan Peele",
     "birth_country": "USA",
@@ -337,7 +317,6 @@
     "height_cm": 191
   },
   {
-    "canonical_id": "p_eggers",
     "source_identifier": "nm8456496",
     "name": "Robert Eggers",
     "birth_country": "USA",
@@ -353,7 +332,6 @@
     "height_cm": 167
   },
   {
-    "canonical_id": "p_aster",
     "source_identifier": "nm2254104",
     "name": "Ari Aster",
     "birth_country": "USA",
@@ -369,7 +347,6 @@
     "height_cm": 185
   },
   {
-    "canonical_id": "p_lanthimos",
     "source_identifier": "nm4321819",
     "name": "Yorgos Lanthimos",
     "birth_country": "Greece",
@@ -386,7 +363,6 @@
     "height_cm": 168
   },
   {
-    "canonical_id": "p_zhao",
     "source_identifier": "nm1180257",
     "name": "Chloe Zhao",
     "birth_country": "China",
@@ -402,7 +378,6 @@
     "height_cm": 196
   },
   {
-    "canonical_id": "p_kogonada",
     "source_identifier": "nm3313954",
     "name": "Kogonada",
     "birth_country": "South Korea",
@@ -418,7 +393,6 @@
     "height_cm": 170
   },
   {
-    "canonical_id": "p_panahi",
     "source_identifier": "nm0743662",
     "name": "Jafar Panahi",
     "birth_country": "Iran",
@@ -435,7 +409,6 @@
     "height_cm": 193
   },
   {
-    "canonical_id": "p_kiarostami",
     "source_identifier": "nm4256165",
     "name": "Abbas Kiarostami",
     "birth_country": "Iran",
@@ -451,7 +424,6 @@
     "height_cm": 166
   },
   {
-    "canonical_id": "p_eisenstein",
     "source_identifier": "nm3444677",
     "name": "Sergei Eisenstein",
     "birth_country": "Russia",
@@ -467,7 +439,6 @@
     "height_cm": 176
   },
   {
-    "canonical_id": "p_chaplin",
     "source_identifier": "nm1067089",
     "name": "Charlie Chaplin",
     "birth_country": "UK",
@@ -483,7 +454,6 @@
     "height_cm": 168
   },
   {
-    "canonical_id": "p_keaton",
     "source_identifier": "nm8840895",
     "name": "Buster Keaton",
     "birth_country": "USA",
@@ -499,7 +469,6 @@
     "height_cm": 161
   },
   {
-    "canonical_id": "p_lang",
     "source_identifier": "nm9487956",
     "name": "Fritz Lang",
     "birth_country": "Austria",
@@ -515,7 +484,6 @@
     "height_cm": 167
   },
   {
-    "canonical_id": "p_welles",
     "source_identifier": "nm8385541",
     "name": "Orson Welles",
     "birth_country": "USA",
@@ -533,7 +501,6 @@
     "height_cm": 160
   },
   {
-    "canonical_id": "p_hitchcock",
     "source_identifier": "nm3290576",
     "name": "Alfred Hitchcock",
     "birth_country": "UK",
@@ -550,7 +517,6 @@
     "height_cm": 185
   },
   {
-    "canonical_id": "p_godard",
     "source_identifier": "nm9637026",
     "name": "Jean-Luc Godard",
     "birth_country": "France",
@@ -568,9 +534,8 @@
     "height_cm": 197
   },
   {
-    "canonical_id": "p_truffaut",
     "source_identifier": "nm0917895",
-    "name": "François Truffaut",
+    "name": "Fran\u00e7ois Truffaut",
     "birth_country": "France",
     "birth_year": 1932,
     "primary_profession": [
@@ -584,7 +549,6 @@
     "height_cm": 199
   },
   {
-    "canonical_id": "p_bergman",
     "source_identifier": "nm9508020",
     "name": "Ingmar Bergman",
     "birth_country": "Sweden",
@@ -600,7 +564,6 @@
     "height_cm": 166
   },
   {
-    "canonical_id": "p_fellini",
     "source_identifier": "nm5262534",
     "name": "Federico Fellini",
     "birth_country": "Italy",
@@ -618,7 +581,6 @@
     "height_cm": 178
   },
   {
-    "canonical_id": "p_tarkovsky",
     "source_identifier": "nm7055573",
     "name": "Andrei Tarkovsky",
     "birth_country": "Russia",
@@ -634,7 +596,6 @@
     "height_cm": 197
   },
   {
-    "canonical_id": "p_ozu",
     "source_identifier": "nm7440220",
     "name": "Yasujiro Ozu",
     "birth_country": "Japan",
@@ -650,7 +611,6 @@
     "height_cm": 194
   },
   {
-    "canonical_id": "p_travolta",
     "source_identifier": "nm6584780",
     "name": "John Travolta",
     "birth_country": "USA",
@@ -666,7 +626,6 @@
     "height_cm": 189
   },
   {
-    "canonical_id": "p_jackson_sl",
     "source_identifier": "nm2841350",
     "name": "Samuel L. Jackson",
     "birth_country": "USA",
@@ -684,7 +643,6 @@
     "height_cm": 169
   },
   {
-    "canonical_id": "p_thurman",
     "source_identifier": "nm6347196",
     "name": "Uma Thurman",
     "birth_country": "USA",
@@ -700,7 +658,6 @@
     "height_cm": 182
   },
   {
-    "canonical_id": "p_willis",
     "source_identifier": "nm5042522",
     "name": "Bruce Willis",
     "birth_country": "USA",
@@ -716,7 +673,6 @@
     "height_cm": 161
   },
   {
-    "canonical_id": "p_dicaprio",
     "source_identifier": "nm3310085",
     "name": "Leonardo DiCaprio",
     "birth_country": "USA",
@@ -732,7 +688,6 @@
     "height_cm": 159
   },
   {
-    "canonical_id": "p_pitt",
     "source_identifier": "nm2735992",
     "name": "Brad Pitt",
     "birth_country": "USA",
@@ -749,7 +704,6 @@
     "height_cm": 161
   },
   {
-    "canonical_id": "p_robbie",
     "source_identifier": "nm4153946",
     "name": "Margot Robbie",
     "birth_country": "Australia",
@@ -767,7 +721,6 @@
     "height_cm": 190
   },
   {
-    "canonical_id": "p_pacino",
     "source_identifier": "nm6877855",
     "name": "Al Pacino",
     "birth_country": "USA",
@@ -783,7 +736,6 @@
     "height_cm": 181
   },
   {
-    "canonical_id": "p_deniro",
     "source_identifier": "nm8081636",
     "name": "Robert De Niro",
     "birth_country": "USA",
@@ -799,7 +751,6 @@
     "height_cm": 175
   },
   {
-    "canonical_id": "p_brando",
     "source_identifier": "nm1088913",
     "name": "Marlon Brando",
     "birth_country": "USA",
@@ -815,7 +766,6 @@
     "height_cm": 172
   },
   {
-    "canonical_id": "p_streep",
     "source_identifier": "nm8470769",
     "name": "Meryl Streep",
     "birth_country": "USA",
@@ -832,7 +782,6 @@
     "height_cm": 155
   },
   {
-    "canonical_id": "p_blanchett",
     "source_identifier": "nm0351947",
     "name": "Cate Blanchett",
     "birth_country": "Australia",
@@ -848,7 +797,6 @@
     "height_cm": 199
   },
   {
-    "canonical_id": "p_dench",
     "source_identifier": "nm8747048",
     "name": "Judi Dench",
     "birth_country": "UK",
@@ -865,7 +813,6 @@
     "height_cm": 176
   },
   {
-    "canonical_id": "p_oldman",
     "source_identifier": "nm2231938",
     "name": "Gary Oldman",
     "birth_country": "UK",
@@ -882,7 +829,6 @@
     "height_cm": 162
   },
   {
-    "canonical_id": "p_dafoe",
     "source_identifier": "nm1582696",
     "name": "Willem Dafoe",
     "birth_country": "USA",
@@ -900,7 +846,6 @@
     "height_cm": 155
   },
   {
-    "canonical_id": "p_pattinson",
     "source_identifier": "nm4605390",
     "name": "Robert Pattinson",
     "birth_country": "UK",
@@ -916,7 +861,6 @@
     "height_cm": 181
   },
   {
-    "canonical_id": "p_stewart_kr",
     "source_identifier": "nm2661898",
     "name": "Kristen Stewart",
     "birth_country": "USA",
@@ -932,9 +876,8 @@
     "height_cm": 179
   },
   {
-    "canonical_id": "p_chalamet",
     "source_identifier": "nm6962463",
-    "name": "Timothée Chalamet",
+    "name": "Timoth\u00e9e Chalamet",
     "birth_country": "USA",
     "birth_year": 1995,
     "primary_profession": [
@@ -948,7 +891,6 @@
     "height_cm": 187
   },
   {
-    "canonical_id": "p_zendaya",
     "source_identifier": "nm0710394",
     "name": "Zendaya",
     "birth_country": "USA",
@@ -964,7 +906,6 @@
     "height_cm": 173
   },
   {
-    "canonical_id": "p_gosling",
     "source_identifier": "nm1059367",
     "name": "Ryan Gosling",
     "birth_country": "Canada",
@@ -980,7 +921,6 @@
     "height_cm": 176
   },
   {
-    "canonical_id": "p_stone_em",
     "source_identifier": "nm8470535",
     "name": "Emma Stone",
     "birth_country": "USA",
@@ -996,7 +936,6 @@
     "height_cm": 159
   },
   {
-    "canonical_id": "p_phoenix",
     "source_identifier": "nm7220552",
     "name": "Joaquin Phoenix",
     "birth_country": "USA",
@@ -1014,7 +953,6 @@
     "height_cm": 156
   },
   {
-    "canonical_id": "p_mifune",
     "source_identifier": "nm6002653",
     "name": "Toshiro Mifune",
     "birth_country": "Japan",
@@ -1030,7 +968,6 @@
     "height_cm": 182
   },
   {
-    "canonical_id": "p_song_kh",
     "source_identifier": "nm9663496",
     "name": "Song Kang-ho",
     "birth_country": "South Korea",
@@ -1046,7 +983,6 @@
     "height_cm": 155
   },
   {
-    "canonical_id": "p_choi_mn",
     "source_identifier": "nm4032316",
     "name": "Choi Min-sik",
     "birth_country": "South Korea",
@@ -1063,7 +999,6 @@
     "height_cm": 185
   },
   {
-    "canonical_id": "p_cruz",
     "source_identifier": "nm0759774",
     "name": "Penelope Cruz",
     "birth_country": "Spain",
@@ -1079,7 +1014,6 @@
     "height_cm": 163
   },
   {
-    "canonical_id": "p_bardem",
     "source_identifier": "nm1977683",
     "name": "Javier Bardem",
     "birth_country": "Spain",
@@ -1097,7 +1031,6 @@
     "height_cm": 194
   },
   {
-    "canonical_id": "p_marceau",
     "source_identifier": "nm4148310",
     "name": "Sophie Marceau",
     "birth_country": "France",
@@ -1115,7 +1048,6 @@
     "height_cm": 171
   },
   {
-    "canonical_id": "p_binoche",
     "source_identifier": "nm9980298",
     "name": "Juliette Binoche",
     "birth_country": "France",
@@ -1131,7 +1063,6 @@
     "height_cm": 197
   },
   {
-    "canonical_id": "p_huppert",
     "source_identifier": "nm5313815",
     "name": "Isabelle Huppert",
     "birth_country": "France",
@@ -1147,7 +1078,6 @@
     "height_cm": 174
   },
   {
-    "canonical_id": "p_mastroianni",
     "source_identifier": "nm1161229",
     "name": "Marcello Mastroianni",
     "birth_country": "Italy",
@@ -1164,7 +1094,6 @@
     "height_cm": 195
   },
   {
-    "canonical_id": "p_keaton_bu",
     "source_identifier": "nm6277878",
     "name": "Buster Keaton",
     "birth_country": "USA",
@@ -1180,7 +1109,6 @@
     "height_cm": 184
   },
   {
-    "canonical_id": "p_grant_hugh",
     "source_identifier": "nm0488665",
     "name": "Hugh Grant",
     "birth_country": "UK",
@@ -1196,7 +1124,6 @@
     "height_cm": 176
   },
   {
-    "canonical_id": "p_thompson_em",
     "source_identifier": "nm4431694",
     "name": "Emma Thompson",
     "birth_country": "UK",
@@ -1212,7 +1139,6 @@
     "height_cm": 155
   },
   {
-    "canonical_id": "p_winslet",
     "source_identifier": "nm9312426",
     "name": "Kate Winslet",
     "birth_country": "UK",
@@ -1228,7 +1154,6 @@
     "height_cm": 162
   },
   {
-    "canonical_id": "p_firth",
     "source_identifier": "nm8824229",
     "name": "Colin Firth",
     "birth_country": "UK",
@@ -1245,7 +1170,6 @@
     "height_cm": 183
   },
   {
-    "canonical_id": "p_redmayne",
     "source_identifier": "nm8021940",
     "name": "Eddie Redmayne",
     "birth_country": "UK",
@@ -1262,7 +1186,6 @@
     "height_cm": 156
   },
   {
-    "canonical_id": "p_isaac",
     "source_identifier": "nm4800693",
     "name": "Oscar Isaac",
     "birth_country": "Guatemala",
@@ -1278,7 +1201,6 @@
     "height_cm": 196
   },
   {
-    "canonical_id": "p_driver",
     "source_identifier": "nm5944785",
     "name": "Adam Driver",
     "birth_country": "USA",
@@ -1295,7 +1217,6 @@
     "height_cm": 181
   },
   {
-    "canonical_id": "p_pugh",
     "source_identifier": "nm6186566",
     "name": "Florence Pugh",
     "birth_country": "UK",
@@ -1311,7 +1232,6 @@
     "height_cm": 180
   },
   {
-    "canonical_id": "p_butler",
     "source_identifier": "nm6476183",
     "name": "Austin Butler",
     "birth_country": "USA",
@@ -1327,7 +1247,6 @@
     "height_cm": 177
   },
   {
-    "canonical_id": "p_freeman",
     "source_identifier": "nm6764832",
     "name": "Morgan Freeman",
     "birth_country": "USA",
@@ -1344,7 +1263,6 @@
     "height_cm": 171
   },
   {
-    "canonical_id": "p_hopkins",
     "source_identifier": "nm9019685",
     "name": "Anthony Hopkins",
     "birth_country": "UK",
@@ -1360,7 +1278,6 @@
     "height_cm": 199
   },
   {
-    "canonical_id": "p_foster_jd",
     "source_identifier": "nm0536595",
     "name": "Jodie Foster",
     "birth_country": "USA",
@@ -1376,7 +1293,6 @@
     "height_cm": 164
   },
   {
-    "canonical_id": "p_keitel",
     "source_identifier": "nm6008212",
     "name": "Harvey Keitel",
     "birth_country": "USA",
@@ -1394,7 +1310,6 @@
     "height_cm": 183
   },
   {
-    "canonical_id": "p_garfield",
     "source_identifier": "nm1690832",
     "name": "Andrew Garfield",
     "birth_country": "USA",
@@ -1410,7 +1325,6 @@
     "height_cm": 178
   },
   {
-    "canonical_id": "p_avary",
     "source_identifier": "nm4034108",
     "name": "Roger Avary",
     "birth_country": "Canada",
@@ -1427,7 +1341,6 @@
     "height_cm": 157
   },
   {
-    "canonical_id": "p_deakins",
     "source_identifier": "nm0677582",
     "name": "Roger Deakins",
     "birth_country": "UK",
@@ -1444,7 +1357,6 @@
     "height_cm": 181
   },
   {
-    "canonical_id": "p_lubezki",
     "source_identifier": "nm5358633",
     "name": "Emmanuel Lubezki",
     "birth_country": "Mexico",
@@ -1462,7 +1374,6 @@
     "height_cm": 192
   },
   {
-    "canonical_id": "p_pfister",
     "source_identifier": "nm6738817",
     "name": "Wally Pfister",
     "birth_country": "USA",
@@ -1479,7 +1390,6 @@
     "height_cm": 198
   },
   {
-    "canonical_id": "p_richardson",
     "source_identifier": "nm3643607",
     "name": "Robert Richardson",
     "birth_country": "USA",
@@ -1495,7 +1405,6 @@
     "height_cm": 156
   },
   {
-    "canonical_id": "p_zsigmond",
     "source_identifier": "nm4372192",
     "name": "Vilmos Zsigmond",
     "birth_country": "Hungary",
@@ -1511,7 +1420,6 @@
     "height_cm": 171
   },
   {
-    "canonical_id": "p_storaro",
     "source_identifier": "nm4534113",
     "name": "Vittorio Storaro",
     "birth_country": "Italy",
@@ -1528,7 +1436,6 @@
     "height_cm": 157
   },
   {
-    "canonical_id": "p_doyle",
     "source_identifier": "nm2563167",
     "name": "Christopher Doyle",
     "birth_country": "Australia",
@@ -1544,7 +1451,6 @@
     "height_cm": 163
   },
   {
-    "canonical_id": "p_kaufman_charlie",
     "source_identifier": "nm7999749",
     "name": "Charlie Kaufman",
     "birth_country": "USA",
@@ -1560,7 +1466,6 @@
     "height_cm": 160
   },
   {
-    "canonical_id": "p_sorkin",
     "source_identifier": "nm1233697",
     "name": "Aaron Sorkin",
     "birth_country": "USA",
@@ -1576,7 +1481,6 @@
     "height_cm": 156
   },
   {
-    "canonical_id": "p_jin_won",
     "source_identifier": "nm6712284",
     "name": "Jin Won-han",
     "birth_country": "South Korea",
@@ -1592,7 +1496,6 @@
     "height_cm": 155
   },
   {
-    "canonical_id": "p_lee_chunyung",
     "source_identifier": "nm3228565",
     "name": "Lee Chun-yung",
     "birth_country": "South Korea",
@@ -1608,7 +1511,6 @@
     "height_cm": 181
   },
   {
-    "canonical_id": "p_takahata",
     "source_identifier": "nm8620710",
     "name": "Isao Takahata",
     "birth_country": "Japan",
@@ -1625,7 +1527,6 @@
     "height_cm": 164
   },
   {
-    "canonical_id": "p_hisaishi",
     "source_identifier": "nm6607982",
     "name": "Joe Hisaishi",
     "birth_country": "Japan",
@@ -1642,7 +1543,6 @@
     "height_cm": 178
   },
   {
-    "canonical_id": "p_williams_jh",
     "source_identifier": "nm4497256",
     "name": "John Williams",
     "birth_country": "USA",
@@ -1658,7 +1558,6 @@
     "height_cm": 167
   },
   {
-    "canonical_id": "p_zimmer",
     "source_identifier": "nm9406451",
     "name": "Hans Zimmer",
     "birth_country": "Germany",
@@ -1676,7 +1575,6 @@
     "height_cm": 185
   },
   {
-    "canonical_id": "p_greenwood",
     "source_identifier": "nm8497187",
     "name": "Jonny Greenwood",
     "birth_country": "UK",
@@ -1694,7 +1592,6 @@
     "height_cm": 168
   },
   {
-    "canonical_id": "p_olmos",
     "source_identifier": "nm9740904",
     "name": "Edward James Olmos",
     "birth_country": "USA",
@@ -1711,7 +1608,6 @@
     "height_cm": 155
   },
   {
-    "canonical_id": "p_yeoh",
     "source_identifier": "nm6718218",
     "name": "Michelle Yeoh",
     "birth_country": "Malaysia",
@@ -1727,7 +1623,6 @@
     "height_cm": 174
   },
   {
-    "canonical_id": "p_quan",
     "source_identifier": "nm6329014",
     "name": "Ke Huy Quan",
     "birth_country": "Vietnam",
@@ -1743,7 +1638,6 @@
     "height_cm": 175
   },
   {
-    "canonical_id": "p_curtis_jl",
     "source_identifier": "nm7829669",
     "name": "Jamie Lee Curtis",
     "birth_country": "USA",
@@ -1760,7 +1654,6 @@
     "height_cm": 183
   },
   {
-    "canonical_id": "p_hsu_st",
     "source_identifier": "nm6985702",
     "name": "Stephanie Hsu",
     "birth_country": "USA",

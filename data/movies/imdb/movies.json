@@ -1,6 +1,5 @@
 [
   {
-    "canonical_id": "m_reservoirdogs",
     "source_identifier": "tt1838941",
     "title": "Reservoir Dogs",
     "year": 1992,
@@ -17,7 +16,6 @@
     ]
   },
   {
-    "canonical_id": "m_killbill1",
     "source_identifier": "tt2878306",
     "title": "Kill Bill: Vol. 1",
     "year": 2003,
@@ -34,7 +32,6 @@
     ]
   },
   {
-    "canonical_id": "m_inglourious",
     "source_identifier": "tt5322801",
     "title": "Inglourious Basterds",
     "year": 2009,
@@ -51,7 +48,6 @@
     ]
   },
   {
-    "canonical_id": "m_djangounchained",
     "source_identifier": "tt0768738",
     "title": "Django Unchained",
     "year": 2012,
@@ -68,7 +64,6 @@
     ]
   },
   {
-    "canonical_id": "m_sevensamurai",
     "source_identifier": "tt9462920",
     "title": "Seven Samurai",
     "year": 1954,
@@ -84,7 +79,6 @@
     ]
   },
   {
-    "canonical_id": "m_yojimbo",
     "source_identifier": "tt0887875",
     "title": "Yojimbo",
     "year": 1961,
@@ -100,7 +94,6 @@
     ]
   },
   {
-    "canonical_id": "m_ikiru",
     "source_identifier": "tt2956327",
     "title": "Ikiru",
     "year": 1952,
@@ -116,7 +109,6 @@
     ]
   },
   {
-    "canonical_id": "m_spiritedaway",
     "source_identifier": "tt9672202",
     "title": "Spirited Away",
     "year": 2001,
@@ -133,7 +125,6 @@
     ]
   },
   {
-    "canonical_id": "m_totoro",
     "source_identifier": "tt3580156",
     "title": "My Neighbor Totoro",
     "year": 1988,
@@ -150,7 +141,6 @@
     ]
   },
   {
-    "canonical_id": "m_princessmononoke",
     "source_identifier": "tt5869102",
     "title": "Princess Mononoke",
     "year": 1997,
@@ -167,7 +157,6 @@
     ]
   },
   {
-    "canonical_id": "m_howlsmoving",
     "source_identifier": "tt0681347",
     "title": "Howl's Moving Castle",
     "year": 2004,
@@ -184,7 +173,6 @@
     ]
   },
   {
-    "canonical_id": "m_goodfellas",
     "source_identifier": "tt3990830",
     "title": "Goodfellas",
     "year": 1990,
@@ -201,7 +189,6 @@
     ]
   },
   {
-    "canonical_id": "m_taxidriver",
     "source_identifier": "tt0451655",
     "title": "Taxi Driver",
     "year": 1976,
@@ -218,7 +205,6 @@
     ]
   },
   {
-    "canonical_id": "m_raginbull",
     "source_identifier": "tt5429701",
     "title": "Raging Bull",
     "year": 1980,
@@ -235,7 +221,6 @@
     ]
   },
   {
-    "canonical_id": "m_departed",
     "source_identifier": "tt4478005",
     "title": "The Departed",
     "year": 2006,
@@ -252,7 +237,6 @@
     ]
   },
   {
-    "canonical_id": "m_clockworkorange",
     "source_identifier": "tt8561522",
     "title": "A Clockwork Orange",
     "year": 1971,
@@ -269,7 +253,6 @@
     ]
   },
   {
-    "canonical_id": "m_theshining",
     "source_identifier": "tt9914091",
     "title": "The Shining",
     "year": 1980,
@@ -286,7 +269,6 @@
     ]
   },
   {
-    "canonical_id": "m_jaws",
     "source_identifier": "tt8421613",
     "title": "Jaws",
     "year": 1975,
@@ -303,7 +285,6 @@
     ]
   },
   {
-    "canonical_id": "m_et",
     "source_identifier": "tt8382007",
     "title": "E.T. the Extra-Terrestrial",
     "year": 1982,
@@ -320,7 +301,6 @@
     ]
   },
   {
-    "canonical_id": "m_savingprivate",
     "source_identifier": "tt4180883",
     "title": "Saving Private Ryan",
     "year": 1998,
@@ -337,7 +317,6 @@
     ]
   },
   {
-    "canonical_id": "m_godfather",
     "source_identifier": "tt6027839",
     "title": "The Godfather",
     "year": 1972,
@@ -354,7 +333,6 @@
     ]
   },
   {
-    "canonical_id": "m_apocalypsenow",
     "source_identifier": "tt0606743",
     "title": "Apocalypse Now",
     "year": 1979,
@@ -371,7 +349,6 @@
     ]
   },
   {
-    "canonical_id": "m_inception",
     "source_identifier": "tt0384318",
     "title": "Inception",
     "year": 2010,
@@ -388,7 +365,6 @@
     ]
   },
   {
-    "canonical_id": "m_dunkirk",
     "source_identifier": "tt9347758",
     "title": "Dunkirk",
     "year": 2017,
@@ -405,7 +381,6 @@
     ]
   },
   {
-    "canonical_id": "m_oppenheimer",
     "source_identifier": "tt0824388",
     "title": "Oppenheimer",
     "year": 2023,
@@ -422,7 +397,6 @@
     ]
   },
   {
-    "canonical_id": "m_arrival",
     "source_identifier": "tt3015600",
     "title": "Arrival",
     "year": 2016,
@@ -439,7 +413,6 @@
     ]
   },
   {
-    "canonical_id": "m_bladerunner2049",
     "source_identifier": "tt1347741",
     "title": "Blade Runner 2049",
     "year": 2017,
@@ -456,7 +429,6 @@
     ]
   },
   {
-    "canonical_id": "m_dune",
     "source_identifier": "tt0260967",
     "title": "Dune",
     "year": 2021,
@@ -473,7 +445,6 @@
     ]
   },
   {
-    "canonical_id": "m_dunept2",
     "source_identifier": "tt5979305",
     "title": "Dune: Part Two",
     "year": 2024,
@@ -490,7 +461,6 @@
     ]
   },
   {
-    "canonical_id": "m_thereblood",
     "source_identifier": "tt4113325",
     "title": "There Will Be Blood",
     "year": 2007,
@@ -507,7 +477,6 @@
     ]
   },
   {
-    "canonical_id": "m_themaster",
     "source_identifier": "tt3425153",
     "title": "The Master",
     "year": 2012,
@@ -524,7 +493,6 @@
     ]
   },
   {
-    "canonical_id": "m_phantomthread",
     "source_identifier": "tt1255788",
     "title": "Phantom Thread",
     "year": 2017,
@@ -541,7 +509,6 @@
     ]
   },
   {
-    "canonical_id": "m_grandbudapest",
     "source_identifier": "tt7070737",
     "title": "The Grand Budapest Hotel",
     "year": 2014,
@@ -558,7 +525,6 @@
     ]
   },
   {
-    "canonical_id": "m_moonrise",
     "source_identifier": "tt8534468",
     "title": "Moonrise Kingdom",
     "year": 2012,
@@ -575,7 +541,6 @@
     ]
   },
   {
-    "canonical_id": "m_fightclub",
     "source_identifier": "tt1042197",
     "title": "Fight Club",
     "year": 1999,
@@ -592,7 +557,6 @@
     ]
   },
   {
-    "canonical_id": "m_socialnetwork",
     "source_identifier": "tt8848709",
     "title": "The Social Network",
     "year": 2010,
@@ -609,7 +573,6 @@
     ]
   },
   {
-    "canonical_id": "m_zodiac",
     "source_identifier": "tt1327569",
     "title": "Zodiac",
     "year": 2007,
@@ -626,7 +589,6 @@
     ]
   },
   {
-    "canonical_id": "m_mulhollanddrive",
     "source_identifier": "tt2398445",
     "title": "Mulholland Drive",
     "year": 2001,
@@ -643,7 +605,6 @@
     ]
   },
   {
-    "canonical_id": "m_blueVelvet",
     "source_identifier": "tt5998323",
     "title": "Blue Velvet",
     "year": 1986,
@@ -660,7 +621,6 @@
     ]
   },
   {
-    "canonical_id": "m_paterson",
     "source_identifier": "tt8603935",
     "title": "Paterson",
     "year": 2016,
@@ -677,7 +637,6 @@
     ]
   },
   {
-    "canonical_id": "m_memoriesmurder",
     "source_identifier": "tt3118917",
     "title": "Memories of Murder",
     "year": 2003,
@@ -694,7 +653,6 @@
     ]
   },
   {
-    "canonical_id": "m_allaboutmother",
     "source_identifier": "tt7447732",
     "title": "All About My Mother",
     "year": 1999,
@@ -711,7 +669,6 @@
     ]
   },
   {
-    "canonical_id": "m_paindglory",
     "source_identifier": "tt9013509",
     "title": "Pain and Glory",
     "year": 2019,
@@ -728,7 +685,6 @@
     ]
   },
   {
-    "canonical_id": "m_amour",
     "source_identifier": "tt9835431",
     "title": "Amour",
     "year": 2012,
@@ -745,7 +701,6 @@
     ]
   },
   {
-    "canonical_id": "m_ladybird",
     "source_identifier": "tt2120981",
     "title": "Lady Bird",
     "year": 2017,
@@ -762,7 +717,6 @@
     ]
   },
   {
-    "canonical_id": "m_littlewomen",
     "source_identifier": "tt1256930",
     "title": "Little Women",
     "year": 2019,
@@ -779,7 +733,6 @@
     ]
   },
   {
-    "canonical_id": "m_barbie",
     "source_identifier": "tt3552223",
     "title": "Barbie",
     "year": 2023,
@@ -796,7 +749,6 @@
     ]
   },
   {
-    "canonical_id": "m_moonlight",
     "source_identifier": "tt7505647",
     "title": "Moonlight",
     "year": 2016,
@@ -813,7 +765,6 @@
     ]
   },
   {
-    "canonical_id": "m_ifbeale",
     "source_identifier": "tt9810970",
     "title": "If Beale Street Could Talk",
     "year": 2018,
@@ -830,7 +781,6 @@
     ]
   },
   {
-    "canonical_id": "m_getout",
     "source_identifier": "tt1420415",
     "title": "Get Out",
     "year": 2017,
@@ -847,7 +797,6 @@
     ]
   },
   {
-    "canonical_id": "m_lighthouse",
     "source_identifier": "tt5235963",
     "title": "The Lighthouse",
     "year": 2019,
@@ -864,7 +813,6 @@
     ]
   },
   {
-    "canonical_id": "m_northman",
     "source_identifier": "tt0633499",
     "title": "The Northman",
     "year": 2022,
@@ -881,7 +829,6 @@
     ]
   },
   {
-    "canonical_id": "m_hereditary",
     "source_identifier": "tt7960788",
     "title": "Hereditary",
     "year": 2018,
@@ -898,7 +845,6 @@
     ]
   },
   {
-    "canonical_id": "m_midsommar",
     "source_identifier": "tt5939016",
     "title": "Midsommar",
     "year": 2019,
@@ -915,7 +861,6 @@
     ]
   },
   {
-    "canonical_id": "m_poorthings",
     "source_identifier": "tt0572684",
     "title": "Poor Things",
     "year": 2023,
@@ -932,7 +877,6 @@
     ]
   },
   {
-    "canonical_id": "m_taxi",
     "source_identifier": "tt2238516",
     "title": "Taxi",
     "year": 2015,
@@ -949,7 +893,6 @@
     ]
   },
   {
-    "canonical_id": "m_closeup",
     "source_identifier": "tt9292167",
     "title": "Close-Up",
     "year": 1990,
@@ -966,7 +909,6 @@
     ]
   },
   {
-    "canonical_id": "m_goldrush",
     "source_identifier": "tt1217180",
     "title": "The Gold Rush",
     "year": 1925,
@@ -982,7 +924,6 @@
     ]
   },
   {
-    "canonical_id": "m_generalkeaton",
     "source_identifier": "tt0453197",
     "title": "The General",
     "year": 1926,
@@ -998,7 +939,6 @@
     ]
   },
   {
-    "canonical_id": "m_metropolis",
     "source_identifier": "tt6387155",
     "title": "Metropolis",
     "year": 1927,
@@ -1014,7 +954,6 @@
     ]
   },
   {
-    "canonical_id": "m_citizenkane",
     "source_identifier": "tt0951972",
     "title": "Citizen Kane",
     "year": 1941,
@@ -1030,7 +969,6 @@
     ]
   },
   {
-    "canonical_id": "m_vertigo",
     "source_identifier": "tt0498081",
     "title": "Vertigo",
     "year": 1958,
@@ -1046,7 +984,6 @@
     ]
   },
   {
-    "canonical_id": "m_psycho",
     "source_identifier": "tt5092042",
     "title": "Psycho",
     "year": 1960,
@@ -1062,7 +999,6 @@
     ]
   },
   {
-    "canonical_id": "m_breathless",
     "source_identifier": "tt8936181",
     "title": "Breathless",
     "year": 1960,
@@ -1078,7 +1014,6 @@
     ]
   },
   {
-    "canonical_id": "m_400blows",
     "source_identifier": "tt0809592",
     "title": "The 400 Blows",
     "year": 1959,
@@ -1094,7 +1029,6 @@
     ]
   },
   {
-    "canonical_id": "m_seventhseal",
     "source_identifier": "tt5155318",
     "title": "The Seventh Seal",
     "year": 1957,
@@ -1110,7 +1044,6 @@
     ]
   },
   {
-    "canonical_id": "m_personabergman",
     "source_identifier": "tt3553450",
     "title": "Persona",
     "year": 1966,
@@ -1126,7 +1059,6 @@
     ]
   },
   {
-    "canonical_id": "m_stalker",
     "source_identifier": "tt0535302",
     "title": "Stalker",
     "year": 1979,
@@ -1143,7 +1075,6 @@
     ]
   },
   {
-    "canonical_id": "m_mirror",
     "source_identifier": "tt2281070",
     "title": "Mirror",
     "year": 1975,
@@ -1160,7 +1091,6 @@
     ]
   },
   {
-    "canonical_id": "m_tokyostory",
     "source_identifier": "tt5674915",
     "title": "Tokyo Story",
     "year": 1953,

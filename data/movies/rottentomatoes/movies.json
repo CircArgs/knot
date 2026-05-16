@@ -1,6 +1,5 @@
 [
   {
-    "canonical_id": "m_pulpfiction",
     "source_identifier": "pulp_fiction",
     "title": "Pulp Fiction",
     "year": 1994,
@@ -14,7 +13,6 @@
     "audience_count_thousands": 759
   },
   {
-    "canonical_id": "m_killbill1",
     "source_identifier": "kill_bill_vol_1",
     "title": "Kill Bill: Vol. 1",
     "year": 2003,
@@ -28,7 +26,6 @@
     "audience_count_thousands": 273
   },
   {
-    "canonical_id": "m_inglourious",
     "source_identifier": "inglourious_basterds",
     "title": "Inglourious Basterds",
     "year": 2009,
@@ -42,7 +39,6 @@
     "audience_count_thousands": 769
   },
   {
-    "canonical_id": "m_djangounchained",
     "source_identifier": "django_unchained",
     "title": "Django Unchained",
     "year": 2012,
@@ -56,7 +52,6 @@
     "audience_count_thousands": 310
   },
   {
-    "canonical_id": "m_oncehollywood",
     "source_identifier": "once_upon_a_time_in_hollywood",
     "title": "Once Upon a Time in Hollywood",
     "year": 2019,
@@ -70,7 +65,6 @@
     "audience_count_thousands": 505
   },
   {
-    "canonical_id": "m_sevensamurai",
     "source_identifier": "seven_samurai",
     "title": "Seven Samurai",
     "year": 1954,
@@ -84,7 +78,6 @@
     "audience_count_thousands": 31
   },
   {
-    "canonical_id": "m_yojimbo",
     "source_identifier": "yojimbo",
     "title": "Yojimbo",
     "year": 1961,
@@ -98,7 +91,6 @@
     "audience_count_thousands": 91
   },
   {
-    "canonical_id": "m_totoro",
     "source_identifier": "my_neighbor_totoro",
     "title": "My Neighbor Totoro",
     "year": 1988,
@@ -112,7 +104,6 @@
     "audience_count_thousands": 132
   },
   {
-    "canonical_id": "m_princessmononoke",
     "source_identifier": "princess_mononoke",
     "title": "Princess Mononoke",
     "year": 1997,
@@ -126,7 +117,6 @@
     "audience_count_thousands": 91
   },
   {
-    "canonical_id": "m_goodfellas",
     "source_identifier": "goodfellas",
     "title": "Goodfellas",
     "year": 1990,
@@ -140,7 +130,6 @@
     "audience_count_thousands": 664
   },
   {
-    "canonical_id": "m_raginbull",
     "source_identifier": "raging_bull",
     "title": "Raging Bull",
     "year": 1980,
@@ -154,7 +143,6 @@
     "audience_count_thousands": 120
   },
   {
-    "canonical_id": "m_wolfwallstreet",
     "source_identifier": "the_wolf_of_wall_street",
     "title": "The Wolf of Wall Street",
     "year": 2013,
@@ -168,7 +156,6 @@
     "audience_count_thousands": 124
   },
   {
-    "canonical_id": "m_killersmoon",
     "source_identifier": "killers_of_the_flower_moon",
     "title": "Killers of the Flower Moon",
     "year": 2023,
@@ -182,7 +169,6 @@
     "audience_count_thousands": 391
   },
   {
-    "canonical_id": "m_2001",
     "source_identifier": "2001_a_space_odyssey",
     "title": "2001: A Space Odyssey (re-release)",
     "year": 1968,
@@ -196,7 +182,6 @@
     "audience_count_thousands": 696
   },
   {
-    "canonical_id": "m_fullmetal",
     "source_identifier": "full_metal_jacket",
     "title": "Full Metal Jacket",
     "year": 1987,
@@ -210,7 +195,6 @@
     "audience_count_thousands": 838
   },
   {
-    "canonical_id": "m_jaws",
     "source_identifier": "jaws",
     "title": "Jaws",
     "year": 1975,
@@ -224,7 +208,6 @@
     "audience_count_thousands": 767
   },
   {
-    "canonical_id": "m_et",
     "source_identifier": "et_the_extra-terrestrial",
     "title": "E.T. the Extra-Terrestrial",
     "year": 1982,
@@ -238,7 +221,6 @@
     "audience_count_thousands": 37
   },
   {
-    "canonical_id": "m_savingprivate",
     "source_identifier": "saving_private_ryan",
     "title": "Saving Private Ryan",
     "year": 1998,
@@ -252,7 +234,6 @@
     "audience_count_thousands": 483
   },
   {
-    "canonical_id": "m_godfather",
     "source_identifier": "the_godfather",
     "title": "The Godfather",
     "year": 1972,
@@ -266,7 +247,6 @@
     "audience_count_thousands": 478
   },
   {
-    "canonical_id": "m_apocalypsenow",
     "source_identifier": "apocalypse_now",
     "title": "Apocalypse Now",
     "year": 1979,
@@ -280,7 +260,6 @@
     "audience_count_thousands": 574
   },
   {
-    "canonical_id": "m_memento",
     "source_identifier": "memento",
     "title": "Memento",
     "year": 2000,
@@ -294,7 +273,6 @@
     "audience_count_thousands": 356
   },
   {
-    "canonical_id": "m_darkknight",
     "source_identifier": "the_dark_knight",
     "title": "The Dark Knight",
     "year": 2008,
@@ -308,7 +286,6 @@
     "audience_count_thousands": 383
   },
   {
-    "canonical_id": "m_dunkirk",
     "source_identifier": "dunkirk",
     "title": "Dunkirk",
     "year": 2017,
@@ -322,7 +299,6 @@
     "audience_count_thousands": 885
   },
   {
-    "canonical_id": "m_oppenheimer",
     "source_identifier": "oppenheimer",
     "title": "Oppenheimer",
     "year": 2023,
@@ -336,7 +312,6 @@
     "audience_count_thousands": 125
   },
   {
-    "canonical_id": "m_dune",
     "source_identifier": "dune",
     "title": "Dune",
     "year": 2021,
@@ -350,7 +325,6 @@
     "audience_count_thousands": 798
   },
   {
-    "canonical_id": "m_dunept2",
     "source_identifier": "dune_part_two",
     "title": "Dune Part Two",
     "year": 2024,
@@ -364,7 +338,6 @@
     "audience_count_thousands": 546
   },
   {
-    "canonical_id": "m_thereblood",
     "source_identifier": "there_will_be_blood",
     "title": "There Will Be Blood",
     "year": 2007,
@@ -378,7 +351,6 @@
     "audience_count_thousands": 677
   },
   {
-    "canonical_id": "m_themaster",
     "source_identifier": "the_master",
     "title": "The Master",
     "year": 2012,
@@ -392,7 +364,6 @@
     "audience_count_thousands": 175
   },
   {
-    "canonical_id": "m_phantomthread",
     "source_identifier": "phantom_thread",
     "title": "Phantom Thread",
     "year": 2017,
@@ -406,7 +377,6 @@
     "audience_count_thousands": 490
   },
   {
-    "canonical_id": "m_grandbudapest",
     "source_identifier": "the_grand_budapest_hotel",
     "title": "The Grand Budapest Hotel",
     "year": 2014,
@@ -420,7 +390,6 @@
     "audience_count_thousands": 583
   },
   {
-    "canonical_id": "m_moonrise",
     "source_identifier": "moonrise_kingdom",
     "title": "Moonrise Kingdom",
     "year": 2012,
@@ -434,7 +403,6 @@
     "audience_count_thousands": 842
   },
   {
-    "canonical_id": "m_asteroidcity",
     "source_identifier": "asteroid_city",
     "title": "Asteroid City",
     "year": 2023,
@@ -448,7 +416,6 @@
     "audience_count_thousands": 808
   },
   {
-    "canonical_id": "m_fightclub",
     "source_identifier": "fight_club",
     "title": "Fight Club",
     "year": 1999,
@@ -462,7 +429,6 @@
     "audience_count_thousands": 619
   },
   {
-    "canonical_id": "m_sevenfilm",
     "source_identifier": "se7en",
     "title": "Se7en",
     "year": 1995,
@@ -476,7 +442,6 @@
     "audience_count_thousands": 853
   },
   {
-    "canonical_id": "m_socialnetwork",
     "source_identifier": "the_social_network",
     "title": "The Social Network",
     "year": 2010,
@@ -490,7 +455,6 @@
     "audience_count_thousands": 612
   },
   {
-    "canonical_id": "m_blueVelvet",
     "source_identifier": "blue_velvet",
     "title": "Blue Velvet",
     "year": 1986,
@@ -504,7 +468,6 @@
     "audience_count_thousands": 539
   },
   {
-    "canonical_id": "m_paterson",
     "source_identifier": "paterson",
     "title": "Paterson",
     "year": 2016,
@@ -518,7 +481,6 @@
     "audience_count_thousands": 665
   },
   {
-    "canonical_id": "m_parasite",
     "source_identifier": "parasite",
     "title": "Parasite",
     "year": 2019,
@@ -532,7 +494,6 @@
     "audience_count_thousands": 532
   },
   {
-    "canonical_id": "m_memoriesmurder",
     "source_identifier": "memories_of_murder",
     "title": "Memories of Murder",
     "year": 2003,
@@ -546,7 +507,6 @@
     "audience_count_thousands": 606
   },
   {
-    "canonical_id": "m_thehost",
     "source_identifier": "the_host",
     "title": "The Host",
     "year": 2006,
@@ -560,7 +520,6 @@
     "audience_count_thousands": 889
   },
   {
-    "canonical_id": "m_decisiontoleave",
     "source_identifier": "decision_to_leave",
     "title": "Decision to Leave",
     "year": 2022,
@@ -574,7 +533,6 @@
     "audience_count_thousands": 600
   },
   {
-    "canonical_id": "m_allaboutmother",
     "source_identifier": "all_about_my_mother",
     "title": "All About My Mother",
     "year": 1999,
@@ -588,7 +546,6 @@
     "audience_count_thousands": 866
   },
   {
-    "canonical_id": "m_paindglory",
     "source_identifier": "pain_and_glory",
     "title": "Pain and Glory",
     "year": 2020,
@@ -602,7 +559,6 @@
     "audience_count_thousands": 732
   },
   {
-    "canonical_id": "m_amour",
     "source_identifier": "amour",
     "title": "Amour",
     "year": 2012,
@@ -616,7 +572,6 @@
     "audience_count_thousands": 66
   },
   {
-    "canonical_id": "m_whiplash",
     "source_identifier": "whiplash",
     "title": "Whiplash",
     "year": 2014,
@@ -630,7 +585,6 @@
     "audience_count_thousands": 29
   },
   {
-    "canonical_id": "m_ladybird",
     "source_identifier": "lady_bird",
     "title": "Lady Bird",
     "year": 2017,
@@ -644,7 +598,6 @@
     "audience_count_thousands": 917
   },
   {
-    "canonical_id": "m_littlewomen",
     "source_identifier": "little_women",
     "title": "Little Women",
     "year": 2019,
@@ -658,7 +611,6 @@
     "audience_count_thousands": 746
   },
   {
-    "canonical_id": "m_barbie",
     "source_identifier": "barbie",
     "title": "Barbie",
     "year": 2023,
@@ -672,7 +624,6 @@
     "audience_count_thousands": 495
   },
   {
-    "canonical_id": "m_moonlight",
     "source_identifier": "moonlight",
     "title": "Moonlight",
     "year": 2016,
@@ -686,7 +637,6 @@
     "audience_count_thousands": 297
   },
   {
-    "canonical_id": "m_getout",
     "source_identifier": "get_out",
     "title": "Get Out",
     "year": 2017,
@@ -700,7 +650,6 @@
     "audience_count_thousands": 117
   },
   {
-    "canonical_id": "m_nope",
     "source_identifier": "nope",
     "title": "Nope",
     "year": 2022,
@@ -714,7 +663,6 @@
     "audience_count_thousands": 114
   },
   {
-    "canonical_id": "m_thewitch",
     "source_identifier": "the_witch",
     "title": "The Witch",
     "year": 2015,
@@ -728,7 +676,6 @@
     "audience_count_thousands": 347
   },
   {
-    "canonical_id": "m_northman",
     "source_identifier": "the_northman",
     "title": "The Northman",
     "year": 2022,
@@ -742,7 +689,6 @@
     "audience_count_thousands": 624
   },
   {
-    "canonical_id": "m_hereditary",
     "source_identifier": "hereditary",
     "title": "Hereditary",
     "year": 2018,
@@ -756,7 +702,6 @@
     "audience_count_thousands": 460
   },
   {
-    "canonical_id": "m_lobster",
     "source_identifier": "the_lobster",
     "title": "The Lobster",
     "year": 2015,
@@ -770,7 +715,6 @@
     "audience_count_thousands": 809
   },
   {
-    "canonical_id": "m_favourite",
     "source_identifier": "the_favourite",
     "title": "The Favourite",
     "year": 2018,
@@ -784,7 +728,6 @@
     "audience_count_thousands": 471
   },
   {
-    "canonical_id": "m_poorthings",
     "source_identifier": "poor_things",
     "title": "Poor Things",
     "year": 2023,
@@ -798,7 +741,6 @@
     "audience_count_thousands": 469
   },
   {
-    "canonical_id": "m_nomadland",
     "source_identifier": "nomadland",
     "title": "Nomadland",
     "year": 2020,
@@ -812,7 +754,6 @@
     "audience_count_thousands": 192
   },
   {
-    "canonical_id": "m_goldrush",
     "source_identifier": "the_gold_rush",
     "title": "The Gold Rush",
     "year": 1925,
@@ -826,7 +767,6 @@
     "audience_count_thousands": 505
   },
   {
-    "canonical_id": "m_metropolis",
     "source_identifier": "metropolis",
     "title": "Metropolis (restored)",
     "year": 1927,
@@ -840,7 +780,6 @@
     "audience_count_thousands": 891
   },
   {
-    "canonical_id": "m_psycho",
     "source_identifier": "psycho",
     "title": "Psycho",
     "year": 1960,
@@ -854,7 +793,6 @@
     "audience_count_thousands": 252
   },
   {
-    "canonical_id": "m_breathless",
     "source_identifier": "breathless",
     "title": "Breathless",
     "year": 1960,
@@ -868,7 +806,6 @@
     "audience_count_thousands": 807
   },
   {
-    "canonical_id": "m_ladolce",
     "source_identifier": "la_dolce_vita",
     "title": "La Dolce Vita",
     "year": 1960,
@@ -882,7 +819,6 @@
     "audience_count_thousands": 237
   },
   {
-    "canonical_id": "m_stalker",
     "source_identifier": "stalker",
     "title": "Stalker",
     "year": 1979,
@@ -896,7 +832,6 @@
     "audience_count_thousands": 551
   },
   {
-    "canonical_id": "m_mirror",
     "source_identifier": "mirror",
     "title": "Mirror",
     "year": 1975,

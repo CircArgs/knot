@@ -41,7 +41,7 @@ def _():
     from movies_spec import imdb_movie_b, movie, spec
 
     imdb_movie_b
-    return imdb_movie_b, movie, spec
+    return imdb_movie_b, spec
 
 
 @app.cell
@@ -62,11 +62,10 @@ def _(psycopg, spec, uuid):
 def _(json):
     # Load real sample data from disk — imdb's movies.json. Each row
     # carries:
-    #   * `source_identifier` — imdb's own key.
-    #   * `canonical_id` — knot's cross-source identity. Pre-assigned
-    #     in the sample data (synchronous ER); a separate notebook will
-    #     cover the async path where canonical_id starts NULL and gets
-    #     assigned by an ER worker later.
+    #   * `source_identifier` — imdb's own key (e.g. "tt1838941").
+    #     This is the only stable identity imdb knows about; knot's
+    #     cross-source `canonical_id` doesn't exist yet — ER assigns
+    #     it later (see 03_er).
     #   * the class slots (`title`, `year`, `director`) as native values.
     #   * extras (`imdb_rating`, `num_votes`, `box_office_usd`, …) that
     #     aren't in the spec — they ride along in the row dict and land
@@ -111,19 +110,24 @@ def _(close_out, insert, json, pg, rows):
 
 
 @app.cell
-def _(movie, pg, schema):
-    # Verify via a knot Query against the resolved view — what the
-    # user-facing read API sees. Each result row is the merged
-    # per-canonical_id state (single-source here = direct passthrough).
-    # Top 10 by year, descending.
-    q = (
-        movie.order_by(movie.col.year, "desc")
-        .limit(10)
-        .select(movie.col.canonical_id, movie.col.title, movie.col.year)
-    )
-    sql, params = q.sql(schema=schema)
+def _(pg, schema):
+    # Verify by introspecting the bindings table directly. We can't
+    # use the resolved view yet — it filters out rows where
+    # canonical_id IS NULL, which is everything we just wrote. ER
+    # hasn't run, so knot doesn't know which source rows map to which
+    # cross-source identity. The bindings table holds the raw claims.
+    #
+    # Top 10 most recently-ingested rows (highest valid_from).
     with pg.cursor() as _cur:
-        _cur.execute(sql, params or None)
+        _cur.execute(
+            f"""
+            SELECT source_identifier, title, year, canonical_id
+            FROM {schema}.movie_bindings
+            WHERE source_name = 'imdb' AND valid_to IS NULL
+            ORDER BY year DESC NULLS LAST
+            LIMIT 10
+            """
+        )
         cols = [d.name for d in _cur.description]
         for row in _cur.fetchall():
             print(dict(zip(cols, row)))

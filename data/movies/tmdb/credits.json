@@ -1,6 +1,5 @@
 [
   {
-    "canonical_id": "c_pulpfiction_d_tarantino",
     "source_identifier": "822588::496596::director",
     "role": "director",
     "movie": "m_pulpfiction",
@@ -11,7 +10,6 @@
     "order": 20
   },
   {
-    "canonical_id": "c_pulpfiction_w_tarantino",
     "source_identifier": "822588::496596::writer",
     "role": "writer",
     "movie": "m_pulpfiction",
@@ -22,7 +20,6 @@
     "order": 5
   },
   {
-    "canonical_id": "c_pulpfiction_a_travolta",
     "source_identifier": "822588::605570::actor",
     "role": "actor",
     "movie": "m_pulpfiction",
@@ -33,7 +30,6 @@
     "order": 0
   },
   {
-    "canonical_id": "c_pulpfiction_a_thurman",
     "source_identifier": "822588::80721::actor",
     "role": "actor",
     "movie": "m_pulpfiction",
@@ -44,7 +40,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_pulpfiction_a_keitel",
     "source_identifier": "822588::209865::actor",
     "role": "actor",
     "movie": "m_pulpfiction",
@@ -55,7 +50,6 @@
     "order": 20
   },
   {
-    "canonical_id": "c_pulpfiction_dp_richardson",
     "source_identifier": "822588::114871::cinematographer",
     "role": "cinematographer",
     "movie": "m_pulpfiction",
@@ -66,7 +60,6 @@
     "order": 24
   },
   {
-    "canonical_id": "c_killbill1_d_tarantino",
     "source_identifier": "323006::496596::director",
     "role": "director",
     "movie": "m_killbill1",
@@ -77,7 +70,6 @@
     "order": 11
   },
   {
-    "canonical_id": "c_killbill1_a_thurman",
     "source_identifier": "323006::80721::actor",
     "role": "actor",
     "movie": "m_killbill1",
@@ -88,7 +80,6 @@
     "order": 10
   },
   {
-    "canonical_id": "c_inglourious_d_tarantino",
     "source_identifier": "705177::496596::director",
     "role": "director",
     "movie": "m_inglourious",
@@ -99,7 +90,6 @@
     "order": 24
   },
   {
-    "canonical_id": "c_inglourious_a_pitt",
     "source_identifier": "705177::229330::actor",
     "role": "actor",
     "movie": "m_inglourious",
@@ -110,7 +100,6 @@
     "order": 19
   },
   {
-    "canonical_id": "c_djangounchained_d_tarantino",
     "source_identifier": "413638::496596::director",
     "role": "director",
     "movie": "m_djangounchained",
@@ -121,7 +110,6 @@
     "order": 16
   },
   {
-    "canonical_id": "c_oncehollywood_d_tarantino",
     "source_identifier": "492532::496596::director",
     "role": "director",
     "movie": "m_oncehollywood",
@@ -132,7 +120,6 @@
     "order": 13
   },
   {
-    "canonical_id": "c_oncehollywood_a_pitt",
     "source_identifier": "492532::229330::actor",
     "role": "actor",
     "movie": "m_oncehollywood",
@@ -143,7 +130,6 @@
     "order": 13
   },
   {
-    "canonical_id": "c_oncehollywood_a_robbie",
     "source_identifier": "492532::536404::actor",
     "role": "actor",
     "movie": "m_oncehollywood",
@@ -154,7 +140,6 @@
     "order": 16
   },
   {
-    "canonical_id": "c_oncehollywood_dp_richardson",
     "source_identifier": "492532::114871::cinematographer",
     "role": "cinematographer",
     "movie": "m_oncehollywood",
@@ -165,7 +150,6 @@
     "order": 4
   },
   {
-    "canonical_id": "c_yojimbo_d_kurosawa",
     "source_identifier": "205699::475953::director",
     "role": "director",
     "movie": "m_yojimbo",
@@ -176,7 +160,6 @@
     "order": 18
   },
   {
-    "canonical_id": "c_yojimbo_a_mifune",
     "source_identifier": "205699::612503::actor",
     "role": "actor",
     "movie": "m_yojimbo",
@@ -187,7 +170,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_ikiru_d_kurosawa",
     "source_identifier": "400814::475953::director",
     "role": "director",
     "movie": "m_ikiru",
@@ -198,7 +180,6 @@
     "order": 11
   },
   {
-    "canonical_id": "c_taxidriver_d_scorsese",
     "source_identifier": "464270::810535::director",
     "role": "director",
     "movie": "m_taxidriver",
@@ -209,7 +190,6 @@
     "order": 22
   },
   {
-    "canonical_id": "c_taxidriver_a_deniro",
     "source_identifier": "464270::548311::actor",
     "role": "actor",
     "movie": "m_taxidriver",
@@ -220,7 +200,6 @@
     "order": 19
   },
   {
-    "canonical_id": "c_taxidriver_a_foster",
     "source_identifier": "464270::346445::actor",
     "role": "actor",
     "movie": "m_taxidriver",
@@ -231,7 +210,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_taxidriver_a_keitel",
     "source_identifier": "464270::209865::actor",
     "role": "actor",
     "movie": "m_taxidriver",
@@ -242,7 +220,6 @@
     "order": 18
   },
   {
-    "canonical_id": "c_departed_d_scorsese",
     "source_identifier": "365590::810535::director",
     "role": "director",
     "movie": "m_departed",
@@ -253,7 +230,6 @@
     "order": 16
   },
   {
-    "canonical_id": "c_killersmoon_d_scorsese",
     "source_identifier": "769296::810535::director",
     "role": "director",
     "movie": "m_killersmoon",
@@ -264,7 +240,6 @@
     "order": 0
   },
   {
-    "canonical_id": "c_killersmoon_a_deniro",
     "source_identifier": "769296::548311::actor",
     "role": "actor",
     "movie": "m_killersmoon",
@@ -275,7 +250,6 @@
     "order": 1
   },
   {
-    "canonical_id": "c_2001_d_kubrick",
     "source_identifier": "836592::268609::director",
     "role": "director",
     "movie": "m_2001",
@@ -286,7 +260,6 @@
     "order": 5
   },
   {
-    "canonical_id": "c_2001_co_williams",
     "source_identifier": "836592::852907::composer",
     "role": "composer",
     "movie": "m_2001",
@@ -297,7 +270,6 @@
     "order": 4
   },
   {
-    "canonical_id": "c_clockworkorange_d_kubrick",
     "source_identifier": "617235::268609::director",
     "role": "director",
     "movie": "m_clockworkorange",
@@ -308,7 +280,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_fullmetal_d_kubrick",
     "source_identifier": "566218::268609::director",
     "role": "director",
     "movie": "m_fullmetal",
@@ -319,7 +290,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_drstrangelove_d_kubrick",
     "source_identifier": "572819::268609::director",
     "role": "director",
     "movie": "m_drstrangelove",
@@ -330,7 +300,6 @@
     "order": 3
   },
   {
-    "canonical_id": "c_jaws_d_spielberg",
     "source_identifier": "560763::656114::director",
     "role": "director",
     "movie": "m_jaws",
@@ -341,7 +310,6 @@
     "order": 15
   },
   {
-    "canonical_id": "c_jaws_co_williams",
     "source_identifier": "560763::852907::composer",
     "role": "composer",
     "movie": "m_jaws",
@@ -352,7 +320,6 @@
     "order": 13
   },
   {
-    "canonical_id": "c_savingprivate_d_spielberg",
     "source_identifier": "588557::656114::director",
     "role": "director",
     "movie": "m_savingprivate",
@@ -363,7 +330,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_godfather_d_coppola",
     "source_identifier": "654537::854126::director",
     "role": "director",
     "movie": "m_godfather",
@@ -374,7 +340,6 @@
     "order": 1
   },
   {
-    "canonical_id": "c_godfather_a_brando",
     "source_identifier": "654537::701437::actor",
     "role": "actor",
     "movie": "m_godfather",
@@ -385,7 +350,6 @@
     "order": 17
   },
   {
-    "canonical_id": "c_godfather_a_pacino",
     "source_identifier": "654537::868205::actor",
     "role": "actor",
     "movie": "m_godfather",
@@ -396,7 +360,6 @@
     "order": 7
   },
   {
-    "canonical_id": "c_godfatherii_d_coppola",
     "source_identifier": "457803::854126::director",
     "role": "director",
     "movie": "m_godfatherii",
@@ -407,7 +370,6 @@
     "order": 23
   },
   {
-    "canonical_id": "c_godfatherii_a_pacino",
     "source_identifier": "457803::868205::actor",
     "role": "actor",
     "movie": "m_godfatherii",
@@ -418,7 +380,6 @@
     "order": 6
   },
   {
-    "canonical_id": "c_godfatherii_a_deniro",
     "source_identifier": "457803::548311::actor",
     "role": "actor",
     "movie": "m_godfatherii",
@@ -429,7 +390,6 @@
     "order": 2
   },
   {
-    "canonical_id": "c_inception_co_zimmer",
     "source_identifier": "240031::473126::composer",
     "role": "composer",
     "movie": "m_inception",
@@ -440,7 +400,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_interstellar_co_zimmer",
     "source_identifier": "228912::473126::composer",
     "role": "composer",
     "movie": "m_interstellar",
@@ -451,7 +410,6 @@
     "order": 2
   },
   {
-    "canonical_id": "c_dunkirk_co_zimmer",
     "source_identifier": "234618::473126::composer",
     "role": "composer",
     "movie": "m_dunkirk",
@@ -462,7 +420,6 @@
     "order": 15
   },
   {
-    "canonical_id": "c_oppenheimer_a_pugh",
     "source_identifier": "745052::571912::actor",
     "role": "actor",
     "movie": "m_oppenheimer",
@@ -473,7 +430,6 @@
     "order": 10
   },
   {
-    "canonical_id": "c_oppenheimer_dp_hoytema",
     "source_identifier": "745052::187432::cinematographer",
     "role": "cinematographer",
     "movie": "m_oppenheimer",
@@ -484,7 +440,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_arrival_d_villeneuve",
     "source_identifier": "353840::46123::director",
     "role": "director",
     "movie": "m_arrival",
@@ -495,7 +450,6 @@
     "order": 15
   },
   {
-    "canonical_id": "c_bladerunner2049_d_villeneuve",
     "source_identifier": "221699::46123::director",
     "role": "director",
     "movie": "m_bladerunner2049",
@@ -506,7 +460,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_bladerunner2049_a_gosling",
     "source_identifier": "221699::430983::actor",
     "role": "actor",
     "movie": "m_bladerunner2049",
@@ -517,7 +470,6 @@
     "order": 24
   },
   {
-    "canonical_id": "c_bladerunner2049_dp_deakins",
     "source_identifier": "221699::187432::cinematographer",
     "role": "cinematographer",
     "movie": "m_bladerunner2049",
@@ -528,7 +480,6 @@
     "order": 8
   },
   {
-    "canonical_id": "c_thereblood_a_dayl",
     "source_identifier": "756115::213890::actor",
     "role": "actor",
     "movie": "m_thereblood",
@@ -539,7 +490,6 @@
     "order": 16
   },
   {
-    "canonical_id": "c_thereblood_co_greenwood",
     "source_identifier": "756115::564279::composer",
     "role": "composer",
     "movie": "m_thereblood",
@@ -550,7 +500,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_themaster_a_phoenix",
     "source_identifier": "44287::213890::actor",
     "role": "actor",
     "movie": "m_themaster",
@@ -561,7 +510,6 @@
     "order": 6
   },
   {
-    "canonical_id": "c_phantomthread_co_greenwood",
     "source_identifier": "338164::564279::composer",
     "role": "composer",
     "movie": "m_phantomthread",
@@ -572,7 +520,6 @@
     "order": 7
   },
   {
-    "canonical_id": "c_moonrise_d_anderson",
     "source_identifier": "152292::300281::director",
     "role": "director",
     "movie": "m_moonrise",
@@ -583,7 +530,6 @@
     "order": 20
   },
   {
-    "canonical_id": "c_fightclub_a_pitt",
     "source_identifier": "586684::229330::actor",
     "role": "actor",
     "movie": "m_fightclub",
@@ -594,7 +540,6 @@
     "order": 17
   },
   {
-    "canonical_id": "c_sevenfilm_a_pitt",
     "source_identifier": "474042::229330::actor",
     "role": "actor",
     "movie": "m_sevenfilm",
@@ -605,7 +550,6 @@
     "order": 8
   },
   {
-    "canonical_id": "c_socialnetwork_a_garfield",
     "source_identifier": "163906::402506::actor",
     "role": "actor",
     "movie": "m_socialnetwork",
@@ -616,7 +560,6 @@
     "order": 11
   },
   {
-    "canonical_id": "c_mulhollanddrive_d_lynch",
     "source_identifier": "402867::281122::director",
     "role": "director",
     "movie": "m_mulhollanddrive",
@@ -627,7 +570,6 @@
     "order": 8
   },
   {
-    "canonical_id": "c_blueVelvet_d_lynch",
     "source_identifier": "71117::281122::director",
     "role": "director",
     "movie": "m_blueVelvet",
@@ -638,7 +580,6 @@
     "order": 23
   },
   {
-    "canonical_id": "c_paterson_d_jarmusch",
     "source_identifier": "591520::253748::director",
     "role": "director",
     "movie": "m_paterson",
@@ -649,7 +590,6 @@
     "order": 1
   },
   {
-    "canonical_id": "c_paterson_a_driver",
     "source_identifier": "591520::316681::actor",
     "role": "actor",
     "movie": "m_paterson",
@@ -660,7 +600,6 @@
     "order": 22
   },
   {
-    "canonical_id": "c_deadman_d_jarmusch",
     "source_identifier": "218922::253748::director",
     "role": "director",
     "movie": "m_deadman",
@@ -671,7 +610,6 @@
     "order": 16
   },
   {
-    "canonical_id": "c_oldboy_d_park",
     "source_identifier": "93995::824118::director",
     "role": "director",
     "movie": "m_oldboy",
@@ -682,7 +620,6 @@
     "order": 22
   },
   {
-    "canonical_id": "c_oldboy_a_choi",
     "source_identifier": "93995::758034::actor",
     "role": "actor",
     "movie": "m_oldboy",
@@ -693,7 +630,6 @@
     "order": 13
   },
   {
-    "canonical_id": "c_decisiontoleave_d_park",
     "source_identifier": "337323::824118::director",
     "role": "director",
     "movie": "m_decisiontoleave",
@@ -704,7 +640,6 @@
     "order": 23
   },
   {
-    "canonical_id": "c_allaboutmother_d_almodovar",
     "source_identifier": "192219::865881::director",
     "role": "director",
     "movie": "m_allaboutmother",
@@ -715,7 +650,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_allaboutmother_a_cruz",
     "source_identifier": "192219::130576::actor",
     "role": "actor",
     "movie": "m_allaboutmother",
@@ -726,7 +660,6 @@
     "order": 15
   },
   {
-    "canonical_id": "c_paindglory_d_almodovar",
     "source_identifier": "536995::865881::director",
     "role": "director",
     "movie": "m_paindglory",
@@ -737,7 +670,6 @@
     "order": 5
   },
   {
-    "canonical_id": "c_paindglory_a_bardem",
     "source_identifier": "536995::615655::actor",
     "role": "actor",
     "movie": "m_paindglory",
@@ -748,7 +680,6 @@
     "order": 16
   },
   {
-    "canonical_id": "c_paindglory_a_cruz",
     "source_identifier": "536995::130576::actor",
     "role": "actor",
     "movie": "m_paindglory",
@@ -759,7 +690,6 @@
     "order": 17
   },
   {
-    "canonical_id": "c_amour_d_haneke",
     "source_identifier": "634319::58924::director",
     "role": "director",
     "movie": "m_amour",
@@ -770,7 +700,6 @@
     "order": 10
   },
   {
-    "canonical_id": "c_amour_a_huppert",
     "source_identifier": "634319::376535::actor",
     "role": "actor",
     "movie": "m_amour",
@@ -781,7 +710,6 @@
     "order": 19
   },
   {
-    "canonical_id": "c_whiteribbon_d_haneke",
     "source_identifier": "545454::58924::director",
     "role": "director",
     "movie": "m_whiteribbon",
@@ -792,7 +720,6 @@
     "order": 23
   },
   {
-    "canonical_id": "c_ladybird_d_gerwig",
     "source_identifier": "448459::188654::director",
     "role": "director",
     "movie": "m_ladybird",
@@ -803,7 +730,6 @@
     "order": 22
   },
   {
-    "canonical_id": "c_ladybird_a_ronan",
     "source_identifier": "448459::126903::actor",
     "role": "actor",
     "movie": "m_ladybird",
@@ -814,7 +740,6 @@
     "order": 8
   },
   {
-    "canonical_id": "c_moonlight_d_jenkins",
     "source_identifier": "563793::71045::director",
     "role": "director",
     "movie": "m_moonlight",
@@ -825,7 +750,6 @@
     "order": 0
   },
   {
-    "canonical_id": "c_ifbeale_d_jenkins",
     "source_identifier": "28231::71045::director",
     "role": "director",
     "movie": "m_ifbeale",
@@ -836,7 +760,6 @@
     "order": 0
   },
   {
-    "canonical_id": "c_getout_d_peele",
     "source_identifier": "149025::893257::director",
     "role": "director",
     "movie": "m_getout",
@@ -847,7 +770,6 @@
     "order": 23
   },
   {
-    "canonical_id": "c_lighthouse_d_eggers",
     "source_identifier": "733477::363358::director",
     "role": "director",
     "movie": "m_lighthouse",
@@ -858,7 +780,6 @@
     "order": 24
   },
   {
-    "canonical_id": "c_lighthouse_a_pattinson",
     "source_identifier": "733477::884960::actor",
     "role": "actor",
     "movie": "m_lighthouse",
@@ -869,7 +790,6 @@
     "order": 6
   },
   {
-    "canonical_id": "c_northman_d_eggers",
     "source_identifier": "189212::363358::director",
     "role": "director",
     "movie": "m_northman",
@@ -880,7 +800,6 @@
     "order": 0
   },
   {
-    "canonical_id": "c_hereditary_d_aster",
     "source_identifier": "543164::739234::director",
     "role": "director",
     "movie": "m_hereditary",
@@ -891,7 +810,6 @@
     "order": 11
   },
   {
-    "canonical_id": "c_favourite_d_lanthimos",
     "source_identifier": "167060::368531::director",
     "role": "director",
     "movie": "m_favourite",
@@ -902,7 +820,6 @@
     "order": 8
   },
   {
-    "canonical_id": "c_favourite_a_stone",
     "source_identifier": "167060::219815::actor",
     "role": "actor",
     "movie": "m_favourite",
@@ -913,7 +830,6 @@
     "order": 18
   },
   {
-    "canonical_id": "c_closeup_d_kiarostami",
     "source_identifier": "504782::405301::director",
     "role": "director",
     "movie": "m_closeup",
@@ -924,7 +840,6 @@
     "order": 22
   },
   {
-    "canonical_id": "c_generalkeaton_d_keaton",
     "source_identifier": "365812::774420::director",
     "role": "director",
     "movie": "m_generalkeaton",
@@ -935,7 +850,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_generalkeaton_a_keaton",
     "source_identifier": "365812::774420::actor",
     "role": "actor",
     "movie": "m_generalkeaton",
@@ -946,7 +860,6 @@
     "order": 1
   },
   {
-    "canonical_id": "c_metropolis_d_lang",
     "source_identifier": "831642::105382::director",
     "role": "director",
     "movie": "m_metropolis",
@@ -957,7 +870,6 @@
     "order": 4
   },
   {
-    "canonical_id": "c_eightandahalf_d_fellini",
     "source_identifier": "21347::329209::director",
     "role": "director",
     "movie": "m_eightandahalf",
@@ -968,7 +880,6 @@
     "order": 24
   },
   {
-    "canonical_id": "c_eightandahalf_a_mastroianni",
     "source_identifier": "21347::800237::actor",
     "role": "actor",
     "movie": "m_eightandahalf",
@@ -979,7 +890,6 @@
     "order": 9
   },
   {
-    "canonical_id": "c_ladolce_d_fellini",
     "source_identifier": "686512::329209::director",
     "role": "director",
     "movie": "m_ladolce",
@@ -990,7 +900,6 @@
     "order": 22
   },
   {
-    "canonical_id": "c_ladolce_a_mastroianni",
     "source_identifier": "686512::800237::actor",
     "role": "actor",
     "movie": "m_ladolce",
@@ -1001,7 +910,6 @@
     "order": 24
   },
   {
-    "canonical_id": "c_mirror_d_tarkovsky",
     "source_identifier": "136783::546080::director",
     "role": "director",
     "movie": "m_mirror",
@@ -1012,7 +920,6 @@
     "order": 14
   },
   {
-    "canonical_id": "c_tokyostory_d_ozu",
     "source_identifier": "694525::133558::director",
     "role": "director",
     "movie": "m_tokyostory",
