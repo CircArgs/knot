@@ -91,7 +91,7 @@ class MockDB:
 
 
 def _basic_spec() -> Spec:
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
@@ -477,7 +477,7 @@ def test_migration_op_carries_target_and_description():
 
 
 def _spec_with_movie_only() -> Spec:
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     return spec
 
@@ -847,7 +847,7 @@ def test_nullable_to_not_null_is_destructive():
 
 def test_not_null_to_nullable_is_safe():
     """Widening (NOT NULL → nullable) doesn't lose data; never destructive."""
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)  # not required → nullable
     db = MockDB(
@@ -879,7 +879,7 @@ def test_not_null_to_nullable_is_safe():
 def test_array_type_matches_when_canonicalized():
     """Postgres returns ARRAY + udt_name='_text' for text[]; the
     normalizer must produce 'text[]' for the comparison."""
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     from knot import types
 
     movie = spec.add_class("Movie")
@@ -911,7 +911,7 @@ def test_array_type_matches_when_canonicalized():
 def test_timestamptz_normalization():
     """Postgres data_type='timestamp with time zone' must match
     knot's 'timestamptz' output."""
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("released_at", types.TIMESTAMP)
     db = MockDB(

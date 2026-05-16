@@ -13,7 +13,7 @@ from knot.spec import Spec
 
 
 def _make_movie_spec() -> tuple[Spec, OntologyClass]:  # noqa: F821
-    spec = Spec(id="test", version="0.0.1")
+    spec = Spec(id="test", version="0.0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("title", types.TEXT)
     movie.slot("year", types.INTEGER)
@@ -120,7 +120,7 @@ def test_fluent_immutability():
 
 def _make_movie_director_spec():
     """Movie with a `director` FK pointing at Person."""
-    spec = Spec(id="test", version="0.0.1")
+    spec = Spec(id="test", version="0.0.1", identifier_slot_name="canonical_id")
     person = spec.add_class("Person")
     person.slot("name", types.TEXT)
     person.slot("birth_country", types.TEXT)

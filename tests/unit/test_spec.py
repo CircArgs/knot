@@ -78,12 +78,12 @@ def test_virtual_class_rejects_non_expr_definition():
 
 def test_spec_id_must_be_non_empty():
     with pytest.raises(ValueError):
-        Spec(id="", version="0.1")
+        Spec(id="", version="0.1", identifier_slot_name="canonical_id")
 
 
 def test_spec_version_must_be_non_empty():
     with pytest.raises(ValueError):
-        Spec(id="m", version="")
+        Spec(id="m", version="", identifier_slot_name="canonical_id")
 
 
 # ---------------------------------------------------------------------------
@@ -92,14 +92,14 @@ def test_spec_version_must_be_non_empty():
 
 
 def test_duplicate_class_name_rejected():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     with pytest.raises(ValueError, match="already has a class"):
         spec.add_class("Movie")
 
 
 def test_duplicate_slot_name_within_class_rejected():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     with pytest.raises(ValueError, match="already has a slot"):
@@ -107,7 +107,7 @@ def test_duplicate_slot_name_within_class_rejected():
 
 
 def test_duplicate_source_name_rejected():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     spec.add_source("imdb")
     with pytest.raises(ValueError, match="already has a source"):
         spec.add_source("imdb")
@@ -150,7 +150,7 @@ def test_identifier_slot_walks_inheritance(movie_spec):
 
 
 def test_effective_slots_dedupe_first_seen():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     parent = spec.add_class("Parent")  # auto-adds canonical_id
     parent.slot("name", types.TEXT)
     child = spec.add_class("Child", is_a=parent)  # inherits canonical_id
@@ -163,7 +163,7 @@ def test_effective_slots_dedupe_first_seen():
 
 
 def test_fk_detection():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("movie", movie)
@@ -188,7 +188,7 @@ def test_validate_strict_no_raise(movie_spec):
 
 
 def test_validate_orphan_constraint_primary():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     ghost = OntologyClass(name="Ghost")
     # Construct an orphan-primary constraint directly (bypassing the
@@ -202,7 +202,7 @@ def test_validate_orphan_constraint_primary():
 def test_validate_concrete_missing_identifier():
     # spec.add_class always auto-adds the identifier — to construct an
     # orphan concrete class without one, bypass the builder.
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     orphan = OntologyClass(name="Movie")
     orphan.slot("name", types.TEXT)
     spec.classes.append(orphan)
@@ -213,7 +213,7 @@ def test_validate_concrete_missing_identifier():
 def test_validate_concrete_multiple_identifiers():
     # spec.add_class auto-adds one; manually adding a second triggers
     # the multiple-identifier validation error.
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("alt_id", types.TEXT, identifier=True)
     errs = spec._validation_errors()
@@ -221,7 +221,7 @@ def test_validate_concrete_multiple_identifiers():
 
 
 def test_validate_classref_target_missing():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     ghost = OntologyClass(name="Ghost")
     credit = spec.add_class("Credit")
@@ -231,7 +231,7 @@ def test_validate_classref_target_missing():
 
 
 def test_validate_binding_to_abstract():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     title = spec.add_class("Title", kind="abstract")
     imdb = spec.add_source("imdb")
     imdb.bind(title)
@@ -250,7 +250,7 @@ def test_validate_mapping_slot_not_on_class(movie_spec):
 
 
 def test_validate_virtual_class_is_a_missing():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     # virtual references a class that's NOT in spec
     ghost = OntologyClass(name="Ghost")
@@ -262,7 +262,7 @@ def test_validate_virtual_class_is_a_missing():
 
 
 def test_validate_strict_raises_with_all_errors():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     # Orphan concrete class (no identifier — bypasses add_class).
     orphan = OntologyClass(name="Movie")
     orphan.slot("name", types.TEXT)
@@ -283,7 +283,7 @@ def test_validate_strict_raises_with_all_errors():
 
 
 def test_validate_self_is_a_cycle():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.is_a = movie  # direct self-reference
     errs = spec._validation_errors()
@@ -291,7 +291,7 @@ def test_validate_self_is_a_cycle():
 
 
 def test_validate_mutual_is_a_cycle():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     a = spec.add_class("A")
     b = spec.add_class("B")
     a.is_a = b
@@ -301,7 +301,7 @@ def test_validate_mutual_is_a_cycle():
 
 
 def test_validate_mixin_cycle():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     a = spec.add_class("A")
     b = spec.add_class("B")
     a.mixins.append(b)
@@ -322,7 +322,7 @@ def test_validate_no_false_positive_for_chain(movie_spec):
 
 
 def test_col_access_rejects_unknown_slot_at_construction():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     # Builder catches the typo at the point of construction — no
@@ -332,7 +332,7 @@ def test_col_access_rejects_unknown_slot_at_construction():
 
 
 def test_col_access_resolves_inherited_slot():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     title = spec.add_class("Title", kind="abstract")
     title.slot("name", types.TEXT, required=True)
     movie = spec.add_class("Movie", is_a=title)
@@ -343,7 +343,7 @@ def test_col_access_resolves_inherited_slot():
 
 
 def test_has_any_unknown_slot_kwarg_raises():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("movie", movie)
@@ -353,7 +353,7 @@ def test_has_any_unknown_slot_kwarg_raises():
 
 
 def test_has_any_no_fk_back_raises():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     other = spec.add_class("Other")
     # Other has no FK back to Movie.
@@ -362,7 +362,7 @@ def test_has_any_no_fk_back_raises():
 
 
 def test_has_any_ambiguous_fk_requires_via():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     person = spec.add_class("Person")
     membership = spec.add_class("Membership")
     membership.slot("user", person)

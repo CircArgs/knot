@@ -13,7 +13,7 @@ def movie_spec() -> Spec:
     base + per-slot trust.
 
     Bodies authored through the semantic builder (no raw SQL)."""
-    spec = Spec(id="movies", version="0.1")
+    spec = Spec(id="movies", version="0.1", identifier_slot_name="canonical_id")
 
     title = spec.add_class("Title", kind="abstract", description="title hierarchy root")
     title.slot("name", types.TEXT, required=True)

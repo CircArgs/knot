@@ -7,7 +7,7 @@ from knot.compile import emit_assign_canonical_sql, emit_recanonicalize_sql
 
 
 def _basic_spec():
-    spec = Spec(id="t", version="0.1")
+    spec = Spec(id="t", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("title", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)

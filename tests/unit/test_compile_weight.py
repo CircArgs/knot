@@ -69,7 +69,7 @@ def test_seed_uses_default_weight_for_unmapped_slots(movie_spec):
 
 
 def test_seed_multi_source_one_class():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
@@ -82,7 +82,7 @@ def test_seed_multi_source_one_class():
 
 
 def test_seed_empty_spec_no_seeds():
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     assert emit_weight_seed(spec) == []
 
 
@@ -100,7 +100,7 @@ def test_seed_schema_kwarg(movie_spec):
 def test_explicit_per_slot_weight_overrides_default():
     """``binding.set_weight(slot, value)`` overrides ``default_weight``
     for that one slot at seed time."""
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     movie.slot("title", types.TEXT)
@@ -117,7 +117,7 @@ def test_explicit_per_slot_weight_overrides_default():
 def test_weight_can_exceed_one():
     """No probability constraint — weights are opaque floats. Setting
     weight=1000 (or negative, or float-min) is fine."""
-    spec = Spec(id="m", version="0.1")
+    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
