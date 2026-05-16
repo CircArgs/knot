@@ -2,7 +2,7 @@
 
 Each test gets a fresh schema. We:
   1. Build a Spec
-  2. Apply emit_ddl + emit_trust_seed to the schema
+  2. Apply emit_ddl + emit_weight_seed to the schema
   3. Exercise the write path (emit_batch_write / emit_close_out)
   4. Query the resolved view + validation SELECTs and assert behavior
   5. Evolve the spec, run diff_against_db, apply the ops, repeat
@@ -24,8 +24,8 @@ from knot.compile import (
     emit_batch_write,
     emit_close_out,
     emit_ddl,
-    emit_trust_seed,
     emit_validation,
+    emit_weight_seed,
 )
 from tests.integration.conftest import exec_many, exec_with_params
 
@@ -35,11 +35,11 @@ from tests.integration.conftest import exec_many, exec_with_params
 
 
 def _deploy(pg, spec: Spec, schema: str) -> None:
-    """Apply emit_ddl + emit_trust_seed to ``schema`` so the DB
+    """Apply emit_ddl + emit_weight_seed to ``schema`` so the DB
     matches ``spec``."""
     exec_many(pg, emit_ddl(spec, schema=schema))
     with pg.cursor() as cur:
-        for sql, params in emit_trust_seed(spec, schema=schema):
+        for sql, params in emit_weight_seed(spec, schema=schema):
             cur.execute(sql, params)
 
 
@@ -54,8 +54,8 @@ def _movies_only_spec() -> Spec:
 
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    imdb.bind(movie).set_default_trust(0.85)
-    tmdb.bind(movie).set_default_trust(0.7)
+    imdb.bind(movie).set_default_weight(0.85)
+    tmdb.bind(movie).set_default_weight(0.7)
     return spec
 
 
@@ -97,7 +97,7 @@ def test_emit_ddl_creates_real_tables(pg, schema):
         tables = [r[0] for r in cur.fetchall()]
     assert "movie" in tables
     assert "movie_bindings" in tables
-    assert "source_trust" in tables
+    assert "source_weight" in tables
 
 
 def test_emit_ddl_creates_resolved_view(pg, schema):
@@ -128,15 +128,15 @@ def test_emit_ddl_creates_indexes(pg, schema):
     assert "movie_bindings_source_idx" in idxs
 
 
-def test_trust_seed_populates_source_trust(pg, schema):
+def test_weight_seed_populates_source_weight(pg, schema):
     """One row per (source, class, non-identifier slot)."""
     spec = _movies_only_spec()
     _deploy(pg, spec, schema)
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT source_name, class_name, slot_name, trust "
-            f"FROM {schema}.source_trust ORDER BY source_name, slot_name"
+            f"SELECT source_name, class_name, slot_name, weight "
+            f"FROM {schema}.source_weight ORDER BY source_name, slot_name"
         )
         rows = cur.fetchall()
     # Movie has 3 non-identifier slots: name, year, runtime_minutes.
@@ -205,7 +205,7 @@ def test_resolved_view_picks_higher_accuracy_source(pg, schema):
 
 def test_all_sources_view_aggregates_per_source_jsonb(pg, schema):
     """The <class>_all_sources provenance view ships one jsonb per
-    slot keyed by source name, with {value, trust} payload — so both
+    slot keyed by source name, with {value, weight} payload — so both
     sources show up for ``year`` even though only one wins in the
     resolved view."""
     spec = _movies_only_spec()
@@ -254,12 +254,12 @@ def test_all_sources_view_aggregates_per_source_jsonb(pg, schema):
 
     # Both sources present in year (both contributed non-null).
     assert set(year_jsonb.keys()) == {"imdb", "tmdb"}
-    assert year_jsonb["imdb"] == {"value": 1925, "trust": 0.85}
-    assert year_jsonb["tmdb"] == {"value": 1924, "trust": 0.7}
+    assert year_jsonb["imdb"] == {"value": 1925, "weight": 0.85}
+    assert year_jsonb["tmdb"] == {"value": 1924, "weight": 0.7}
 
     # Only IMDB present in runtime_minutes (TMDB contributed NULL → filtered).
     assert set(runtime_jsonb.keys()) == {"imdb"}
-    assert runtime_jsonb["imdb"] == {"value": 75, "trust": 0.85}
+    assert runtime_jsonb["imdb"] == {"value": 75, "weight": 0.85}
 
 
 def test_resolved_view_falls_back_per_slot(pg, schema):
@@ -612,8 +612,8 @@ def test_evolve_add_slot_preserves_existing_data(pg, schema, query_fn):
     assert lang is None
 
 
-def test_operator_tunes_trust_changes_winner(pg, schema, query_fn):
-    """Trust values live in postgres; operators tune them via plain
+def test_operator_tunes_weight_changes_winner(pg, schema, query_fn):
+    """Weight values live in postgres; operators tune them via plain
     UPDATE statements. INSERT-only seed semantics mean the spec is
     *not* the authoritative knob at runtime — once the table is
     seeded, the operator owns it."""
@@ -664,7 +664,7 @@ def test_operator_tunes_trust_changes_winner(pg, schema, query_fn):
     # plain UPDATE against the runtime table. No redeploy.
     with pg.cursor() as cur:
         cur.execute(
-            f"UPDATE {schema}.source_trust SET trust = 0.9 "
+            f"UPDATE {schema}.source_weight SET weight = 0.9 "
             f"WHERE source_name = 'tmdb' AND class_name = 'Movie' AND slot_name = 'year'"
         )
 
@@ -676,29 +676,29 @@ def test_operator_tunes_trust_changes_winner(pg, schema, query_fn):
         assert cur.fetchone()[0] == 1928
 
 
-def test_trust_seed_does_not_clobber_operator_tuning(pg, schema, query_fn):
+def test_weight_seed_does_not_clobber_operator_tuning(pg, schema, query_fn):
     """The migration emitter is INSERT-only: redeploying the spec must
-    leave operator-tuned trust values alone."""
+    leave operator-tuned weight values alone."""
     spec = _movies_only_spec()
     _deploy(pg, spec, schema)
 
-    # Operator tunes a trust value at runtime.
+    # Operator tunes a weight value at runtime.
     with pg.cursor() as cur:
         cur.execute(
-            f"UPDATE {schema}.source_trust SET trust = 0.42 "
+            f"UPDATE {schema}.source_weight SET weight = 0.42 "
             f"WHERE source_name = 'imdb' AND class_name = 'Movie' AND slot_name = 'year'"
         )
 
     # Redeploy (spec unchanged from initial); seed must NOT overwrite.
     spec2 = _movies_only_spec()
     ops = diff_against_db(spec2, query_fn, schema=schema)
-    trust_ops = [op for op in ops if op.target == "trust_seed"]
+    weight_ops = [op for op in ops if op.target == "weight_seed"]
     # No (source, class, slot) rows are new → nothing to INSERT.
-    assert trust_ops == []
+    assert weight_ops == []
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT trust FROM {schema}.source_trust "
+            f"SELECT weight FROM {schema}.source_weight "
             f"WHERE source_name = 'imdb' AND class_name = 'Movie' AND slot_name = 'year'"
         )
         assert cur.fetchone()[0] == 0.42  # operator's value preserved
@@ -734,8 +734,8 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     movie.slot("length_min", types.INTEGER)  # was runtime_minutes
     imdb = spec2.add_source("imdb")
     tmdb = spec2.add_source("tmdb")
-    imdb.bind(movie).set_default_trust(0.85)
-    tmdb.bind(movie).set_default_trust(0.7)
+    imdb.bind(movie).set_default_weight(0.85)
+    tmdb.bind(movie).set_default_weight(0.7)
 
     ops = diff_against_db(
         spec2,
@@ -767,7 +767,7 @@ def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
     imdb = spec2.add_source("imdb")
-    imdb.bind(movie).set_default_trust(0.85)
+    imdb.bind(movie).set_default_weight(0.85)
 
     # Without destructive opt-in: no drop emitted (filtered out).
     ops = diff_against_db(spec2, query_fn, schema=schema)
@@ -806,10 +806,10 @@ def test_init_sql_from_scratch_creates_everything(pg, schema):
     sql = spec.init_sql(schema=schema)
     pg.execute(sql)
 
-    # Trust seeded per (source, class, slot).
+    # Weight seeded per (source, class, slot).
     # Movie has 3 non-identifier slots; 3 sources × 3 slots = 9 rows.
     with pg.cursor() as cur:
-        cur.execute(f"SELECT count(*) FROM {schema}.source_trust")
+        cur.execute(f"SELECT count(*) FROM {schema}.source_weight")
         assert cur.fetchone()[0] == 9
 
         cur.execute(

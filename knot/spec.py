@@ -20,9 +20,8 @@ constructing them directly. All entities are plain
 
 Validation happens at two levels:
 
-  - Entity-local: ``__post_init__`` rejects empty names, out-of-range
-    trust values, and (via ``StrEnum`` coercion) unknown ``ClassKind``
-    / ``Severity`` values.
+  - Entity-local: ``__post_init__`` rejects empty names and (via
+    ``StrEnum`` coercion) unknown ``ClassKind`` / ``Severity`` values.
   - Cross-entity: ``Spec.validate()`` raises ``SpecError`` if the spec
     has any well-formedness errors (orphan references, missing
     identifier slots, duplicate names, etc.). The façade methods
@@ -537,10 +536,12 @@ class Source:
         """Create a binding from this source to ``cls`` and register it
         on the owning spec.
 
-        Trust starts at ``DEFAULT_TRUST`` for every slot. To set it, call
-        ``binding.set_default_trust(...)`` or ``binding.set_trust(slot,
-        value)`` on the returned binding — trust is its own concern,
-        declared separately from "what this source publishes"."""
+        Weight starts at ``DEFAULT_WEIGHT`` for every slot. To set it,
+        call ``binding.set_default_weight(...)`` or
+        ``binding.set_weight(slot, value)`` on the returned binding —
+        weight is the resolver's argmax key, declared separately from
+        "what this source publishes". The score itself is opaque to
+        knot: any float will do, the higher one wins."""
         if self._spec is None:
             raise RuntimeError(
                 f"Source {self.name!r} not attached to a Spec — create via "
@@ -558,15 +559,16 @@ class Source:
 
 
 # Reserved synthetic source for human-curated overrides. The resolver
-# treats this like any other source — high trust in source_trust is
-# what makes corrections "win" the per-slot argmax tie-break.
+# treats this like any other source — a high weight in source_weight
+# is what makes corrections "win" the per-slot argmax tie-break.
 CORRECTIONS_SOURCE_NAME: str = "_user_corrections"
 
-# Default per-slot trust applied to a fresh binding. Operators tune by
-# calling ``binding.set_default_trust(...)`` / ``binding.set_trust(slot,
-# value)`` at spec build time, or by ``UPDATE`` on ``source_trust`` at
-# runtime. Module constant so adapters can rebind it before import.
-DEFAULT_TRUST: float = 0.67
+# Default per-slot weight applied to a fresh binding. Opaque to knot;
+# higher wins. Operators tune by calling
+# ``binding.set_default_weight(...)`` / ``binding.set_weight(slot,
+# value)`` at spec build time, or by ``UPDATE`` on ``source_weight``
+# at runtime. Module constant so adapters can rebind it before import.
+DEFAULT_WEIGHT: float = 1.0
 
 
 @dataclass(slots=True)
@@ -583,8 +585,8 @@ class SlotMapping:
       server-side over the ``source_slot`` fields. ``None`` means
       passthrough of ``source_slot[0]``.
 
-    Trust is declared separately on the owning ``SourceBinding`` via
-    ``set_default_trust`` / ``set_trust``; it's not part of the
+    Weight is declared separately on the owning ``SourceBinding`` via
+    ``set_default_weight`` / ``set_weight``; it's not part of the
     ingest-mapping shape.
     """
 
@@ -620,12 +622,15 @@ class SourceBinding:
     """(Source, OntologyClass) binding — what one source publishes
     about one class, and how its raw fields map onto the class's slots.
 
-    Trust is a separate concern, carried on this same binding but set
-    via ``set_default_trust`` / ``set_trust`` (not via ``bind()`` /
-    ``slot()`` kwargs). The runtime resolver picks per-slot winners
-    by argmax over the live ``source_trust`` table, which the spec
-    seeds at deploy time from these values (INSERT-only — once a row
-    exists, operator's runtime tuning is authoritative).
+    Weight is a separate concern, carried on this same binding but
+    set via ``set_default_weight`` / ``set_weight`` (not via
+    ``bind()`` / ``slot()`` kwargs). Weights are opaque to knot — any
+    float will do; the resolver picks per-slot winners by argmax over
+    the live ``source_weight`` table, which the spec seeds at deploy
+    time from these values (INSERT-only — once a row exists,
+    operator's runtime tuning is authoritative). Calibration /
+    probability semantics belong to the external algorithm that
+    produced the numbers, not to knot.
 
     ``slot_mappings`` describes ingest mechanics (which source field
     feeds which class slot, optional SQL transform). Unmapped class
@@ -634,17 +639,10 @@ class SourceBinding:
 
     source: Source
     class_: OntologyClass
-    default_trust: float = DEFAULT_TRUST
+    default_weight: float = DEFAULT_WEIGHT
     slot_mappings: dict[str, SlotMapping] = field(default_factory=dict)
-    slot_trusts: dict[str, float] = field(default_factory=dict)
+    slot_weights: dict[str, float] = field(default_factory=dict)
     description: str | None = None
-
-    def __post_init__(self) -> None:
-        if not (0.0 <= self.default_trust <= 1.0):
-            raise ValueError(
-                f"SourceBinding default_trust must be in [0, 1]; "
-                f"got {self.default_trust}"
-            )
 
     @property
     def identifier_slot(self) -> Slot:
@@ -653,7 +651,7 @@ class SourceBinding:
         return self.class_.identifier_slot()
 
     # ------------------------------------------------------------------
-    # Ingest-mapping declaration (no trust here — see set_trust below).
+    # Ingest-mapping declaration (no weight here — see set_weight below).
     # ------------------------------------------------------------------
 
     def slot(
@@ -670,8 +668,8 @@ class SourceBinding:
           tuple of strings when ``sql`` references multiple raw fields.
         - ``sql`` is the optional postgres expression over those fields.
 
-        Trust is set separately via ``set_default_trust`` /
-        ``set_trust`` — those are the only knobs that touch trust.
+        Weight is set separately via ``set_default_weight`` /
+        ``set_weight`` — those are the only knobs that touch weight.
         """
         # Validate the class slot exists (raises KeyError on typo).
         self.class_.get_slot(class_slot)
@@ -697,41 +695,40 @@ class SourceBinding:
         )
 
     # ------------------------------------------------------------------
-    # Trust API — separate concern from ingest mapping. Trust is the
-    # resolver's argmax weight; mapping is "how to project the row".
+    # Weight API — separate concern from ingest mapping. Weight is the
+    # resolver's argmax key; mapping is "how to project the row".
     # ------------------------------------------------------------------
 
-    def set_default_trust(self, value: float) -> SourceBinding:
-        """Default trust for any non-identifier slot that doesn't have
+    def set_default_weight(self, value: float) -> SourceBinding:
+        """Default weight for any non-identifier slot that doesn't have
         a per-slot override. Applies to every slot of this binding
-        unless overridden via ``set_trust(slot, value)``."""
-        if not (0.0 <= value <= 1.0):
-            raise ValueError(f"default_trust must be in [0, 1]; got {value}")
-        self.default_trust = value
+        unless overridden via ``set_weight(slot, value)``.
+
+        Weights are opaque floats — knot does no calibration check,
+        the higher value wins."""
+        self.default_weight = value
         return self
 
-    def set_trust(self, slot: str, value: float) -> SourceBinding:
-        """Per-slot trust override for one non-identifier slot.
+    def set_weight(self, slot: str, value: float) -> SourceBinding:
+        """Per-slot weight override for one non-identifier slot.
         Replaces the default for this slot only. Rejected on the
         identifier slot (identity is not argmax-resolved)."""
         slot_obj = self.class_.get_slot(slot)
         if slot_obj is self.identifier_slot:
             raise ValueError(
-                f"trust is meaningless on the identifier slot "
+                f"weight is meaningless on the identifier slot "
                 f"{slot!r} — identity is not argmax-resolved"
             )
-        if not (0.0 <= value <= 1.0):
-            raise ValueError(f"trust must be in [0, 1]; got {value}")
-        self.slot_trusts[slot] = value
+        self.slot_weights[slot] = value
         return self
 
-    def trust_for(self, class_slot_name: str) -> float:
-        """Effective trust value for ``class_slot_name``: the slot's
-        explicit value (from ``set_trust``) if set, otherwise the
-        binding's ``default_trust``."""
-        if class_slot_name in self.slot_trusts:
-            return self.slot_trusts[class_slot_name]
-        return self.default_trust
+    def weight_for(self, class_slot_name: str) -> float:
+        """Effective weight for ``class_slot_name``: the slot's explicit
+        value (from ``set_weight``) if set, otherwise the binding's
+        ``default_weight``."""
+        if class_slot_name in self.slot_weights:
+            return self.slot_weights[class_slot_name]
+        return self.default_weight
 
     # ------------------------------------------------------------------
     # Runtime helpers — ingest, ER. Methods on the binding because the
@@ -882,19 +879,19 @@ class Spec:
     def enable_corrections(
         self,
         *,
-        default_trust: float = 0.99,
+        default_weight: float = 1e6,
         description: str | None = "human overrides",
     ) -> Source:
         """Register the ``_user_corrections`` synthetic source and bind
         it to every concrete ``OntologyClass`` in the spec.
 
-        High ``default_trust`` (0.99) means corrections override
-        declared sources at the resolver tie-break. Operators can tune
-        per-slot via ``UPDATE source_trust SET trust = … WHERE
-        source_name = '_user_corrections' AND class_name = '<X>' AND
-        slot_name = '<Y>'`` without touching the spec, or call
-        ``cls.corrections_binding().set_trust(slot, value)`` to set
-        per-slot values at spec build time.
+        A large ``default_weight`` (1e6 by default) means corrections
+        dominate the resolver's argmax against any declared source.
+        Operators tune per-slot via ``UPDATE source_weight SET weight =
+        … WHERE source_name = '_user_corrections' AND class_name =
+        '<X>' AND slot_name = '<Y>'`` without touching the spec, or
+        call ``cls.corrections_binding().set_weight(slot, value)`` to
+        set per-slot values at spec build time.
 
         Idempotent: calling again is a no-op if the source already
         exists. Returns the (possibly pre-existing) ``Source`` object.
@@ -911,7 +908,7 @@ class Spec:
         self.sources.append(source)
         for cls in self.concrete_classes():
             binding = source.bind(cls)
-            binding.set_default_trust(default_trust)
+            binding.set_default_weight(default_weight)
         return source
 
     def _check_unique_class_name(self, name: str) -> None:
@@ -943,7 +940,7 @@ class Spec:
     def _validation_errors(self) -> list[str]:
         """Internal: list cross-entity well-formedness errors.
 
-        Local entity checks (name shape, trust bounds, enum values,
+        Local entity checks (name shape, enum values,
         body Expr typing) have already run in each entity's
         ``__post_init__``. Body slot-ref typos are caught at expression
         construction time by ``movie.col.<slot>`` raising ``KeyError``.

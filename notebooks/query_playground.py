@@ -21,7 +21,7 @@ def _(mo):
     1. **Basic spec.** Movie + Person, one source (imdb). Deploy. Ingest. Query.
     2. **Add a second source.** tmdb publishes some of the same Movies with
        different values. Spec evolves; ``init_sql`` emits only the delta.
-       Trust resolves per-slot winners.
+       The argmax resolves per-slot winners by weight.
     3. **Evolve the spec.** Add the Credit reified relation + a third source
        (rottentomatoes). Spec grows; ``init_sql`` adds the new table without
        touching the existing data.
@@ -120,8 +120,8 @@ def _():
     )
 
     imdb_v1 = spec_v1.add_source("imdb")
-    imdb_v1.bind(person_v1).set_default_trust(0.85)
-    imdb_v1.bind(movie_v1).set_default_trust(0.85)
+    imdb_v1.bind(person_v1).set_default_weight(0.85)
+    imdb_v1.bind(movie_v1).set_default_weight(0.85)
 
     spec_v1.validate()
     return Spec, imdb_v1, movie_v1, person_v1, spec_v1, types
@@ -130,7 +130,7 @@ def _():
 @app.cell
 def _(mo, pg, schema, spec_v1):
     # One call. ``init_sql`` validates the spec, then emits a single SQL
-    # script — DDL + bindings + indexes + FKs + resolved views + trust
+    # script — DDL + bindings + indexes + FKs + resolved views + weight
     # seed. With no query_fn it assumes an empty schema.
     pg.execute(spec_v1.init_sql(schema=schema))
     mo.md(f"Stage 1 deployed in **`{schema}`**.")
@@ -189,7 +189,7 @@ def _(mo):
 
     Same spec shape, plus a `tmdb` source binding. ``init_sql(query_fn=…)``
     introspects the live DB and emits only the delta — no `CREATE TABLE`
-    churn, just a couple of trust-seed `INSERT`s for the new source. Then
+    churn, just a couple of weight-seed `INSERT`s for the new source. Then
     ingest tmdb's overlapping rows and watch the resolver pick winners
     per-slot.
     """)
@@ -223,12 +223,12 @@ def _(Spec, movie_v1, person_v1, spec_v1, types):
 
     # imdb already deployed and seeded; tmdb is new.
     imdb_v2 = spec_v2.add_source("imdb")
-    imdb_v2.bind(person_v2).set_default_trust(0.85)
-    imdb_v2.bind(movie_v2).set_default_trust(0.85)
+    imdb_v2.bind(person_v2).set_default_weight(0.85)
+    imdb_v2.bind(movie_v2).set_default_weight(0.85)
 
     tmdb_v2 = spec_v2.add_source("tmdb")
-    tmdb_v2.bind(person_v2).set_default_trust(0.75)
-    tmdb_v2.bind(movie_v2).set_default_trust(0.75)
+    tmdb_v2.bind(person_v2).set_default_weight(0.75)
+    tmdb_v2.bind(movie_v2).set_default_weight(0.75)
 
     spec_v2.validate()
     return movie_v2, person_v2, spec_v2, tmdb_v2
@@ -236,7 +236,7 @@ def _(Spec, movie_v1, person_v1, spec_v1, types):
 
 @app.cell
 def _(mo, pg, schema, spec_v2):
-    # Diff against the live DB — only the trust-seed deltas for tmdb
+    # Diff against the live DB — only the weight-seed deltas for tmdb
     # should appear, plus idempotent CREATE OR REPLACE VIEW for the
     # resolved views. The DDL for tables/indexes is already in place.
     def query_fn(sql: str, params: tuple) -> list:
@@ -294,11 +294,12 @@ def _(ClassWrites, load, pg, schema, spec_v2):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ### See trust at work
+    ### See the weights at work
 
-    Two sources, one of them more trusted (imdb 0.85 > tmdb 0.75). Where
+    Two sources, one weighted higher (imdb 0.85 > tmdb 0.75). Where
     their values disagree, the per-slot resolver picks imdb's value
-    automatically. The bindings table still preserves both.
+    automatically. The bindings table still preserves both. Weights
+    are opaque floats — calibration is up to whatever produced them.
     """)
     return
 
@@ -333,9 +334,9 @@ def _(pg, schema):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ### Operator tunes trust at runtime
+    ### Operator tunes weights at runtime
 
-    No spec edit, no redeploy. Just `UPDATE source_trust` and the resolver
+    No spec edit, no redeploy. Just `UPDATE source_weight` and the resolver
     picks up the new value on its next query.
     """)
     return
@@ -344,10 +345,10 @@ def _(mo):
 @app.cell
 def _(pg, schema):
     with pg.cursor() as cur:
-        # Bump tmdb's trust on `year` above imdb's. The next query against
+        # Bump tmdb's weight on `year` above imdb's. The next query against
         # movie_resolved.year will return tmdb's value where they disagree.
         cur.execute(
-            f"UPDATE {schema}.source_trust SET trust = 0.95 "
+            f"UPDATE {schema}.source_weight SET weight = 0.95 "
             f"WHERE source_name = 'tmdb' AND class_name = 'Movie' "
             f"AND slot_name = 'year'"
         )
@@ -389,7 +390,7 @@ def _(mo):
     The resolved view picks one winner per slot; ``movie_all_sources``
     keeps the rest of the receipts. Same shape, one row per
     canonical_id, but each slot column is a jsonb keyed by
-    source_name with ``{value, trust}`` payload. Audit UIs and
+    source_name with ``{value, weight}`` payload. Audit UIs and
     GraphQL ``SlotValue`` projections read from this view; the
     resolved view stays cheap and skinny.
     """)
@@ -486,7 +487,7 @@ def _(mo):
 
     ``init_sql(query_fn=…)`` emits exactly what's missing: a new
     ``credit`` canonical table, a ``credit_bindings`` table, a
-    ``credit_resolved`` view, FK constraints, indexes, and trust-seed
+    ``credit_resolved`` view, FK constraints, indexes, and weight-seed
     rows for the new (rottentomatoes, *, *) and (*, Credit, *) triples.
     Existing data is untouched.
     """)
@@ -543,19 +544,19 @@ def _(Spec, types):
     )
 
     imdb_v3 = spec_v3.add_source("imdb")
-    imdb_v3.bind(person_v3).set_default_trust(0.85)
-    imdb_v3.bind(movie_v3).set_default_trust(0.85)
-    imdb_v3.bind(credit_v3).set_default_trust(0.85)
+    imdb_v3.bind(person_v3).set_default_weight(0.85)
+    imdb_v3.bind(movie_v3).set_default_weight(0.85)
+    imdb_v3.bind(credit_v3).set_default_weight(0.85)
 
     tmdb_v3 = spec_v3.add_source("tmdb")
-    tmdb_v3.bind(person_v3).set_default_trust(0.75)
-    tmdb_v3.bind(movie_v3).set_default_trust(0.75)
-    tmdb_v3.bind(credit_v3).set_default_trust(0.75)
+    tmdb_v3.bind(person_v3).set_default_weight(0.75)
+    tmdb_v3.bind(movie_v3).set_default_weight(0.75)
+    tmdb_v3.bind(credit_v3).set_default_weight(0.75)
 
     rt_v3 = spec_v3.add_source("rottentomatoes")
-    rt_v3.bind(person_v3).set_default_trust(0.70)
-    rt_v3.bind(movie_v3).set_default_trust(0.70)
-    rt_v3.bind(credit_v3).set_default_trust(0.70)
+    rt_v3.bind(person_v3).set_default_weight(0.70)
+    rt_v3.bind(movie_v3).set_default_weight(0.70)
+    rt_v3.bind(credit_v3).set_default_weight(0.70)
 
     spec_v3.validate()
     return credit_v3, directed_movie_v3, movie_v3, person_v3, spec_v3

@@ -8,7 +8,7 @@ from knot.compile import (
     ClassWrites,
     emit_batch_write,
     emit_close_out,
-    emit_trust_seed,
+    emit_weight_seed,
 )
 
 # ---------------------------------------------------------------------------
@@ -23,7 +23,7 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
     person = spec.add_class("Person")
     person.slot("canonical_id", types.TEXT, identifier=True)
 
-    src = spec.enable_corrections(default_trust=0.99)
+    src = spec.enable_corrections(default_weight=0.99)
     assert src.name == CORRECTIONS_SOURCE_NAME
     binding_pairs = {(b.source.name, b.class_.name) for b in spec.source_bindings}
     assert (CORRECTIONS_SOURCE_NAME, "Movie") in binding_pairs
@@ -64,22 +64,25 @@ def test_corrections_source_name_is_reserved():
         spec.add_source(CORRECTIONS_SOURCE_NAME)
 
 
-def test_corrections_default_accuracy_is_high():
+def test_corrections_default_weight_dominates():
+    """``enable_corrections`` seeds the corrections binding with a
+    very large default_weight (1e6 by default) so corrections win the
+    resolver's argmax against any declared source."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections()
     b = movie.corrections_binding()
-    assert b.default_trust == 0.99
+    assert b.default_weight == 1e6
 
 
-def test_corrections_custom_accuracy():
+def test_corrections_custom_default_weight():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    spec.enable_corrections(default_trust=0.8)
+    spec.enable_corrections(default_weight=12.5)
     b = movie.corrections_binding()
-    assert b.default_trust == 0.8
+    assert b.default_weight == 12.5
 
 
 def test_corrections_binding_raises_when_disabled():
@@ -153,7 +156,7 @@ def test_emit_close_out_rejects_unknown_class():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end: corrections write through emit_batch_write + trust seed
+# End-to-end: corrections write through emit_batch_write + weight seed
 # ---------------------------------------------------------------------------
 
 
@@ -192,15 +195,15 @@ def test_corrections_write_uses_batch_write():
     )
 
 
-def test_corrections_appear_in_trust_seed():
+def test_corrections_appear_in_weight_seed():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
-    spec.enable_corrections(default_trust=0.95)
-    seeds = emit_trust_seed(spec)
+    spec.enable_corrections(default_weight=0.95)
+    seeds = emit_weight_seed(spec)
     # One row per (source, class, non-identifier-slot). Corrections binds
-    # to every concrete class with the same default_trust applied to
+    # to every concrete class with the same default_weight applied to
     # every non-identifier slot.
     correction_seed = next(
         (sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME

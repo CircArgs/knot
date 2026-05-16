@@ -249,7 +249,7 @@ def test_multi_class_batch_emits_both_classes(movie_spec):
     # Build a credit binding for the same source
     imdb = movie_spec.sources[0]
     credit = next(c for c in movie_spec.classes if c.name == "Credit")
-    credit_b = imdb.bind(credit).set_default_trust(0.8)
+    credit_b = imdb.bind(credit).set_default_weight(0.8)
 
     bw = emit_batch_write(
         movie_spec,

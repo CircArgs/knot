@@ -13,7 +13,7 @@ def _basic_spec():
     movie.slot("title", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
-    imdb.bind(movie).set_default_trust(0.85)
+    imdb.bind(movie).set_default_weight(0.85)
     return spec, movie
 
 

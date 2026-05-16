@@ -3,25 +3,28 @@
 For each concrete ``OntologyClass``, emit a SQL ``VIEW`` named
 ``<schema>.<class>_resolved`` that joins all currently-open rows of
 ``<class>_bindings`` (``valid_to IS NULL``) and picks each slot's
-winning value by argmax over the per-(source, class, slot) trust.
+winning value by argmax over the per-(source, class, slot) weight.
 One row per ``canonical_id``.
 
 Resolution semantics:
 
   - Each (source, class, slot) triple has a row in
-    ``<schema>.<trust_table>`` (default ``source_trust``) carrying its
-    current trust value. The resolved view ``LEFT JOIN``s against that
-    table at query time, so trust is operational state — an operator
-    can ``UPDATE source_trust SET trust = 0.8 WHERE source_name =
-    'imdb' AND class_name = 'Movie' AND slot_name = 'year'`` and the
-    resolver picks up the new value immediately without rebuilding the
-    view.
-  - Per slot, the winner is the binding with the highest trust among
+    ``<schema>.<weight_table>`` (default ``source_weight``) carrying
+    its current weight. The resolved view ``LEFT JOIN``s against that
+    table at query time, so the weight is operational state — an
+    operator can ``UPDATE source_weight SET weight = 12.5 WHERE
+    source_name = 'imdb' AND class_name = 'Movie' AND slot_name =
+    'year'`` and the resolver picks up the new value immediately
+    without rebuilding the view.
+  - Per slot, the winner is the binding with the highest weight among
     those whose value for that slot is non-null. Ties are broken by
     ``source_name`` alphabetical (deterministic).
-  - Triples missing from ``source_trust`` fall to ``COALESCE(..., 0)``
+  - Triples missing from ``source_weight`` fall to ``COALESCE(..., 0)``
     and lose every tie-break — effectively ignored.
   - Slots with no non-null claim resolve to ``NULL``.
+
+Weights are opaque floats. The argmax doesn't care about scale or
+calibration; whatever produced the numbers owns that.
 """
 
 from __future__ import annotations
@@ -32,25 +35,25 @@ from knot.spec import ClassKind, OntologyClass, Slot, Spec
 def _winning_value_expr(
     *,
     bindings_table: str,
-    trust_table: str,
+    weight_table: str,
     class_name: str,
     canonical_id_slot: Slot,
     slot: Slot,
 ) -> str:
     """Correlated subquery that picks the winning value for ``slot``.
-    The JOIN against the trust table is per-(source, class, slot) so
-    each slot gets its own trust value."""
+    The JOIN against the weight table is per-(source, class, slot) so
+    each slot gets its own weight."""
     return (
         f"(SELECT b.{slot.name} "
         f"FROM {bindings_table} b "
-        f"LEFT JOIN {trust_table} t "
-        f"ON t.source_name = b.source_name "
-        f"AND t.class_name = '{class_name}' "
-        f"AND t.slot_name = '{slot.name}' "
+        f"LEFT JOIN {weight_table} w "
+        f"ON w.source_name = b.source_name "
+        f"AND w.class_name = '{class_name}' "
+        f"AND w.slot_name = '{slot.name}' "
         f"WHERE b.{canonical_id_slot.name} = cb.{canonical_id_slot.name} "
         f"AND b.valid_to IS NULL "
         f"AND b.{slot.name} IS NOT NULL "
-        f"ORDER BY COALESCE(t.trust, 0) DESC, b.source_name "
+        f"ORDER BY COALESCE(w.weight, 0) DESC, b.source_name "
         f"LIMIT 1)"
     )
 
@@ -62,16 +65,16 @@ def emit_resolved_view(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
-    trust_table_name: str = "source_trust",
+    weight_table_name: str = "source_weight",
     if_not_exists: bool = False,
 ) -> str:
     """Return ``CREATE VIEW <schema>.<class><resolved_suffix>`` for one
     concrete class, resolving per-slot winners from its bindings table.
 
-    The view depends on ``<schema>.<trust_table_name>`` existing —
+    The view depends on ``<schema>.<weight_table_name>`` existing —
     emit it via ``emit_ddl`` (which creates the table) before
     deploying this view, and seed it via
-    ``knot.compile.trust.emit_trust_seed`` to populate the rows.
+    ``knot.compile.weight.emit_weight_seed`` to populate the rows.
     """
     if cls.kind != ClassKind.CONCRETE:
         raise ValueError(
@@ -80,7 +83,7 @@ def emit_resolved_view(
         )
 
     bindings_table = f"{schema}.{cls.name.lower()}{bindings_suffix}"
-    trust_table = f"{schema}.{trust_table_name}"
+    weight_table = f"{schema}.{weight_table_name}"
     view_name = f"{schema}.{cls.name.lower()}{resolved_suffix}"
     ident = cls.identifier_slot()
     create = "CREATE OR REPLACE VIEW" if if_not_exists else "CREATE VIEW"
@@ -91,7 +94,7 @@ def emit_resolved_view(
             continue
         expr = _winning_value_expr(
             bindings_table=bindings_table,
-            trust_table=trust_table,
+            weight_table=weight_table,
             class_name=cls.name,
             canonical_id_slot=ident,
             slot=slot,
@@ -119,7 +122,7 @@ def emit_resolved_views(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
-    trust_table_name: str = "source_trust",
+    weight_table_name: str = "source_weight",
     if_not_exists: bool = False,
 ) -> list[str]:
     """Return one ``CREATE VIEW`` per concrete class in ``spec``."""
@@ -133,7 +136,7 @@ def emit_resolved_views(
                     schema=schema,
                     bindings_suffix=bindings_suffix,
                     resolved_suffix=resolved_suffix,
-                    trust_table_name=trust_table_name,
+                    weight_table_name=weight_table_name,
                     if_not_exists=if_not_exists,
                 )
             )
@@ -152,7 +155,7 @@ def emit_all_sources_view(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     all_sources_suffix: str = "_all_sources",
-    trust_table_name: str = "source_trust",
+    weight_table_name: str = "source_weight",
     if_not_exists: bool = False,
 ) -> str:
     """Return ``CREATE VIEW <schema>.<class><all_sources_suffix>`` — the
@@ -160,16 +163,16 @@ def emit_all_sources_view(
 
     Same shape as ``<class>_resolved`` (one row per ``canonical_id``)
     but every slot column carries a ``jsonb`` object keyed by source
-    name, with ``{value, trust}`` payload per source::
+    name, with ``{value, weight}`` payload per source::
 
         {
-          "imdb": {"value": 1994, "trust": 0.85},
-          "tmdb": {"value": 1995, "trust": 0.70}
+          "imdb": {"value": 1994, "weight": 0.85},
+          "tmdb": {"value": 1995, "weight": 0.70}
         }
 
     Sources contributing ``NULL`` for a slot are filtered out per slot
     (so a partial-coverage source doesn't leave a ``{"src": {"value":
-    null, "trust": …}}`` entry). The identifier slot stays as a plain
+    null, "weight": …}}`` entry). The identifier slot stays as a plain
     column — it's the key, not a multi-source claim.
 
     This is the substrate downstream layers (GraphQL ``SlotValue``
@@ -183,7 +186,7 @@ def emit_all_sources_view(
         )
 
     bindings_table = f"{schema}.{cls.name.lower()}{bindings_suffix}"
-    trust_table = f"{schema}.{trust_table_name}"
+    weight_table = f"{schema}.{weight_table_name}"
     view_name = f"{schema}.{cls.name.lower()}{all_sources_suffix}"
     ident = cls.identifier_slot()
     create = "CREATE OR REPLACE VIEW" if if_not_exists else "CREATE VIEW"
@@ -194,9 +197,9 @@ def emit_all_sources_view(
     for slot in cls.effective_slots():
         if slot.name == ident.name:
             continue
-        alias = f"t_{slot.name}"
+        alias = f"w_{slot.name}"
         join_lines.append(
-            f"LEFT JOIN {trust_table} {alias}\n"
+            f"LEFT JOIN {weight_table} {alias}\n"
             f"  ON {alias}.source_name = b.source_name "
             f"AND {alias}.class_name = '{cls.name}' "
             f"AND {alias}.slot_name = '{slot.name}'"
@@ -205,7 +208,7 @@ def emit_all_sources_view(
             f"    jsonb_object_agg(\n"
             f"      b.source_name,\n"
             f"      jsonb_build_object('value', b.{slot.name}, "
-            f"'trust', COALESCE({alias}.trust, 0))\n"
+            f"'weight', COALESCE({alias}.weight, 0))\n"
             f"    ) FILTER (WHERE b.{slot.name} IS NOT NULL) AS {slot.name}"
         )
 
@@ -226,7 +229,7 @@ def emit_all_sources_views(
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
     all_sources_suffix: str = "_all_sources",
-    trust_table_name: str = "source_trust",
+    weight_table_name: str = "source_weight",
     if_not_exists: bool = False,
 ) -> list[str]:
     """Return one ``CREATE VIEW <class>_all_sources`` per concrete class."""
@@ -240,7 +243,7 @@ def emit_all_sources_views(
                     schema=schema,
                     bindings_suffix=bindings_suffix,
                     all_sources_suffix=all_sources_suffix,
-                    trust_table_name=trust_table_name,
+                    weight_table_name=weight_table_name,
                     if_not_exists=if_not_exists,
                 )
             )

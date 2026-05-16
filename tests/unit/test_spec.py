@@ -8,8 +8,6 @@ from knot import (
     OntologyClass,
     Severity,
     Slot,
-    Source,
-    SourceBinding,
     Spec,
     SpecError,
     VirtualClass,
@@ -78,14 +76,6 @@ def test_virtual_class_rejects_non_expr_definition():
     parent = OntologyClass(name="Movie")
     with pytest.raises(TypeError, match="must be an Expr"):
         VirtualClass(name="DirectedMovie", is_a=parent, definition="raw sql string")
-
-
-def test_source_binding_rejects_default_trust_out_of_range():
-    s = Source(name="imdb")
-    cls = OntologyClass(name="Movie")
-    cls.slot("canonical_id", types.TEXT, identifier=True)
-    with pytest.raises(ValueError, match="default_trust"):
-        SourceBinding(source=s, class_=cls, default_trust=1.5)
 
 
 def test_spec_id_must_be_non_empty():

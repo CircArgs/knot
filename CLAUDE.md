@@ -3,7 +3,7 @@
 **knot** is a reflective ontology compiler — a pure Python library that
 takes a typed dataclass spec (classes, slots, sources, source bindings,
 constraints) and emits the runtime artifacts (postgres DDL, resolved
-views, per-slot trust seed, batch writes, migration ops, query SQL).
+views, per-slot weight seed, batch writes, migration ops, query SQL).
 
 Branch `library/v0` is the focused library. Anything that talks to a
 connection, serves HTTP, holds runtime state, or assembles a GraphQL
@@ -22,9 +22,14 @@ builds around it. The earlier monorepo (API service + UI + ingest + ER
   pattern, separate file per target. Not preemptively built.
 - **Module-level constants, not env vars.** The default schema name
   (`knot_data`), the corrections source name (`_user_corrections`),
-  the trust table name (`source_trust`) are exposed as kwargs on the
-  emitter functions; their *defaults* are constants you can rebind
+  the weight table name (`source_weight`) are exposed as kwargs on
+  the emitter functions; their *defaults* are constants you can rebind
   before import. No `os.environ.get` anywhere.
+- **Weights are opaque.** Per-(source, class, slot) weights live in
+  `source_weight`; the resolver argmaxes over them. knot does not
+  constrain the range, calibrate them, or pretend they're
+  probabilities. Whatever scoring algorithm produced the numbers owns
+  that — knot just stores + reads.
 - **Single-team posture.** Trusted authors of the spec, no
   multi-tenant defenses, no sandboxing.
 - **Sync.** The compiler is sync (pure transforms). Adapters wrap it
@@ -50,12 +55,12 @@ knot/
   compile/
     __init__.py
     ddl.py             # canonical tables + bindings tables + indexes
-                       # + FK ALTERs + source_trust table + virtual
+                       # + FK ALTERs + source_weight table + virtual
                        # class views
     resolver.py        # per-(source, class, slot) argmax resolved views
     constraints.py     # constraint validation SELECTs
     data_io.py         # batch SCD2 writes (close-out + insert)
-    trust.py           # source_trust INSERT-only seed
+    weight.py          # source_weight INSERT-only seed
     migrate.py         # diff_against_db (Alembic-style autogen) — the
                        # single source of truth for "what SQL to run";
                        # ``Spec.init_sql`` is a one-line façade over it
@@ -122,8 +127,8 @@ movie.slot("director", person)             # FK — pass the class directly
 movie.slot("genres", types.ARRAY(types.TEXT))
 ```
 
-**Sources and bindings** — source-method-chained. Trust is its
-own concern, set separately via `set_default_trust` / `set_trust`
+**Sources and bindings** — source-method-chained. Weight is its
+own concern, set separately via `set_default_weight` / `set_weight`
 (declared after the mapping, not woven into the mapping kwargs):
 
 ```python
@@ -133,11 +138,11 @@ imdb_movie.slot(class_slot="canonical_id", source_slot="imdb_id")
 imdb_movie.slot(class_slot="year", source_slot="release_year")
 imdb_movie.slot(class_slot="runtime", source_slot="runtime",
                 sql="(regexp_match(runtime, '[0-9]+'))[1]::int")
-# Trust — separate API on the binding:
-imdb_movie.set_default_trust(0.85)       # applies to every slot
-imdb_movie.set_trust("year", 0.9)        # per-slot override
-imdb_movie.set_trust("runtime", 0.7)
-# Slots not explicitly mapped → implicit passthrough at default_trust.
+# Weight — separate API on the binding. Opaque floats; higher wins.
+imdb_movie.set_default_weight(0.85)      # applies to every slot
+imdb_movie.set_weight("year", 0.9)       # per-slot override
+imdb_movie.set_weight("runtime", 0.7)
+# Slots not explicitly mapped → implicit passthrough at default_weight.
 ```
 
 **Ingest, ER, and corrections live on the entities they describe**
@@ -162,7 +167,7 @@ movie.add_virtual("DirectedMovie",
                   where=movie.has_any(credit, role="director"))
 
 # Corrections binding lookup
-spec.enable_corrections(default_trust=0.99)
+spec.enable_corrections(default_weight=1e6)
 corr_b = movie.corrections_binding()
 ```
 
@@ -219,11 +224,14 @@ sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)
   shapes — each carries metadata or per-row params that doesn't
   concatenate cleanly.
 
-**Trust runtime**:
-- Per-(source, class, slot) value lives in `<schema>.source_trust`.
-- The seed emitter is **INSERT-only** (`ON CONFLICT DO NOTHING`). Spec
-  values are *initial conditions*; once a row exists, the operator
-  owns it. Redeploying the spec never clobbers operator tuning.
+**Weight runtime**:
+- Per-(source, class, slot) value lives in `<schema>.source_weight`.
+  Opaque float column; no range constraint, no schema-level
+  calibration assertion.
+- The seed emitter (`emit_weight_seed`) is **INSERT-only** (`ON
+  CONFLICT DO NOTHING`). Spec values are *initial conditions*; once a
+  row exists, the operator owns it. Redeploying the spec never
+  clobbers operator tuning.
 
 ## Boundary rules
 
@@ -255,8 +263,8 @@ sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)
   Adding a new node type = one register; adding a new compilation
   target = one new module.
 - **Free functions for spec → SQL emission** (DDL, migrate, write,
-  resolver, trust, flyway). The Spec is a fixed shape, not a
-  recursive heterogeneous tree — dispatch doesn't earn its keep.
+  resolver, weight). The Spec is a fixed shape, not a recursive
+  heterogeneous tree — dispatch doesn't earn its keep.
 - **`match` statements for type-discriminated dispatch** where the set
   is closed and small.
 - **Compile-time validation over runtime checks.** Construction-time
@@ -287,8 +295,11 @@ sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)
 - Don't add GraphQL emission or Pydantic row-model emission inside
   `knot/` yet. Those are adapter-package territory. The current
   library compiles to SQL; the rest is downstream.
-- Don't paper over operator agency at runtime — trust seed is
+- Don't paper over operator agency at runtime — the weight seed is
   INSERT-only, deliberately. Don't add an `--overwrite` flag.
+- Don't reintroduce 0..1 / probability constraints on weights, or
+  rename them back to "trust". Weights are opaque floats by design;
+  calibration is an external concern.
 
 ## Auto-memory
 

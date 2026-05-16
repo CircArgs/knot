@@ -18,10 +18,10 @@ def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
         for s in stmts
         if s.startswith("CREATE TABLE")
         and "_bindings" not in s
-        and "source_trust" not in s
+        and "source_weight" not in s
     ]
     bindings = [s for s in stmts if s.startswith("CREATE TABLE") and "_bindings" in s]
-    trust = [s for s in stmts if s.startswith("CREATE TABLE") and "source_trust" in s]
+    weight = [s for s in stmts if s.startswith("CREATE TABLE") and "source_weight" in s]
     resolved_views = [s for s in stmts if "_resolved AS" in s]
     all_sources_views = [s for s in stmts if "_all_sources AS" in s]
     virtual_views = [
@@ -33,7 +33,7 @@ def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
     ]
     assert len(canonical) == 3  # Movie, Person, Credit canonical tables
     assert len(bindings) == 3  # Movie, Person, Credit bindings tables
-    assert len(trust) == 1  # source_trust (invariant)
+    assert len(weight) == 1  # source_weight (invariant)
     assert len(resolved_views) == 3  # Movie, Person, Credit resolved views
     assert len(all_sources_views) == 3  # parallel provenance views
     assert len(virtual_views) == 1  # DirectedMovie (the virtual class)

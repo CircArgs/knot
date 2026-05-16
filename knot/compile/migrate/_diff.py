@@ -3,7 +3,7 @@ introspection helpers, returns ordered ``MigrationOp`` records.
 
 Phases: rename pre-pass → drops → adds. ``allow_destructive=False``
 (the default) filters out DROP TABLE / DROP COLUMN at the end; other
-drops (DROP VIEW, DROP INDEX, DELETE FROM trust) are always emitted.
+drops (DROP VIEW, DROP INDEX, DELETE FROM weight) are always emitted.
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ from knot.compile.ddl import (
     _emit_bindings_table,
     _emit_fk_alters,
     _emit_table,
-    _emit_trust_table,
     _emit_view,
+    _emit_weight_table,
 )
 from knot.compile.migrate._introspect import (
     QueryFn,
@@ -29,8 +29,8 @@ from knot.compile.migrate._introspect import (
     _existing_indexes,
     _existing_schemas,
     _existing_tables,
-    _existing_trust_rows,
     _existing_views,
+    _existing_weight_rows,
 )
 from knot.compile.resolver import emit_all_sources_view, emit_resolved_view
 from knot.spec import OntologyClass, Spec
@@ -51,10 +51,10 @@ class MigrationOp:
         True when applying the op may discard data. Phase 1 emits no
         destructive ops; the flag is reserved for Phase 2.
     target
-        Coarse classification — ``"schema"``, ``"trust_table"``,
+        Coarse classification — ``"schema"``, ``"weight_table"``,
         ``"canonical"``, ``"bindings"``, ``"index"``, ``"fk"``,
         ``"resolved_view"``, ``"all_sources_view"``, ``"virtual_view"``,
-        ``"trust_seed"``. Useful for grouping ops in migration files.
+        ``"weight_seed"``. Useful for grouping ops in migration files.
     """
 
     description: str
@@ -71,7 +71,7 @@ def diff_against_db(
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
     all_sources_suffix: str = "_all_sources",
-    trust_table_name: str = "source_trust",
+    weight_table_name: str = "source_weight",
     allow_destructive: bool = False,
     renames: dict[str, dict[str, str]] | None = None,
 ) -> list[MigrationOp]:
@@ -82,7 +82,7 @@ def diff_against_db(
 
       A. **Drops** (Phase 2). Things in the database that aren't in the
          spec. Non-destructive cleanup (DROP FK / VIEW / INDEX, DELETE
-         FROM trust) is always emitted. Truly destructive ops (DROP
+         FROM weight) is always emitted. Truly destructive ops (DROP
          TABLE, DROP COLUMN) carry ``destructive=True`` and are
          filtered out unless ``allow_destructive=True``.
 
@@ -92,10 +92,10 @@ def diff_against_db(
     Ordering: drops run first (cleaning the old state) so any
     subsequent adds don't collide with stale objects.
 
-    Drop sequence: FK constraints → views → indexes → trust rows →
-    columns → tables. Add sequence: schema → trust table → canonical
+    Drop sequence: FK constraints → views → indexes → weight rows →
+    columns → tables. Add sequence: schema → weight table → canonical
     tables → bindings tables (+ indexes) → ALTER ADD columns → ALTER
-    ADD FK constraints → resolved views → virtual views → trust seed.
+    ADD FK constraints → resolved views → virtual views → weight seed.
 
     ``renames`` (optional) declares explicit ``{class_name: {old_col:
     new_col}}`` mappings. Renames run BEFORE drops or adds so the rest
@@ -125,7 +125,7 @@ def diff_against_db(
             bindings_suffix=bindings_suffix,
             resolved_suffix=resolved_suffix,
             all_sources_suffix=all_sources_suffix,
-            trust_table_name=trust_table_name,
+            weight_table_name=weight_table_name,
             renames=renames,
         )
     )
@@ -141,17 +141,17 @@ def diff_against_db(
         )
     db_tables = _existing_tables(query, schema)
 
-    # 2. Trust table
-    if trust_table_name not in db_tables:
+    # 2. Weight table
+    if weight_table_name not in db_tables:
         ops.append(
             MigrationOp(
-                description=f"create_table_{trust_table_name}",
-                sql=_emit_trust_table(
+                description=f"create_table_{weight_table_name}",
+                sql=_emit_weight_table(
                     schema=schema,
-                    trust_table_name=trust_table_name,
+                    weight_table_name=weight_table_name,
                     if_not_exists=True,
                 ),
-                target="trust_table",
+                target="weight_table",
             )
         )
 
@@ -177,7 +177,7 @@ def diff_against_db(
             schema=schema,
             bindings_suffix=bindings_suffix,
             resolved_suffix=resolved_suffix,
-            trust_table_name=trust_table_name,
+            weight_table_name=weight_table_name,
             if_not_exists=True,
         )
         ops.append(
@@ -197,7 +197,7 @@ def diff_against_db(
             schema=schema,
             bindings_suffix=bindings_suffix,
             all_sources_suffix=all_sources_suffix,
-            trust_table_name=trust_table_name,
+            weight_table_name=weight_table_name,
             if_not_exists=True,
         )
         ops.append(
@@ -219,11 +219,11 @@ def diff_against_db(
             )
         )
 
-    # 9. Trust seed — INSERT-only. Spec values are *initial conditions*;
+    # 9. Weight seed — INSERT-only. Spec values are *initial conditions*;
     # once a (source, class, slot) row exists, the operator's runtime
     # tuning is authoritative and we do NOT clobber it on redeploy.
     # Emit INSERT only for net-new (source, class, slot) triples.
-    trust_rows = _existing_trust_rows(query, schema, trust_table_name)
+    weight_rows = _existing_weight_rows(query, schema, weight_table_name)
     for b in spec.source_bindings:
         cls = b.class_
         ident_name = b.identifier_slot.name
@@ -231,22 +231,22 @@ def diff_against_db(
             if slot.name == ident_name:
                 continue
             key = (b.source.name, cls.name, slot.name)
-            if key in trust_rows:
+            if key in weight_rows:
                 continue  # row exists — leave operator's tuning alone
             source_lit = "'" + b.source.name.replace("'", "''") + "'"
             class_lit = "'" + cls.name.replace("'", "''") + "'"
             slot_lit = "'" + slot.name.replace("'", "''") + "'"
-            trust = b.trust_for(slot.name)
+            weight = b.weight_for(slot.name)
             ops.append(
                 MigrationOp(
-                    description=(f"seed_trust_{b.source.name}_{cls.name}_{slot.name}"),
+                    description=(f"seed_weight_{b.source.name}_{cls.name}_{slot.name}"),
                     sql=(
-                        f"INSERT INTO {schema}.{trust_table_name} "
-                        f"(source_name, class_name, slot_name, trust) "
-                        f"VALUES ({source_lit}, {class_lit}, {slot_lit}, {trust})\n"
+                        f"INSERT INTO {schema}.{weight_table_name} "
+                        f"(source_name, class_name, slot_name, weight) "
+                        f"VALUES ({source_lit}, {class_lit}, {slot_lit}, {weight})\n"
                         f"ON CONFLICT (source_name, class_name, slot_name) DO NOTHING;"
                     ),
-                    target="trust_seed",
+                    target="weight_seed",
                 )
             )
 
@@ -323,13 +323,13 @@ def _diff_drops(
     bindings_suffix: str,
     resolved_suffix: str,
     all_sources_suffix: str,
-    trust_table_name: str,
+    weight_table_name: str,
     renames: dict[str, dict[str, str]] | None = None,
 ) -> list[MigrationOp]:
     """Detect everything that's in the database but no longer matches
     the spec, and emit DROP / DELETE ops.
 
-    Ordering: FK constraints → views → indexes → trust rows → columns →
+    Ordering: FK constraints → views → indexes → weight rows → columns →
     tables. Within each tier, non-destructive ops first so a partial
     apply leaves the DB in a usable state.
     """
@@ -425,7 +425,7 @@ def _diff_drops(
                 )
             )
 
-    # 4. Unused trust rows (source/class/slot triples no longer in spec).
+    # 4. Unused weight rows (source/class/slot triples no longer in spec).
     expected_triples: set[tuple[str, str, str]] = set()
     for b in spec.source_bindings:
         cls = b.class_
@@ -434,21 +434,21 @@ def _diff_drops(
             if slot.name == ident_name:
                 continue
             expected_triples.add((b.source.name, cls.name, slot.name))
-    db_trust_rows = _existing_trust_rows(query, schema, trust_table_name)
-    for src, cls_name, slot_name in sorted(set(db_trust_rows) - expected_triples):
+    db_weight_rows = _existing_weight_rows(query, schema, weight_table_name)
+    for src, cls_name, slot_name in sorted(set(db_weight_rows) - expected_triples):
         s_lit = "'" + src.replace("'", "''") + "'"
         c_lit = "'" + cls_name.replace("'", "''") + "'"
         sl_lit = "'" + slot_name.replace("'", "''") + "'"
         ops.append(
             MigrationOp(
-                description=f"drop_trust_{src}_{cls_name}_{slot_name}",
+                description=f"drop_weight_{src}_{cls_name}_{slot_name}",
                 sql=(
-                    f"DELETE FROM {schema}.{trust_table_name} "
+                    f"DELETE FROM {schema}.{weight_table_name} "
                     f"WHERE source_name = {s_lit} "
                     f"AND class_name = {c_lit} "
                     f"AND slot_name = {sl_lit};"
                 ),
-                target="trust_seed",
+                target="weight_seed",
             )
         )
 
@@ -503,7 +503,7 @@ def _diff_drops(
 
     # 6. Unused tables (destructive). Classes no longer in spec take
     # their canonical + bindings tables with them.
-    expected_data_tables = expected_canonical | expected_bindings | {trust_table_name}
+    expected_data_tables = expected_canonical | expected_bindings | {weight_table_name}
     for table in sorted(db_tables - expected_data_tables):
         target = "bindings" if table.endswith(bindings_suffix) else "canonical"
         ops.append(

@@ -35,7 +35,7 @@ from knot.ast.expr import (
 from knot.ast.select import OrderBy, Query
 from knot.spec import (
     CORRECTIONS_SOURCE_NAME,
-    DEFAULT_TRUST,
+    DEFAULT_WEIGHT,
     ClassKind,
     Constraint,
     OntologyClass,

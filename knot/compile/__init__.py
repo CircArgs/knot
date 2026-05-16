@@ -30,7 +30,7 @@ from knot.compile.resolver import (
     emit_resolved_view,
     emit_resolved_views,
 )
-from knot.compile.trust import emit_trust_seed
+from knot.compile.weight import emit_weight_seed
 from knot.compile.write import (
     BatchWrite,
     ClassWrites,

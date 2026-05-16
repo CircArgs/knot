@@ -113,17 +113,18 @@ def _existing_fk_constraints(query: QueryFn, schema: str, table: str) -> set[str
     return {r[0] for r in rows}
 
 
-def _existing_trust_rows(
+def _existing_weight_rows(
     query: QueryFn,
     schema: str,
-    trust_table_name: str,
+    weight_table_name: str,
 ) -> dict[tuple[str, str, str], float]:
-    """Return ``{(source_name, class_name, slot_name): trust}`` from the
-    trust table, or empty dict if the table doesn't exist."""
-    if trust_table_name not in _existing_tables(query, schema):
+    """Return ``{(source_name, class_name, slot_name): weight}`` from the
+    weight table, or empty dict if the table doesn't exist."""
+    if weight_table_name not in _existing_tables(query, schema):
         return {}
     rows = query(
-        f"SELECT source_name, class_name, slot_name, trust FROM {schema}.{trust_table_name}",
+        f"SELECT source_name, class_name, slot_name, weight "
+        f"FROM {schema}.{weight_table_name}",
         (),
     )
     return {(r[0], r[1], r[2]): float(r[3]) for r in rows}

@@ -44,7 +44,7 @@ class MockDB:
         | None = None,  # (schema, table) → indexes
         fks: dict[tuple[str, str], set[str]]
         | None = None,  # (schema, table) → fk names
-        trust_rows: list[tuple[str, str, str, float]] | None = None,
+        weight_rows: list[tuple[str, str, str, float]] | None = None,
     ):
         self.schemas = schemas or set()
         self.tables = tables or {}
@@ -52,7 +52,7 @@ class MockDB:
         self.columns = columns or {}
         self.indexes = indexes or {}
         self.fks = fks or {}
-        self.trust_rows = trust_rows or []
+        self.weight_rows = weight_rows or []
 
     def __call__(self, sql: str, params: tuple[Any, ...]) -> list[tuple[Any, ...]]:
         sql_lc = sql.lower()
@@ -85,8 +85,8 @@ class MockDB:
         if "from information_schema.table_constraints" in sql_lc:
             schema, table = params
             return [(f,) for f in sorted(self.fks.get((schema, table), set()))]
-        if ".source_trust" in sql_lc and "select" in sql_lc:
-            return [(s, c, sl, t) for s, c, sl, t in self.trust_rows]
+        if ".source_weight" in sql_lc and "select" in sql_lc:
+            return [(s, c, sl, t) for s, c, sl, t in self.weight_rows]
         return []
 
 
@@ -96,7 +96,7 @@ def _basic_spec() -> Spec:
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
-    imdb.bind(movie).set_default_trust(0.85)
+    imdb.bind(movie).set_default_weight(0.85)
     return spec
 
 
@@ -110,13 +110,13 @@ def test_empty_db_emits_full_create_sequence():
     ops = diff_against_db(spec, MockDB())
     targets = [op.target for op in ops]
     assert "schema" in targets
-    assert "trust_table" in targets
+    assert "weight_table" in targets
     assert "canonical" in targets
     assert "bindings" in targets
     assert "index" in targets
     assert "resolved_view" in targets
     assert "all_sources_view" in targets
-    assert "trust_seed" in targets
+    assert "weight_seed" in targets
 
 
 def test_empty_db_op_ordering():
@@ -125,8 +125,8 @@ def test_empty_db_op_ordering():
     targets = [op.target for op in ops]
     # Schema must come first
     assert targets[0] == "schema"
-    # Trust table must come before canonical (resolver views depend on it)
-    assert targets.index("trust_table") < targets.index("canonical")
+    # Weight table must come before canonical (resolver views depend on it)
+    assert targets.index("weight_table") < targets.index("canonical")
     # Canonical before bindings
     assert targets.index("canonical") < targets.index("bindings")
     # Bindings before its indexes
@@ -170,7 +170,7 @@ def test_canonical_present_bindings_missing():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie"}},
+        tables={"knot_data": {"source_weight", "movie"}},
         columns={("knot_data", "movie"): {"canonical_id", "year"}},
     )
     ops = diff_against_db(spec, db)
@@ -191,7 +191,7 @@ def test_missing_column_emits_add_column():
     # canonical exists but only has canonical_id — `year` is missing
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id"},  # missing `year`
             ("knot_data", "movie_bindings"): {
@@ -218,7 +218,7 @@ def test_missing_raw_payload_column_in_bindings():
     # the migration should detect and ALTER ADD it.
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -238,18 +238,18 @@ def test_missing_raw_payload_column_in_bindings():
 
 
 # ---------------------------------------------------------------------------
-# Trust-seed diff
+# Weight-seed diff
 # ---------------------------------------------------------------------------
 
 
-def test_trust_row_already_exists_no_seed():
+def test_weight_row_already_exists_no_seed():
     """INSERT-only semantics: if a (source, class, slot) row already
-    exists in source_trust, the migration must NOT clobber it — the
+    exists in source_weight, the migration must NOT clobber it — the
     operator's runtime tuning is authoritative."""
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -270,21 +270,21 @@ def test_trust_row_already_exists_no_seed():
         },
         # DB already has the (imdb, Movie, year) row — even if at a
         # different value, the migration must leave it alone.
-        trust_rows=[("imdb", "Movie", "year", 0.7)],
+        weight_rows=[("imdb", "Movie", "year", 0.7)],
     )
     ops = diff_against_db(spec, db)
-    trust_ops = [op for op in ops if op.target == "trust_seed"]
-    assert trust_ops == []
+    weight_ops = [op for op in ops if op.target == "weight_seed"]
+    assert weight_ops == []
 
 
-def test_trust_row_missing_emits_insert():
+def test_weight_row_missing_emits_insert():
     """When a (source, class, slot) row doesn't yet exist, the
     migration emits an INSERT ... ON CONFLICT DO NOTHING with the
     spec's value."""
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -303,14 +303,14 @@ def test_trust_row_missing_emits_insert():
                 "movie_bindings_source_idx",
             }
         },
-        trust_rows=[],  # nothing seeded yet
+        weight_rows=[],  # nothing seeded yet
     )
     ops = diff_against_db(spec, db)
-    trust_ops = [op for op in ops if op.target == "trust_seed"]
-    assert len(trust_ops) == 1
-    assert "0.85" in trust_ops[0].sql
-    assert "ON CONFLICT" in trust_ops[0].sql
-    assert "DO NOTHING" in trust_ops[0].sql
+    weight_ops = [op for op in ops if op.target == "weight_seed"]
+    assert len(weight_ops) == 1
+    assert "0.85" in weight_ops[0].sql
+    assert "ON CONFLICT" in weight_ops[0].sql
+    assert "DO NOTHING" in weight_ops[0].sql
 
 
 # ---------------------------------------------------------------------------
@@ -327,7 +327,7 @@ def test_resolved_view_always_dropped_and_replaced():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         views={"knot_data": {"movie_resolved"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
@@ -347,7 +347,7 @@ def test_resolved_view_always_dropped_and_replaced():
                 "movie_bindings_source_idx",
             }
         },
-        trust_rows=[("imdb", "Movie", "year", 0.85)],
+        weight_rows=[("imdb", "Movie", "year", 0.85)],
     )
     ops = diff_against_db(spec, db)
     view_ops = [op for op in ops if op.target == "resolved_view"]
@@ -366,7 +366,7 @@ def test_all_sources_view_always_dropped_and_replaced():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         views={"knot_data": {"movie_resolved", "movie_all_sources"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
@@ -386,7 +386,7 @@ def test_all_sources_view_always_dropped_and_replaced():
                 "movie_bindings_source_idx",
             }
         },
-        trust_rows=[("imdb", "Movie", "year", 0.85)],
+        weight_rows=[("imdb", "Movie", "year", 0.85)],
     )
     ops = diff_against_db(spec, db)
     view_ops = [op for op in ops if op.target == "all_sources_view"]
@@ -407,7 +407,7 @@ def test_missing_index_on_existing_bindings():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -460,7 +460,7 @@ def test_migration_op_carries_target_and_description():
         assert op.sql
         assert op.target in {
             "schema",
-            "trust_table",
+            "weight_table",
             "canonical",
             "bindings",
             "index",
@@ -468,7 +468,7 @@ def test_migration_op_carries_target_and_description():
             "resolved_view",
             "all_sources_view",
             "virtual_view",
-            "trust_seed",
+            "weight_seed",
         }
 
 
@@ -491,7 +491,7 @@ def test_extra_table_in_db_emits_drop_when_allowed():
         schemas={"knot_data"},
         tables={
             "knot_data": {
-                "source_trust",
+                "source_weight",
                 "movie",
                 "movie_bindings",
                 "show",
@@ -513,7 +513,7 @@ def test_extra_table_filtered_out_when_destructive_disabled():
     spec = _spec_with_movie_only()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings", "show"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings", "show"}},
     )
     ops = diff_against_db(spec, db, allow_destructive=False)
     assert not any(op.description.startswith("drop_table_") for op in ops)
@@ -523,7 +523,7 @@ def test_extra_column_emits_drop_when_allowed():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year", "deprecated_col"},
             ("knot_data", "movie_bindings"): {
@@ -561,7 +561,7 @@ def test_bindings_framework_columns_never_dropped():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -593,7 +593,7 @@ def test_extra_view_drop_is_not_destructive():
     spec = _spec_with_movie_only()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         views={"knot_data": {"movie_resolved", "show_resolved", "old_virtual"}},
     )
     ops = diff_against_db(spec, db, allow_destructive=False)
@@ -610,7 +610,7 @@ def test_extra_fk_drop_is_not_destructive():
     spec = _spec_with_movie_only()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id"},
             ("knot_data", "movie_bindings"): {
@@ -636,7 +636,7 @@ def test_extra_index_drop_is_not_destructive_and_preserves_pkey():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -667,12 +667,12 @@ def test_extra_index_drop_is_not_destructive_and_preserves_pkey():
         assert op.destructive is False
 
 
-def test_extra_trust_row_emits_delete():
+def test_extra_weight_row_emits_delete():
     spec = _basic_spec()
-    # DB has trust rows for sources not in the spec.
+    # DB has weight rows for sources not in the spec.
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "year"},
             ("knot_data", "movie_bindings"): {
@@ -691,17 +691,17 @@ def test_extra_trust_row_emits_delete():
                 "movie_bindings_source_idx",
             }
         },
-        trust_rows=[
+        weight_rows=[
             ("imdb", "Movie", "year", 0.85),  # in spec → keep
             ("rottentomatoes", "Movie", "year", 0.6),  # not in spec → drop
         ],
     )
     ops = diff_against_db(spec, db, allow_destructive=False)
-    drop_trust = [op for op in ops if op.description.startswith("drop_trust_")]
-    assert len(drop_trust) == 1
-    assert "rottentomatoes" in drop_trust[0].sql
-    assert "DELETE FROM" in drop_trust[0].sql
-    assert drop_trust[0].destructive is False
+    drop_weight = [op for op in ops if op.description.startswith("drop_weight_")]
+    assert len(drop_weight) == 1
+    assert "rottentomatoes" in drop_weight[0].sql
+    assert "DELETE FROM" in drop_weight[0].sql
+    assert drop_weight[0].destructive is False
 
 
 def test_drops_precede_adds():
@@ -710,7 +710,7 @@ def test_drops_precede_adds():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings", "ghost"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings", "ghost"}},
         views={"knot_data": {"ghost_resolved"}},
         columns={
             ("knot_data", "movie"): {"canonical_id"},  # missing `year`
@@ -743,7 +743,7 @@ def test_drop_all_sql_parses_postgres():
     spec = _spec_with_movie_only()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings", "show"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings", "show"}},
         views={"knot_data": {"show_resolved"}},
         columns={
             ("knot_data", "movie"): {"canonical_id", "stale_col"},
@@ -752,7 +752,7 @@ def test_drop_all_sql_parses_postgres():
             ("knot_data", "movie_bindings"): {"old_idx", "movie_bindings_pkey"},
         },
         fks={("knot_data", "movie"): {"fk_movie_nobody"}},
-        trust_rows=[("orphan", "Movie", "year", 0.5)],
+        weight_rows=[("orphan", "Movie", "year", 0.5)],
     )
     for op in diff_against_db(spec, db, allow_destructive=True):
         sqlglot.parse_one(op.sql, dialect="postgres")
@@ -767,7 +767,7 @@ def test_type_mismatch_emits_alter_column_type():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             # DB has `year` as text; spec says integer.
             ("knot_data", "movie"): {
@@ -797,7 +797,7 @@ def test_type_mismatch_filtered_out_when_destructive_disabled():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -822,7 +822,7 @@ def test_nullable_to_not_null_is_destructive():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             # canonical_id is nullable in DB but spec says identifier (NOT NULL)
             ("knot_data", "movie"): {
@@ -855,7 +855,7 @@ def test_not_null_to_nullable_is_safe():
     movie.slot("year", types.INTEGER)  # not required → nullable
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -890,7 +890,7 @@ def test_array_type_matches_when_canonicalized():
     movie.slot("genres", types.ARRAY(types.TEXT))
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -921,7 +921,7 @@ def test_timestamptz_normalization():
     movie.slot("released_at", types.TIMESTAMP)
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -952,7 +952,7 @@ def test_rename_emits_alter_table_rename_column_on_both_tables():
     # DB has `yr` from a prior version; spec calls it `year`.
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -988,7 +988,7 @@ def test_rename_runs_before_drops_and_adds():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -1027,7 +1027,7 @@ def test_rename_suppresses_drop_and_add():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),
@@ -1061,7 +1061,7 @@ def test_rename_skipped_when_old_column_missing():
     spec = _basic_spec()
     db = MockDB(
         schemas={"knot_data"},
-        tables={"knot_data": {"source_trust", "movie", "movie_bindings"}},
+        tables={"knot_data": {"source_weight", "movie", "movie_bindings"}},
         columns={
             ("knot_data", "movie"): {
                 "canonical_id": ("text", False),

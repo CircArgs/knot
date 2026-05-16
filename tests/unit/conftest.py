@@ -43,7 +43,7 @@ def movie_spec() -> Spec:
 
     imdb = spec.add_source("imdb")
     binding = imdb.bind(movie)
-    binding.set_default_trust(0.85)
+    binding.set_default_weight(0.85)
     binding.slot(class_slot="year", source_slot="release_year")
     binding.slot(
         class_slot="runtime_minutes",

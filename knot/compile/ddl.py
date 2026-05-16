@@ -39,14 +39,14 @@ def emit_ddl(
     bindings_suffix: str = "_bindings",
     resolved_suffix: str = "_resolved",
     all_sources_suffix: str = "_all_sources",
-    trust_table_name: str = "source_trust",
+    weight_table_name: str = "source_weight",
     if_not_exists: bool = False,
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
     emit_all_sources_views: bool = True,
     emit_fk_references: bool = True,
     emit_indexes: bool = True,
-    emit_trust_table: bool = True,
+    emit_weight_table: bool = True,
     emit_descriptions: bool = False,
 ) -> list[str]:
     """Return the DDL statements that materialize ``spec``.
@@ -90,12 +90,12 @@ def emit_ddl(
         When True, emit partial indexes on each ``<class>_bindings``
         table that match the resolver's per-slot lookup and the SCD2
         close-out hot paths (both filter on ``valid_to IS NULL``).
-    emit_trust_table
-        When True, emit the invariant ``<schema>.<trust_table_name>``
-        (default ``source_trust``) that carries the runtime per-(source,
-        class, slot) trust. The resolver views ``LEFT JOIN`` against
-        this table; seed its rows from the spec via
-        ``knot.compile.trust.emit_trust_seed``.
+    emit_weight_table
+        When True, emit the invariant ``<schema>.<weight_table_name>``
+        (default ``source_weight``) that carries the runtime
+        per-(source, class, slot) weight. The resolver views
+        ``LEFT JOIN`` against this table; seed its rows from the spec
+        via ``knot.compile.weight.emit_weight_seed``.
     emit_descriptions
         When True, follow each entity with ``COMMENT ON TABLE / COLUMN /
         VIEW`` for any non-empty ``description`` fields.
@@ -106,13 +106,13 @@ def emit_ddl(
 
     stmts: list[str] = [f"CREATE SCHEMA IF NOT EXISTS {schema};"]
 
-    # Invariant trust-policy table — must exist before any resolved
+    # Invariant weight-policy table — must exist before any resolved
     # view that LEFT JOINs against it.
-    if emit_trust_table:
+    if emit_weight_table:
         stmts.append(
-            _emit_trust_table(
+            _emit_weight_table(
                 schema=schema,
-                trust_table_name=trust_table_name,
+                weight_table_name=weight_table_name,
                 if_not_exists=if_not_exists,
             )
         )
@@ -152,12 +152,12 @@ def emit_ddl(
                             schema=schema,
                             bindings_suffix=bindings_suffix,
                             resolved_suffix=resolved_suffix,
-                            trust_table_name=trust_table_name,
+                            weight_table_name=weight_table_name,
                             if_not_exists=if_not_exists,
                         )
                     )
                 if emit_all_sources_views and emit_bindings:
-                    # Provenance view — same bindings + trust dependency.
+                    # Provenance view — same bindings + weight dependency.
                     stmts.append(
                         emit_all_sources_view(
                             spec,
@@ -165,7 +165,7 @@ def emit_ddl(
                             schema=schema,
                             bindings_suffix=bindings_suffix,
                             all_sources_suffix=all_sources_suffix,
-                            trust_table_name=trust_table_name,
+                            weight_table_name=weight_table_name,
                             if_not_exists=if_not_exists,
                         )
                     )
@@ -417,27 +417,28 @@ def _emit_bindings_indexes(
 
 
 # ---------------------------------------------------------------------------
-# Trust-policy table — runtime tuning surface for source accuracies
+# Weight-policy table — runtime tuning surface for source/slot weights
 # ---------------------------------------------------------------------------
 
 
-def _emit_trust_table(
+def _emit_weight_table(
     *,
     schema: str,
-    trust_table_name: str,
+    weight_table_name: str,
     if_not_exists: bool,
 ) -> str:
     """Invariant table carrying the runtime per-(source, class, slot)
-    trust. The resolver views ``LEFT JOIN`` against this table; operators
-    tune trust with plain ``UPDATE`` statements without redeploying."""
+    weight. The resolver views ``LEFT JOIN`` against this table;
+    operators tune weights with plain ``UPDATE`` statements without
+    redeploying. Weight values are opaque floats — knot does not
+    constrain or interpret them; the higher value wins the argmax."""
     ct = "CREATE TABLE IF NOT EXISTS" if if_not_exists else "CREATE TABLE"
     return (
-        f"{ct} {schema}.{trust_table_name} (\n"
+        f"{ct} {schema}.{weight_table_name} (\n"
         "    source_name text NOT NULL,\n"
         "    class_name  text NOT NULL,\n"
         "    slot_name   text NOT NULL,\n"
-        "    trust       double precision NOT NULL\n"
-        "                CHECK (trust >= 0 AND trust <= 1),\n"
+        "    weight      double precision NOT NULL,\n"
         "    PRIMARY KEY (source_name, class_name, slot_name)\n"
         ");"
     )
