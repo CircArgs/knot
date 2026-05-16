@@ -87,6 +87,16 @@ class Query:
         """Set the projection. ``None`` (the default) means ``SELECT *``."""
         return replace(self, projection=tuple(refs))
 
+    def from_source(self, source: Any) -> Query:
+        """Filter to one source. Adds ``WHERE source_name = '<name>'``
+        to the query — only meaningful against the bindings or
+        all_sources layer (the resolved view has no source_name
+        column; the filter compiles but matches nothing)."""
+        from knot.ast.expr import Raw
+
+        src_name = source.name.replace("'", "''")
+        return self.where(Raw(f"source_name = '{src_name}'"))
+
     # ------------------------------------------------------------------
     # Compile entry point — methods on the entity they're about. The
     # Spec back-reference lets the host call ``q.sql(...)`` directly.

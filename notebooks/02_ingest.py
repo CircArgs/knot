@@ -35,13 +35,13 @@ def _():
 @app.cell
 def _():
     # Same shared spec as 01_deploy — imports the spec, the Movie class,
-    # and the imdb→Movie binding from ``movies_spec.py``. Real deployments
-    # share this exact import pattern: workers, the service API, the ER
-    # pipeline all import from the same spec module.
-    from movies_spec import imdb_movie_b, movie, spec
+    # the imdb Source, and the imdb→Movie binding from ``movies_spec.py``.
+    # Real deployments share this exact import pattern: workers, the
+    # service API, the ER pipeline all import from the same spec module.
+    from movies_spec import imdb, imdb_movie_b, movie, spec
 
     imdb_movie_b
-    return imdb_movie_b, movie, spec
+    return imdb, imdb_movie_b, movie, spec
 
 
 @app.cell
@@ -110,14 +110,16 @@ def _(close_out, insert, json, pg, rows):
 
 
 @app.cell
-def _(movie, pg, schema):
-    # Verify via ``movie.bindings`` — a knot Query already pointed
-    # at the bindings layer. The resolved view (the default Query
-    # target) filters out rows where canonical_id IS NULL, which is
-    # everything we just wrote. ``cls.bindings`` reads the raw
-    # claims directly.
+def _(imdb, movie, pg, schema):
+    # Verify via ``movie.bindings.from_source(imdb)``:
+    #   - ``movie.bindings`` repoints the Query at the raw bindings
+    #     layer (the resolved view filters NULL canonical_id, which
+    #     is everything we just wrote — ER hasn't run yet).
+    #   - ``.from_source(imdb)`` adds ``WHERE source_name = 'imdb'``,
+    #     scoping to this one source's claims.
     q = (
-        movie.bindings.order_by(movie.col.year, "desc")
+        movie.bindings.from_source(imdb)
+        .order_by(movie.col.year, "desc")
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
