@@ -23,7 +23,7 @@ def test_message_null_when_unset(movie_spec):
 
 
 def test_message_literal_when_set():
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     movie.add_constraint(
@@ -36,7 +36,7 @@ def test_message_literal_when_set():
 
 
 def test_apostrophe_in_message_escaped():
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     movie.add_constraint(
@@ -57,7 +57,7 @@ def test_bare_column_unchanged(movie_spec):
 
 
 def test_class_ref_renders_qualified():
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("role", types.TEXT, required=True)
@@ -84,7 +84,7 @@ def test_class_ref_renders_qualified():
 
 
 def test_has_count_in_predicate():
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("movie", movie)
@@ -99,7 +99,7 @@ def test_has_count_in_predicate():
 
 
 def test_boolean_composition():
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     movie.slot("runtime", types.INTEGER)
@@ -121,6 +121,6 @@ def test_emit_validation_union_for_non_empty_spec(movie_spec):
 
 
 def test_emit_validation_union_empty_spec():
-    spec = Spec(id="e", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     assert emit_validation_union(spec) is None

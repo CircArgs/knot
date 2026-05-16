@@ -38,7 +38,7 @@ def _deploy(pg, spec: Spec, schema: str) -> None:
 
 def _movies_only_spec() -> Spec:
     """Single class Movie with year + runtime, IMDB + TMDB sources."""
-    spec = Spec(id="movies", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
@@ -755,7 +755,7 @@ def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
     )
 
     # Evolve: rename runtime_minutes → length_min.
-    spec2 = Spec(id="movies", version="0.2", identifier_slot_name="canonical_id")
+    spec2 = Spec(identifier_slot_name="canonical_id")
     movie = spec2.add_class("Movie")
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
@@ -789,7 +789,7 @@ def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
     _deploy(pg, spec, schema)
 
     # Drop `runtime_minutes` from the spec.
-    spec2 = Spec(id="movies", version="0.2", identifier_slot_name="canonical_id")
+    spec2 = Spec(identifier_slot_name="canonical_id")
     movie = spec2.add_class("Movie")
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)

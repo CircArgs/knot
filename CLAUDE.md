@@ -431,6 +431,34 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
 - Don't reintroduce 0..1 / probability constraints on weights, or
   rename them back to "trust". Weights are opaque floats by design;
   calibration is an external concern.
+- Don't add label-only fields to entities. ``Spec.id`` and
+  ``Spec.version`` were dropped because they never reached the
+  compile path — purely documentation. If a team wants to label
+  the spec, that lives in the codebase (filename, module name,
+  repo), not on the dataclass.
+
+## Smell audit — patterns we've eliminated
+
+Catalog of design smells that earlier versions of knot carried and
+that we deleted. Use these as patterns to watch for going forward;
+the closing question for any new addition should be "does this fit
+the same shape as anything below?"
+
+| smell | what it was | why it was bad | how to spot it |
+|---|---|---|---|
+| **God-Spec methods** | ``spec.assign_canonical``, ``spec.compile_query``, ``spec.add_constraint(primary=cls, …)`` | The method talked about an entity (binding, query, class) but lived on ``Spec`` — required passing the entity in as an arg, redundant with ``self`` | Method takes an entity kwarg that pins which entity it's about. Move to that entity. |
+| **Runtime data in the compile API** | ``binding.write(rows)`` json.dumps-ed rows inside knot; ``emit_assign_canonical(canonical_id=…)`` packaged values into params dict | knot is a SQL compiler. Rows / IDs / metadata are runtime data the host's connector binds. Mixing them blurs the line and forces knot to own serialization. | Compile function takes runtime values as args. Hand back SQL templates with named placeholders; let the host bind. |
+| **Wrapper dataclasses with no behavior** | ``ClassWrites(binding=…, rows=…)``, ``BatchWrite(statements=…)`` | Container with no methods, just transport. Adds API surface (import, construct, unpack) for no payoff. | A dataclass whose sole job is to pass two adjacent fields to another function. Use a tuple, dict, or pass them directly. |
+| **Bundled policy in the SQL** | ``enforce=True`` appended a PL/pgSQL DO block to the write SQL; ``json.dumps`` inside ``assign_canonical`` | Library hardcoded one policy ("any violation → rollback"); host couldn't pick "delta-only" or "scheduled sweep" without bypassing the API. | An emitter takes a policy-shaped kwarg (``enforce``, ``strict``, ``on_conflict``). Split into primitives; let the host compose. |
+| **Label-only fields** | ``Spec.id``, ``Spec.version`` | Never embedded in SQL, never structural. Just typing overhead at construction. | A required field that's never read by ``compile/*``. Drop it. |
+| **Defaulted opinions** | trust as float in [0, 1] with CHECK constraint; ``schema="knot_data"`` default; ``base_trust=0.67`` | Hid a calibration / probability / naming opinion that didn't earn its keep. | A default that's "the conventional thing for this domain" rather than "the simplest thing that compiles". Make it required, or drop the value entirely (rename to be opaque). |
+| **Per-entity redeclaration of universal facts** | ``cls.slot("canonical_id", types.TEXT, identifier=True)`` on every class | Same line, every class, every spec. Identifier slot is a spec-level convention; per-class declaration is noise. | A line that gets copy-pasted across N entities. Promote to a spec-level field, apply automatically. |
+| **Spec versioning by duplication** | notebook's ``spec_v1`` / ``spec_v2`` / ``spec_v3`` rebuilt the whole spec for each "version" | Hides the actual migration story (mutate one spec, ``init_sql`` diffs against live DB). Fake versioning. | Multiple spec objects with overlapping definitions. Mutate one spec in place; expose a stage marker for marimo-style cell deps. |
+| **Strings where objects exist** | ``emit_assign_canonical(source_name="imdb", class_name="Movie")`` | The user has the ``Source`` / ``OntologyClass`` objects in scope. Strings force a name-lookup the library has to do internally. | A kwarg that takes a string when the corresponding object is in the user's scope. Take the object. |
+| **Spec-level operations that span all entities** | ``spec.emit_batch_write([ClassWrites…])`` taking a list when each binding could just expose its own ``.write_sql()`` | The "do this for many entities" function bundles what should be N independent operations. Host can compose them via the language (loops, transactions) without a library helper. | A spec method that loops over entities calling the same per-entity emitter. Move the work onto each entity; let the host iterate. |
+
+When adding a new API surface, run through this list. If the new
+shape matches any row, propose the alternative before committing.
 
 ## Auto-memory
 

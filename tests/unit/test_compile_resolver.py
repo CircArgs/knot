@@ -42,7 +42,7 @@ def test_resolved_view_left_joins_weight_table(movie_spec):
 def test_resolved_view_no_inline_case_when():
     """The pre-weight-table inline CASE WHEN shape is gone — refactor
     moved score values into source_weight at runtime."""
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
@@ -107,7 +107,7 @@ def test_resolved_view_kwargs_threading(movie_spec):
 
 
 def test_resolved_view_rejects_abstract_class():
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     title = spec.add_class("Title", kind="abstract")
     with pytest.raises(ValueError, match="concrete classes"):
         emit_resolved_view(spec, title)
@@ -117,7 +117,7 @@ def test_resolved_view_unbound_sources_fall_to_zero_via_coalesce():
     # Sources not present in source_weight LEFT JOIN to NULL; the
     # COALESCE collapses them to 0 and the tie-break loses against any
     # source that DOES have a row.
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     v = emit_resolved_view(spec, movie)
@@ -221,7 +221,7 @@ def test_all_sources_view_kwargs_threading(movie_spec):
 def test_all_sources_view_rejects_abstract_class():
     from knot.compile import emit_all_sources_view
 
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     title = spec.add_class("Title", kind="abstract")
     with pytest.raises(ValueError, match="concrete classes"):
         emit_all_sources_view(spec, title)

@@ -840,17 +840,19 @@ class Spec:
     The identifier slot is spec-level, not per-class: ``add_class()``
     auto-adds a slot named ``identifier_slot_name`` of
     ``identifier_type`` to every concrete class (and to abstract
-    classes that don't inherit one). Both kwargs are required — knot
-    won't pick a name for you. ``identifier_type`` defaults to
-    ``types.TEXT`` since string keys are nearly universal; pass
-    ``types.INTEGER`` or another primitive when needed.
+    classes that don't inherit one). ``identifier_slot_name`` is
+    required — knot won't pick a name for you. ``identifier_type``
+    defaults to ``types.TEXT`` since string keys are nearly universal;
+    pass ``types.INTEGER`` or another primitive when needed.
 
-    No per-class override. If a class genuinely needs a different
-    identifier shape, that's outside knot's single-team posture.
+    No per-class identifier override — if a class genuinely needs a
+    different identifier shape, that's outside knot's single-team
+    posture. No spec-level ``id`` or ``version`` either: the deploy
+    schema (``init_sql(schema=…)``) is the only structural name knot
+    cares about. If you want to label the spec for your team, do it
+    in the codebase (filename, module name, repo).
     """
 
-    id: str
-    version: str
     identifier_slot_name: str  # required — no default; e.g. "canonical_id"
     classes: list[OntologyClass | VirtualClass] = field(default_factory=list)
     sources: list[Source] = field(default_factory=list)
@@ -862,10 +864,7 @@ class Spec:
     identifier_type: Any = None
 
     def __post_init__(self) -> None:
-        _check_name("Spec.id", self.id)
         _check_name("Spec.identifier_slot_name", self.identifier_slot_name)
-        if not isinstance(self.version, str) or not self.version.strip():
-            raise ValueError("Spec.version must be a non-empty string")
         if self.identifier_type is None:
             from knot.ast.types import Primitive
 

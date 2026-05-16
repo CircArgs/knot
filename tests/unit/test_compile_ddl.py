@@ -118,7 +118,7 @@ def test_fk_alters_use_target_identifier_slot_name():
     # Spec-level override of the identifier slot name. Every class
     # gets `imdb_id` as its identifier; the FK references the
     # target's identifier column.
-    spec = Spec(id="m", version="0.1", identifier_slot_name="imdb_id")
+    spec = Spec(identifier_slot_name="imdb_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("movie", movie)
@@ -157,7 +157,7 @@ def test_fk_alters_not_emitted_for_bindings_table(movie_spec):
 
 def test_fk_alters_only_for_concrete_classes():
     # Abstract classes don't get a canonical table → no ALTER TABLE.
-    spec = Spec(id="m", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
     title = spec.add_class("Title", kind="abstract")
     spec.add_class("Movie", is_a=title)
     other = spec.add_class("Other")

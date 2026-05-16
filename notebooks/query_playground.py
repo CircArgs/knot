@@ -94,7 +94,7 @@ def _(mo):
 def _():
     from knot import Spec, types
 
-    spec = Spec(id="movies_play", version="0.1", identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id")
 
     person = spec.add_class("Person")
     person.slot("name", types.TEXT, required=True)
