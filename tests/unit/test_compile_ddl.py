@@ -2,7 +2,7 @@
 
 import sqlglot
 
-from knot import Spec, types
+from knot import Spec
 from knot.compile import emit_ddl
 
 
@@ -115,11 +115,12 @@ def test_fk_alters_emitted_for_classref_slots(movie_spec):
 
 
 def test_fk_alters_use_target_identifier_slot_name():
-    spec = Spec(id="m", version="0.1")
+    # Spec-level override of the identifier slot name. Every class
+    # gets `imdb_id` as its identifier; the FK references the
+    # target's identifier column.
+    spec = Spec(id="m", version="0.1", identifier_slot_name="imdb_id")
     movie = spec.add_class("Movie")
-    movie.slot("imdb_id", types.TEXT, identifier=True)  # non-default identifier name
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("movie", movie)
     stmts = emit_ddl(spec)
     fk = next(s for s in stmts if s.startswith("ALTER TABLE knot_data.credit"))
@@ -158,10 +159,8 @@ def test_fk_alters_only_for_concrete_classes():
     # Abstract classes don't get a canonical table → no ALTER TABLE.
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", types.TEXT, identifier=True)
     spec.add_class("Movie", is_a=title)
     other = spec.add_class("Other")
-    other.slot("canonical_id", types.TEXT, identifier=True)
     other.slot("title", title)  # FK to abstract — questionable but allowed
     stmts = emit_ddl(spec)
     # No FK alter should reference an abstract class's nonexistent table.

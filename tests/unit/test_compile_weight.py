@@ -71,7 +71,6 @@ def test_seed_uses_default_weight_for_unmapped_slots(movie_spec):
 def test_seed_multi_source_one_class():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
@@ -103,7 +102,6 @@ def test_explicit_per_slot_weight_overrides_default():
     for that one slot at seed time."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     movie.slot("title", types.TEXT)
     imdb = spec.add_source("imdb")
@@ -121,7 +119,6 @@ def test_weight_can_exceed_one():
     weight=1000 (or negative, or float-min) is fine."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     binding = imdb.bind(movie).set_default_weight(1000.0)

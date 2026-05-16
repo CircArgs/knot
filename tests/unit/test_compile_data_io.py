@@ -109,7 +109,6 @@ def test_schema_and_suffix_kwargs(movie_spec):
 def test_source_name_apostrophe_escaped():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("o_brien")
     src.name = "o'brien"  # simulate an apostrophe
     b = src.bind(movie)
@@ -126,7 +125,6 @@ def test_source_name_apostrophe_escaped():
 def test_abstract_class_rejected():
     spec = Spec(id="m", version="0.1")
     abstract = spec.add_class("A", kind="abstract")
-    abstract.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("s")
     b = SourceBinding(source=src, class_=abstract)
     spec.source_bindings.append(b)
@@ -166,7 +164,6 @@ def test_write_emits_no_do_block_regardless_of_constraints(movie_spec):
 def test_severity_warning_does_not_affect_write_sql():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     movie.add_constraint(
         "warn_only",

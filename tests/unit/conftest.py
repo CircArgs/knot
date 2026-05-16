@@ -16,7 +16,6 @@ def movie_spec() -> Spec:
     spec = Spec(id="movies", version="0.1")
 
     title = spec.add_class("Title", kind="abstract", description="title hierarchy root")
-    title.slot("canonical_id", types.TEXT, identifier=True)
     title.slot("name", types.TEXT, required=True)
 
     movie = spec.add_class("Movie", is_a=title, description="a film")
@@ -25,11 +24,9 @@ def movie_spec() -> Spec:
     movie.slot("genres", types.ARRAY(types.TEXT))
 
     person = spec.add_class("Person")
-    person.slot("canonical_id", types.TEXT, identifier=True)
     person.slot("name", types.TEXT, required=True)
 
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
     credit.slot("movie", movie)
     credit.slot("person", person)

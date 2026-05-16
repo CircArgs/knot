@@ -97,13 +97,11 @@ def _():
     spec = Spec(id="movies_play", version="0.1")
 
     person = spec.add_class("Person")
-    person.slot("canonical_id", types.TEXT, identifier=True)
     person.slot("name", types.TEXT, required=True)
     person.slot("birth_country", types.TEXT)
     person.slot("birth_year", types.INTEGER)
 
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("title", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
     movie.slot("runtime_minutes", types.INTEGER)
@@ -436,7 +434,6 @@ def _(movie, person, spec_at_stage2, types):
     credit = spec_at_stage2.add_class(
         "Credit", description="A person's role on a movie."
     )
-    credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
     credit.slot("movie", movie)
     credit.slot("person", person)

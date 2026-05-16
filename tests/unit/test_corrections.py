@@ -16,10 +16,8 @@ from knot.compile import (
 
 def test_enable_corrections_registers_source_and_per_class_bindings():
     spec = Spec(id="m", version="0.1")
-    movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
-    person = spec.add_class("Person")
-    person.slot("canonical_id", types.TEXT, identifier=True)
+    spec.add_class("Movie")
+    spec.add_class("Person")
 
     src = spec.enable_corrections(default_weight=0.99)
     assert src.name == CORRECTIONS_SOURCE_NAME
@@ -31,7 +29,6 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
 def test_enable_corrections_skips_abstract_and_virtual_classes():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", types.TEXT, identifier=True)
     movie = spec.add_class("Movie", is_a=title)
     movie.add_virtual("DirectedMovie", where=movie.col.canonical_id.is_not_null())
 
@@ -44,8 +41,7 @@ def test_enable_corrections_skips_abstract_and_virtual_classes():
 
 def test_enable_corrections_is_idempotent():
     spec = Spec(id="m", version="0.1")
-    movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
+    spec.add_class("Movie")
     src1 = spec.enable_corrections()
     src2 = spec.enable_corrections()
     assert src1 is src2  # second call returns the same Source
@@ -68,7 +64,6 @@ def test_corrections_default_weight_dominates():
     resolver's argmax against any declared source."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections()
     b = movie.corrections_binding()
     assert b.default_weight == 1e6
@@ -77,7 +72,6 @@ def test_corrections_default_weight_dominates():
 def test_corrections_custom_default_weight():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections(default_weight=12.5)
     b = movie.corrections_binding()
     assert b.default_weight == 12.5
@@ -86,7 +80,6 @@ def test_corrections_custom_default_weight():
 def test_corrections_binding_raises_when_disabled():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(KeyError, match="enable_corrections"):
         movie.corrections_binding()
 
@@ -99,7 +92,6 @@ def test_corrections_binding_raises_when_disabled():
 def test_close_out_sql_targets_correct_table_and_source():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     spec.enable_corrections()
     b = movie.corrections_binding()
     sql = emit_close_out_sql(b)
@@ -114,16 +106,15 @@ def test_close_out_sql_targets_correct_table_and_source():
 def test_close_out_sql_parses_postgres():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("imdb")
     b = src.bind(movie)
     sqlglot.parse_one(emit_close_out_sql(b), dialect="postgres")
 
 
 def test_close_out_sql_uses_class_identifier_column_name():
-    spec = Spec(id="m", version="0.1")
+    # Spec-level override of identifier name.
+    spec = Spec(id="m", version="0.1", identifier_slot_name="imdb_id")
     movie = spec.add_class("Movie")
-    movie.slot("imdb_id", types.TEXT, identifier=True)  # non-default ident
     src = spec.add_source("imdb")
     b = src.bind(movie)
     sql = emit_close_out_sql(b)
@@ -135,7 +126,6 @@ def test_close_out_sql_uses_class_identifier_column_name():
 def test_close_out_sql_escapes_apostrophe_in_source_name():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("o_brien")
     src.name = "o'brien"  # simulate apostrophe
     b = src.bind(movie)
@@ -146,7 +136,6 @@ def test_close_out_sql_escapes_apostrophe_in_source_name():
 def test_close_out_sql_rejects_abstract_class():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("imdb")
     # Construct an abstract binding directly (the builder forbids it).
     b = SourceBinding(source=src, class_=title)
@@ -158,7 +147,6 @@ def test_close_out_sql_rejects_abstract_class():
 def test_close_out_sql_via_binding_method_matches_free_function():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     src = spec.add_source("imdb")
     b = src.bind(movie)
     assert b.close_out_sql() == emit_close_out_sql(b)
@@ -172,7 +160,6 @@ def test_close_out_sql_via_binding_method_matches_free_function():
 def test_corrections_write_uses_same_scd2_machinery():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     spec.enable_corrections()
     b = movie.corrections_binding()
@@ -187,7 +174,6 @@ def test_corrections_write_uses_same_scd2_machinery():
 def test_corrections_appear_in_weight_seed():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     spec.enable_corrections(default_weight=0.95)
     seeds = emit_weight_seed(spec)

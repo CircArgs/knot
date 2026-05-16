@@ -835,7 +835,16 @@ class SourceBinding:
 
 @dataclass(slots=True)
 class Spec:
-    """Ontology declaration root."""
+    """Ontology declaration root.
+
+    The identifier-slot convention is spec-level, not per-class: every
+    new class gets ``identifier_slot_name`` of ``identifier_type``
+    automatically via ``add_class()``. The defaults are
+    ``canonical_id`` / ``types.TEXT``; override at construction if a
+    spec genuinely needs a different convention. No per-class
+    override — if some class needs a different identifier, that's
+    outside knot's single-team posture.
+    """
 
     id: str
     version: str
@@ -843,11 +852,21 @@ class Spec:
     sources: list[Source] = field(default_factory=list)
     source_bindings: list[SourceBinding] = field(default_factory=list)
     constraints: list[Constraint] = field(default_factory=list)
+    identifier_slot_name: str = "canonical_id"
+    # ``None`` defaults to ``types.TEXT`` in __post_init__ (module-import
+    # order means we can't reference Primitive.TEXT in the field default
+    # cleanly). Treat the typed annotation as "TypeExpression | None"
+    # at runtime; mypy sees TypeExpression after post-init normalization.
+    identifier_type: Any = None
 
     def __post_init__(self) -> None:
         _check_name("Spec.id", self.id)
         if not isinstance(self.version, str) or not self.version.strip():
             raise ValueError("Spec.version must be a non-empty string")
+        if self.identifier_type is None:
+            from knot.ast.types import Primitive
+
+            self.identifier_type = Primitive.TEXT
 
     # -- builder methods --
 
@@ -870,6 +889,12 @@ class Spec:
             _spec=self,
         )
         self.classes.append(cls)
+        # Auto-add the spec's identifier slot — but only if no parent
+        # in the is_a / mixin chain already contributes one. Skipping
+        # the auto-add when inherited prevents the duplicate-identifier
+        # error from validate().
+        if not any(s.identifier for s in cls.effective_slots()):
+            cls.slot(self.identifier_slot_name, self.identifier_type, identifier=True)
         return cls
 
     def add_source(

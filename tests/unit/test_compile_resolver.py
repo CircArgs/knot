@@ -44,7 +44,6 @@ def test_resolved_view_no_inline_case_when():
     moved score values into source_weight at runtime."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
@@ -110,7 +109,6 @@ def test_resolved_view_kwargs_threading(movie_spec):
 def test_resolved_view_rejects_abstract_class():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(ValueError, match="concrete classes"):
         emit_resolved_view(spec, title)
 
@@ -121,7 +119,6 @@ def test_resolved_view_unbound_sources_fall_to_zero_via_coalesce():
     # source that DOES have a row.
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     v = emit_resolved_view(spec, movie)
     assert "COALESCE(w.weight, 0)" in v
@@ -226,7 +223,6 @@ def test_all_sources_view_rejects_abstract_class():
 
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
-    title.slot("canonical_id", types.TEXT, identifier=True)
     with pytest.raises(ValueError, match="concrete classes"):
         emit_all_sources_view(spec, title)
 

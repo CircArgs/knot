@@ -15,7 +15,6 @@ from knot.spec import Spec
 def _make_movie_spec() -> tuple[Spec, OntologyClass]:  # noqa: F821
     spec = Spec(id="test", version="0.0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("title", types.TEXT)
     movie.slot("year", types.INTEGER)
     return spec, movie
@@ -123,11 +122,9 @@ def _make_movie_director_spec():
     """Movie with a `director` FK pointing at Person."""
     spec = Spec(id="test", version="0.0.1")
     person = spec.add_class("Person")
-    person.slot("canonical_id", types.TEXT, identifier=True)
     person.slot("name", types.TEXT)
     person.slot("birth_country", types.TEXT)
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("title", types.TEXT)
     movie.slot("year", types.INTEGER)
     movie.slot("director", person)

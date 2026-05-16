@@ -93,7 +93,6 @@ class MockDB:
 def _basic_spec() -> Spec:
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
     imdb.bind(movie).set_default_weight(0.85)
@@ -479,8 +478,7 @@ def test_migration_op_carries_target_and_description():
 
 def _spec_with_movie_only() -> Spec:
     spec = Spec(id="m", version="0.1")
-    movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
+    spec.add_class("Movie")
     return spec
 
 
@@ -851,7 +849,6 @@ def test_not_null_to_nullable_is_safe():
     """Widening (NOT NULL → nullable) doesn't lose data; never destructive."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)  # not required → nullable
     db = MockDB(
         schemas={"knot_data"},
@@ -886,7 +883,6 @@ def test_array_type_matches_when_canonicalized():
     from knot import types
 
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("genres", types.ARRAY(types.TEXT))
     db = MockDB(
         schemas={"knot_data"},
@@ -917,7 +913,6 @@ def test_timestamptz_normalization():
     knot's 'timestamptz' output."""
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("released_at", types.TIMESTAMP)
     db = MockDB(
         schemas={"knot_data"},

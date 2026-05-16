@@ -25,7 +25,6 @@ def test_message_null_when_unset(movie_spec):
 def test_message_literal_when_set():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     movie.add_constraint(
         "y",
@@ -39,7 +38,6 @@ def test_message_literal_when_set():
 def test_apostrophe_in_message_escaped():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     movie.add_constraint(
         "y",
@@ -61,9 +59,7 @@ def test_bare_column_unchanged(movie_spec):
 def test_class_ref_renders_qualified():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("role", types.TEXT, required=True)
     credit.slot("movie", movie)
     movie.add_constraint(
@@ -90,9 +86,7 @@ def test_class_ref_renders_qualified():
 def test_has_count_in_predicate():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     credit = spec.add_class("Credit")
-    credit.slot("canonical_id", types.TEXT, identifier=True)
     credit.slot("movie", movie)
     movie.add_constraint(
         "min_three_credits",
@@ -107,7 +101,6 @@ def test_has_count_in_predicate():
 def test_boolean_composition():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
-    movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     movie.slot("runtime", types.INTEGER)
     movie.add_constraint(
@@ -129,5 +122,5 @@ def test_emit_validation_union_for_non_empty_spec(movie_spec):
 
 def test_emit_validation_union_empty_spec():
     spec = Spec(id="e", version="0.1")
-    spec.add_class("Movie").slot("canonical_id", types.TEXT, identifier=True)
+    spec.add_class("Movie")
     assert emit_validation_union(spec) is None
