@@ -7,14 +7,16 @@ lives in ``knot/compile/query_sql.py`` (singledispatch sibling of
 The user surface is fluent immutable: every builder method on
 ``Query`` (``.where()``, ``.order_by()``, ``.limit()``, etc.) returns
 a new ``Query`` — the AST is never mutated. ``OntologyClass`` exposes
-the same methods as ergonomic entry points: ``Movie.where(...)`` is
-sugar for ``Query(class_name="Movie").where(...)``.
+three explicit layer-targeted entry points that *return* a ``Query``:
+``cls.resolved`` (argmax view), ``cls.all_sources`` (per-source jsonb
+provenance), and ``cls.from_source(s)`` (one source's raw bindings).
+There is no default — every read declares its layer.
 
 The AST carries ``class_name`` as a string (same convention as ``Ref``
 in ``knot.ast.expr``) so the node itself is decoupled from
-``OntologyClass`` instances. A ``Query`` constructed via the
-class-side fluent API also holds a private back-reference to its
-owning ``Spec`` so ``q.sql(schema=...)`` compiles itself end-to-end.
+``OntologyClass`` instances. A ``Query`` constructed via the class-side
+entry points also holds a private back-reference to its owning ``Spec``
+so ``q.sql(schema=...)`` compiles itself end-to-end.
 """
 
 from __future__ import annotations
@@ -50,9 +52,9 @@ class Query:
     fluent builder methods (``.where``/``.order_by``/etc.). Frozen +
     fluent: every builder returns a new ``Query`` via ``replace``.
 
-    ``_spec`` is a back-reference set by the class-side fluent entry
-    points (``OntologyClass.where`` / ``.order_by`` / etc.) so
-    ``q.sql(schema=...)`` knows which spec to compile against. It's
+    ``_spec`` is a back-reference set by the class-side entry points
+    (``OntologyClass.resolved`` / ``.all_sources`` / ``.from_source``)
+    so ``q.sql(schema=...)`` knows which spec to compile against. It's
     intentionally private and excluded from repr/compare so the AST
     still behaves like pure data for tests and equality checks.
     """
@@ -87,16 +89,6 @@ class Query:
         """Set the projection. ``None`` (the default) means ``SELECT *``."""
         return replace(self, projection=tuple(refs))
 
-    def from_source(self, source: Any) -> Query:
-        """Filter to one source. Adds ``WHERE source_name = '<name>'``
-        to the query — only meaningful against the bindings or
-        all_sources layer (the resolved view has no source_name
-        column; the filter compiles but matches nothing)."""
-        from knot.ast.expr import Raw
-
-        src_name = source.name.replace("'", "''")
-        return self.where(Raw(f"source_name = '{src_name}'"))
-
     # ------------------------------------------------------------------
     # Compile entry point — methods on the entity they're about. The
     # Spec back-reference lets the host call ``q.sql(...)`` directly.
@@ -114,7 +106,7 @@ class Query:
         if self._spec is None:
             raise RuntimeError(
                 "Query has no spec back-reference — build it via "
-                "spec_class.where(...) / .order_by(...) / etc., or use "
+                "cls.resolved / .all_sources / .from_source(...), or use "
                 "knot.compile.query.compile_query(q, spec=spec) directly"
             )
         self._spec.validate()

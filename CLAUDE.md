@@ -284,24 +284,43 @@ corr_b = movie.corrections_binding()
 ```
 
 **Read substrate** — fluent immutable queries with outer-scope
-correlation, transparent FK walks, per-slot aggregates:
+correlation, transparent FK walks, per-slot aggregates. Every read
+declares its layer explicitly via one of three entry points on the
+class — there is no silent default:
+
+- ``cls.resolved`` — argmax view, one row per canonical_id, the
+  resolver's winners. The default "current state" shape.
+- ``cls.all_sources`` — per-source provenance view, one row per
+  canonical_id with each slot as a jsonb of
+  ``{source_name: {value, weight}}``.
+- ``cls.from_source(source)`` — one source's raw bindings about this
+  class. Useful pre-ER (when ``canonical_id`` is still NULL) and for
+  per-source audits.
 
 ```python
 from knot import this
 
-# Top 10 movies + their directors (FK walk + projection + order/limit)
-q = (movie.order_by(movie.col.year, "desc")
-          .limit(10)
-          .select(movie.col.title, movie.col.director.name))
+# Top 10 movies + their directors (resolved view, FK walk, project)
+q = (movie.resolved.order_by(movie.col.year, "desc")
+                   .limit(10)
+                   .select(movie.col.title, movie.col.director.name))
 
 # Directors with more than 5 movies (correlation + count aggregate)
-q = person.where((movie.col.director == this.Person).count() > 5)
+q = person.resolved.where((movie.col.director == this.Person).count() > 5)
 
 # People who never directed (.none() aggregate)
-q = person.where((movie.col.director == this.Person).none())
+q = person.resolved.where((movie.col.director == this.Person).none())
+
+# What does imdb specifically claim? (raw bindings, one source)
+q = movie.from_source(imdb).order_by(movie.col.year, "desc").limit(10)
 
 sql, params = q.sql(schema="knot_data")
 ```
+
+The cross-source raw bindings stream (every source's claims, no
+filter) is intentionally not exposed at the user surface — it's
+rarely the right read shape, and ``from_source`` covers per-source
+inspection cleanly. Drop to raw SQL if you genuinely need it.
 
 **Spec keeps only whole-graph methods.** Per-entity facts live on
 the entity they describe (see above); Spec is the registrar and
@@ -456,6 +475,7 @@ the same shape as anything below?"
 | **Spec versioning by duplication** | notebook's ``spec_v1`` / ``spec_v2`` / ``spec_v3`` rebuilt the whole spec for each "version" | Hides the actual migration story (mutate one spec, ``init_sql`` diffs against live DB). Fake versioning. | Multiple spec objects with overlapping definitions. Mutate one spec in place; expose a stage marker for marimo-style cell deps. |
 | **Strings where objects exist** | ``emit_assign_canonical(source_name="imdb", class_name="Movie")`` | The user has the ``Source`` / ``OntologyClass`` objects in scope. Strings force a name-lookup the library has to do internally. | A kwarg that takes a string when the corresponding object is in the user's scope. Take the object. |
 | **Spec-level operations that span all entities** | ``spec.emit_batch_write([ClassWrites…])`` taking a list when each binding could just expose its own ``.write_sql()`` | The "do this for many entities" function bundles what should be N independent operations. Host can compose them via the language (loops, transactions) without a library helper. | A spec method that loops over entities calling the same per-entity emitter. Move the work onto each entity; let the host iterate. |
+| **Silent semantic defaults** | ``cls.where(...)`` / ``.order_by(...)`` / etc. on ``OntologyClass`` silently routed to ``<class>_resolved`` | The layer choice (resolved vs raw bindings vs per-source provenance) is load-bearing semantics — picking one by default hid the choice. ``Query.from_source(s)`` compounded it by producing valid SQL against the wrong layer (filtered ``source_name`` on the resolved view → zero rows, no error). | A method that silently picks one of several semantically-different shapes. Force the choice to surface: three entry points (``cls.resolved``, ``cls.all_sources``, ``cls.from_source(s)``) each *return* a Query rather than letting one mode masquerade as the default. |
 
 When adding a new API surface, run through this list. If the new
 shape matches any row, propose the alternative before committing.

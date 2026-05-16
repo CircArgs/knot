@@ -322,53 +322,66 @@ class OntologyClass:
     # ``.offset()`` / ``.select()`` on the returned ``Query``.
     # ------------------------------------------------------------------
 
-    def _query(self, target_suffix: str = "_resolved") -> Query:
-        """Construct a fresh Query rooted at this class, with the
-        spec back-reference set so ``.sql(schema=...)`` works. The
-        ``target_suffix`` defaults to ``_resolved`` — see ``bindings``
-        / ``all_sources`` properties for the other layers."""
+    # Layer-targeted query entry points. Every read declares its
+    # layer explicitly — no silent default.
+    #
+    #   cls.resolved          argmax view, one row per canonical_id,
+    #                         slot values are the resolver's winners
+    #   cls.all_sources       per-source provenance, one row per
+    #                         canonical_id, slot columns are jsonb
+    #                         keyed by source_name with {value, weight}
+    #   cls.from_source(s)    one source's claims about this class —
+    #                         raw bindings, scoped to source ``s``
+    #
+    # All return ``Query`` and chain the same fluent surface
+    # (``.where`` / ``.order_by`` / ``.limit`` / ``.offset`` /
+    # ``.select`` / ``.sql``). The cross-source raw bindings stream
+    # is intentionally unexposed — internal / admin concern.
+
+    def _query(self, target_suffix: str) -> Query:
+        if self.kind != ClassKind.CONCRETE:
+            raise ValueError(
+                f"OntologyClass {self.name!r} is {self.kind.value!r}; "
+                f"only concrete classes have a {target_suffix} relation"
+            )
         return Query(
             class_name=self.name,
             target_suffix=target_suffix,
             _spec=self._spec,
         )
 
-    def where(self, predicate: Expr) -> Query:
-        return self._query().where(predicate)
-
-    def order_by(self, ref: Expr, direction: str = "asc") -> Query:
-        return self._query().order_by(ref, direction)
-
-    def limit(self, n: int) -> Query:
-        return self._query().limit(n)
-
-    def offset(self, n: int) -> Query:
-        return self._query().offset(n)
-
-    def select(self, *refs: Expr) -> Query:
-        return self._query().select(*refs)
-
-    # Layer-targeted query entry points. ``cls.bindings`` and
-    # ``cls.all_sources`` return Query objects already pointed at
-    # the raw SCD2 bindings layer / per-source provenance view
-    # respectively — same fluent surface as ``cls.where(...)`` etc.,
-    # just against a different underlying relation.
     @property
-    def bindings(self) -> Query:
-        """Query rooted at ``<class>_bindings`` — raw per-source
-        SCD2 claims. Visible columns are the spec's slots; the
-        bindings-internal columns (source_name, source_identifier,
-        valid_from, valid_to, raw_payload, er_metadata) aren't part
-        of the Query AST."""
-        return self._query(target_suffix="_bindings")
+    def resolved(self) -> Query:
+        """Query against ``<class>_resolved`` — the resolver's
+        argmax view, one row per canonical_id with the highest-weight
+        non-null value per slot. The user-facing "current state"
+        read shape."""
+        return self._query(target_suffix="_resolved")
 
     @property
     def all_sources(self) -> Query:
-        """Query rooted at ``<class>_all_sources`` — per-source
-        provenance view, one jsonb per slot keyed by source name
-        with ``{value, weight}`` payload. Slot columns project as
-        jsonb here, not their underlying scalar type."""
+        """Query against ``<class>_all_sources`` — per-source
+        provenance view, one row per canonical_id with each slot
+        column as a jsonb of ``{source_name: {value, weight}}``.
+        Slot columns project as jsonb here, not their underlying
+        scalar type."""
         return self._query(target_suffix="_all_sources")
+
+    def from_source(self, source: Source) -> Query:
+        """Query one source's claims about this class. Returns a
+        Query against ``<class>_bindings`` filtered to
+        ``source_name = '<name>'``. The bindings layer is otherwise
+        unexposed; use this when you want to inspect what a specific
+        source has said (e.g. pre-ER raw rows, or per-source debug)."""
+        from knot.ast.expr import Raw
+
+        # source.name is constrained to [A-Za-z_][A-Za-z0-9_]* by
+        # ``_check_name`` at Source.__post_init__, so quotes can't
+        # appear here. Defense-in-depth escape kept.
+        src = source.name.replace("'", "''")
+        return self._query(target_suffix="_bindings").where(
+            Raw(f"source_name = '{src}'")
+        )
 
     # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.

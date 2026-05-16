@@ -111,14 +111,13 @@ def _(close_out, insert, json, pg, rows):
 
 @app.cell
 def _(imdb, movie, pg, schema):
-    # Verify via ``movie.bindings.from_source(imdb)``:
-    #   - ``movie.bindings`` repoints the Query at the raw bindings
-    #     layer (the resolved view filters NULL canonical_id, which
-    #     is everything we just wrote — ER hasn't run yet).
-    #   - ``.from_source(imdb)`` adds ``WHERE source_name = 'imdb'``,
-    #     scoping to this one source's claims.
+    # Verify via ``movie.from_source(imdb)`` — one source's claims about
+    # Movie. This is a Query over the raw bindings layer (one row per
+    # source_identifier) scoped to ``source_name = 'imdb'``. The
+    # ``resolved`` layer would be empty here: ER hasn't run yet, so
+    # every row's ``canonical_id`` is still NULL.
     q = (
-        movie.bindings.from_source(imdb)
+        movie.from_source(imdb)
         .order_by(movie.col.year, "desc")
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
