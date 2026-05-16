@@ -41,7 +41,7 @@ def _():
     from movies_spec import imdb_movie_b, movie, spec
 
     imdb_movie_b
-    return imdb_movie_b, spec
+    return imdb_movie_b, movie, spec
 
 
 @app.cell
@@ -110,24 +110,26 @@ def _(close_out, insert, json, pg, rows):
 
 
 @app.cell
-def _(pg, schema):
-    # Verify by introspecting the bindings table directly. We can't
-    # use the resolved view yet — it filters out rows where
-    # canonical_id IS NULL, which is everything we just wrote. ER
-    # hasn't run, so knot doesn't know which source rows map to which
-    # cross-source identity. The bindings table holds the raw claims.
+def _(movie, pg, schema):
+    # Verify via a knot Query — retargeted at the bindings layer.
+    # The resolved view filters out rows where canonical_id IS NULL,
+    # which is everything we just wrote (ER hasn't run yet). The
+    # bindings table holds the raw claims.
     #
-    # Top 10 most recently-ingested rows (highest valid_from).
+    # ``Query.target_suffix`` defaults to ``_resolved``; ``replace``
+    # repoints it at the bindings table. Same Query AST, different
+    # underlying relation.
+    from dataclasses import replace
+
+    q = (
+        movie.order_by(movie.col.year, "desc")
+        .limit(10)
+        .select(movie.col.canonical_id, movie.col.title, movie.col.year)
+    )
+    q = replace(q, target_suffix="_bindings")
+    sql, params = q.sql(schema=schema)
     with pg.cursor() as _cur:
-        _cur.execute(
-            f"""
-            SELECT source_identifier, title, year, canonical_id
-            FROM {schema}.movie_bindings
-            WHERE source_name = 'imdb' AND valid_to IS NULL
-            ORDER BY year DESC NULLS LAST
-            LIMIT 10
-            """
-        )
+        _cur.execute(sql, params or None)
         cols = [d.name for d in _cur.description]
         for row in _cur.fetchall():
             print(dict(zip(cols, row)))
