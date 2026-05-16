@@ -94,52 +94,52 @@ def _(mo):
 def _():
     from knot import Spec, types
 
-    spec_v1 = Spec(id="movies_play", version="0.1")
+    spec = Spec(id="movies_play", version="0.1")
 
-    person_v1 = spec_v1.add_class("Person")
-    person_v1.slot("canonical_id", types.TEXT, identifier=True)
-    person_v1.slot("name", types.TEXT, required=True)
-    person_v1.slot("birth_country", types.TEXT)
-    person_v1.slot("birth_year", types.INTEGER)
+    person = spec.add_class("Person")
+    person.slot("canonical_id", types.TEXT, identifier=True)
+    person.slot("name", types.TEXT, required=True)
+    person.slot("birth_country", types.TEXT)
+    person.slot("birth_year", types.INTEGER)
 
-    movie_v1 = spec_v1.add_class("Movie")
-    movie_v1.slot("canonical_id", types.TEXT, identifier=True)
-    movie_v1.slot("title", types.TEXT, required=True)
-    movie_v1.slot("year", types.INTEGER)
-    movie_v1.slot("runtime_minutes", types.INTEGER)
-    movie_v1.slot("director", person_v1)  # FK to Person
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    movie.slot("title", types.TEXT, required=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime_minutes", types.INTEGER)
+    movie.slot("director", person)  # FK to Person
 
     # A constraint isn't a postgres CHECK — it's a rule the spec
     # compiles to a validation SELECT. The host runs it whenever it
     # wants (after a write, periodically, on-demand). The first
     # non-trivial domain rule on Movie: no film predates the Lumière
     # screenings of 1888.
-    movie_v1.add_constraint(
+    movie.add_constraint(
         "year_sane",
-        body=movie_v1.col.year >= 1888,
+        body=movie.col.year >= 1888,
         message="Movie.year predates the invention of film.",
     )
 
-    imdb_v1 = spec_v1.add_source("imdb")
-    imdb_v1.bind(person_v1).set_default_weight(0.85)
-    imdb_v1.bind(movie_v1).set_default_weight(0.85)
+    imdb = spec.add_source("imdb")
+    imdb.bind(person).set_default_weight(0.85)
+    imdb.bind(movie).set_default_weight(0.85)
 
-    spec_v1.validate()
-    return Spec, imdb_v1, movie_v1, person_v1, spec_v1, types
+    spec.validate()
+    return Spec, imdb, movie, person, spec, types
 
 
 @app.cell
-def _(mo, pg, schema, spec_v1):
+def _(mo, pg, schema, spec):
     # One call. ``init_sql`` validates the spec, then emits a single SQL
     # script — DDL + bindings + indexes + FKs + resolved views + weight
     # seed. With no query_fn it assumes an empty schema.
-    pg.execute(spec_v1.init_sql(schema=schema))
+    pg.execute(spec.init_sql(schema=schema))
     mo.md(f"Stage 1 deployed in **`{schema}`**.")
     return
 
 
 @app.cell
-def _(load, movie_v1, person_v1, pg, schema, spec_v1):
+def _(load, movie, person, pg, schema, spec):
     import json as _json
 
     # Ingest from imdb only. ``binding.write_sql()`` returns
@@ -152,8 +152,8 @@ def _(load, movie_v1, person_v1, pg, schema, spec_v1):
             cur.execute(close_out, {"rows": payload})
             cur.execute(insert, {"rows": payload})
 
-    movie_b = next(b for b in spec_v1.source_bindings if b.class_.name == "Movie")
-    person_b = next(b for b in spec_v1.source_bindings if b.class_.name == "Person")
+    movie_b = next(b for b in spec.source_bindings if b.class_.name == "Movie")
+    person_b = next(b for b in spec.source_bindings if b.class_.name == "Person")
 
     write_to(person_b, load("imdb", "persons"))
     write_to(movie_b, load("imdb", "movies"))
@@ -165,17 +165,17 @@ def _(load, movie_v1, person_v1, pg, schema, spec_v1):
             cur.execute(sql, params or None)
             return len(cur.fetchall())
 
-    f"Stage 1 ingest: {_count(person_v1)} persons, {_count(movie_v1)} movies (imdb only)."
+    f"Stage 1 ingest: {_count(person)} persons, {_count(movie)} movies (imdb only)."
     return (write_to,)
 
 
 @app.cell
-def _(movie_v1, pg, schema, spec_v1):
+def _(movie, pg, schema, spec):
     # Smoke test — five most recent movies + their directors.
     q = (
-        movie_v1.order_by(movie_v1.col.year, "desc")
+        movie.order_by(movie.col.year, "desc")
         .limit(5)
-        .select(movie_v1.col.title, movie_v1.col.year, movie_v1.col.director.name)
+        .select(movie.col.title, movie.col.year, movie.col.director.name)
     )
     sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
@@ -200,45 +200,23 @@ def _(mo):
 
 
 @app.cell
-def _(Spec, movie_v1, person_v1, spec_v1, types):
-    # Build the v2 spec — same shape + tmdb source. Done as a fresh Spec
-    # rather than mutating spec_v1 so the two are inspectable side-by-side.
-    spec_v2 = Spec(id="movies_play", version="0.2")
-
-    person_v2 = spec_v2.add_class("Person")
-    person_v2.slot("canonical_id", types.TEXT, identifier=True)
-    person_v2.slot("name", types.TEXT, required=True)
-    person_v2.slot("birth_country", types.TEXT)
-    person_v2.slot("birth_year", types.INTEGER)
-
-    movie_v2 = spec_v2.add_class("Movie")
-    movie_v2.slot("canonical_id", types.TEXT, identifier=True)
-    movie_v2.slot("title", types.TEXT, required=True)
-    movie_v2.slot("year", types.INTEGER)
-    movie_v2.slot("runtime_minutes", types.INTEGER)
-    movie_v2.slot("director", person_v2)
-
-    movie_v2.add_constraint(
-        "year_sane",
-        body=movie_v2.col.year >= 1888,
-        message="Movie.year predates the invention of film.",
-    )
-
-    # imdb already deployed and seeded; tmdb is new.
-    imdb_v2 = spec_v2.add_source("imdb")
-    imdb_v2.bind(person_v2).set_default_weight(0.85)
-    imdb_v2.bind(movie_v2).set_default_weight(0.85)
-
-    tmdb_v2 = spec_v2.add_source("tmdb")
-    tmdb_v2.bind(person_v2).set_default_weight(0.75)
-    tmdb_v2.bind(movie_v2).set_default_weight(0.75)
-
-    spec_v2.validate()
-    return movie_v2, person_v2, spec_v2, tmdb_v2
+def _(movie, person, spec):
+    # Evolve the SAME spec in-place. No duplication — just add tmdb as a
+    # second source and bind it to the existing Movie + Person classes.
+    # ``spec_at_stage2`` is the same object as ``spec`` under a new
+    # name so marimo cells downstream can declare a dependency on the
+    # post-evolution state. (Marimo doesn't track in-place mutation;
+    # the rename makes the ordering explicit.)
+    tmdb = spec.add_source("tmdb")
+    tmdb.bind(person).set_default_weight(0.75)
+    tmdb.bind(movie).set_default_weight(0.75)
+    spec.validate()
+    spec_at_stage2 = spec
+    return spec_at_stage2, tmdb
 
 
 @app.cell
-def _(mo, pg, schema, spec_v2):
+def _(mo, pg, schema, spec_at_stage2):
     # Diff against the live DB — only the weight-seed deltas for tmdb
     # should appear, plus idempotent CREATE OR REPLACE VIEW for the
     # resolved views. The DDL for tables/indexes is already in place.
@@ -247,7 +225,7 @@ def _(mo, pg, schema, spec_v2):
             cur.execute(sql, params)
             return cur.fetchall()
 
-    delta_sql = spec_v2.init_sql(query_fn=query_fn, schema=schema)
+    delta_sql = spec_at_stage2.init_sql(query_fn=query_fn, schema=schema)
     op_count = len([line for line in delta_sql.split(";\n\n") if line.strip()])
     pg.execute(delta_sql)
     mo.md(f"Stage 2 evolve: ran **{op_count}** delta ops.")
@@ -255,25 +233,25 @@ def _(mo, pg, schema, spec_v2):
 
 
 @app.cell
-def _(load, movie_v2, pg, schema, spec_v2, write_to):
+def _(load, movie, pg, schema, spec_at_stage2, write_to):
     # Ingest tmdb's overlapping rows. Many of these are about the SAME
     # canonical Movies and Persons that imdb already wrote — but with
     # tmdb's own source_identifier and occasionally different field values.
     tmdb_person_b = next(
         b
-        for b in spec_v2.source_bindings
+        for b in spec_at_stage2.source_bindings
         if b.source.name == "tmdb" and b.class_.name == "Person"
     )
     tmdb_movie_b = next(
         b
-        for b in spec_v2.source_bindings
+        for b in spec_at_stage2.source_bindings
         if b.source.name == "tmdb" and b.class_.name == "Movie"
     )
 
     write_to(tmdb_person_b, load("tmdb", "persons"))
     write_to(tmdb_movie_b, load("tmdb", "movies"))
 
-    sql, params = movie_v2.select(movie_v2.col.canonical_id).sql(schema=schema)
+    sql, params = movie.select(movie.col.canonical_id).sql(schema=schema)
     with pg.cursor() as cur:
         cur.execute(sql, params or None)
         resolved_count = len(cur.fetchall())
@@ -295,12 +273,10 @@ def _(mo):
 
 
 @app.cell
-def _(movie_v2, pg, schema):
+def _(movie, pg, schema):
     # First 5 movies + their resolver-picked year — imdb wins at default
     # weights (imdb 0.85 > tmdb 0.75).
-    q = movie_v2.limit(5).select(
-        movie_v2.col.canonical_id, movie_v2.col.title, movie_v2.col.year
-    )
+    q = movie.limit(5).select(movie.col.canonical_id, movie.col.title, movie.col.year)
     sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
         cur.execute(sql, params or None)
@@ -335,12 +311,10 @@ def _(pg, schema):
 
 
 @app.cell
-def _(movie_v2, pg, schema):
+def _(movie, pg, schema):
     # Same Query re-run — wherever imdb and tmdb disagreed on year,
     # the resolver's argmax now picks tmdb's value (weight 0.95 > 0.85).
-    q = movie_v2.limit(5).select(
-        movie_v2.col.canonical_id, movie_v2.col.title, movie_v2.col.year
-    )
+    q = movie.limit(5).select(movie.col.canonical_id, movie.col.title, movie.col.year)
     sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
         cur.execute(sql, params or None)
@@ -364,14 +338,14 @@ def _(mo):
 
 
 @app.cell
-def _(movie_v2, pg, schema):
+def _(movie, pg, schema):
     from dataclasses import replace
 
     # Provenance lives in <class>_all_sources — same shape as the
     # resolved view but with jsonb-per-slot. Same Query AST, just
     # retargeted to the all_sources view via Query.target_suffix.
-    q = movie_v2.limit(5).select(
-        movie_v2.col.canonical_id, movie_v2.col.year, movie_v2.col.runtime_minutes
+    q = movie.limit(5).select(
+        movie.col.canonical_id, movie.col.year, movie.col.runtime_minutes
     )
     q = replace(q, target_suffix="_all_sources")
     sql, params = q.sql(schema=schema)
@@ -396,10 +370,10 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema, spec_v2, write_to):
+def _(pg, schema, spec_at_stage2, write_to):
     correction_b = next(
         b
-        for b in spec_v2.source_bindings
+        for b in spec_at_stage2.source_bindings
         if b.source.name == "imdb" and b.class_.name == "Movie"
     )
     # Re-ingest one imdb row with a deliberately-different runtime.
@@ -453,93 +427,98 @@ def _(mo):
 
 
 @app.cell
-def _(Spec, types):
-    spec_v3 = Spec(id="movies_play", version="0.3")
-
-    person_v3 = spec_v3.add_class("Person")
-    person_v3.slot("canonical_id", types.TEXT, identifier=True)
-    person_v3.slot("name", types.TEXT, required=True)
-    person_v3.slot("birth_country", types.TEXT)
-    person_v3.slot("birth_year", types.INTEGER)
-
-    movie_v3 = spec_v3.add_class("Movie")
-    movie_v3.slot("canonical_id", types.TEXT, identifier=True)
-    movie_v3.slot("title", types.TEXT, required=True)
-    movie_v3.slot("year", types.INTEGER)
-    movie_v3.slot("runtime_minutes", types.INTEGER)
-    movie_v3.slot("director", person_v3)
-
-    credit_v3 = spec_v3.add_class("Credit", description="A person's role on a movie.")
-    credit_v3.slot("canonical_id", types.TEXT, identifier=True)
-    credit_v3.slot("role", types.TEXT, required=True)
-    credit_v3.slot("movie", movie_v3)
-    credit_v3.slot("person", person_v3)
+def _(movie, person, spec_at_stage2, types):
+    # Evolve in-place again. Add the Credit reified relation, a
+    # DirectedMovie virtual class derived from it, two more
+    # constraints, and the rottentomatoes source with bindings for
+    # all three classes. tmdb (from stage 2) also picks up a new
+    # binding for Credit since the class didn't exist before.
+    credit = spec_at_stage2.add_class(
+        "Credit", description="A person's role on a movie."
+    )
+    credit.slot("canonical_id", types.TEXT, identifier=True)
+    credit.slot("role", types.TEXT, required=True)
+    credit.slot("movie", movie)
+    credit.slot("person", person)
 
     # Virtual class — derived membership, no table of its own. A movie
     # IS a DirectedMovie iff some Credit row exists with role='director'
     # pointing at it. The view sits on top of movie_resolved + the
     # has_any predicate, so it stays current with whatever the resolver
     # currently believes about each movie.
-    directed_movie_v3 = movie_v3.add_virtual(
+    directed_movie = movie.add_virtual(
         "DirectedMovie",
-        where=movie_v3.has_any(credit_v3, role="director"),
+        where=movie.has_any(credit, role="director"),
     )
 
-    # Constraints carry the actual business rules — the bits a CHECK
-    # constraint can't reach. Three shapes:
+    # Two more constraints on top of stage 1's year_sane:
 
-    # 1. Simple range check. Compiles to a SELECT with `WHERE NOT
-    #    (year >= 1888)` against movie_resolved.
-    movie_v3.add_constraint(
-        "year_sane",
-        body=movie_v3.col.year >= 1888,
-        message="Movie.year predates the invention of film.",
-    )
-
-    # 2. Enum-without-DDL. ``role`` is text in the schema; the
-    #    vocabulary lives in the constraint so it can be tuned
-    #    without a schema migration.
-    credit_v3.add_constraint(
+    # Enum-without-DDL. ``role`` is text in the schema; the vocabulary
+    # lives in the constraint so it can be tuned without a schema
+    # migration.
+    credit.add_constraint(
         "role_in_vocabulary",
-        body=credit_v3.col.role.in_(
+        body=credit.col.role.in_(
             ["director", "writer", "actor", "producer", "composer"]
         ),
         message="Credit.role outside the curated vocabulary.",
     )
 
-    # 3. Cross-class existence — every Movie must have at least one
-    #    Credit with role='director'. Compiles to a correlated EXISTS
-    #    subquery against credit_resolved. This is the kind of rule
-    #    a postgres CHECK can't express; it requires looking at
-    #    another table.
-    movie_v3.add_constraint(
+    # Cross-class existence — every Movie must have at least one Credit
+    # with role='director'. Compiles to a correlated EXISTS subquery
+    # against credit_resolved. The kind of rule a postgres CHECK can't
+    # express; it requires looking at another table.
+    movie.add_constraint(
         "must_have_director",
-        body=movie_v3.has_any(credit_v3, role="director"),
+        body=movie.has_any(credit, role="director"),
         message="Movie has no Credit with role='director'.",
     )
 
-    imdb_v3 = spec_v3.add_source("imdb")
-    imdb_v3.bind(person_v3).set_default_weight(0.85)
-    imdb_v3.bind(movie_v3).set_default_weight(0.85)
-    imdb_v3.bind(credit_v3).set_default_weight(0.85)
+    # Cross-class aggregate — bound the cast size. Compiles to a
+    # correlated subquery with COUNT(*). Demonstrates that constraints
+    # can read scalar-aggregated state of related rows, not just
+    # existence.
+    from knot import Severity
 
-    tmdb_v3 = spec_v3.add_source("tmdb")
-    tmdb_v3.bind(person_v3).set_default_weight(0.75)
-    tmdb_v3.bind(movie_v3).set_default_weight(0.75)
-    tmdb_v3.bind(credit_v3).set_default_weight(0.75)
+    movie.add_constraint(
+        "credit_count_sane",
+        body=movie.has_count(credit) <= 50,
+        message="Movie has more than 50 Credit rows — likely data quality issue.",
+    )
 
-    rt_v3 = spec_v3.add_source("rottentomatoes")
-    rt_v3.bind(person_v3).set_default_weight(0.70)
-    rt_v3.bind(movie_v3).set_default_weight(0.70)
-    rt_v3.bind(credit_v3).set_default_weight(0.70)
+    # Warning severity — informational, not blocking. The host can
+    # treat severity=WARNING as "log but don't reject" and split
+    # those rows into a separate review queue. Stage 1's `year_sane`,
+    # `role_in_vocabulary`, `must_have_director` are all ERROR by
+    # default; this one flags pre-1900 silent-era films for
+    # operator attention without rejecting them.
+    movie.add_constraint(
+        "silent_era_flag",
+        body=movie.col.year >= 1900,
+        severity=Severity.WARNING,
+        message="Pre-1900 film — flagged for review (not blocking).",
+    )
 
-    spec_v3.validate()
-    return credit_v3, directed_movie_v3, movie_v3, person_v3, spec_v3
+    # New source — rottentomatoes — for all three classes.
+    rt = spec_at_stage2.add_source("rottentomatoes")
+    rt.bind(person).set_default_weight(0.70)
+    rt.bind(movie).set_default_weight(0.70)
+    rt.bind(credit).set_default_weight(0.70)
+
+    # Existing sources need bindings for the new Credit class.
+    _imdb = next(s for s in spec_at_stage2.sources if s.name == "imdb")
+    _tmdb = next(s for s in spec_at_stage2.sources if s.name == "tmdb")
+    _imdb.bind(credit).set_default_weight(0.85)
+    _tmdb.bind(credit).set_default_weight(0.75)
+
+    spec_at_stage2.validate()
+    spec_at_stage3 = spec_at_stage2  # same object, post-stage-3 marker
+    return credit, directed_movie, spec_at_stage3
 
 
 @app.cell
-def _(mo, pg, query_fn, schema, spec_v3):
-    delta_sql = spec_v3.init_sql(query_fn=query_fn, schema=schema)
+def _(mo, pg, query_fn, schema, spec_at_stage3):
+    delta_sql = spec_at_stage3.init_sql(query_fn=query_fn, schema=schema)
     op_count = len([line for line in delta_sql.split(";\n\n") if line.strip()])
     pg.execute(delta_sql)
     mo.md(
@@ -549,7 +528,7 @@ def _(mo, pg, query_fn, schema, spec_v3):
 
 
 @app.cell
-def _(credit_v3, load, movie_v3, person_v3, pg, schema, spec_v3, write_to):
+def _(credit, load, movie, person, pg, schema, spec_at_stage3, write_to):
     # Ingest the remaining data — rottentomatoes for everything, plus
     # credits from all three sources. Per binding; one binding.write_sql()
     # call per source × class.
@@ -562,21 +541,21 @@ def _(credit_v3, load, movie_v3, person_v3, pg, schema, spec_v3, write_to):
                 cls_name = entity[:-1].capitalize()
                 b = next(
                     b
-                    for b in spec_v3.source_bindings
+                    for b in spec_at_stage3.source_bindings
                     if b.source.name == source_name and b.class_.name == cls_name
                 )
                 write_to(b, load(source_name, entity))
         else:
             b = next(
                 b
-                for b in spec_v3.source_bindings
+                for b in spec_at_stage3.source_bindings
                 if b.source.name == source_name and b.class_.name == "Credit"
             )
             write_to(b, load(source_name, "credits"))
 
     # Counts via knot Queries — one Query per class.
     counts = {}
-    for cls in (person_v3, movie_v3, credit_v3):
+    for cls in (person, movie, credit):
         sql, params = cls.select(cls.col.canonical_id).sql(schema=schema)
         with pg.cursor() as cur:
             cur.execute(sql, params or None)
@@ -611,14 +590,18 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema, spec_v3):
-    # emit_validation -> [(rule_id, sql), ...]
-    violations = {}
+def _(pg, schema, spec_at_stage3):
+    # Run every constraint's SELECT and show count + severity.
+    # emit_validation -> [(rule_id, sql), ...]; we cross-reference with
+    # spec.constraints to surface severity (ERROR blocks, WARNING flags).
+    severity_by_name = {c.name: c.severity.value for c in spec_at_stage3.constraints}
+    report = {}
     with pg.cursor() as cur:
-        for rule, sql in spec_v3.emit_validation(schema=schema):
+        for rule, sql in spec_at_stage3.emit_validation(schema=schema):
             cur.execute(sql)
-            violations[rule] = cur.fetchall()
-    {rule: len(rows) for rule, rows in violations.items()}
+            rows = cur.fetchall()
+            report[rule] = {"severity": severity_by_name[rule], "violations": len(rows)}
+    report
 
 
 @app.cell
@@ -636,12 +619,12 @@ def _(mo):
 
 
 @app.cell
-def _(movie_v3, pg, schema, spec_v3):
+def _(movie, pg, schema, spec_at_stage3):
     import json as _json
 
     imdb_movie_b = next(
         b
-        for b in spec_v3.source_bindings
+        for b in spec_at_stage3.source_bindings
         if b.source.name == "imdb" and b.class_.name == "Movie"
     )
     bad_batch = [
@@ -656,13 +639,18 @@ def _(movie_v3, pg, schema, spec_v3):
     ]
     close_out, insert = imdb_movie_b.write_sql(schema=schema)
     payload = _json.dumps(bad_batch)
+    # Host-side enforcement filters by severity — only ERROR rules
+    # block the write; WARNING rules are run separately as
+    # informational (this cell ignores them).
+    severity_by_name = {c.name: c.severity.value for c in spec_at_stage3.constraints}
     error = None
     try:
         with pg.transaction(), pg.cursor() as cur:
             cur.execute(close_out, {"rows": payload})
             cur.execute(insert, {"rows": payload})
-            # Host-side enforcement — run validation SELECTs, raise on rows.
-            for rule, vsql in spec_v3.emit_validation(schema=schema):
+            for rule, vsql in spec_at_stage3.emit_validation(schema=schema):
+                if severity_by_name[rule] != "error":
+                    continue
                 cur.execute(vsql)
                 bad = cur.fetchall()
                 if bad:
@@ -673,8 +661,8 @@ def _(movie_v3, pg, schema, spec_v3):
     # Confirm nothing landed despite the attempt. Query the resolved
     # view (not the bindings table) — if the row leaked through, it'd
     # be visible here.
-    check_q = movie_v3.where(movie_v3.col.canonical_id == "m_anachronism").select(
-        movie_v3.col.canonical_id
+    check_q = movie.where(movie.col.canonical_id == "m_anachronism").select(
+        movie.col.canonical_id
     )
     check_sql, check_params = check_q.sql(schema=schema)
     with pg.cursor() as cur:
@@ -743,59 +731,59 @@ def _(pg, schema):
 
 
 @app.cell
-def _(movie_v3, qf):
+def _(movie, qf):
     # Q1 — 10 most recent movies + their directors (FK walk via .director.name)
     qf(
-        movie_v3.order_by(movie_v3.col.year, "desc")
+        movie.order_by(movie.col.year, "desc")
         .limit(10)
-        .select(movie_v3.col.title, movie_v3.col.year, movie_v3.col.director.name)
+        .select(movie.col.title, movie.col.year, movie.col.director.name)
     )
     return
 
 
 @app.cell
-def _(movie_v3, qf):
+def _(movie, qf):
     # Q2 — Movies directed by someone born in the USA
     qf(
-        movie_v3.where(movie_v3.col.director.birth_country == "USA")
-        .order_by(movie_v3.col.year)
-        .select(movie_v3.col.title, movie_v3.col.year, movie_v3.col.director.name)
+        movie.where(movie.col.director.birth_country == "USA")
+        .order_by(movie.col.year)
+        .select(movie.col.title, movie.col.year, movie.col.director.name)
     )
     return
 
 
 @app.cell
-def _(movie_v3, person_v3, qf):
+def _(movie, person, qf):
     from knot import this
 
     # Q3 — Persons who have directed at least one movie
     qf(
-        person_v3.where((movie_v3.col.director == this.Person).any())
-        .order_by(person_v3.col.name)
-        .select(person_v3.col.name, person_v3.col.birth_country)
+        person.where((movie.col.director == this.Person).any())
+        .order_by(person.col.name)
+        .select(person.col.name, person.col.birth_country)
     )
     return (this,)
 
 
 @app.cell
-def _(movie_v3, person_v3, qf, this):
+def _(movie, person, qf, this):
     # Q4 — Directors with more than 3 movies in the dataset
     qf(
-        person_v3.where((movie_v3.col.director == this.Person).count() > 3)
-        .order_by(person_v3.col.name)
-        .select(person_v3.col.name, person_v3.col.birth_country)
+        person.where((movie.col.director == this.Person).count() > 3)
+        .order_by(person.col.name)
+        .select(person.col.name, person.col.birth_country)
     )
     return
 
 
 @app.cell
-def _(movie_v3, person_v3, qf, this):
+def _(movie, person, qf, this):
     # Q5 — People who appear in the dataset but never directed
     qf(
-        person_v3.where((movie_v3.col.director == this.Person).none())
-        .order_by(person_v3.col.name)
+        person.where((movie.col.director == this.Person).none())
+        .order_by(person.col.name)
         .limit(15)
-        .select(person_v3.col.name, person_v3.col.birth_country)
+        .select(person.col.name, person.col.birth_country)
     )
     return
 
@@ -807,12 +795,12 @@ def _(mo):
 
 
 @app.cell
-def _(movie_v3, qsql, this):
+def _(movie, qsql, this):
     print(
         qsql(
-            movie_v3.where(movie_v3.col.director.birth_country == "Japan")
-            .order_by(movie_v3.col.year)
-            .select(movie_v3.col.title, movie_v3.col.director.name)
+            movie.where(movie.col.director.birth_country == "Japan")
+            .order_by(movie.col.year)
+            .select(movie.col.title, movie.col.director.name)
         )
     )
     return
