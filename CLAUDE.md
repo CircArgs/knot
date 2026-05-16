@@ -45,7 +45,8 @@ host processes that own postgres connections. The reference shape is
   (`imdb`, `tmdb`, `rottentomatoes`, …) gets its own workflow
   definition with its own auth, rate limits, schedule, source-shaped
   normalization. Activities pull from the source, normalize, then
-  call `binding.write(rows)` to compile + execute the SCD2 write.
+  call `binding.write_sql()` to get `(close_out_sql, insert_sql)`
+  and execute each with `{"rows": rows}` bound by the driver.
 - **ER workers** (Temporal workflows). Look at unresolved bindings,
   decide canonical_ids (whatever scoring / matching policy the team
   owns), call `binding.assign_canonical(...)` /
@@ -246,14 +247,24 @@ sql = spec.init_sql(schema="knot_data")        # query_fn=None → full create
 sql = spec.init_sql(query_fn=q, schema="knot_data")  # introspect → diff only
 pg.execute(sql)
 
-# Multi-binding atomic batch (one binding → use binding.write(rows))
-bw     = spec.emit_batch_write(writes, schema="knot_data")     # BatchWrite (sql+params)
 checks = spec.emit_validation(schema="knot_data")              # [(name, sql), …]
 ```
 
-The read path lives on the query, not on the spec — `q.sql(schema=…)`
-compiles the AST against its owning spec (back-reference set when the
-query is built via `class_.where(...)` / `.order_by(...)` / etc.).
+Per-entity runtime methods live on the entity:
+
+```python
+sql, params = q.sql(schema="knot_data")              # (sql, params)
+close_out, insert = binding.write_sql(schema="knot_data")  # both reference %(rows)s::jsonb
+sql, params = binding.assign_canonical(...)
+sql, params = binding.recanonicalize(...)
+```
+
+The read path lives on the query, not the spec. The write path lives
+on the binding, not the spec — and never touches the rows: knot
+emits SQL templates that reference `%(rows)s::jsonb`, the host's
+connector binds the actual data. Multi-binding atomic write =
+multiple `binding.write_sql()` calls, all run in one
+`pg.transaction()`.
 
 **Façade contract.**
 
@@ -265,10 +276,10 @@ query is built via `class_.where(...)` / `.order_by(...)` / etc.).
   ``query_fn=None`` substitutes an empty-DB callable, so an empty
   schema gets the full create sequence and a populated schema gets
   only the delta. One code path, two modes.
-- Parameterized / per-element methods (``emit_batch_write``,
-  ``emit_validation``, ``Query.sql``) keep their distinct return
-  shapes — each carries metadata or per-row params that doesn't
-  concatenate cleanly.
+- Parameterized / per-element methods (``binding.write_sql``,
+  ``binding.assign_canonical``, ``emit_validation``, ``Query.sql``)
+  keep their distinct return shapes — each carries metadata or
+  per-row params that doesn't concatenate cleanly.
 
 **Weight runtime**:
 - Per-(source, class, slot) value lives in `<schema>.source_weight`.

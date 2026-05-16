@@ -741,34 +741,39 @@ class SourceBinding:
     # those at the call site.
     # ------------------------------------------------------------------
 
-    def write(
+    def write_sql(
         self,
-        rows: list[dict[str, Any]],
         *,
         schema: str = "knot_data",
-        enforce: bool = False,
-        **kwargs: Any,
-    ) -> Any:
-        """Single-binding batch write. Returns a ``BatchWrite``.
+        bindings_suffix: str = "_bindings",
+    ) -> tuple[str, str]:
+        """Return ``(close_out_sql, insert_sql)`` for this binding's
+        SCD2 write. Both reference a single ``%(rows)s::jsonb``
+        parameter — the host's connector binds the rows.
 
-        For multi-binding atomic writes (multiple sources or multiple
-        classes in one transaction) call ``spec.emit_batch_write([...])``
-        directly with multiple ``ClassWrites`` entries."""
+        Run both statements in one transaction::
+
+            close_out, insert = binding.write_sql()
+            with pg.transaction(), pg.cursor() as cur:
+                cur.execute(close_out, {"rows": rows})
+                cur.execute(insert,    {"rows": rows})
+
+        Multi-binding atomic write: call ``binding.write_sql()`` per
+        binding, run all the statements in one ``pg.transaction()``.
+        Constraint enforcement is the host's concern — run
+        ``spec.emit_validation()`` after the write inside the same
+        transaction and roll back if any return rows.
+        """
         if self.source._spec is None:
             raise RuntimeError(
                 f"binding {self.source.name!r} → {self.class_.name!r} "
                 f"is not attached to a Spec"
             )
-        spec = self.source._spec
-        spec.validate()
-        from knot.compile.write import ClassWrites, emit_batch_write
+        self.source._spec.validate()
+        from knot.compile.write import emit_binding_write_sql
 
-        return emit_batch_write(
-            spec,
-            [ClassWrites(binding=self, rows=rows)],
-            schema=schema,
-            enforce=enforce,
-            **kwargs,
+        return emit_binding_write_sql(
+            self, schema=schema, bindings_suffix=bindings_suffix
         )
 
     def assign_canonical(
@@ -1088,14 +1093,15 @@ class Spec:
     # ``knot.compile.*`` are validation-free — they're the back door for
     # adapters and tests that want to compile arbitrary inputs.
     #
-    # Four methods, four concerns:
+    # Three methods, three concerns:
     #   - validate        — well-formedness check
     #   - init_sql        — schema deploy / migrate (one SQL script)
-    #   - emit_batch_write— runtime multi-binding ingest
     #   - emit_validation — runtime constraint checks (per-rule SELECTs)
-    # Per-entity reads live on the entity: ``query.sql(schema=…)`` on
-    # the ``Query`` AST node, built via ``class_.where(...)`` /
-    # ``.order_by(...)`` / etc.
+    # Per-entity runtime methods live on the entity:
+    #   - ``query.sql(schema=…)``               read (Query AST node)
+    #   - ``binding.write(rows)``               ingest (SourceBinding)
+    #   - ``binding.assign_canonical(...)``     ER stamp (SourceBinding)
+    #   - ``binding.recanonicalize(...)``       ER reassign (SourceBinding)
     # ------------------------------------------------------------------
 
     def init_sql(
@@ -1130,14 +1136,6 @@ class Spec:
             self, query_fn, schema=schema, allow_destructive=allow_destructive
         )
         return "\n\n".join(op.sql for op in ops)
-
-    def emit_batch_write(self, writes: Any, **kwargs: Any) -> Any:
-        """Transactional SCD2 batch write. Validates the spec first.
-        See ``knot.compile.write.emit_batch_write``."""
-        self.validate()
-        from knot.compile.write import emit_batch_write
-
-        return emit_batch_write(self, writes, **kwargs)
 
     def emit_validation(self, **kwargs: Any) -> Any:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates

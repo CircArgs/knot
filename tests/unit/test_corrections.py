@@ -5,8 +5,6 @@ import sqlglot
 
 from knot import CORRECTIONS_SOURCE_NAME, Spec, types
 from knot.compile import (
-    ClassWrites,
-    emit_batch_write,
     emit_close_out,
     emit_weight_seed,
 )
@@ -156,43 +154,23 @@ def test_emit_close_out_rejects_unknown_class():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end: corrections write through emit_batch_write + weight seed
+# End-to-end: corrections write through binding.write_sql + weight seed
 # ---------------------------------------------------------------------------
 
 
-def test_corrections_write_uses_batch_write():
+def test_corrections_write_uses_same_scd2_machinery():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
     movie.slot("year", types.INTEGER)
     spec.enable_corrections()
     b = movie.corrections_binding()
-    bw = emit_batch_write(
-        spec,
-        [
-            ClassWrites(
-                binding=b,
-                rows=[
-                    {
-                        "canonical_id": "m1",
-                        "source_identifier": "curator-42",
-                        "year": 1925,
-                    },
-                ],
-            )
-        ],
-        enforce=False,
-    )
+    close_out, insert = b.write_sql()
     # Same SCD2 machinery as any other binding write.
-    assert "source_name = '_user_corrections'" in "\n\n".join(
-        s for s, _ in bw.statements
-    )
-    assert "UPDATE knot_data.movie_bindings" in "\n\n".join(
-        s for s, _ in bw.statements
-    )  # close-out
-    assert "INSERT INTO knot_data.movie_bindings" in "\n\n".join(
-        s for s, _ in bw.statements
-    )
+    assert "UPDATE knot_data.movie_bindings" in close_out
+    assert "source_name = '_user_corrections'" in close_out
+    assert "INSERT INTO knot_data.movie_bindings" in insert
+    assert "'_user_corrections'" in insert  # baked in as INSERT SELECT literal
 
 
 def test_corrections_appear_in_weight_seed():

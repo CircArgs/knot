@@ -3,7 +3,7 @@
 Each test gets a fresh schema. We:
   1. Build a Spec
   2. Apply emit_ddl + emit_weight_seed to the schema
-  3. Exercise the write path (emit_batch_write / emit_close_out)
+  3. Exercise the write path (binding.write_sql / emit_close_out)
   4. Query the resolved view + validation SELECTs and assert behavior
   5. Evolve the spec, run diff_against_db, apply the ops, repeat
 
@@ -19,9 +19,7 @@ from knot import (
     types,
 )
 from knot.compile import (
-    ClassWrites,
     diff_against_db,
-    emit_batch_write,
     emit_close_out,
     emit_ddl,
     emit_validation,
@@ -66,17 +64,19 @@ def _write_claim(
     rows: list[dict],
     *,
     schema: str,
-    enforce: bool = False,
 ) -> None:
-    bw = emit_batch_write(
-        spec,
-        [ClassWrites(binding=binding, rows=rows)],
-        schema=schema,
-        enforce=enforce,
-    )
+    close_out, insert = binding.write_sql(schema=schema)
     with pg.cursor() as cur:
-        for sql, params in bw.statements:
-            cur.execute(sql, params)
+        cur.execute(close_out, {"rows": _json(rows)})
+        cur.execute(insert, {"rows": _json(rows)})
+
+
+def _json(rows: list[dict]) -> str:
+    """Serialize a row list as a JSON string for psycopg's jsonb binding.
+    Psycopg2 wants a string; psycopg3 auto-adapts dicts/lists."""
+    import json as _json_mod
+
+    return _json_mod.dumps(rows)
 
 
 # ---------------------------------------------------------------------------

@@ -1,89 +1,42 @@
-"""Write-data path — batched SCD2 binding writes.
+"""Write-data path — SCD2 binding write SQL templates.
 
-Single primitive: ``emit_batch_write`` takes a list of ``ClassWrites``
-(one per class participating in the batch) and returns a single
-transactional SQL script the host runs in one ``execute(sql, params)``
-call. Single-row writes are just a one-element list with one row.
+``emit_binding_write_sql`` takes a ``SourceBinding`` and returns
+``(close_out_sql, insert_sql)`` — two SQL templates both referencing
+a single ``%(rows)s::jsonb`` parameter. The host binds the rows to
+its connector and runs both statements sequentially in one
+transaction. knot never touches the actual row data; rows are
+runtime input, not compile-time input.
 
-For each ``ClassWrites`` the emitter produces:
+The emitter produces:
 
-  1. **bulk close-out** — ``UPDATE … FROM jsonb_array_elements(…)`` that
-     sets ``valid_to = now()`` on every prior currently-open binding for
-     the ``(identifier, source_name, source_identifier)`` triples in the
-     batch.
-  2. **bulk insert** — ``INSERT … SELECT FROM jsonb_array_elements(…)``.
-     When ``use_mappings=True`` the binding's per-slot SQL projections
-     are applied server-side over the raw source fields; otherwise the
-     row dicts are interpreted as direct slot values.
+  1. **close-out** — ``UPDATE … FROM jsonb_array_elements(%(rows)s::jsonb)``
+     sets ``valid_to = now()`` on every prior currently-open binding
+     for the ``(identifier, source_identifier)`` keys in the batch.
+  2. **insert** — ``INSERT … SELECT FROM jsonb_array_elements(%(rows)s::jsonb)``.
+     The binding's per-slot mappings (``source_slot``, optional
+     ``sql``) are applied server-side over the raw source fields.
 
-When ``enforce=True`` the script ends with a PL/pgSQL ``DO`` block that
-runs every validation SELECT whose primary is one of the affected
-classes (error severity only) and ``RAISE EXCEPTION`` on any violation;
-the surrounding transaction rolls back automatically.
+Postgres' ``jsonb_array_elements`` iterates each element as ``r`` so
+mapping expressions reference its keys as bare columns through the
+``raw`` subquery alias (no rewriting of the mappings is required).
 
-Row payloads are passed as one ``jsonb`` parameter per class, named
-``<class_lowercase>_rows``. Postgres' ``jsonb_array_elements`` iterates
-each element as ``r`` so mapping expressions reference its keys as bare
-columns through the ``raw`` subquery alias (no rewriting of the
-mappings is required).
+Constraint enforcement is a separate concern — the host runs
+``spec.emit_validation()`` SELECTs after the write inside the same
+transaction and rolls back if any return rows.
+
+Multi-binding atomic writes (multiple sources / classes in one
+transaction) are the host's responsibility: call
+``binding.write_sql()`` per binding, run all of the resulting
+statements in a single ``pg.transaction()``.
 """
 
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
 from typing import Any
 
 from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
-from knot.compile.constraints import emit_validation
 from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding, Spec
-
-# ---------------------------------------------------------------------------
-# Public dataclasses
-# ---------------------------------------------------------------------------
-
-
-@dataclass(frozen=True)
-class ClassWrites:
-    """One class's contribution to a batch write.
-
-    ``binding`` carries the (source, class) identity and the per-slot
-    mappings (``binding.slot_mappings``). ``rows`` is a list of dicts
-    keyed by **raw source field names** — i.e. the ``source_slot``
-    names declared in the binding. Slots without an explicit
-    ``.slot(...)`` mapping default to a same-name passthrough: row key
-    equals class slot name.
-
-    Every row must also include ``source_identifier`` (the source's
-    own opaque ID, used for SCD2 close-out).
-    """
-
-    binding: SourceBinding
-    rows: list[dict[str, Any]]
-
-
-@dataclass(frozen=True)
-class BatchWrite:
-    """A multi-class batch write as a list of single-statement
-    ``(sql, params)`` tuples.
-
-    Each tuple is one already-parameterized statement the host runs
-    via ``cursor.execute(sql, params)``. Multi-statement scripts +
-    params don't mix with postgres' prepared-statement protocol, so
-    the emitter splits at compile time — the host doesn't need to
-    know about any blank-line convention.
-
-    Run them in order inside a transaction:
-
-        with pg.transaction():
-            with pg.cursor() as cur:
-                for sql, params in bw.statements:
-                    cur.execute(sql, params)
-    """
-
-    statements: list[tuple[str, dict[str, Any]]]
-    affected_classes: tuple[str, ...]
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -201,16 +154,16 @@ def _passthrough_value(slot: Slot, raw_field: str) -> str:
 
 
 def _emit_class_insert(
-    cw: ClassWrites,
+    binding: SourceBinding,
     *,
     schema: str,
     bindings_suffix: str,
     rows_param: str,
 ) -> str:
-    cls = cw.binding.class_
+    cls = binding.class_
     _check_concrete(cls)
     table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    source_literal = _sql_literal(cw.binding.source.name)
+    source_literal = _sql_literal(binding.source.name)
     eff_slots = cls.effective_slots()
     # raw_payload always trails the slot columns; preserves the full
     # ingested row so unmapped fields are recoverable later.
@@ -221,13 +174,13 @@ def _emit_class_insert(
     )
     columns_csv = ", ".join(insert_columns)
 
-    raw_subquery = _emit_raw_subquery(cw.binding, rows_param)
+    raw_subquery = _emit_raw_subquery(binding, rows_param)
     select_lines: list[str] = [
         f"    {source_literal}",
         "    raw.source_identifier",
     ]
     for slot in eff_slots:
-        m = cw.binding.effective_mapping(slot.name)
+        m = binding.effective_mapping(slot.name)
         if m.sql is not None:
             # Explicit SQL — user owns casting; the SQL references the
             # raw subquery's text aliases by bare name (postgres resolves
@@ -243,20 +196,17 @@ def _emit_class_insert(
 
 
 def _emit_class_close_out(
-    cw: ClassWrites,
+    binding: SourceBinding,
     *,
     schema: str,
     bindings_suffix: str,
     rows_param: str,
 ) -> str:
-    cls = cw.binding.class_
+    cls = binding.class_
     _check_concrete(cls)
     ident = cls.identifier_slot()
     table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    source_literal = _sql_literal(cw.binding.source.name)
-    # In mapped mode the identifier lives under raw.<ident_name>; in
-    # direct-slot mode it's under r->>'<ident_name>'. We use jsonb
-    # extraction in both cases for the close-out — simpler.
+    source_literal = _sql_literal(binding.source.name)
     return (
         f"UPDATE {table} AS b\n"
         f"SET valid_to = now()\n"
@@ -274,137 +224,46 @@ def _emit_class_close_out(
 
 
 # ---------------------------------------------------------------------------
-# Enforcement block — PL/pgSQL DO that RAISEs on error-severity violations
-# ---------------------------------------------------------------------------
-
-
-def _emit_enforcement_block(
-    spec: Spec,
-    affected_classes: set[str],
-    *,
-    schema: str,
-) -> str | None:
-    """Return a PL/pgSQL DO block that runs validation for the affected
-    classes' constraints and raises on any error-severity violation, or
-    ``None`` if no error-severity constraints touch the batch.
-
-    Note: validation SELECTs target the canonical table (not bindings)
-    by emit_validation's current contract. Until the resolver maintains
-    the canonical view from bindings, in-batch enforcement only catches
-    constraints checkable against canonical state the host writes
-    directly. Retargeting validation to the bindings-current view is a
-    separate follow-up item.
-    """
-    relevant_names: list[str] = []
-    for c in spec.constraints:
-        if c.primary.name not in affected_classes:
-            continue
-        if c.severity.value != "error":
-            continue
-        relevant_names.append(c.name)
-    if not relevant_names:
-        return None
-
-    # Reuse emit_validation to get fully-rewritten SELECTs, then filter.
-    all_v = dict(emit_validation(spec, schema=schema))
-    union_parts = []
-    for name in relevant_names:
-        if name not in all_v:
-            continue
-        # Strip the trailing ';' for UNION ALL composition.
-        union_parts.append(all_v[name].rstrip().rstrip(";"))
-    if not union_parts:
-        return None
-    union_sql = "\n  UNION ALL\n".join(union_parts)
-
-    return (
-        "DO $$\n"
-        "DECLARE v RECORD;\n"
-        "BEGIN\n"
-        "  FOR v IN\n"
-        f"{union_sql}\n"
-        "  LOOP\n"
-        "    RAISE EXCEPTION "
-        "'knot constraint violated: rule=% class=% pk=% message=%',\n"
-        "      v.rule_id, v.class_name, v.offending_pk, COALESCE(v.message, '');\n"
-        "  END LOOP;\n"
-        "END $$;"
-    )
-
-
-# ---------------------------------------------------------------------------
 # Public entry point
 # ---------------------------------------------------------------------------
 
 
-def emit_batch_write(
-    spec: Spec,
-    writes: list[ClassWrites],
+def emit_binding_write_sql(
+    binding: SourceBinding,
     *,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
-    enforce: bool = True,
-) -> BatchWrite:
-    """Return a multi-class batch write as a list of per-statement
-    ``(sql, params)`` tuples. The host runs them in a transaction.
+) -> tuple[str, str]:
+    """Return ``(close_out_sql, insert_sql)`` for one binding's SCD2
+    write. Both reference a single ``%(rows)s::jsonb`` parameter — the
+    host's connector binds the rows.
 
-    Each class contributes two statements (close-out + insert) that
-    share one jsonb param. The optional enforcement DO block has no
-    params and is appended last when ``enforce=True``.
+    Run them in order in one transaction::
+
+        close_out, insert = binding.write_sql()
+        with pg.transaction(), pg.cursor() as cur:
+            cur.execute(close_out, {"rows": rows})
+            cur.execute(insert,    {"rows": rows})
+
+    Constraint enforcement is the host's concern — run
+    ``spec.emit_validation()`` SELECTs after the write inside the
+    same transaction and roll back if any return rows.
     """
-    if not writes:
-        raise ValueError("emit_batch_write: writes list is empty")
-
-    statements: list[tuple[str, dict[str, Any]]] = []
-    used_param_keys: set[str] = set()
-    affected: set[str] = set()
-
-    for cw in writes:
-        cls = cw.binding.class_
-        _check_concrete(cls)
-        affected.add(cls.name)
-        # Param key per (source, class). Same source + same class twice
-        # in one batch is a duplicate (rejected); different sources writing
-        # the same class is fine — they go to different param slots.
-        rows_param = f"{cw.binding.source.name.lower()}_{cls.name.lower()}_rows"
-        if rows_param in used_param_keys:
-            raise ValueError(
-                f"duplicate ClassWrites for ({cw.binding.source.name!r}, "
-                f"{cls.name!r}) in batch"
-            )
-        used_param_keys.add(rows_param)
-        class_params = {rows_param: json.dumps(cw.rows)}
-        statements.append(
-            (
-                _emit_class_close_out(
-                    cw,
-                    schema=schema,
-                    bindings_suffix=bindings_suffix,
-                    rows_param=rows_param,
-                ),
-                class_params,
-            )
-        )
-        statements.append(
-            (
-                _emit_class_insert(
-                    cw,
-                    schema=schema,
-                    bindings_suffix=bindings_suffix,
-                    rows_param=rows_param,
-                ),
-                class_params,
-            )
-        )
-
-    if enforce:
-        block = _emit_enforcement_block(spec, affected, schema=schema)
-        if block is not None:
-            statements.append((block, {}))
-
-    return BatchWrite(
-        statements=statements,
-        affected_classes=tuple(sorted(affected)),
+    _check_concrete(binding.class_)
+    rows_param = "rows"
+    return (
+        _emit_class_close_out(
+            binding,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+            rows_param=rows_param,
+        ),
+        _emit_class_insert(
+            binding,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+            rows_param=rows_param,
+        ),
     )
 
 

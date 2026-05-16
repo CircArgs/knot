@@ -110,9 +110,10 @@ def _():
     movie_v1.slot("director", person_v1)  # FK to Person
 
     # A constraint isn't a postgres CHECK — it's a rule the spec
-    # compiles to a validation SELECT (and optionally an in-transaction
-    # DO block via ``enforce=True``). The first non-trivial domain rule
-    # on Movie: no film predates the Lumière screenings of 1888.
+    # compiles to a validation SELECT. The host runs it whenever it
+    # wants (after a write, periodically, on-demand). The first
+    # non-trivial domain rule on Movie: no film predates the Lumière
+    # screenings of 1888.
     movie_v1.add_constraint(
         "year_sane",
         body=movie_v1.col.year >= 1888,
@@ -139,23 +140,23 @@ def _(mo, pg, schema, spec_v1):
 
 @app.cell
 def _(load, pg, schema, spec_v1):
-    from knot.compile import ClassWrites
+    import json as _json
 
-    # Ingest from imdb only. Pass row dicts straight through.
+    # Ingest from imdb only. ``binding.write_sql()`` returns
+    # ``(close_out_sql, insert_sql)`` — both reference ``%(rows)s::jsonb``.
+    # The host binds the rows; knot never touches the row data.
+    def write_to(binding, rows):
+        close_out, insert = binding.write_sql(schema=schema)
+        payload = _json.dumps(rows)
+        with pg.cursor() as cur:
+            cur.execute(close_out, {"rows": payload})
+            cur.execute(insert, {"rows": payload})
+
     movie_b = next(b for b in spec_v1.source_bindings if b.class_.name == "Movie")
     person_b = next(b for b in spec_v1.source_bindings if b.class_.name == "Person")
 
-    bw = spec_v1.emit_batch_write(
-        [
-            ClassWrites(binding=person_b, rows=load("imdb", "persons")),
-            ClassWrites(binding=movie_b, rows=load("imdb", "movies")),
-        ],
-        schema=schema,
-        enforce=False,
-    )
-    with pg.cursor() as cur:
-        for sql, params in bw.statements:
-            cur.execute(sql, params)
+    write_to(person_b, load("imdb", "persons"))
+    write_to(movie_b, load("imdb", "movies"))
 
     with pg.cursor() as cur:
         cur.execute(f"SELECT count(*) FROM {schema}.person_resolved")
@@ -163,7 +164,7 @@ def _(load, pg, schema, spec_v1):
         cur.execute(f"SELECT count(*) FROM {schema}.movie_resolved")
         movie_count = cur.fetchone()[0]
     f"Stage 1 ingest: {person_count} persons, {movie_count} movies (imdb only)."
-    return (ClassWrites,)
+    return (write_to,)
 
 
 @app.cell
@@ -252,32 +253,23 @@ def _(mo, pg, schema, spec_v2):
 
 
 @app.cell
-def _(ClassWrites, load, pg, schema, spec_v2):
+def _(load, pg, schema, spec_v2, write_to):
     # Ingest tmdb's overlapping rows. Many of these are about the SAME
     # canonical Movies and Persons that imdb already wrote — but with
     # tmdb's own source_identifier and occasionally different field values.
-    person_b = next(
+    tmdb_person_b = next(
         b
         for b in spec_v2.source_bindings
         if b.source.name == "tmdb" and b.class_.name == "Person"
     )
-    movie_b = next(
+    tmdb_movie_b = next(
         b
         for b in spec_v2.source_bindings
         if b.source.name == "tmdb" and b.class_.name == "Movie"
     )
 
-    bw = spec_v2.emit_batch_write(
-        [
-            ClassWrites(binding=person_b, rows=load("tmdb", "persons")),
-            ClassWrites(binding=movie_b, rows=load("tmdb", "movies")),
-        ],
-        schema=schema,
-        enforce=False,
-    )
-    with pg.cursor() as cur:
-        for sql, params in bw.statements:
-            cur.execute(sql, params)
+    write_to(tmdb_person_b, load("tmdb", "persons"))
+    write_to(tmdb_movie_b, load("tmdb", "movies"))
 
     with pg.cursor() as cur:
         cur.execute(f"SELECT count(*) FROM {schema}.movie_bindings")
@@ -436,31 +428,26 @@ def _(mo):
 
 
 @app.cell
-def _(ClassWrites, pg, schema, spec_v2):
-    movie_b = next(
+def _(pg, schema, spec_v2, write_to):
+    correction_b = next(
         b
         for b in spec_v2.source_bindings
         if b.source.name == "imdb" and b.class_.name == "Movie"
     )
     # Re-ingest one imdb row with a deliberately-different runtime.
-    correction = [
-        {
-            "canonical_id": "m_killbill1",
-            "source_identifier": "tt2878306",
-            "title": "Kill Bill: Vol. 1",
-            "year": 2003,
-            "runtime_minutes": 111,  # was 112 in the original ingest
-            "director": "p_tarantino",
-        }
-    ]
-    bw = spec_v2.emit_batch_write(
-        [ClassWrites(binding=movie_b, rows=correction)],
-        schema=schema,
-        enforce=False,
+    write_to(
+        correction_b,
+        [
+            {
+                "canonical_id": "m_killbill1",
+                "source_identifier": "tt2878306",
+                "title": "Kill Bill: Vol. 1",
+                "year": 2003,
+                "runtime_minutes": 111,  # was 112 in the original ingest
+                "director": "p_tarantino",
+            }
+        ],
     )
-    with pg.cursor() as cur:
-        for sql, params in bw.statements:
-            cur.execute(sql, params)
 
     with pg.cursor() as cur:
         cur.execute(
@@ -574,10 +561,10 @@ def _(mo, pg, query_fn, schema, spec_v3):
 
 
 @app.cell
-def _(ClassWrites, load, pg, schema, spec_v3):
+def _(load, pg, schema, spec_v3, write_to):
     # Ingest the remaining data — rottentomatoes for everything, plus
-    # credits from all three sources.
-    writes = []
+    # credits from all three sources. Per binding; one binding.write_sql()
+    # call per source × class.
     for source_name in ("imdb", "tmdb", "rottentomatoes"):
         # rottentomatoes is brand new — persons/movies from it.
         # imdb/tmdb persons/movies already ingested, but their credits
@@ -590,19 +577,14 @@ def _(ClassWrites, load, pg, schema, spec_v3):
                     for b in spec_v3.source_bindings
                     if b.source.name == source_name and b.class_.name == cls_name
                 )
-                writes.append(ClassWrites(binding=b, rows=load(source_name, entity)))
+                write_to(b, load(source_name, entity))
         else:
             b = next(
                 b
                 for b in spec_v3.source_bindings
                 if b.source.name == source_name and b.class_.name == "Credit"
             )
-            writes.append(ClassWrites(binding=b, rows=load(source_name, "credits")))
-
-    bw = spec_v3.emit_batch_write(writes, schema=schema, enforce=False)
-    with pg.cursor() as cur:
-        for sql, params in bw.statements:
-            cur.execute(sql, params)
+            write_to(b, load(source_name, "credits"))
 
     with pg.cursor() as cur:
         counts = {}
@@ -640,20 +622,21 @@ def _(pg, schema, spec_v3):
 @app.cell
 def _(mo):
     mo.md(r"""
-    ### Reject bad writes at ingest time with ``enforce=True``
+    ### Reject bad writes by host-side enforcement
 
-    Same validation SQLs, wrapped in a PL/pgSQL ``DO`` block appended
-    to the batch write. Postgres runs the inserts and the checks in
-    one transaction; any constraint violation ``RAISE``s and the
-    whole batch rolls back. Below: try to ingest a fake "Le Voyage
-    dans la Lune from 1850" — predates film, so ``year_sane`` fires
-    and nothing is written.
+    knot doesn't bundle constraint checks into the write SQL — the host
+    wraps `binding.write_sql()` + `spec.emit_validation()` in one
+    transaction and rolls back if any violation row appears. Below:
+    try to ingest a fake "Le Voyage dans la Lune from 1850" — predates
+    film, so `year_sane` fires and nothing is written.
     """)
     return
 
 
 @app.cell
-def _(ClassWrites, pg, psycopg, schema, spec_v3):
+def _(pg, schema, spec_v3):
+    import json as _json
+
     imdb_movie_b = next(
         b
         for b in spec_v3.source_bindings
@@ -669,18 +652,20 @@ def _(ClassWrites, pg, psycopg, schema, spec_v3):
             "director": "p_melies",
         }
     ]
-    bw = spec_v3.emit_batch_write(
-        [ClassWrites(binding=imdb_movie_b, rows=bad_batch)],
-        schema=schema,
-        enforce=True,
-    )
+    close_out, insert = imdb_movie_b.write_sql(schema=schema)
+    payload = _json.dumps(bad_batch)
     error = None
     try:
-        with pg.transaction():
-            with pg.cursor() as cur:
-                for sql, params in bw.statements:
-                    cur.execute(sql, params)
-    except psycopg.errors.RaiseException as e:
+        with pg.transaction(), pg.cursor() as cur:
+            cur.execute(close_out, {"rows": payload})
+            cur.execute(insert, {"rows": payload})
+            # Host-side enforcement — run validation SELECTs, raise on rows.
+            for rule, vsql in spec_v3.emit_validation(schema=schema):
+                cur.execute(vsql)
+                bad = cur.fetchall()
+                if bad:
+                    raise RuntimeError(f"constraint {rule!r} violated: {bad}")
+    except RuntimeError as e:
         error = str(e).splitlines()[0]
 
     # Confirm nothing landed despite the attempt.

@@ -7,9 +7,8 @@ Each emitter is a free function on the corresponding module:
   - ``knot.compile.resolver.emit_resolved_views`` all concrete classes' resolved views
   - ``knot.compile.constraints.emit_validation``  per-constraint validation SELECTs
   - ``knot.compile.constraints.emit_validation_union``  single-query UNION ALL form
-  - ``knot.compile.write.emit_batch_write``     batched SCD2 binding writes,
-                                                  optionally with in-transaction
-                                                  constraint enforcement
+  - ``knot.compile.write.emit_binding_write_sql`` SCD2 write SQL templates
+                                                  for one binding (close-out + insert)
 
 The spec itself lives in Python code (see ``knot.spec`` / ``knot.expr``).
 Migrations diff the in-memory spec against the live postgres schema at
@@ -32,10 +31,8 @@ from knot.compile.resolver import (
 )
 from knot.compile.weight import emit_weight_seed
 from knot.compile.write import (
-    BatchWrite,
-    ClassWrites,
     emit_assign_canonical,
-    emit_batch_write,
+    emit_binding_write_sql,
     emit_close_out,
     emit_recanonicalize,
 )
