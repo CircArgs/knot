@@ -776,53 +776,56 @@ class SourceBinding:
             self, schema=schema, bindings_suffix=bindings_suffix
         )
 
-    def assign_canonical(
+    def assign_canonical_sql(
         self,
         *,
-        source_identifier: str,
-        canonical_id: str,
-        er_metadata: dict[str, Any] | None = None,
         schema: str = "knot_data",
-        **kwargs: Any,
-    ) -> tuple[str, dict[str, Any]]:
-        """SQL to assign a ``canonical_id`` to one previously-unresolved
-        binding row identified by ``source_identifier``. The (source,
-        class) is pinned by this binding. See
-        ``knot.compile.write.emit_assign_canonical``."""
-        from knot.compile.write import emit_assign_canonical
+        bindings_suffix: str = "_bindings",
+    ) -> str:
+        """Return the SQL template that assigns a ``canonical_id`` to
+        one unresolved binding row. Three named placeholders —
+        ``%(canonical_id)s``, ``%(source_identifier)s``,
+        ``%(er_metadata)s`` (None to leave unchanged, JSON string to
+        set). Host binds via ``cur.execute(sql, params)``. See
+        ``knot.compile.write.emit_assign_canonical_sql``."""
+        from knot.compile.write import emit_assign_canonical_sql
 
-        return emit_assign_canonical(
-            self.class_,
-            canonical_id,
-            source_name=self.source.name,
-            source_identifier=source_identifier,
-            er_metadata=er_metadata,
-            schema=schema,
-            **kwargs,
+        return emit_assign_canonical_sql(
+            self, schema=schema, bindings_suffix=bindings_suffix
         )
 
-    def recanonicalize(
+    def recanonicalize_sql(
         self,
         *,
-        source_identifier: str,
-        new_canonical_id: str,
-        er_metadata: dict[str, Any] | None = None,
         schema: str = "knot_data",
-        **kwargs: Any,
-    ) -> tuple[str, dict[str, Any]]:
-        """SCD2-aware reassignment of one binding row's canonical_id.
-        See ``knot.compile.write.emit_recanonicalize``."""
-        from knot.compile.write import emit_recanonicalize
+        bindings_suffix: str = "_bindings",
+    ) -> str:
+        """Return the SQL template that reassigns a binding row's
+        ``canonical_id``, preserving history via SCD2. Three named
+        placeholders — ``%(new_canonical_id)s``,
+        ``%(source_identifier)s``, ``%(er_metadata)s`` (None inherits
+        the closed row's metadata; JSON string overrides). See
+        ``knot.compile.write.emit_recanonicalize_sql``."""
+        from knot.compile.write import emit_recanonicalize_sql
 
-        return emit_recanonicalize(
-            self.class_,
-            new_canonical_id,
-            source_name=self.source.name,
-            source_identifier=source_identifier,
-            er_metadata=er_metadata,
-            schema=schema,
-            **kwargs,
+        return emit_recanonicalize_sql(
+            self, schema=schema, bindings_suffix=bindings_suffix
         )
+
+    def close_out_sql(
+        self,
+        *,
+        schema: str = "knot_data",
+        bindings_suffix: str = "_bindings",
+    ) -> str:
+        """Return the SQL template that closes out one open binding
+        row without inserting a replacement. Two named placeholders
+        — ``%(canonical_id)s``, ``%(source_identifier)s``. Used to
+        retract a source's claim. See
+        ``knot.compile.write.emit_close_out_sql``."""
+        from knot.compile.write import emit_close_out_sql
+
+        return emit_close_out_sql(self, schema=schema, bindings_suffix=bindings_suffix)
 
 
 # ---------------------------------------------------------------------------
@@ -1100,8 +1103,9 @@ class Spec:
     # Per-entity runtime methods live on the entity:
     #   - ``query.sql(schema=…)``               read (Query AST node)
     #   - ``binding.write(rows)``               ingest (SourceBinding)
-    #   - ``binding.assign_canonical(...)``     ER stamp (SourceBinding)
-    #   - ``binding.recanonicalize(...)``       ER reassign (SourceBinding)
+    #   - ``binding.assign_canonical_sql()``    ER stamp (SourceBinding)
+    #   - ``binding.recanonicalize_sql()``      ER reassign (SourceBinding)
+    #   - ``binding.close_out_sql()``           retract a claim (SourceBinding)
     # ------------------------------------------------------------------
 
     def init_sql(

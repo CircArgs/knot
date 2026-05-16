@@ -1,11 +1,11 @@
-"""knot — _user_corrections synthetic source + emit_close_out."""
+"""knot — _user_corrections synthetic source + close_out_sql."""
 
 import pytest
 import sqlglot
 
-from knot import CORRECTIONS_SOURCE_NAME, Spec, types
+from knot import CORRECTIONS_SOURCE_NAME, SourceBinding, Spec, types
 from knot.compile import (
-    emit_close_out,
+    emit_close_out_sql,
     emit_weight_seed,
 )
 
@@ -92,19 +92,17 @@ def test_corrections_binding_raises_when_disabled():
 
 
 # ---------------------------------------------------------------------------
-# emit_close_out — used to withdraw a correction (no replacement INSERT)
+# binding.close_out_sql — used to withdraw a correction (no replacement INSERT)
 # ---------------------------------------------------------------------------
 
 
-def test_emit_close_out_targets_correct_table_and_source():
+def test_close_out_sql_targets_correct_table_and_source():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    sql = emit_close_out(
-        spec,
-        class_name="Movie",
-        source_name=CORRECTIONS_SOURCE_NAME,
-    )
+    spec.enable_corrections()
+    b = movie.corrections_binding()
+    sql = emit_close_out_sql(b)
     assert "UPDATE knot_data.movie_bindings" in sql
     assert "SET valid_to = now()" in sql
     assert "source_name = '_user_corrections'" in sql
@@ -113,44 +111,57 @@ def test_emit_close_out_targets_correct_table_and_source():
     assert "valid_to IS NULL" in sql
 
 
-def test_emit_close_out_parses_postgres():
+def test_close_out_sql_parses_postgres():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    sql = emit_close_out(spec, class_name="Movie", source_name="imdb")
-    sqlglot.parse_one(sql, dialect="postgres")
+    src = spec.add_source("imdb")
+    b = src.bind(movie)
+    sqlglot.parse_one(emit_close_out_sql(b), dialect="postgres")
 
 
-def test_emit_close_out_uses_class_identifier_column_name():
+def test_close_out_sql_uses_class_identifier_column_name():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("imdb_id", types.TEXT, identifier=True)  # non-default ident
-    sql = emit_close_out(spec, class_name="Movie", source_name="imdb")
+    src = spec.add_source("imdb")
+    b = src.bind(movie)
+    sql = emit_close_out_sql(b)
     # The WHERE clause uses the actual identifier slot's column name,
     # not the literal "canonical_id".
     assert "imdb_id = %(canonical_id)s" in sql
 
 
-def test_emit_close_out_escapes_apostrophe_in_source_name():
+def test_close_out_sql_escapes_apostrophe_in_source_name():
     spec = Spec(id="m", version="0.1")
     movie = spec.add_class("Movie")
     movie.slot("canonical_id", types.TEXT, identifier=True)
-    sql = emit_close_out(spec, class_name="Movie", source_name="o'brien")
+    src = spec.add_source("o_brien")
+    src.name = "o'brien"  # simulate apostrophe
+    b = src.bind(movie)
+    sql = emit_close_out_sql(b)
     assert "'o''brien'" in sql
 
 
-def test_emit_close_out_rejects_abstract_class():
+def test_close_out_sql_rejects_abstract_class():
     spec = Spec(id="m", version="0.1")
     title = spec.add_class("Title", kind="abstract")
     title.slot("canonical_id", types.TEXT, identifier=True)
+    src = spec.add_source("imdb")
+    # Construct an abstract binding directly (the builder forbids it).
+    b = SourceBinding(source=src, class_=title)
+    spec.source_bindings.append(b)
     with pytest.raises(ValueError, match="abstract"):
-        emit_close_out(spec, class_name="Title", source_name="imdb")
+        emit_close_out_sql(b)
 
 
-def test_emit_close_out_rejects_unknown_class():
+def test_close_out_sql_via_binding_method_matches_free_function():
     spec = Spec(id="m", version="0.1")
-    with pytest.raises(ValueError, match="no concrete class"):
-        emit_close_out(spec, class_name="Ghost", source_name="imdb")
+    movie = spec.add_class("Movie")
+    movie.slot("canonical_id", types.TEXT, identifier=True)
+    src = spec.add_source("imdb")
+    b = src.bind(movie)
+    assert b.close_out_sql() == emit_close_out_sql(b)
 
 
 # ---------------------------------------------------------------------------

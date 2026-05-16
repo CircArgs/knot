@@ -32,11 +32,8 @@ statements in a single ``pg.transaction()``.
 
 from __future__ import annotations
 
-import json
-from typing import Any
-
 from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
-from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding, Spec
+from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -267,31 +264,30 @@ def emit_binding_write_sql(
     )
 
 
-def emit_close_out(
-    spec: Spec,
+def emit_close_out_sql(
+    binding: SourceBinding,
     *,
-    class_name: str,
-    source_name: str,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
 ) -> str:
-    """Close out the currently-open binding for one ``(class, source,
-    source_identifier)`` pair without inserting a replacement.
+    """Return the SQL template that closes out one currently-open
+    binding row without inserting a replacement.
 
-    Use to retract a source's claim — most commonly to withdraw a user
-    correction so the resolver falls back to the next-best source.
-    The corresponding INSERT half of the SCD2 dance is intentionally
-    omitted; this is just a one-shot ``UPDATE``.
+    Use to retract a source's claim — most commonly to withdraw a
+    user correction so the resolver falls back to the next-best
+    source. The corresponding INSERT half of the SCD2 dance is
+    intentionally omitted; this is just a one-shot ``UPDATE``.
 
-    Returns parameterized SQL with named placeholders ``%(canonical_id)s``
-    and ``%(source_identifier)s``. The host runs::
+    SQL has named placeholders ``%(canonical_id)s`` and
+    ``%(source_identifier)s``. Host binds them::
 
-        conn.execute(sql, {"canonical_id": "...", "source_identifier": "..."})
+        cur.execute(binding.close_out_sql(),
+                    {"canonical_id": "...", "source_identifier": "..."})
     """
-    cls = _find_concrete(spec, class_name)
-    ident = cls.identifier_slot()
-    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    source_literal = _sql_literal(source_name)
+    _check_concrete(binding.class_)
+    ident = binding.class_.identifier_slot()
+    table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
     return (
         f"UPDATE {table}\n"
         f"SET valid_to = now()\n"
@@ -302,105 +298,83 @@ def emit_close_out(
     )
 
 
-def _find_concrete(spec: Spec, name: str) -> OntologyClass:
-    """Look up a concrete OntologyClass by name; raise if not found or
-    not concrete."""
-    for c in spec.classes:
-        if isinstance(c, OntologyClass) and c.name == name:
-            if c.kind != ClassKind.CONCRETE:
-                raise ValueError(
-                    f"class {name!r} is {c.kind.value!r}; only concrete "
-                    f"classes have bindings tables"
-                )
-            return c
-    raise ValueError(f"no concrete class named {name!r} in spec")
-
-
 # ---------------------------------------------------------------------------
 # ER helpers — canonical_id assignment + reassignment
 # ---------------------------------------------------------------------------
 
 
-def emit_assign_canonical(
-    cls: OntologyClass,
-    canonical_id: str,
+def emit_assign_canonical_sql(
+    binding: SourceBinding,
     *,
-    source_name: str,
-    source_identifier: str,
-    er_metadata: dict[str, Any] | None = None,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
-) -> tuple[str, dict[str, Any]]:
-    """SQL that assigns a ``canonical_id`` to one previously-unresolved
-    binding row identified by ``(source_name, source_identifier)``.
+) -> str:
+    """Return the SQL template that assigns a ``canonical_id`` to one
+    previously-unresolved binding row.
 
     Refuses to clobber an existing assignment: the ``WHERE`` clause
     includes ``<ident> IS NULL``, so re-running is a no-op. To change
-    an already-assigned canonical_id, call ``emit_recanonicalize``.
+    an already-assigned canonical_id, use ``emit_recanonicalize_sql``.
 
-    ``er_metadata`` (optional) is a free-form dict stamped onto the
-    binding row's ``er_metadata jsonb`` column — caller-defined
-    payload typically containing the ER run id, method, confidence,
-    or any other audit detail. When omitted, the column is left
-    untouched (defaults to ``'{}'::jsonb`` for fresh rows).
+    SQL has three named placeholders — ``%(canonical_id)s``,
+    ``%(source_identifier)s``, ``%(er_metadata)s``. The
+    ``er_metadata`` column uses ``COALESCE`` so binding ``None`` keeps
+    the existing value; binding a JSON-serialized string overwrites.
+    Host binds::
 
-    Returns ``(sql, params)`` with named ``%(...)s`` placeholders.
+        cur.execute(binding.assign_canonical_sql(), {
+            "canonical_id":      "m_pulpfiction",
+            "source_identifier": "tt0110912",
+            "er_metadata":       json.dumps({"run_id": "r42"}),  # or None
+        })
     """
-    _check_concrete(cls)
-    ident_name = cls.identifier_slot().name
-    bindings_table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    set_clauses = [f"{ident_name} = %(canonical_id)s"]
-    params: dict[str, Any] = {
-        "canonical_id": canonical_id,
-        "source_name": source_name,
-        "source_identifier": source_identifier,
-    }
-    if er_metadata is not None:
-        set_clauses.append("er_metadata = %(er_metadata)s::jsonb")
-        params["er_metadata"] = json.dumps(er_metadata)
-    sql = (
-        f"UPDATE {bindings_table}\n"
-        f"SET {', '.join(set_clauses)}\n"
-        f"WHERE source_name = %(source_name)s\n"
+    _check_concrete(binding.class_)
+    ident_name = binding.class_.identifier_slot().name
+    table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
+    return (
+        f"UPDATE {table}\n"
+        f"SET {ident_name} = %(canonical_id)s,\n"
+        f"    er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)\n"
+        f"WHERE source_name = {source_literal}\n"
         f"  AND source_identifier = %(source_identifier)s\n"
         f"  AND {ident_name} IS NULL\n"
         f"  AND valid_to IS NULL;"
     )
-    return sql, params
 
 
-def emit_recanonicalize(
-    cls: OntologyClass,
-    new_canonical_id: str,
+def emit_recanonicalize_sql(
+    binding: SourceBinding,
     *,
-    source_name: str,
-    source_identifier: str,
-    er_metadata: dict[str, Any] | None = None,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
-) -> tuple[str, dict[str, Any]]:
-    """SQL that reassigns a binding row's ``canonical_id``, preserving
-    history via SCD2.
+) -> str:
+    """Return the SQL template that reassigns a binding row's
+    ``canonical_id``, preserving history via SCD2.
 
     Closes the currently-open binding (``valid_to = now()``) and
     inserts a new row with the corrected ``canonical_id`` and
     otherwise-identical state (same source, same slot values, same
     raw_payload). Old row stays addressable for history; the resolved
-    view sees only the new one.
+    view sees only the new one. One atomic statement via a writable
+    CTE — ``now()`` is the same instant on both halves.
 
-    One atomic statement via a writable CTE — ``now()`` is the same
-    instant on both halves of the close-out / re-insert.
+    SQL has three named placeholders — ``%(new_canonical_id)s``,
+    ``%(source_identifier)s``, ``%(er_metadata)s``. ``er_metadata``
+    uses ``COALESCE`` so binding ``None`` inherits the closed row's
+    payload; binding a JSON string overrides::
 
-    ``er_metadata`` (optional) overrides the closed row's value on
-    the new row; when omitted, the new row inherits the closed row's
-    ``er_metadata`` verbatim.
-
-    Returns ``(sql, params)`` with named ``%(...)s`` placeholders.
+        cur.execute(binding.recanonicalize_sql(), {
+            "new_canonical_id":  "m_correct",
+            "source_identifier": "tt001",
+            "er_metadata":       json.dumps({...}),  # or None to inherit
+        })
     """
-    _check_concrete(cls)
-    ident_name = cls.identifier_slot().name
-    bindings_table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    eff_slots = cls.effective_slots()
+    _check_concrete(binding.class_)
+    ident_name = binding.class_.identifier_slot().name
+    table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
+    eff_slots = binding.class_.effective_slots()
 
     insert_cols = (
         ["source_name", "source_identifier"]
@@ -414,29 +388,18 @@ def emit_recanonicalize(
         else:
             select_cols.append(slot.name)
     select_cols.append("raw_payload")
-    if er_metadata is not None:
-        select_cols.append("%(er_metadata)s::jsonb AS er_metadata")
-    else:
-        select_cols.append("er_metadata")
+    select_cols.append("COALESCE(%(er_metadata)s::jsonb, er_metadata) AS er_metadata")
     select_cols.append("now() AS valid_from")
 
-    sql = (
+    return (
         f"WITH closed AS (\n"
-        f"    UPDATE {bindings_table} SET valid_to = now()\n"
-        f"    WHERE source_name = %(source_name)s\n"
+        f"    UPDATE {table} SET valid_to = now()\n"
+        f"    WHERE source_name = {source_literal}\n"
         f"      AND source_identifier = %(source_identifier)s\n"
         f"      AND valid_to IS NULL\n"
         f"    RETURNING *\n"
         f")\n"
-        f"INSERT INTO {bindings_table} ({', '.join(insert_cols)})\n"
+        f"INSERT INTO {table} ({', '.join(insert_cols)})\n"
         f"SELECT {', '.join(select_cols)}\n"
         f"FROM closed;"
     )
-    params: dict[str, Any] = {
-        "new_canonical_id": new_canonical_id,
-        "source_name": source_name,
-        "source_identifier": source_identifier,
-    }
-    if er_metadata is not None:
-        params["er_metadata"] = json.dumps(er_metadata)
-    return sql, params

@@ -49,10 +49,11 @@ host processes that own postgres connections. The reference shape is
   and execute each with `{"rows": rows}` bound by the driver.
 - **ER workers** (Temporal workflows). Look at unresolved bindings,
   decide canonical_ids (whatever scoring / matching policy the team
-  owns), call `binding.assign_canonical(...)` /
-  `binding.recanonicalize(...)` with optional `er_metadata={...}`
-  audit stamps. Ingest cadence and ER cadence are independent — that
-  decoupling is why these are separate workflows.
+  owns), call `binding.assign_canonical_sql()` or
+  `binding.recanonicalize_sql()` and bind `{"canonical_id": …,
+  "source_identifier": …, "er_metadata": json.dumps({...}) or None}`
+  via the connector. Ingest cadence and ER cadence are independent
+  — that decoupling is why these are separate workflows.
 - **Service API** (FastAPI / GraphQL / REST / whatever). Translates
   incoming requests into knot `Query` AST nodes using the spec's
   classes, calls `q.sql(schema=...)` to compile to `(sql, params)`,
@@ -193,17 +194,23 @@ imdb_movie.set_weight("runtime", 0.7)
 — not on `Spec`:
 
 ```python
-# Single-binding write
-bw = imdb_movie.write(rows, schema="knot_data")
+# Single-binding write — SQL templates only; host binds rows via the connector.
+close_out, insert = imdb_movie.write_sql(schema="knot_data")
+with pg.transaction(), pg.cursor() as cur:
+    cur.execute(close_out, {"rows": json.dumps(rows)})
+    cur.execute(insert,    {"rows": json.dumps(rows)})
 
-# ER decisions on a specific binding row
-sql, p = imdb_movie.assign_canonical(
-    source_identifier="tt001", canonical_id="m_x",
-    er_metadata={"run_id": "r42", "method": "exact_title_year"},
-)
-sql, p = imdb_movie.recanonicalize(
-    source_identifier="tt001", new_canonical_id="m_y",
-)
+# ER decisions on a specific binding row — same shape: SQL + host binds.
+cur.execute(imdb_movie.assign_canonical_sql(), {
+    "canonical_id": "m_x",
+    "source_identifier": "tt001",
+    "er_metadata": json.dumps({"run_id": "r42", "method": "exact_title_year"}),
+})
+cur.execute(imdb_movie.recanonicalize_sql(), {
+    "new_canonical_id": "m_y",
+    "source_identifier": "tt001",
+    "er_metadata": None,  # None ⇒ inherit closed row's er_metadata
+})
 
 # Class-level constraints + virtual subclasses
 movie.add_constraint("year_sane", body=movie.col.year >= 1888)
@@ -250,20 +257,23 @@ pg.execute(sql)
 checks = spec.emit_validation(schema="knot_data")              # [(name, sql), …]
 ```
 
-Per-entity runtime methods live on the entity:
+Per-entity runtime methods live on the entity. Every one returns
+SQL templates only — no row data, no value args, no `json.dumps`
+inside knot. The host binds via the connector.
 
 ```python
-sql, params = q.sql(schema="knot_data")              # (sql, params)
-close_out, insert = binding.write_sql(schema="knot_data")  # both reference %(rows)s::jsonb
-sql, params = binding.assign_canonical(...)
-sql, params = binding.recanonicalize(...)
+sql, params       = q.sql(schema="knot_data")                  # (sql, params)
+close_out, insert = binding.write_sql(schema="knot_data")      # both ref %(rows)s::jsonb
+sql_assign        = binding.assign_canonical_sql(schema=…)     # %(canonical_id)s, %(source_identifier)s, %(er_metadata)s
+sql_recan         = binding.recanonicalize_sql(schema=…)       # %(new_canonical_id)s, %(source_identifier)s, %(er_metadata)s
+sql_close         = binding.close_out_sql(schema=…)            # %(canonical_id)s, %(source_identifier)s
 ```
 
-The read path lives on the query, not the spec. The write path lives
-on the binding, not the spec — and never touches the rows: knot
-emits SQL templates that reference `%(rows)s::jsonb`, the host's
-connector binds the actual data. Multi-binding atomic write =
-multiple `binding.write_sql()` calls, all run in one
+The read path lives on the query, not the spec. The write/ER path
+lives on the binding, not the spec. Rows + values never enter the
+compile API — knot emits SQL templates with `%(named)s::jsonb`
+placeholders, the host's connector binds actual data. Multi-binding
+atomic write = multiple `binding.write_sql()` calls, all run in one
 `pg.transaction()`.
 
 **Façade contract.**
@@ -276,10 +286,13 @@ multiple `binding.write_sql()` calls, all run in one
   ``query_fn=None`` substitutes an empty-DB callable, so an empty
   schema gets the full create sequence and a populated schema gets
   only the delta. One code path, two modes.
-- Parameterized / per-element methods (``binding.write_sql``,
-  ``binding.assign_canonical``, ``emit_validation``, ``Query.sql``)
-  keep their distinct return shapes — each carries metadata or
-  per-row params that doesn't concatenate cleanly.
+- Per-element compile methods (``binding.write_sql``,
+  ``binding.assign_canonical_sql``, ``binding.recanonicalize_sql``,
+  ``binding.close_out_sql``, ``Query.sql``) all return raw SQL
+  templates with named placeholders. The host binds via its
+  connector. ``emit_validation`` and ``emit_weight_seed`` return
+  parameterized statements because their parameters are derived
+  from the spec itself, not from runtime input.
 
 **Weight runtime**:
 - Per-(source, class, slot) value lives in `<schema>.source_weight`.

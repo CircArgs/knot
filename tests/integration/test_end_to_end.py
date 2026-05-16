@@ -3,7 +3,7 @@
 Each test gets a fresh schema. We:
   1. Build a Spec
   2. Apply emit_ddl + emit_weight_seed to the schema
-  3. Exercise the write path (binding.write_sql / emit_close_out)
+  3. Exercise the write path (binding.write_sql / binding.close_out_sql)
   4. Query the resolved view + validation SELECTs and assert behavior
   5. Evolve the spec, run diff_against_db, apply the ops, repeat
 
@@ -13,14 +13,9 @@ but semantically correct against postgres 16.
 
 from __future__ import annotations
 
-from knot import (
-    CORRECTIONS_SOURCE_NAME,
-    Spec,
-    types,
-)
+from knot import Spec, types
 from knot.compile import (
     diff_against_db,
-    emit_close_out,
     emit_ddl,
     emit_validation,
     emit_weight_seed,
@@ -66,17 +61,58 @@ def _write_claim(
     schema: str,
 ) -> None:
     close_out, insert = binding.write_sql(schema=schema)
+    payload = _json(rows)
     with pg.cursor() as cur:
-        cur.execute(close_out, {"rows": _json(rows)})
-        cur.execute(insert, {"rows": _json(rows)})
+        cur.execute(close_out, {"rows": payload})
+        cur.execute(insert, {"rows": payload})
 
 
-def _json(rows: list[dict]) -> str:
-    """Serialize a row list as a JSON string for psycopg's jsonb binding.
+def _json(value) -> str:
+    """Serialize for psycopg's jsonb binding (host responsibility).
     Psycopg2 wants a string; psycopg3 auto-adapts dicts/lists."""
     import json as _json_mod
 
-    return _json_mod.dumps(rows)
+    return _json_mod.dumps(value)
+
+
+def _assign(
+    pg,
+    binding,
+    *,
+    canonical_id: str,
+    source_identifier: str,
+    er_metadata: dict | None = None,
+    schema: str,
+) -> None:
+    with pg.cursor() as cur:
+        cur.execute(
+            binding.assign_canonical_sql(schema=schema),
+            {
+                "canonical_id": canonical_id,
+                "source_identifier": source_identifier,
+                "er_metadata": _json(er_metadata) if er_metadata is not None else None,
+            },
+        )
+
+
+def _recan(
+    pg,
+    binding,
+    *,
+    new_canonical_id: str,
+    source_identifier: str,
+    er_metadata: dict | None = None,
+    schema: str,
+) -> None:
+    with pg.cursor() as cur:
+        cur.execute(
+            binding.recanonicalize_sql(schema=schema),
+            {
+                "new_canonical_id": new_canonical_id,
+                "source_identifier": source_identifier,
+                "er_metadata": _json(er_metadata) if er_metadata is not None else None,
+            },
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -500,15 +536,9 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
     )
 
     # Withdraw the correction.
-    sql = emit_close_out(
-        spec,
-        class_name="Movie",
-        source_name=CORRECTIONS_SOURCE_NAME,
-        schema=schema,
-    )
     exec_with_params(
         pg,
-        sql,
+        corr_b.close_out_sql(schema=schema),
         {
             "canonical_id": "m1",
             "source_identifier": "curator-42",
@@ -872,13 +902,7 @@ def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
         assert cur.fetchone()[0] == 0  # invisible until ER claims it
 
     # ER assigns canonical_id.
-    sql, params = imdb_b.assign_canonical(
-        source_identifier="tt001",
-        canonical_id="m_pulp",
-        schema=schema,
-    )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
+    _assign(pg, imdb_b, canonical_id="m_pulp", source_identifier="tt001", schema=schema)
 
     with pg.cursor() as cur:
         cur.execute(f"SELECT canonical_id, name FROM {schema}.movie_resolved")
@@ -907,23 +931,15 @@ def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
         ],
         schema=schema,
     )
-    sql, params = imdb_b.assign_canonical(
-        source_identifier="tt001",
-        canonical_id="m_first",
-        schema=schema,
+    _assign(
+        pg, imdb_b, canonical_id="m_first", source_identifier="tt001", schema=schema
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     # Try to assign a DIFFERENT id — the WHERE clause's IS NULL check
     # means nothing happens.
-    sql, params = imdb_b.assign_canonical(
-        source_identifier="tt001",
-        canonical_id="m_second",
-        schema=schema,
+    _assign(
+        pg, imdb_b, canonical_id="m_second", source_identifier="tt001", schema=schema
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     with pg.cursor() as cur:
         cur.execute(f"SELECT canonical_id FROM {schema}.movie_resolved")
@@ -955,13 +971,13 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
     )
 
     # ER decided m_wrong should actually be m_correct.
-    sql, params = imdb_b.recanonicalize(
-        source_identifier="tt001",
+    _recan(
+        pg,
+        imdb_b,
         new_canonical_id="m_correct",
+        source_identifier="tt001",
         schema=schema,
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     with pg.cursor() as cur:
         cur.execute(
@@ -1002,9 +1018,11 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
         schema=schema,
     )
 
-    sql, params = imdb_b.assign_canonical(
-        source_identifier="tt001",
+    _assign(
+        pg,
+        imdb_b,
         canonical_id="m_reservoirdogs",
+        source_identifier="tt001",
         er_metadata={
             "run_id": "r42",
             "method": "exact_title_year",
@@ -1012,8 +1030,6 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
         },
         schema=schema,
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     with pg.cursor() as cur:
         cur.execute(
@@ -1054,23 +1070,23 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
     )
 
     # First stamp: ER assigns + writes metadata
-    sql, params = imdb_b.assign_canonical(
-        source_identifier="tt001",
+    _assign(
+        pg,
+        imdb_b,
         canonical_id="m_wrong",
+        source_identifier="tt001",
         er_metadata={"run_id": "r1", "method": "exact_title_year"},
         schema=schema,
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     # Recanonicalize without er_metadata kwarg — new row inherits.
-    sql, params = imdb_b.recanonicalize(
-        source_identifier="tt001",
+    _recan(
+        pg,
+        imdb_b,
         new_canonical_id="m_correct",
+        source_identifier="tt001",
         schema=schema,
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     with pg.cursor() as cur:
         cur.execute(
@@ -1107,23 +1123,22 @@ def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
         ],
         schema=schema,
     )
-    sql, params = imdb_b.assign_canonical(
-        source_identifier="tt001",
+    _assign(
+        pg,
+        imdb_b,
         canonical_id="m_wrong",
+        source_identifier="tt001",
         er_metadata={"run_id": "r1", "method": "exact"},
         schema=schema,
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
-
-    sql, params = imdb_b.recanonicalize(
-        source_identifier="tt001",
+    _recan(
+        pg,
+        imdb_b,
         new_canonical_id="m_correct",
+        source_identifier="tt001",
         er_metadata={"run_id": "r2", "method": "human_review"},
         schema=schema,
     )
-    with pg.cursor() as cur:
-        cur.execute(sql, params)
 
     with pg.cursor() as cur:
         cur.execute(

@@ -31,8 +31,8 @@ from knot.compile.resolver import (
 )
 from knot.compile.weight import emit_weight_seed
 from knot.compile.write import (
-    emit_assign_canonical,
+    emit_assign_canonical_sql,
     emit_binding_write_sql,
-    emit_close_out,
-    emit_recanonicalize,
+    emit_close_out_sql,
+    emit_recanonicalize_sql,
 )
