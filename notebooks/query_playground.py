@@ -139,7 +139,7 @@ def _(mo, pg, schema, spec_v1):
 
 
 @app.cell
-def _(load, pg, schema, spec_v1):
+def _(load, movie_v1, person_v1, pg, schema, spec_v1):
     import json as _json
 
     # Ingest from imdb only. ``binding.write_sql()`` returns
@@ -158,12 +158,14 @@ def _(load, pg, schema, spec_v1):
     write_to(person_b, load("imdb", "persons"))
     write_to(movie_b, load("imdb", "movies"))
 
-    with pg.cursor() as cur:
-        cur.execute(f"SELECT count(*) FROM {schema}.person_resolved")
-        person_count = cur.fetchone()[0]
-        cur.execute(f"SELECT count(*) FROM {schema}.movie_resolved")
-        movie_count = cur.fetchone()[0]
-    f"Stage 1 ingest: {person_count} persons, {movie_count} movies (imdb only)."
+    # Sanity counts via knot Queries — no raw SQL.
+    def _count(cls):
+        sql, params = cls.select(cls.col.canonical_id).sql(schema=schema)
+        with pg.cursor() as cur:
+            cur.execute(sql, params or None)
+            return len(cur.fetchall())
+
+    f"Stage 1 ingest: {_count(person_v1)} persons, {_count(movie_v1)} movies (imdb only)."
     return (write_to,)
 
 
@@ -253,7 +255,7 @@ def _(mo, pg, schema, spec_v2):
 
 
 @app.cell
-def _(load, pg, schema, spec_v2, write_to):
+def _(load, movie_v2, pg, schema, spec_v2, write_to):
     # Ingest tmdb's overlapping rows. Many of these are about the SAME
     # canonical Movies and Persons that imdb already wrote — but with
     # tmdb's own source_identifier and occasionally different field values.
@@ -271,15 +273,11 @@ def _(load, pg, schema, spec_v2, write_to):
     write_to(tmdb_person_b, load("tmdb", "persons"))
     write_to(tmdb_movie_b, load("tmdb", "movies"))
 
+    sql, params = movie_v2.select(movie_v2.col.canonical_id).sql(schema=schema)
     with pg.cursor() as cur:
-        cur.execute(f"SELECT count(*) FROM {schema}.movie_bindings")
-        binding_count = cur.fetchone()[0]
-        cur.execute(f"SELECT count(*) FROM {schema}.movie_resolved")
-        resolved_count = cur.fetchone()[0]
-    (
-        f"Stage 2 ingest: {binding_count} movie bindings rows "
-        f"(imdb + tmdb), {resolved_count} resolved movies."
-    )
+        cur.execute(sql, params or None)
+        resolved_count = len(cur.fetchall())
+    f"Stage 2 ingest done. {resolved_count} resolved movies (imdb + tmdb merged)."
     return
 
 
@@ -297,28 +295,15 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema):
-    # Pick movies where imdb and tmdb disagree on year.
+def _(movie_v2, pg, schema):
+    # First 5 movies + their resolver-picked year — imdb wins at default
+    # weights (imdb 0.85 > tmdb 0.75).
+    q = movie_v2.limit(5).select(
+        movie_v2.col.canonical_id, movie_v2.col.title, movie_v2.col.year
+    )
+    sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT
-              i.canonical_id,
-              i.year AS imdb_year,
-              t.year AS tmdb_year,
-              r.year AS resolved_year
-            FROM {schema}.movie_bindings i
-            JOIN {schema}.movie_bindings t
-              ON t.canonical_id = i.canonical_id
-            JOIN {schema}.movie_resolved r
-              ON r.canonical_id = i.canonical_id
-            WHERE i.source_name = 'imdb' AND t.source_name = 'tmdb'
-              AND i.year <> t.year
-              AND i.valid_to IS NULL AND t.valid_to IS NULL
-            ORDER BY i.canonical_id
-            LIMIT 10
-            """
-        )
+        cur.execute(sql, params or None)
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -328,17 +313,19 @@ def _(mo):
     mo.md(r"""
     ### Operator tunes weights at runtime
 
-    No spec edit, no redeploy. Just `UPDATE source_weight` and the resolver
-    picks up the new value on its next query.
+    No spec edit, no redeploy. Just `UPDATE source_weight` (runtime
+    config table, not knot's compiled output) and the resolver picks
+    up the new value on the next query.
     """)
     return
 
 
 @app.cell
 def _(pg, schema):
+    # Bump tmdb's weight on `year` above imdb's. This UPDATE targets
+    # knot's runtime config table — the resolver argmax reads from it
+    # at query time, so no recompile.
     with pg.cursor() as cur:
-        # Bump tmdb's weight on `year` above imdb's. The next query against
-        # movie_resolved.year will return tmdb's value where they disagree.
         cur.execute(
             f"UPDATE {schema}.source_weight SET weight = 0.95 "
             f"WHERE source_name = 'tmdb' AND class_name = 'Movie' "
@@ -348,28 +335,15 @@ def _(pg, schema):
 
 
 @app.cell
-def _(pg, schema):
-    # Same query as above — resolved_year flips to tmdb's where they disagreed.
+def _(movie_v2, pg, schema):
+    # Same Query re-run — wherever imdb and tmdb disagreed on year,
+    # the resolver's argmax now picks tmdb's value (weight 0.95 > 0.85).
+    q = movie_v2.limit(5).select(
+        movie_v2.col.canonical_id, movie_v2.col.title, movie_v2.col.year
+    )
+    sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT
-              i.canonical_id,
-              i.year AS imdb_year,
-              t.year AS tmdb_year,
-              r.year AS resolved_year
-            FROM {schema}.movie_bindings i
-            JOIN {schema}.movie_bindings t
-              ON t.canonical_id = i.canonical_id
-            JOIN {schema}.movie_resolved r
-              ON r.canonical_id = i.canonical_id
-            WHERE i.source_name = 'imdb' AND t.source_name = 'tmdb'
-              AND i.year <> t.year
-              AND i.valid_to IS NULL AND t.valid_to IS NULL
-            ORDER BY i.canonical_id
-            LIMIT 10
-            """
-        )
+        cur.execute(sql, params or None)
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -390,25 +364,19 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema):
-    # Same canonical_id, both source perspectives in one row.
+def _(movie_v2, pg, schema):
+    from dataclasses import replace
+
+    # Provenance lives in <class>_all_sources — same shape as the
+    # resolved view but with jsonb-per-slot. Same Query AST, just
+    # retargeted to the all_sources view via Query.target_suffix.
+    q = movie_v2.limit(5).select(
+        movie_v2.col.canonical_id, movie_v2.col.year, movie_v2.col.runtime_minutes
+    )
+    q = replace(q, target_suffix="_all_sources")
+    sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
-        cur.execute(
-            f"""
-            SELECT canonical_id, year, runtime_minutes
-            FROM {schema}.movie_all_sources
-            WHERE canonical_id IN (
-                SELECT i.canonical_id
-                FROM {schema}.movie_bindings i
-                JOIN {schema}.movie_bindings t USING (canonical_id)
-                WHERE i.source_name = 'imdb' AND t.source_name = 'tmdb'
-                  AND i.year <> t.year
-                  AND i.valid_to IS NULL AND t.valid_to IS NULL
-                LIMIT 5
-            )
-            ORDER BY canonical_id
-            """
-        )
+        cur.execute(sql, params or None)
         cols = [d.name for d in cur.description]
         return [dict(zip(cols, row)) for row in cur.fetchall()]
 
@@ -449,6 +417,9 @@ def _(pg, schema, spec_v2, write_to):
         ],
     )
 
+    # Direct introspection of knot's internal SCD2 layer to show the
+    # close-out + insert pair. Query AST targets _resolved; the raw
+    # _bindings table is plumbing, not a user-facing surface.
     with pg.cursor() as cur:
         cur.execute(
             f"""
@@ -514,20 +485,37 @@ def _(Spec, types):
         where=movie_v3.has_any(credit_v3, role="director"),
     )
 
+    # Constraints carry the actual business rules — the bits a CHECK
+    # constraint can't reach. Three shapes:
+
+    # 1. Simple range check. Compiles to a SELECT with `WHERE NOT
+    #    (year >= 1888)` against movie_resolved.
     movie_v3.add_constraint(
         "year_sane",
         body=movie_v3.col.year >= 1888,
         message="Movie.year predates the invention of film.",
     )
-    # Credit.role is a free-text slot in the spec; lock the vocabulary
-    # at the constraint layer instead of in DDL so the operator can
-    # tweak the set without a schema migration.
+
+    # 2. Enum-without-DDL. ``role`` is text in the schema; the
+    #    vocabulary lives in the constraint so it can be tuned
+    #    without a schema migration.
     credit_v3.add_constraint(
         "role_in_vocabulary",
         body=credit_v3.col.role.in_(
             ["director", "writer", "actor", "producer", "composer"]
         ),
         message="Credit.role outside the curated vocabulary.",
+    )
+
+    # 3. Cross-class existence — every Movie must have at least one
+    #    Credit with role='director'. Compiles to a correlated EXISTS
+    #    subquery against credit_resolved. This is the kind of rule
+    #    a postgres CHECK can't express; it requires looking at
+    #    another table.
+    movie_v3.add_constraint(
+        "must_have_director",
+        body=movie_v3.has_any(credit_v3, role="director"),
+        message="Movie has no Credit with role='director'.",
     )
 
     imdb_v3 = spec_v3.add_source("imdb")
@@ -561,7 +549,7 @@ def _(mo, pg, query_fn, schema, spec_v3):
 
 
 @app.cell
-def _(load, pg, schema, spec_v3, write_to):
+def _(credit_v3, load, movie_v3, person_v3, pg, schema, spec_v3, write_to):
     # Ingest the remaining data — rottentomatoes for everything, plus
     # credits from all three sources. Per binding; one binding.write_sql()
     # call per source × class.
@@ -586,11 +574,13 @@ def _(load, pg, schema, spec_v3, write_to):
             )
             write_to(b, load(source_name, "credits"))
 
-    with pg.cursor() as cur:
-        counts = {}
-        for cls in ("person", "movie", "credit"):
-            cur.execute(f"SELECT count(*) FROM {schema}.{cls}_resolved")
-            counts[cls] = cur.fetchone()[0]
+    # Counts via knot Queries — one Query per class.
+    counts = {}
+    for cls in (person_v3, movie_v3, credit_v3):
+        sql, params = cls.select(cls.col.canonical_id).sql(schema=schema)
+        with pg.cursor() as cur:
+            cur.execute(sql, params or None)
+            counts[cls.name.lower()] = len(cur.fetchall())
     counts
     return
 
@@ -602,8 +592,20 @@ def _(mo):
 
     Each constraint compiles to one SELECT that returns zero rows when
     the rule holds and one row per violating canonical_id otherwise.
-    The host runs whichever schedule it wants — periodic batch, after
-    every ingest, on-demand from an audit UI — knot just emits the SQL.
+    knot emits the SQL; **the host decides when to run it**. Three
+    canonical placements:
+
+    1. **In-transaction with each ingest** — write + validation in one
+       `pg.transaction()`; raise on rows, the txn rolls back. Atomic
+       enforcement at write time (the next stage demos this).
+    2. **Scheduled sweep** — a Temporal cron / k8s CronJob runs all
+       validations periodically against the live resolved views;
+       violations open tickets / page oncall.
+    3. **On-demand from an audit UI** — an operator opens a "data
+       quality" page that runs validations and surfaces offending
+       canonical_ids.
+
+    Same SQL, three lifecycles. knot doesn't pick; the host does.
     """)
     return
 
@@ -634,7 +636,7 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema, spec_v3):
+def _(movie_v3, pg, schema, spec_v3):
     import json as _json
 
     imdb_movie_b = next(
@@ -668,14 +670,17 @@ def _(pg, schema, spec_v3):
     except RuntimeError as e:
         error = str(e).splitlines()[0]
 
-    # Confirm nothing landed despite the attempt.
+    # Confirm nothing landed despite the attempt. Query the resolved
+    # view (not the bindings table) — if the row leaked through, it'd
+    # be visible here.
+    check_q = movie_v3.where(movie_v3.col.canonical_id == "m_anachronism").select(
+        movie_v3.col.canonical_id
+    )
+    check_sql, check_params = check_q.sql(schema=schema)
     with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT count(*) FROM {schema}.movie_bindings "
-            f"WHERE canonical_id = 'm_anachronism'"
-        )
-        leaked = cur.fetchone()[0]
-    {"raised": error, "rows_leaked_into_bindings": leaked}
+        cur.execute(check_sql, check_params or None)
+        leaked = len(cur.fetchall())
+    {"raised": error, "leaked_into_resolved": leaked}
 
 
 @app.cell
@@ -694,6 +699,11 @@ def _(mo):
 
 @app.cell
 def _(pg, schema):
+    # VirtualClass is materialized as ``<schema>.<lowername>`` (no
+    # _resolved suffix — virtual views layer on top of the resolved
+    # base). Query AST doesn't have a VirtualClass builder yet; the
+    # view is a knot artifact so a direct SELECT against it is the
+    # current way to read it.
     with pg.cursor() as cur:
         cur.execute(
             f"SELECT canonical_id, title, year FROM {schema}.directedmovie "
