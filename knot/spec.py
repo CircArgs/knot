@@ -25,7 +25,7 @@ Validation happens at two levels:
   - Cross-entity: ``Spec.validate()`` raises ``SpecError`` if the spec
     has any well-formedness errors (orphan references, missing
     identifier slots, duplicate names, etc.). The façade methods
-    (``init_sql``, ``compile_query`` etc.) call it automatically.
+    (``init_sql``, ``Query.sql`` etc.) call it automatically.
 
 Body validation (typos in slot references) is caught at construction
 time by the builder: ``movie.col.nonexistent`` raises ``KeyError``
@@ -322,20 +322,25 @@ class OntologyClass:
     # ``.offset()`` / ``.select()`` on the returned ``Query``.
     # ------------------------------------------------------------------
 
+    def _query(self) -> Query:
+        """Construct a fresh Query rooted at this class, with the
+        spec back-reference set so ``.sql(schema=...)`` works."""
+        return Query(class_name=self.name, _spec=self._spec)
+
     def where(self, predicate: Expr) -> Query:
-        return Query(class_name=self.name).where(predicate)
+        return self._query().where(predicate)
 
     def order_by(self, ref: Expr, direction: str = "asc") -> Query:
-        return Query(class_name=self.name).order_by(ref, direction)
+        return self._query().order_by(ref, direction)
 
     def limit(self, n: int) -> Query:
-        return Query(class_name=self.name).limit(n)
+        return self._query().limit(n)
 
     def offset(self, n: int) -> Query:
-        return Query(class_name=self.name).offset(n)
+        return self._query().offset(n)
 
     def select(self, *refs: Expr) -> Query:
-        return Query(class_name=self.name).select(*refs)
+        return self._query().select(*refs)
 
     # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.
@@ -1083,12 +1088,14 @@ class Spec:
     # ``knot.compile.*`` are validation-free — they're the back door for
     # adapters and tests that want to compile arbitrary inputs.
     #
-    # Five methods, five concerns:
+    # Four methods, four concerns:
     #   - validate        — well-formedness check
     #   - init_sql        — schema deploy / migrate (one SQL script)
-    #   - emit_batch_write— runtime ingest (transactional, parameterized)
+    #   - emit_batch_write— runtime multi-binding ingest
     #   - emit_validation — runtime constraint checks (per-rule SELECTs)
-    #   - compile_query   — runtime read (one SQL + params)
+    # Per-entity reads live on the entity: ``query.sql(schema=…)`` on
+    # the ``Query`` AST node, built via ``class_.where(...)`` /
+    # ``.order_by(...)`` / etc.
     # ------------------------------------------------------------------
 
     def init_sql(
@@ -1139,14 +1146,6 @@ class Spec:
         from knot.compile.constraints import emit_validation
 
         return emit_validation(self, **kwargs)
-
-    def compile_query(self, query_node: Any, **kwargs: Any) -> Any:
-        """Compile a ``Query`` AST to ``(sql, params)``. Validates the
-        spec first. See ``knot.compile.query.compile_query``."""
-        self.validate()
-        from knot.compile.query import compile_query
-
-        return compile_query(query_node, spec=self, **kwargs)
 
 
 class SpecError(ValueError):

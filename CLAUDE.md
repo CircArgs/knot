@@ -54,8 +54,9 @@ host processes that own postgres connections. The reference shape is
   decoupling is why these are separate workflows.
 - **Service API** (FastAPI / GraphQL / REST / whatever). Translates
   incoming requests into knot `Query` AST nodes using the spec's
-  classes, calls `spec.compile_query(q)`, executes the SQL, maps rows
-  to the response shape it owes its caller.
+  classes, calls `q.sql(schema=...)` to compile to `(sql, params)`,
+  executes the SQL, maps rows to the response shape it owes its
+  caller.
 
 The **spec** is the shared dependency — a Python module that every
 surface imports alongside knot. Spec + knot together compile to SQL;
@@ -230,7 +231,7 @@ q = person.where((movie.col.director == this.Person).count() > 5)
 # People who never directed (.none() aggregate)
 q = person.where((movie.col.director == this.Person).none())
 
-sql, params = spec.compile_query(q, schema="knot_data")
+sql, params = q.sql(schema="knot_data")
 ```
 
 **Spec keeps only whole-graph methods.** Per-entity facts live on
@@ -248,8 +249,11 @@ pg.execute(sql)
 # Multi-binding atomic batch (one binding → use binding.write(rows))
 bw     = spec.emit_batch_write(writes, schema="knot_data")     # BatchWrite (sql+params)
 checks = spec.emit_validation(schema="knot_data")              # [(name, sql), …]
-sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)
 ```
+
+The read path lives on the query, not on the spec — `q.sql(schema=…)`
+compiles the AST against its owning spec (back-reference set when the
+query is built via `class_.where(...)` / `.order_by(...)` / etc.).
 
 **Façade contract.**
 
@@ -262,7 +266,7 @@ sql, p = spec.compile_query(query_node, schema="knot_data")    # (sql, params)
   schema gets the full create sequence and a populated schema gets
   only the delta. One code path, two modes.
 - Parameterized / per-element methods (``emit_batch_write``,
-  ``emit_validation``, ``compile_query``) keep their distinct return
+  ``emit_validation``, ``Query.sql``) keep their distinct return
   shapes — each carries metadata or per-row params that doesn't
   concatenate cleanly.
 

@@ -174,7 +174,7 @@ def _(movie_v1, pg, schema, spec_v1):
         .limit(5)
         .select(movie_v1.col.title, movie_v1.col.year, movie_v1.col.director.name)
     )
-    sql, params = spec_v1.compile_query(q, schema=schema)
+    sql, params = q.sql(schema=schema)
     with pg.cursor() as cur:
         cur.execute(sql, params or None)
         rows = [dict(zip([d.name for d in cur.description], r)) for r in cur.fetchall()]
@@ -730,10 +730,10 @@ def _(mo):
 
 
 @app.cell
-def _(pg, schema, spec_v3):
+def _(pg, schema):
     def qf(q):
         """Compile + run a knot Query; return list of dict rows."""
-        sql, params = spec_v3.compile_query(q, schema=schema)
+        sql, params = q.sql(schema=schema)
         with pg.cursor() as cur:
             cur.execute(sql, params or None)
             cols = [d.name for d in cur.description]
@@ -741,7 +741,7 @@ def _(pg, schema, spec_v3):
 
     def qsql(q):
         """Show the compiled SQL without executing."""
-        s, _ = spec_v3.compile_query(q, schema=schema)
+        s, _ = q.sql(schema=schema)
         return s
 
     return qf, qsql
