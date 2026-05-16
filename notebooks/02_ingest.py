@@ -59,29 +59,29 @@ def _(psycopg, spec, uuid):
 
 
 @app.cell
-def _():
-    # A batch of two rows from imdb. Each row carries:
-    #   * `source_identifier` — imdb's own ID for the movie (their key).
+def _(json):
+    # Load real sample data from disk — imdb's movies.json. Each row
+    # carries:
+    #   * `source_identifier` — imdb's own key.
     #   * `canonical_id` — knot's cross-source identity. Pre-assigned
-    #     here (synchronous ER); a separate notebook will cover the
-    #     async path where canonical_id starts NULL and gets assigned
-    #     by an ER worker later.
-    #   * the class slots (`title`, `year`) as native values.
-    rows = [
-        {
-            "source_identifier": "tt0110912",
-            "canonical_id": "m_pulpfiction",
-            "title": "Pulp Fiction",
-            "year": 1994,
-        },
-        {
-            "source_identifier": "tt2878306",
-            "canonical_id": "m_killbill1",
-            "title": "Kill Bill: Vol. 1",
-            "year": 2003,
-        },
-    ]
-    rows
+    #     in the sample data (synchronous ER); a separate notebook will
+    #     cover the async path where canonical_id starts NULL and gets
+    #     assigned by an ER worker later.
+    #   * the class slots (`title`, `year`, `director`) as native values.
+    #   * extras (`imdb_rating`, `num_votes`, `box_office_usd`, …) that
+    #     aren't in the spec — they ride along in the row dict and land
+    #     in `raw_payload jsonb` on the binding row, recoverable later
+    #     without re-fetching from imdb.
+    #
+    # In a real worker this loader would be a pandas DataFrame from a
+    # CSV/parquet, a Kafka pull, an HTTP fetch — anything that yields a
+    # list[dict]. knot only cares about the dict shape.
+    from pathlib import Path
+
+    DATA = Path("../data/movies/imdb/movies.json")
+    rows = json.loads(DATA.read_text())
+    print(f"loaded {len(rows)} rows; first one:")
+    rows[0]
     return (rows,)
 
 
@@ -113,10 +113,14 @@ def _(close_out, insert, json, pg, rows):
 @app.cell
 def _(movie, pg, schema):
     # Verify via a knot Query against the resolved view — what the
-    # user-facing read API sees. Each cur.fetchone()-shape result row
-    # is the merged (this notebook: single-source = pass-through)
-    # per-canonical_id state.
-    q = movie.order_by(movie.col.year).select(movie.col.canonical_id, movie.col.title, movie.col.year)
+    # user-facing read API sees. Each result row is the merged
+    # per-canonical_id state (single-source here = direct passthrough).
+    # Top 10 by year, descending.
+    q = (
+        movie.order_by(movie.col.year, "desc")
+        .limit(10)
+        .select(movie.col.canonical_id, movie.col.title, movie.col.year)
+    )
     sql, params = q.sql(schema=schema)
     with pg.cursor() as _cur:
         _cur.execute(sql, params or None)
