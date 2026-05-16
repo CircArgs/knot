@@ -111,22 +111,16 @@ def _(close_out, insert, json, pg, rows):
 
 @app.cell
 def _(movie, pg, schema):
-    # Verify via a knot Query — retargeted at the bindings layer.
-    # The resolved view filters out rows where canonical_id IS NULL,
-    # which is everything we just wrote (ER hasn't run yet). The
-    # bindings table holds the raw claims.
-    #
-    # ``Query.target_suffix`` defaults to ``_resolved``; ``replace``
-    # repoints it at the bindings table. Same Query AST, different
-    # underlying relation.
-    from dataclasses import replace
-
+    # Verify via ``movie.bindings`` — a knot Query already pointed
+    # at the bindings layer. The resolved view (the default Query
+    # target) filters out rows where canonical_id IS NULL, which is
+    # everything we just wrote. ``cls.bindings`` reads the raw
+    # claims directly.
     q = (
-        movie.order_by(movie.col.year, "desc")
+        movie.bindings.order_by(movie.col.year, "desc")
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
-    q = replace(q, target_suffix="_bindings")
     sql, params = q.sql(schema=schema)
     with pg.cursor() as _cur:
         _cur.execute(sql, params or None)

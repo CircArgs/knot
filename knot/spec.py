@@ -322,10 +322,16 @@ class OntologyClass:
     # ``.offset()`` / ``.select()`` on the returned ``Query``.
     # ------------------------------------------------------------------
 
-    def _query(self) -> Query:
+    def _query(self, target_suffix: str = "_resolved") -> Query:
         """Construct a fresh Query rooted at this class, with the
-        spec back-reference set so ``.sql(schema=...)`` works."""
-        return Query(class_name=self.name, _spec=self._spec)
+        spec back-reference set so ``.sql(schema=...)`` works. The
+        ``target_suffix`` defaults to ``_resolved`` — see ``bindings``
+        / ``all_sources`` properties for the other layers."""
+        return Query(
+            class_name=self.name,
+            target_suffix=target_suffix,
+            _spec=self._spec,
+        )
 
     def where(self, predicate: Expr) -> Query:
         return self._query().where(predicate)
@@ -341,6 +347,28 @@ class OntologyClass:
 
     def select(self, *refs: Expr) -> Query:
         return self._query().select(*refs)
+
+    # Layer-targeted query entry points. ``cls.bindings`` and
+    # ``cls.all_sources`` return Query objects already pointed at
+    # the raw SCD2 bindings layer / per-source provenance view
+    # respectively — same fluent surface as ``cls.where(...)`` etc.,
+    # just against a different underlying relation.
+    @property
+    def bindings(self) -> Query:
+        """Query rooted at ``<class>_bindings`` — raw per-source
+        SCD2 claims. Visible columns are the spec's slots; the
+        bindings-internal columns (source_name, source_identifier,
+        valid_from, valid_to, raw_payload, er_metadata) aren't part
+        of the Query AST."""
+        return self._query(target_suffix="_bindings")
+
+    @property
+    def all_sources(self) -> Query:
+        """Query rooted at ``<class>_all_sources`` — per-source
+        provenance view, one jsonb per slot keyed by source name
+        with ``{value, weight}`` payload. Slot columns project as
+        jsonb here, not their underlying scalar type."""
+        return self._query(target_suffix="_all_sources")
 
     # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.
