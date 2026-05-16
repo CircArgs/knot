@@ -35,6 +35,48 @@ builds around it. The earlier monorepo (API service + UI + ingest + ER
 - **Sync.** The compiler is sync (pure transforms). Adapters wrap it
   for async hosts if they want.
 
+## Host integration
+
+knot is a library, not a service. It's `pip install`-ed into the
+host processes that own postgres connections. The reference shape is
+**three deployment surfaces, one shared spec**:
+
+- **Per-source ingest workers** (Temporal workflows). Each source
+  (`imdb`, `tmdb`, `rottentomatoes`, …) gets its own workflow
+  definition with its own auth, rate limits, schedule, source-shaped
+  normalization. Activities pull from the source, normalize, then
+  call `binding.write(rows)` to compile + execute the SCD2 write.
+- **ER workers** (Temporal workflows). Look at unresolved bindings,
+  decide canonical_ids (whatever scoring / matching policy the team
+  owns), call `binding.assign_canonical(...)` /
+  `binding.recanonicalize(...)` with optional `er_metadata={...}`
+  audit stamps. Ingest cadence and ER cadence are independent — that
+  decoupling is why these are separate workflows.
+- **Service API** (FastAPI / GraphQL / REST / whatever). Translates
+  incoming requests into knot `Query` AST nodes using the spec's
+  classes, calls `spec.compile_query(q)`, executes the SQL, maps rows
+  to the response shape it owes its caller.
+
+The **spec** is the shared dependency — a Python module that every
+surface imports alongside knot. Spec + knot together compile to SQL;
+the host process owns the connection and executes. Three deployment
+shapes, one source of truth for schema + bindings + weights +
+constraints.
+
+knot has no awareness of HTTP, no workflow concepts, no ingest
+scheduler, no ER policy, no auth, no response shape. It is a
+**substrate** the host consumes:
+
+- the service API is the *active read consumer* that composes
+  `Query` ASTs, possibly issues many per request, joins knot results
+  with whatever else it needs;
+- the workers are *active write consumers* that orchestrate ingest
+  + ER as durable workflows;
+- knot provides the AST language and the SQL compiler. Nothing more.
+
+This is the design intent behind every "the host owns this" line in
+the rest of this document. The library's job ends at `(sql, params)`.
+
 ## Layout
 
 ```
