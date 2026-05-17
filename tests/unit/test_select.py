@@ -7,7 +7,7 @@ from dataclasses import replace
 import pytest
 
 from knot import types
-from knot.ast.select import OrderBy, Query
+from knot.ast.select import Layer, OrderBy, Query
 from knot.compile.query import compile_query
 from knot.spec import Spec
 
@@ -89,10 +89,10 @@ def test_full_chain():
     assert "LIMIT 50" in sql
 
 
-def test_target_suffix_canonical():
+def test_layer_canonical():
     """Query can target the canonical table instead of _resolved."""
     spec, movie = _make_movie_spec()
-    q = replace(movie.resolved.where(movie.col.year == 2020), target_suffix="")
+    q = replace(movie.resolved.where(movie.col.year == 2020), layer=Layer.CANONICAL)
     sql = compile_query(q, spec=spec, schema="knot_data")
     assert "FROM knot_data.movie\n" in sql
     assert "knot_data.movie.year = 2020" in sql
@@ -139,7 +139,7 @@ def test_fk_ref_as_value():
     ref = movie.col.director
     assert isinstance(ref, FkRef)
     assert ref.target_class_name == "Person"
-    sql = compile_sql(ref, schema="knot_data", target_suffix="_resolved")
+    sql = compile_sql(ref, schema="knot_data", layer=Layer.RESOLVED)
     assert sql == "knot_data.movie_resolved.director"
 
 
@@ -213,7 +213,7 @@ def test_this_outside_aggregate_raises():
     from knot.compile.expr import compile_sql
 
     with pytest.raises(ValueError, match="this.Person used outside"):
-        compile_sql(this.Person, schema="knot_data", target_suffix="_resolved")
+        compile_sql(this.Person, schema="knot_data", layer=Layer.RESOLVED)
 
 
 def test_any_existence():
@@ -313,7 +313,7 @@ def test_aggregate_all_requires_condition():
 def test_resolved_targets_resolved_view():
     spec, movie = _make_movie_spec()
     q = movie.resolved
-    assert q.target_suffix == "_resolved"
+    assert q.layer is Layer.RESOLVED
     sql = q.sql(schema="knot_data")
     assert "FROM knot_data.movie_resolved" in sql
 
@@ -321,7 +321,7 @@ def test_resolved_targets_resolved_view():
 def test_all_sources_targets_provenance_view():
     spec, movie = _make_movie_spec()
     q = movie.all_sources
-    assert q.target_suffix == "_all_sources"
+    assert q.layer is Layer.ALL_SOURCES
     sql = q.sql(schema="knot_data")
     assert "FROM knot_data.movie_all_sources" in sql
 
@@ -331,7 +331,7 @@ def test_from_source_targets_bindings_with_filter():
     imdb = spec.add_source("imdb")
     imdb.bind(movie)
     q = movie.from_source(imdb)
-    assert q.target_suffix == "_bindings"
+    assert q.layer is Layer.BINDINGS
     sql = q.sql(schema="knot_data")
     assert "FROM knot_data.movie_bindings" in sql
     assert "source_name = 'imdb'" in sql

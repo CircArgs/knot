@@ -39,7 +39,7 @@ from enum import StrEnum
 from typing import Any
 
 from knot.ast.expr import CountRel, Exists, Expr, FkRef, Ref
-from knot.ast.select import Query
+from knot.ast.select import Layer, Query
 from knot.ast.types import ClassRef, TypeExpression, _coerce_type
 
 # ---------------------------------------------------------------------------
@@ -338,17 +338,13 @@ class OntologyClass:
     # ``.select`` / ``.sql``). The cross-source raw bindings stream
     # is intentionally unexposed — internal / admin concern.
 
-    def _query(self, target_suffix: str) -> Query:
+    def _query(self, layer: Layer) -> Query:
         if self.kind != ClassKind.CONCRETE:
             raise ValueError(
                 f"OntologyClass {self.name!r} is {self.kind.value!r}; "
-                f"only concrete classes have a {target_suffix} relation"
+                f"only concrete classes have a {layer.name} relation"
             )
-        return Query(
-            class_name=self.name,
-            target_suffix=target_suffix,
-            _spec=self._spec,
-        )
+        return Query(class_name=self.name, layer=layer, _spec=self._spec)
 
     @property
     def resolved(self) -> Query:
@@ -356,7 +352,7 @@ class OntologyClass:
         argmax view, one row per canonical_id with the highest-weight
         non-null value per slot. The user-facing "current state"
         read shape."""
-        return self._query(target_suffix="_resolved")
+        return self._query(Layer.RESOLVED)
 
     @property
     def all_sources(self) -> Query:
@@ -365,7 +361,7 @@ class OntologyClass:
         column as a jsonb of ``{source_name: {value, weight}}``.
         Slot columns project as jsonb here, not their underlying
         scalar type."""
-        return self._query(target_suffix="_all_sources")
+        return self._query(Layer.ALL_SOURCES)
 
     def from_source(self, source: Source) -> Query:
         """Query one source's claims about this class. Returns a
@@ -379,9 +375,7 @@ class OntologyClass:
         # ``_check_name`` at Source.__post_init__, so quotes can't
         # appear here. Defense-in-depth escape kept.
         src = source.name.replace("'", "''")
-        return self._query(target_suffix="_bindings").where(
-            Raw(f"source_name = '{src}'")
-        )
+        return self._query(Layer.BINDINGS).where(Raw(f"source_name = '{src}'"))
 
     # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.

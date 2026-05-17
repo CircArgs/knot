@@ -5,10 +5,11 @@ per node. Adding a second compilation target (cypher, in-process
 evaluator, typed IR) is a new dispatch table in a sibling module; the
 ``Expr`` dataclasses don't need to change.
 
-``target_suffix`` flips the rendered table reference between the
-canonical table (``""``), the resolved view (``"_resolved"``), or the
-bindings-current view (``"_bindings_current"``) — the same Expr tree
-compiles against any of them.
+``layer`` (a ``Layer`` enum, ``StrEnum``-typed so the value is also
+the literal SQL table-name suffix) flips the rendered table reference
+between the canonical table, the resolved view, the bindings table,
+and the per-source provenance view — the same Expr tree compiles
+against any of them.
 
 ``outer_class`` carries the enclosing query's class name through
 recursive compilation so that ``This`` references can render against
@@ -40,6 +41,7 @@ from knot.ast.expr import (
     Ref,
     This,
 )
+from knot.ast.select import Layer
 
 
 @singledispatch
@@ -47,7 +49,7 @@ def compile_sql(
     node: Expr,
     *,
     schema: str,
-    target_suffix: str,
+    layer: Layer,
     outer_class: str | None = None,
 ) -> str:
     """Render ``node`` as a postgres SQL fragment."""
@@ -55,38 +57,32 @@ def compile_sql(
 
 
 @compile_sql.register
-def _(
-    node: Ref, *, schema: str, target_suffix: str, outer_class: str | None = None
-) -> str:
-    return f"{schema}.{node.class_name.lower()}{target_suffix}.{node.slot_name}"
+def _(node: Ref, *, schema: str, layer: Layer, outer_class: str | None = None) -> str:
+    return f"{schema}.{node.class_name.lower()}{layer}.{node.slot_name}"
+
+
+@compile_sql.register
+def _(node: FkRef, *, schema: str, layer: Layer, outer_class: str | None = None) -> str:
+    return f"{schema}.{node.class_name.lower()}{layer}.{node.slot_name}"
 
 
 @compile_sql.register
 def _(
-    node: FkRef, *, schema: str, target_suffix: str, outer_class: str | None = None
-) -> str:
-    return f"{schema}.{node.class_name.lower()}{target_suffix}.{node.slot_name}"
-
-
-@compile_sql.register
-def _(
-    node: FkChainRef, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: FkChainRef, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
     target_class = node.chain[-1][1]
-    return f"{schema}.{target_class.lower()}{target_suffix}.{node.terminal_slot}"
+    return f"{schema}.{target_class.lower()}{layer}.{node.terminal_slot}"
 
 
 @compile_sql.register
 def _(
-    node: Literal, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: Literal, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
     return _sql_literal(node.value)
 
 
 @compile_sql.register
-def _(
-    node: This, *, schema: str, target_suffix: str, outer_class: str | None = None
-) -> str:
+def _(node: This, *, schema: str, layer: Layer, outer_class: str | None = None) -> str:
     if outer_class is None:
         raise ValueError(f"this.{node.class_name} used outside of an Aggregate context")
     if node.class_name != outer_class:
@@ -95,57 +91,45 @@ def _(
             f"({outer_class!r}) — outer-scope reference mismatched"
         )
     # The outer row's identity column. knot convention: canonical_id.
-    return f"{schema}.{outer_class.lower()}{target_suffix}.canonical_id"
+    return f"{schema}.{outer_class.lower()}{layer}.canonical_id"
 
 
 @compile_sql.register
 def _(
-    node: Compare, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: Compare, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    lhs = compile_sql(
-        node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
-    )
-    rhs = compile_sql(
-        node.right, schema=schema, target_suffix=target_suffix, outer_class=outer_class
-    )
+    lhs = compile_sql(node.left, schema=schema, layer=layer, outer_class=outer_class)
+    rhs = compile_sql(node.right, schema=schema, layer=layer, outer_class=outer_class)
     return f"{lhs} {node.op} {rhs}"
 
 
 @compile_sql.register
 def _(
-    node: BoolOp, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: BoolOp, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    lhs = compile_sql(
-        node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
-    )
-    rhs = compile_sql(
-        node.right, schema=schema, target_suffix=target_suffix, outer_class=outer_class
-    )
+    lhs = compile_sql(node.left, schema=schema, layer=layer, outer_class=outer_class)
+    rhs = compile_sql(node.right, schema=schema, layer=layer, outer_class=outer_class)
     return f"({lhs}) {node.op} ({rhs})"
 
 
 @compile_sql.register
-def _(
-    node: Not, *, schema: str, target_suffix: str, outer_class: str | None = None
-) -> str:
-    return f"NOT ({compile_sql(node.expr, schema=schema, target_suffix=target_suffix, outer_class=outer_class)})"
+def _(node: Not, *, schema: str, layer: Layer, outer_class: str | None = None) -> str:
+    return f"NOT ({compile_sql(node.expr, schema=schema, layer=layer, outer_class=outer_class)})"
 
 
 @compile_sql.register
 def _(
-    node: IsNull, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: IsNull, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
     op = "IS NOT NULL" if node.negated else "IS NULL"
-    return f"{compile_sql(node.expr, schema=schema, target_suffix=target_suffix, outer_class=outer_class)} {op}"
+    return f"{compile_sql(node.expr, schema=schema, layer=layer, outer_class=outer_class)} {op}"
 
 
 @compile_sql.register
 def _(
-    node: InList, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: InList, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    lhs = compile_sql(
-        node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
-    )
+    lhs = compile_sql(node.left, schema=schema, layer=layer, outer_class=outer_class)
     vs = ", ".join(_sql_literal(v) for v in node.values)
     op = "NOT IN" if node.negated else "IN"
     return f"{lhs} {op} ({vs})"
@@ -153,20 +137,18 @@ def _(
 
 @compile_sql.register
 def _(
-    node: Between, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: Between, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    lhs = compile_sql(
-        node.left, schema=schema, target_suffix=target_suffix, outer_class=outer_class
-    )
+    lhs = compile_sql(node.left, schema=schema, layer=layer, outer_class=outer_class)
     return f"{lhs} BETWEEN {_sql_literal(node.low)} AND {_sql_literal(node.high)}"
 
 
 @compile_sql.register
 def _(
-    node: Exists, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: Exists, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    other_table = f"{schema}.{node.other_class_name.lower()}{target_suffix}"
-    primary_table = f"{schema}.{node.primary_class_name.lower()}{target_suffix}"
+    other_table = f"{schema}.{node.other_class_name.lower()}{layer}"
+    primary_table = f"{schema}.{node.primary_class_name.lower()}{layer}"
     clauses = [
         f"{other_table}.{node.fk_slot_name} = {primary_table}.{node.primary_identifier}"
     ]
@@ -175,7 +157,7 @@ def _(
             compile_sql(
                 node.where,
                 schema=schema,
-                target_suffix=target_suffix,
+                layer=layer,
                 outer_class=outer_class,
             )
         )
@@ -185,10 +167,10 @@ def _(
 
 @compile_sql.register
 def _(
-    node: CountRel, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: CountRel, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    other_table = f"{schema}.{node.other_class_name.lower()}{target_suffix}"
-    primary_table = f"{schema}.{node.primary_class_name.lower()}{target_suffix}"
+    other_table = f"{schema}.{node.other_class_name.lower()}{layer}"
+    primary_table = f"{schema}.{node.primary_class_name.lower()}{layer}"
     clauses = [
         f"{other_table}.{node.fk_slot_name} = {primary_table}.{node.primary_identifier}"
     ]
@@ -197,7 +179,7 @@ def _(
             compile_sql(
                 node.where,
                 schema=schema,
-                target_suffix=target_suffix,
+                layer=layer,
                 outer_class=outer_class,
             )
         )
@@ -206,7 +188,7 @@ def _(
 
 @compile_sql.register
 def _(
-    node: Aggregate, *, schema: str, target_suffix: str, outer_class: str | None = None
+    node: Aggregate, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
     # Infer the primary class — the class whose slot refs appear in the
     # predicate (ignoring This refs, which point to outer scope).
@@ -216,14 +198,14 @@ def _(
             f"Aggregate.predicate has no class-bound slot refs; cannot "
             f"infer the primary row-set. Predicate: {node.predicate!r}"
         )
-    sub_table = f"{schema}.{primary.lower()}{target_suffix}"
+    sub_table = f"{schema}.{primary.lower()}{layer}"
     # The aggregate's sub-predicate compiles with outer_class unchanged
     # (it propagates the enclosing scope, since This refs in the predicate
     # bind to the enclosing query, not the subquery itself).
     pred_sql = compile_sql(
         node.predicate,
         schema=schema,
-        target_suffix=target_suffix,
+        layer=layer,
         outer_class=outer_class,
     )
     if node.kind == "any":
@@ -240,7 +222,7 @@ def _(
         cond_sql = compile_sql(
             node.condition,
             schema=schema,
-            target_suffix=target_suffix,
+            layer=layer,
             outer_class=outer_class,
         )
         return f"NOT EXISTS (SELECT 1 FROM {sub_table} WHERE {pred_sql} AND NOT ({cond_sql}))"
@@ -248,9 +230,7 @@ def _(
 
 
 @compile_sql.register
-def _(
-    node: Raw, *, schema: str, target_suffix: str, outer_class: str | None = None
-) -> str:
+def _(node: Raw, *, schema: str, layer: Layer, outer_class: str | None = None) -> str:
     return node.sql
 
 

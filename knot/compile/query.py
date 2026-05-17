@@ -48,17 +48,15 @@ def compile_query(node: Any, *, spec: Spec, schema: str) -> str:
 
 @compile_query.register
 def _(node: Query, *, spec: Spec, schema: str) -> str:
-    suffix = node.target_suffix
-    table = f"{schema}.{node.class_name.lower()}{suffix}"
+    layer = node.layer
+    table = f"{schema}.{node.class_name.lower()}{layer}"
 
     # Projection — None means SELECT *.
     if node.projection is None:
         select_sql = "*"
     else:
         select_sql = ", ".join(
-            compile_sql(
-                r, schema=schema, target_suffix=suffix, outer_class=node.class_name
-            )
+            compile_sql(r, schema=schema, layer=layer, outer_class=node.class_name)
             for r in node.projection
         )
 
@@ -85,9 +83,9 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
                 target_cls = _lookup_class(spec, target_class)
                 target_ident = target_cls.identifier_slot().name
                 joins.append(
-                    f"JOIN {schema}.{target_class.lower()}{suffix} "
-                    f"ON {schema}.{target_class.lower()}{suffix}.{target_ident} "
-                    f"= {schema}.{source_class.lower()}{suffix}.{fk_slot}"
+                    f"JOIN {schema}.{target_class.lower()}{layer} "
+                    f"ON {schema}.{target_class.lower()}{layer}.{target_ident} "
+                    f"= {schema}.{source_class.lower()}{layer}.{fk_slot}"
                 )
             source_class = target_class
 
@@ -100,7 +98,7 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
         where_sql = compile_sql(
             node.where_clause,
             schema=schema,
-            target_suffix=suffix,
+            layer=layer,
             outer_class=node.class_name,
         )
         parts.append(f"WHERE {where_sql}")
@@ -111,7 +109,7 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
             ref_sql = compile_sql(
                 ob.ref,
                 schema=schema,
-                target_suffix=suffix,
+                layer=layer,
                 outer_class=node.class_name,
             )
             order_parts.append(f"{ref_sql} {ob.direction.upper()}")

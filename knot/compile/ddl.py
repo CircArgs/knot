@@ -18,6 +18,7 @@ with an extra ``(source_name, source_identifier)`` layer and SCD2
 
 from __future__ import annotations
 
+from knot.ast.select import Layer
 from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
 from knot.compile.expr import compile_sql
 from knot.spec import (
@@ -257,7 +258,7 @@ def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
     # VirtualClass.definition is an Expr (from knot.expr). The view
     # selects from the *canonical* parent table, so refs in the
     # predicate render with no resolved-suffix.
-    body_sql = compile_sql(vc.definition, schema=schema, target_suffix="")
+    body_sql = compile_sql(vc.definition, schema=schema, layer=Layer.CANONICAL)
     return (
         f"{_create_view(if_not_exists=if_not_exists)} "
         f"{schema}.{vc.name.lower()} AS\n"

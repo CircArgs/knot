@@ -7,6 +7,7 @@ builder directly (e.g. ``movie.col.year`` → ``Ref("Movie", "year")``);
 import sqlglot
 
 from knot import Spec, types
+from knot.ast.select import Layer
 from knot.compile import emit_validation, emit_validation_union
 
 
@@ -67,7 +68,7 @@ def test_class_ref_renders_qualified():
         body=movie.has_any(credit, role="director"),
     )
 
-    # Default target_suffix='_resolved' — refs go to the resolved views.
+    # Default layer=Layer.RESOLVED — refs go to the resolved views.
     rewrites = dict(emit_validation(spec))
     sql = rewrites["has_director"]
     assert "knot_data.credit_resolved" in sql
@@ -75,8 +76,8 @@ def test_class_ref_renders_qualified():
     assert "knot_data.credit_resolved.role" in sql
     assert "knot_data.movie_resolved.canonical_id" in sql
 
-    # target_suffix='' — canonical-table targeting.
-    rewrites_canonical = dict(emit_validation(spec, target_suffix=""))
+    # layer=Layer.CANONICAL — canonical-table targeting.
+    rewrites_canonical = dict(emit_validation(spec, layer=Layer.CANONICAL))
     sql_c = rewrites_canonical["has_director"]
     assert "knot_data.credit.movie" in sql_c
     assert "knot_data.movie.canonical_id" in sql_c

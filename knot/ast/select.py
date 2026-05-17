@@ -22,12 +22,26 @@ so ``q.sql(schema=...)`` compiles itself end-to-end.
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from knot.ast.expr import Expr
 
 if TYPE_CHECKING:
     from knot.spec import Spec
+
+
+class Layer(StrEnum):
+    """Which postgres relation a ``Query`` (or constraint validation, or
+    DDL view body) targets. The enum value is the literal table-name
+    suffix the compiler appends after ``<schema>.<class>`` — typing the
+    layer instead of a bare string moves typos from runtime
+    "relation does not exist" errors to construction-time failures."""
+
+    RESOLVED = "_resolved"
+    ALL_SOURCES = "_all_sources"
+    BINDINGS = "_bindings"
+    CANONICAL = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,7 +79,7 @@ class Query:
     limit_value: int | None = None
     offset_value: int | None = None
     projection: tuple[Expr, ...] | None = None
-    target_suffix: str = "_resolved"
+    layer: Layer = Layer.RESOLVED
     _spec: Any = field(default=None, repr=False, compare=False)
 
     def where(self, predicate: Expr) -> Query:

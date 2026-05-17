@@ -32,7 +32,7 @@ from knot.ast.expr import (
     raw,
     this,
 )
-from knot.ast.select import OrderBy, Query
+from knot.ast.select import Layer, OrderBy, Query
 from knot.spec import (
     CORRECTIONS_SOURCE_NAME,
     DEFAULT_WEIGHT,
