@@ -1170,7 +1170,7 @@ class Spec:
     #   - emit_validation — runtime constraint checks (per-rule SELECTs)
     # Per-entity runtime methods live on the entity:
     #   - ``query.sql(schema=…)``               read (Query AST node)
-    #   - ``binding.write(rows)``               ingest (SourceBinding)
+    #   - ``binding.write_sql(schema=…)``       ingest (SourceBinding)
     #   - ``binding.assign_canonical_sql()``    ER stamp (SourceBinding)
     #   - ``binding.recanonicalize_sql()``      ER reassign (SourceBinding)
     #   - ``binding.close_out_sql()``           retract a claim (SourceBinding)

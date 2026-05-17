@@ -14,8 +14,9 @@ builds around it. The earlier monorepo (API service + UI + ingest + ER
 ## Posture
 
 - **Pure library.** No FastAPI, no HTTP, no `psycopg.connect`, no
-  ingest path inside `knot/`. Compile functions return SQL strings (or
-  `(sql, params)` pairs); the host runs them.
+  ingest path inside `knot/`. Compile functions return SQL strings;
+  the host runs them (and binds params for the few write/seed
+  emitters that emit named placeholders).
 - **Postgres-only today.** All emitters target postgres. A future
   Trino / Spark / cypher dialect lands as a sibling module
   (`expr_sql_trino.py`, `query_sql_trino.py`, etc.) — same dispatch
@@ -56,7 +57,7 @@ host processes that own postgres connections. The reference shape is
   — that decoupling is why these are separate workflows.
 - **Service API** (FastAPI / GraphQL / REST / whatever). Translates
   incoming requests into knot `Query` AST nodes using the spec's
-  classes, calls `q.sql(schema=...)` to compile to `(sql, params)`,
+  classes, calls `q.sql(schema=...)` to compile to a SQL string,
   executes the SQL, maps rows to the response shape it owes its
   caller.
 
@@ -78,7 +79,8 @@ scheduler, no ER policy, no auth, no response shape. It is a
 - knot provides the AST language and the SQL compiler. Nothing more.
 
 This is the design intent behind every "the host owns this" line in
-the rest of this document. The library's job ends at `(sql, params)`.
+the rest of this document. The library's job ends at the SQL
+string (plus the named-placeholder dict, where one is needed).
 
 ## Constraint enforcement
 
@@ -314,7 +316,7 @@ q = person.resolved.where((movie.col.director == this.Person).none())
 # What does imdb specifically claim? (raw bindings, one source)
 q = movie.from_source(imdb).order_by(movie.col.year, "desc").limit(10)
 
-sql, params = q.sql(schema="knot_data")
+sql = q.sql(schema="knot_data")
 ```
 
 The cross-source raw bindings stream (every source's claims, no
@@ -342,7 +344,7 @@ SQL templates only — no row data, no value args, no `json.dumps`
 inside knot. The host binds via the connector.
 
 ```python
-sql, params       = q.sql(schema="knot_data")                  # (sql, params)
+sql               = q.sql(schema="knot_data")                  # literals inlined
 close_out, insert = binding.write_sql(schema="knot_data")      # both ref %(rows)s::jsonb
 sql_assign        = binding.assign_canonical_sql(schema=…)     # %(canonical_id)s, %(source_identifier)s, %(er_metadata)s
 sql_recan         = binding.recanonicalize_sql(schema=…)       # %(new_canonical_id)s, %(source_identifier)s, %(er_metadata)s
@@ -366,13 +368,16 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
   ``query_fn=None`` substitutes an empty-DB callable, so an empty
   schema gets the full create sequence and a populated schema gets
   only the delta. One code path, two modes.
-- Per-element compile methods (``binding.write_sql``,
+- ``Query.sql`` returns a SQL string with literals inlined — no
+  parameter list, the host calls ``cur.execute(sql)`` and is done.
+- The binding compile methods (``binding.write_sql``,
   ``binding.assign_canonical_sql``, ``binding.recanonicalize_sql``,
-  ``binding.close_out_sql``, ``Query.sql``) all return raw SQL
-  templates with named placeholders. The host binds via its
-  connector. ``emit_validation`` and ``emit_weight_seed`` return
-  parameterized statements because their parameters are derived
-  from the spec itself, not from runtime input.
+  ``binding.close_out_sql``) return SQL templates with named
+  placeholders (``%(rows)s::jsonb``, ``%(canonical_id)s``, …). The
+  host binds runtime data via its connector.
+- ``emit_validation`` and ``emit_weight_seed`` return parameterized
+  statements because their parameters are derived from the spec
+  itself, not from runtime input.
 
 **Weight runtime**:
 - Per-(source, class, slot) value lives in `<schema>.source_weight`.

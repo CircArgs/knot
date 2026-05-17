@@ -1,10 +1,9 @@
 """Postgres SQL compilation for the read substrate.
 
 Sibling dispatch table to ``compile_sql`` — that one renders Expr
-fragments (string only); this one renders Query statements and
-returns ``(sql, params)``. ``params`` is empty for now because
-literals are inlined via ``compile_sql``; parameterized output can
-layer on without changing the signature.
+fragments, this one renders Query statements. Both return raw SQL
+strings; literal values are inlined at compile time so there is no
+positional parameter list to thread through to the driver.
 
 JOIN assembly: a pre-pass walks the query AST (where / order_by /
 projection) collecting every ``FkChainRef``. Each unique
@@ -42,13 +41,13 @@ from knot.spec import Spec
 
 
 @singledispatch
-def compile_query(node: Any, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
-    """Render ``node`` as a full postgres SQL statement + parameter list."""
+def compile_query(node: Any, *, spec: Spec, schema: str) -> str:
+    """Render ``node`` as a full postgres SQL statement."""
     raise NotImplementedError(f"no query compiler registered for {type(node).__name__}")
 
 
 @compile_query.register
-def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
+def _(node: Query, *, spec: Spec, schema: str) -> str:
     suffix = node.target_suffix
     table = f"{schema}.{node.class_name.lower()}{suffix}"
 
@@ -124,7 +123,7 @@ def _(node: Query, *, spec: Spec, schema: str) -> tuple[str, list[Any]]:
     if node.offset_value is not None:
         parts.append(f"OFFSET {node.offset_value}")
 
-    return "\n".join(parts) + ";", []
+    return "\n".join(parts) + ";"
 
 
 def _lookup_class(spec: Spec, name: str) -> Any:

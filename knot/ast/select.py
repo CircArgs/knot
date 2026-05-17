@@ -98,9 +98,10 @@ class Query:
         self,
         *,
         schema: str = "knot_data",
-    ) -> tuple[str, list[Any]]:
-        """Compile this query to ``(sql, params)`` against its owning
-        spec. Validates the spec first; raises ``SpecError`` if
+    ) -> str:
+        """Compile this query to a postgres SQL string against its owning
+        spec. Literals are inlined; there's no positional-parameter list
+        to bind. Validates the spec first; raises ``SpecError`` if
         malformed and ``RuntimeError`` if this Query wasn't built via
         a spec's class (no back-reference)."""
         if self._spec is None:

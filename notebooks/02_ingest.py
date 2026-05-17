@@ -122,9 +122,9 @@ def _(imdb, movie, pg, schema):
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
-    sql, params = q.sql(schema=schema)
+    sql = q.sql(schema=schema)
     with pg.cursor() as _cur:
-        _cur.execute(sql, params or None)
+        _cur.execute(sql)
         cols = [d.name for d in _cur.description]
         for row in _cur.fetchall():
             print(dict(zip(cols, row)))
