@@ -16,12 +16,17 @@ def _(mo):
     mo.md(r"""
     # knot — 03: extend the spec, migrate the live DB
 
-    The team wants to ship ER, which needs (a) a second source for
-    cross-source matching and (b) a vector column on `Movie` for
-    k-NN blocking. Both changes live in a new file —
-    `movies_spec/full.py` — that mutates the shared spec object
-    when imported. That file IS the migration: a Python module,
-    versioned alongside the rest of the codebase.
+    The team wants knot to cover more than movies: video games,
+    podcasts, TV, and the messy webscraped mentions feed. Each
+    new domain is a file in `movies_spec/` — `games.py`,
+    `podcasts.py`, `tv.py`, `webscraped.py`. Activating them is
+    one import: `import movies_spec.full`.
+
+    That import IS the migration. It mutates the same shared
+    `spec` object the v1 notebooks (`01_deploy`, `02_ingest`) ran
+    against, growing it from **4 classes / 3 sources / 9 bindings**
+    (v1, movies only) to **17 classes / 14 sources / 56 bindings**
+    (full CKG).
 
     knot doesn't own the migration runtime — `Spec.ddl()` emits
     the canonical target schema, and we hand it to

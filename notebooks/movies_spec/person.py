@@ -1,20 +1,28 @@
-"""Cross-domain Person extensions.
+"""Person — shared across every domain.
 
-Person is declared in ``base.py`` with the minimum the v1 spec
-needs (``name``, ``birth_country``). Multiple downstream domains
-(movies, games, podcasts, …) all reference Person, and each
-contributes slots Person didn't originally carry. Rather than have
-every domain extend Person separately (slot-ordering conflicts,
-duplicate-add errors), centralize the cross-domain Person slots
-here.
+A Tarantino is the same Person whether he's directing a movie
+(MovieCredit), credited on a video-game adaptation (GameCredit),
+or guesting on a podcast (PodcastCredit). One class, many
+domain-specific edges to it.
 
-knot's ``cls.slot(...)`` is just an in-place mutation; this file's
-import grafts the additional slots onto the existing class object.
+Owns the full Person slot set up-front. Domain files import
+``person`` from here when they need an FK target.
+
+Module surface
+--------------
+``part``    a self-contained ``Spec`` holding just Person — the
+            APIRouter analogue. Base composes it in via
+            ``spec.include(part)``.
+``person``  the OntologyClass handle for cross-domain FK references.
 """
 
-from knot import types
-from movies_spec.base import person
+from knot import Spec, types
 
+part = Spec(identifier_slot_name="canonical_id")
+
+person = part.add_class("Person")
+person.slot("name", types.TEXT, required=True)
+person.slot("birth_country", types.TEXT)
 person.slot("birth_year", types.INTEGER)
 person.slot("role_description", types.TEXT)  # podcasts feed shape
 person.slot("role_summary", types.TEXT)  # games feed shape

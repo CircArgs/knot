@@ -1,45 +1,32 @@
 # isort: skip_file
-"""The 'uber-complete' spec — composes all domain extensions
-into the shared ``spec`` object from ``base.py``.
+"""Compose the migration-time domains onto the v1 spec.
 
-Each domain lives in its own file:
+Loading ``movies_spec`` gives you the v1 (base + person + movies).
+Loading THIS module includes the four additional domains —
+``games`` / ``podcasts`` / ``tv`` / ``webscraped`` — by calling
+``spec.include(domain.part)`` on each.
 
-  person.py     cross-domain Person extensions (birth_year, embedding, …)
-  movies.py     Movie extensions, MovieCredit, virtual, year_sane,
-                tmdb + rottentomatoes sources
-  games.py      Studio + Platform + Game + Release + GameCredit,
-                igdb + giant_bomb + steam sources
-  podcasts.py   Podcast + PodcastEpisode + PodcastCredit,
-                apple_podcasts + spotify + listennotes sources
-  tv.py         Show + Season + TVEpisode + TVCredit,
-                tvdb + reused tmdb/imdb for TV class bindings
-  webscraped.py Mention class, 4 low-trust scraper sources
+Same shape as a FastAPI app loading more routers at startup.
 
-Import order matters where one file's source/class is referenced
-by another:
+Order matters because tv + webscraped both reference movies'
+source/class handles (tmdb, imdb, Movie). movies has already been
+included in the v1 by ``__init__.py`` — so by the time tv.py or
+webscraped.py runs, those handles point at the parent spec.
 
-  * person     — earliest; movies/games/podcasts/tv all use the
-                 extended Person slots
-  * movies     — declares tmdb + imdb_movie_credit_b; tv reuses
-                 tmdb + imdb; webscraped's Mention FK→Movie
-  * games / podcasts — independent, order doesn't matter
-  * tv         — must follow movies (looks up tmdb + imdb sources)
-  * webscraped — must follow movies (Mention FK→Movie)
-
-The ``isort: skip_file`` directive at the top preserves this
-hand-ordered narrative against import-sorter auto-rewrites.
-
-This module finishes with one ``spec.validate()`` so any cross-
-file inconsistency surfaces at import time.
+``# isort: skip_file`` keeps the hand-ordered narrative.
 """
 
+import movies_spec  # noqa: F401  — ensures v1 has loaded first
 from movies_spec.base import spec
 
-import movies_spec.person  # noqa: E402,F401  ← cross-domain Person slots
-import movies_spec.movies  # noqa: E402,F401
-import movies_spec.games  # noqa: E402,F401
-import movies_spec.podcasts  # noqa: E402,F401
-import movies_spec.tv  # noqa: E402,F401  ← needs movies
-import movies_spec.webscraped  # noqa: E402,F401  ← needs movies
+from movies_spec import games as _games
+from movies_spec import podcasts as _podcasts
+from movies_spec import tv as _tv
+from movies_spec import webscraped as _webscraped
+
+spec.include(_games.part)
+spec.include(_podcasts.part)
+spec.include(_tv.part)
+spec.include(_webscraped.part)
 
 spec.validate()

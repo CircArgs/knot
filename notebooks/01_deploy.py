@@ -14,27 +14,34 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # knot — 01: deploy the **base** spec
+    # knot — 01: deploy the **v1** spec (movies domain)
 
     Walk-through arc:
 
-    1. **01_deploy** (this notebook) — deploy the base spec
-    2. 02_ingest — ingest imdb data
-    3. 03_migrate — extend the spec to add tmdb + embeddings, run Atlas
-    4. 04_ingest_tmdb — ingest the new source
-    5. 05_er — compute embeddings, run ER, watch the resolver view fill
+    1. **01_deploy** (this notebook) — deploy the v1 spec
+    2. 02_ingest — ingest imdb movies
+    3. 03_migrate — compose in games + podcasts + tv + webscraped,
+       run Atlas to apply
+    4. 04_ingest_more — ingest the 55 bindings the migration enabled
+    5. 05_er — compute Movie embeddings, run ER, watch the resolver fill
 
-    The spec is the package `movies_spec/`:
+    The spec is the package `movies_spec/`, structured like a
+    FastAPI app:
 
-    - `base.py` — Person + Movie + the imdb source binding. **Loaded
-      by default** when you `from movies_spec import ...`.
-    - `full.py` — adds the tmdb source and a `VECTOR(384)` slot for
-      ER blocking. **Opt-in**: importing this module mutates the
-      shared spec object — that's the migration story (a new file
-      contributes to the same spec; `Spec.ddl()` reflects the new
-      shape; the migration tool reconciles).
+    | file | what it owns |
+    |---|---|
+    | `base.py`       | the `Spec` object — three lines, no classes |
+    | `person.py`     | the shared `Person` class + all its slots |
+    | `movies.py`     | Movie + MovieCredit + DirectedMovie + 3 movie sources |
+    | `games.py`      | Studio + Platform + Game + Release + GameCredit + 3 srcs |
+    | `podcasts.py`   | Podcast + PodcastEpisode + PodcastCredit + 3 srcs |
+    | `tv.py`         | Show + Season + TVEpisode + TVCredit + tvdb + cross-bind |
+    | `webscraped.py` | Mention class + 4 low-trust scraper sources |
+    | `full.py`       | composes the migration-time domains onto v1 |
 
-    This notebook only imports the base.
+    Loading `movies_spec` gives you the v1: `base + person + movies`.
+    The other domains stay opt-in until 03_migrate imports
+    `movies_spec.full`.
     """)
     return
 

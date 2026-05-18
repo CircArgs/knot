@@ -986,6 +986,58 @@ class Spec:
             binding.set_default_weight(default_weight)
         return source
 
+    def include(self, other: Spec) -> None:
+        """Merge another spec's classes, sources, source bindings, and
+        constraints into this one — the FastAPI ``app.include_router``
+        analogue for knot.
+
+        Each domain module builds a self-contained sub-spec (its own
+        ``Spec`` instance, treated as a collector), then ``base.py``
+        creates the top-level ``Spec`` and ``.include()``s each one.
+        Avoids the shared-singleton pattern where every domain file
+        imports the same ``spec`` and mutates it directly.
+
+        Identifier-slot-name must match across the two specs;
+        sub-specs would otherwise add identifier slots with a
+        different name than the parent expects. Classes and sources
+        get re-rooted (``_spec``) to this spec so subsequent
+        ``cls.add_virtual`` / ``cls.add_constraint`` calls land on the
+        right object.
+
+        Same-named classes / sources across two parts are an error —
+        the include is additive only, not a merge.
+        """
+        if self.identifier_slot_name != other.identifier_slot_name:
+            raise ValueError(
+                f"Spec.include: identifier_slot_name mismatch "
+                f"({self.identifier_slot_name!r} vs "
+                f"{other.identifier_slot_name!r})"
+            )
+        for cls in other.classes:
+            if any(c.name == cls.name for c in self.classes):
+                raise ValueError(
+                    f"Spec.include: class {cls.name!r} already exists "
+                    f"in target spec — included parts cannot redeclare "
+                    f"classes that the parent already owns"
+                )
+            # VirtualClass has slots=True and no ``_spec`` field
+            # (its parent OntologyClass owns the back-reference). Only
+            # OntologyClass needs re-rooting.
+            if isinstance(cls, OntologyClass):
+                cls._spec = self
+            self.classes.append(cls)
+        for src in other.sources:
+            if any(s.name == src.name for s in self.sources):
+                raise ValueError(
+                    f"Spec.include: source {src.name!r} already exists in target spec"
+                )
+            src._spec = self
+            self.sources.append(src)
+        for binding in other.source_bindings:
+            self.source_bindings.append(binding)
+        for constraint in other.constraints:
+            self.constraints.append(constraint)
+
     def _check_unique_class_name(self, name: str) -> None:
         if any(c.name == name for c in self.classes):
             raise ValueError(f"Spec already has a class named {name!r}")

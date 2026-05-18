@@ -1,29 +1,37 @@
-"""Shared spec for the walkthrough notebooks — composable.
+# isort: skip_file
+"""Shared spec package for the walkthrough notebooks.
 
-The package is the canonical example of how a real team file-splits
-a knot spec:
+This file is the FastAPI ``main.py`` analogue — it creates the
+top-level ``spec`` (via ``base.py``) and includes the v1 domain
+parts (``person`` + ``movies``).
 
-  base.py       Core entities + the foundational source binding.
-                Always loaded; this is the "v1" the demo starts from.
-
-  full.py       Uber-complete extensions: a second source (tmdb) and
-                the title_embedding VECTOR(384) slot used for ER.
-                Opt-in — *importing* this module mutates the shared
-                ``spec`` object, which is how a team grows a spec
-                over time. The migration notebook is the place this
-                import happens.
-
-A real deployment splits even finer (one file per source, one per
-extension); the package shape is the pattern. ``__init__.py`` exposes
-only the base — extensions stay explicit so the notebook narrative
-shows when they get composed in.
+Additional domains (games, podcasts, tv, webscraped) are opt-in:
+``import movies_spec.full`` composes them onto the same spec.
+That import IS the migration story (see notebook 03_migrate).
 """
 
-from movies_spec.base import (
+from movies_spec.base import spec
+from movies_spec import person as _person
+from movies_spec import movies as _movies
+
+spec.include(_person.part)
+spec.include(_movies.part)
+
+# Re-export the v1 handles every notebook actually grabs.
+from movies_spec.person import person  # noqa: E402,F401
+from movies_spec.movies import (  # noqa: E402,F401
     imdb,
     imdb_movie_b,
+    imdb_movie_credit_b,
     imdb_person_b,
     movie,
-    person,
-    spec,
+    movie_credit,
+    rt,
+    rt_movie_b,
+    rt_movie_credit_b,
+    rt_person_b,
+    tmdb,
+    tmdb_movie_b,
+    tmdb_movie_credit_b,
+    tmdb_person_b,
 )
