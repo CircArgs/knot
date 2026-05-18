@@ -54,9 +54,11 @@ def _():
 @app.cell
 def _():
     # Full spec composed in (we need both source bindings).
+    # tmdb_movie_b lives in the movies.py domain file once .full
+    # has been imported (it's defined there, full just composes).
     import movies_spec.full  # noqa: F401
     from movies_spec import imdb_movie_b, movie
-    from movies_spec.full import tmdb_movie_b
+    from movies_spec.movies import tmdb_movie_b
 
     return imdb_movie_b, movie, tmdb_movie_b
 
