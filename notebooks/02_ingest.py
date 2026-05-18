@@ -14,39 +14,40 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # knot — 02: ingest
+    # knot — 02: ingest imdb data
 
-    Bind a source to a class. See the write SQL knot emits. Bind row
-    data to it via the connector. Verify what landed.
+    The schema is up (deployed by `01_deploy`). The base spec
+    declares an `imdb` source bound to `Movie`. Now we feed real
+    rows through `imdb_movie_b.write_sql()` and verify they land
+    in `movie_bindings`.
+
+    Each row's `canonical_id` is **NULL** at ingest — ER hasn't
+    run yet. The resolver view filters NULL canonical_ids out, so
+    `movie.resolved` is empty until 05_er.
     """)
     return
 
 
 @app.cell
 def _():
-    import uuid
-
     import pandas as pd
     import psycopg
+    from sqlalchemy import create_engine
 
-    return pd, psycopg, uuid
+    return create_engine, pd, psycopg
 
 
 @app.cell
 def _():
-    # Same shared spec as 01_deploy — imports the spec, the Movie class,
-    # the imdb Source, and the imdb→Movie binding from ``movies_spec.py``.
-    # Real deployments share this exact import pattern: workers, the
-    # service API, the ER pipeline all import from the same spec module.
-    from movies_spec import imdb, imdb_movie_b, movie, spec
+    # Same shared spec module as 01_deploy. We only need the imdb
+    # binding for ingest — the spec import surface stays minimal.
+    from movies_spec import imdb, imdb_movie_b, movie
 
-    imdb_movie_b
-    return imdb, imdb_movie_b, movie, spec
+    return imdb, imdb_movie_b, movie
 
 
 @app.cell
-def _(psycopg, spec, uuid):
-    # Host plumbing + deploy. Schema name is a throwaway per-run id.
+def _(create_engine, psycopg):
     pg = psycopg.connect(
         host="localhost",
         port=5433,
@@ -55,25 +56,24 @@ def _(psycopg, spec, uuid):
         dbname="knot",
         autocommit=True,
     )
-    schema = f"knot_play_{uuid.uuid4().hex[:8]}"
-    pg.execute(spec.ddl(schema=schema))
-    schema
-    return pg, schema
+    engine = create_engine("postgresql+psycopg://knot:knot@localhost:5433/knot")
+    SCHEMA = "knot_demo"  # set up by 01_deploy
+    SCHEMA
+    return SCHEMA, engine, pg
 
 
 @app.cell
 def _(pd):
-    # Load real sample data from disk — imdb's movies.json. Each row
-    # carries:
+    # imdb's catalog as a DataFrame. Each row carries:
     #   * `source_identifier` — imdb's own key (e.g. "tt1838941").
-    #     This is the only stable identity imdb knows about; knot's
+    #     The only stable identity imdb knows about; knot's
     #     cross-source `canonical_id` doesn't exist yet — ER assigns
-    #     it later (see 04_er).
+    #     it in 05_er.
     #   * the class slots (`title`, `year`, `director`) as native values.
     #   * extras (`imdb_rating`, `num_votes`, `box_office_usd`, …) that
-    #     aren't in the spec — they ride along in the row dict and land
-    #     in `raw_payload jsonb` on the binding row, recoverable later
-    #     without re-fetching from imdb.
+    #     aren't in the spec — they ride along in the row dict and
+    #     land in `raw_payload jsonb` on the binding row, recoverable
+    #     later without re-fetching from imdb.
     raw_df = pd.read_json("../data/movies/imdb/movies.json")
     print(f"loaded {len(raw_df)} rows")
     raw_df.head()
@@ -81,11 +81,11 @@ def _(pd):
 
 
 @app.cell
-def _(imdb_movie_b, schema):
-    # `binding.write_sql()` returns two SQL templates — both reference a
-    # single `%(rows)s::jsonb` parameter. knot never touches the rows;
-    # the host's connector binds them at execute time.
-    close_out, insert = imdb_movie_b.write_sql(schema=schema)
+def _(SCHEMA, imdb_movie_b):
+    # `binding.write_sql()` returns two SQL templates — both reference
+    # a single `%(rows)s::jsonb` parameter. knot never touches the
+    # rows; the host's connector binds them at execute time.
+    close_out, insert = imdb_movie_b.write_sql(schema=SCHEMA)
     print("--- close_out ---")
     print(close_out)
     print("\n--- insert ---")
@@ -95,32 +95,30 @@ def _(imdb_movie_b, schema):
 
 @app.cell
 def _(close_out, insert, pg, raw_df):
-    # Run both statements with the rows bound as a single jsonb param.
-    # raw_df → JSON via DataFrame.to_json (records orientation = a JSON
-    # array of dicts, which is what jsonb_array_elements expects).
-    # For an autocommit connection each cur.execute commits independently;
-    # wrap in pg.transaction() if you want atomic close_out + insert.
+    # Run both statements with the rows bound as one jsonb param.
+    # raw_df → JSON via DataFrame.to_json("records") gives the JSON
+    # array shape `jsonb_array_elements` expects.
     payload = raw_df.to_json(orient="records")
-    with pg.cursor() as _cur:
-        _cur.execute(close_out, {"rows": payload})
-        _cur.execute(insert, {"rows": payload})
+    with pg.cursor() as cur:
+        cur.execute(close_out, {"rows": payload})
+        cur.execute(insert, {"rows": payload})
     return
 
 
 @app.cell
-def _(imdb, movie, pd, pg, schema):
-    # Verify via ``movie.from_source(imdb)`` — one source's claims about
-    # Movie. This is a Query over the raw bindings layer (one row per
-    # source_identifier) scoped to ``source_name = 'imdb'``. The
-    # ``resolved`` layer would be empty here: ER hasn't run yet, so
-    # every row's ``canonical_id`` is still NULL.
+def _(SCHEMA, imdb, movie, engine, pd, pg):
+    # Verify via ``movie.from_source(imdb)`` — one source's claims
+    # about Movie. This is a Query over the raw bindings layer (one
+    # row per source_identifier) scoped to ``source_name = 'imdb'``.
+    # The ``resolved`` layer would be empty here: ER hasn't run yet,
+    # so every row's ``canonical_id`` is still NULL.
     q = (
         movie.from_source(imdb)
         .order_by(movie.col.year, "desc")
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
-    pd.read_sql_query(q.sql(schema=schema), pg)
+    pd.read_sql_query(q.sql(schema=SCHEMA), engine)
     return
 
 

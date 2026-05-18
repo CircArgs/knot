@@ -14,43 +14,59 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    # knot — 01: deploy
+    # knot — 01: deploy the **base** spec
 
-    Build a spec → see the SQL knot generates → execute it → look at the
-    tables. Subsequent notebooks (02_ingest, 03_query, ...) cover the
-    runtime concerns.
+    Walk-through arc:
+
+    1. **01_deploy** (this notebook) — deploy the base spec
+    2. 02_ingest — ingest imdb data
+    3. 03_migrate — extend the spec to add tmdb + embeddings, run Atlas
+    4. 04_ingest_tmdb — ingest the new source
+    5. 05_er — compute embeddings, run ER, watch the resolver view fill
+
+    The spec is the package `movies_spec/`:
+
+    - `base.py` — Person + Movie + the imdb source binding. **Loaded
+      by default** when you `from movies_spec import ...`.
+    - `full.py` — adds the tmdb source and a `VECTOR(384)` slot for
+      ER blocking. **Opt-in**: importing this module mutates the
+      shared spec object — that's the migration story (a new file
+      contributes to the same spec; `Spec.ddl()` reflects the new
+      shape; the migration tool reconciles).
+
+    This notebook only imports the base.
     """)
     return
 
 
 @app.cell
 def _():
-    import uuid
-
     import pandas as pd
     import psycopg
+    from sqlalchemy import create_engine
 
-    return pd, psycopg, uuid
+    return create_engine, pd, psycopg
 
 
 @app.cell
 def _():
-    # The spec lives in ``movies_spec.py`` next to this notebook — same
-    # pattern as a real deployment, where the workers + service API all
-    # import a shared spec module. See that file for the actual class +
-    # source + binding declarations.
+    # ``from movies_spec import spec`` → spec object with the BASE
+    # entities only. movies_spec.full has not been imported, so the
+    # spec doesn't know about tmdb or the embedding slot yet.
     from movies_spec import spec
 
+    print("classes:", [c.name for c in spec.classes])
+    print("sources:", [s.name for s in spec.sources])
+    print("Movie slots:", [s.name for s in spec.classes[1].slots])
     spec
     return (spec,)
 
 
 @app.cell
-def _(psycopg, uuid):
-    # Host plumbing — psycopg connection + a fresh per-run schema name
-    # so re-running the notebook never collides with prior runs. We don't
-    # create the schema here: ``Spec.ddl()`` emits ``CREATE SCHEMA IF NOT
-    # EXISTS`` as its first statement.
+def _(create_engine, psycopg):
+    # Fixed schema name `knot_demo` shared by every notebook in the
+    # arc — they chain. 01 drops + recreates so re-runs are clean;
+    # 02..05 assume the schema exists from the previous step.
     pg = psycopg.connect(
         host="localhost",
         port=5433,
@@ -59,52 +75,50 @@ def _(psycopg, uuid):
         dbname="knot",
         autocommit=True,
     )
-    schema = f"knot_play_{uuid.uuid4().hex[:8]}"
-    schema
-    return pg, schema
+    engine = create_engine("postgresql+psycopg://knot:knot@localhost:5433/knot")
+    SCHEMA = "knot_demo"
+    pg.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
+    SCHEMA
+    return SCHEMA, engine, pg
 
 
 @app.cell
-def _(schema, spec):
-    # The canonical target schema for the spec, as one SQL script.
-    # Nothing executes yet — just the text. Notice the order: schema
-    # → weight table → canonical tables → bindings tables → indexes
-    # → FK alters → resolved views → all-sources views.
+def _(SCHEMA, spec):
+    # The canonical target schema for the base spec, as one SQL script.
+    # Nothing executes yet — just the text. Notice the order: schema →
+    # weight table → canonical tables → bindings tables → indexes →
+    # FK alters → resolved views → all-sources views.
     #
-    # For migrations against a live DB, you wouldn't pg.execute this
-    # directly — you'd pipe it through sqldef (or Atlas, dbmate, …)
-    # to get a reconciling diff. See 03_migration for that loop.
-    print(spec.ddl(schema=schema))
+    # No CREATE EXTENSION vector — the base spec has no vector slot.
+    print(spec.ddl(schema=SCHEMA))
     return
 
 
 @app.cell
-def _(pg, schema, spec):
-    # First deploy against an empty schema: just run the script. Every
-    # statement is idempotent (IF NOT EXISTS / CREATE OR REPLACE), so
-    # re-running is a no-op.
-    pg.execute(spec.ddl(schema=schema))
+def _(SCHEMA, pg, spec):
+    # First deploy against an empty schema: execute directly. Every
+    # statement is idempotent (CREATE TABLE IF NOT EXISTS / CREATE OR
+    # REPLACE VIEW), so re-running is a no-op.
+    pg.execute(spec.ddl(schema=SCHEMA))
     return
 
 
 @app.cell
-def _(pd, pg, schema):
-    # What landed? Ask postgres via information_schema. For Person +
-    # Movie we expect: 1 invariant table (source_weight), 2 canonical
-    # tables, 2 bindings tables, 2 resolved views, 2 all-sources views.
-    introspect = pd.read_sql_query(
+def _(SCHEMA, engine, pd, pg):
+    # What landed?
+    pd.read_sql_query(
         """
-        SELECT t.table_name, t.table_type,
-               c.column_name, c.data_type, c.is_nullable
-        FROM information_schema.tables t
-        JOIN information_schema.columns c USING (table_schema, table_name)
-        WHERE t.table_schema = %(schema)s
-        ORDER BY t.table_type, t.table_name, c.ordinal_position
+        SELECT table_name, table_type
+        FROM information_schema.tables
+        WHERE table_schema = %(schema)s
+        UNION ALL
+        SELECT viewname, 'VIEW'
+        FROM pg_views WHERE schemaname = %(schema)s
+        ORDER BY 2, 1
         """,
-        pg,
-        params={"schema": schema},
+        engine,
+        params={"schema": SCHEMA},
     )
-    introspect
     return
 
 

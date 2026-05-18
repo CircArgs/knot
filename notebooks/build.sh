@@ -17,9 +17,10 @@ for src in *.py; do
     esac
     out="${src%.py}.ipynb"
     echo "→ $src → $out"
-    # marimo export → ipynb (no execution, no outputs)
-    "$MARIMO" export ipynb "$src" -o "$out" --include-outputs 2>/dev/null || \
-        "$MARIMO" export ipynb "$src" -o "$out"
+    # marimo export → ipynb (NO --include-outputs; that would execute
+    # the notebook and we want NotebookClient to be the only executor
+    # so side-effects don't run twice).
+    "$MARIMO" export ipynb "$src" -o "$out"
     # Execute the ipynb in-place so outputs land in the JSON.
     # cwd = notebooks/ so `from movies_spec import …` resolves.
     "$PY" - <<EOF
