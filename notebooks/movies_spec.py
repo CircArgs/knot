@@ -22,6 +22,12 @@ movie = spec.add_class("Movie")
 movie.slot("title", types.TEXT, required=True)
 movie.slot("year", types.INTEGER)
 movie.slot("director", person)  # FK — pass the class
+# Dense embedding of the title text. 384 = all-MiniLM-L6-v2 dim, a small
+# fast English sentence-transformer that's a reasonable default for
+# blocking. Populated by a separate embedding worker (not the ingest
+# worker) — knot just declares the column + HNSW index; the ER notebook
+# fills it in and uses it for k-NN candidate generation.
+movie.slot("title_embedding", types.VECTOR(384))
 
 imdb = spec.add_source("imdb")
 imdb_person_b = imdb.bind(person).set_default_weight(0.85)

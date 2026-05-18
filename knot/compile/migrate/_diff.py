@@ -17,6 +17,7 @@ from knot.compile.ddl import (
     _emit_bindings_table,
     _emit_fk_alters,
     _emit_table,
+    _emit_vector_indexes,
     _emit_view,
     _emit_weight_table,
 )
@@ -139,6 +140,21 @@ def diff_against_db(
                 target="schema",
             )
         )
+
+    # 1a. pgvector extension — idempotent IF NOT EXISTS, only emitted
+    # when the spec actually has a vector slot. Has to land before any
+    # table that declares a vector(N) column.
+    from knot.compile.ddl import _spec_has_vector_slot
+
+    if _spec_has_vector_slot(spec):
+        ops.append(
+            MigrationOp(
+                description="create_extension_vector",
+                sql="CREATE EXTENSION IF NOT EXISTS vector;",
+                target="schema",
+            )
+        )
+
     db_tables = _existing_tables(query, schema)
 
     # 2. Weight table
@@ -541,6 +557,16 @@ def _diff_concrete_class(
                 target="canonical",
             )
         )
+        for idx_sql in _emit_vector_indexes(
+            cls, table_name=canonical_name, schema=schema, if_not_exists=True
+        ):
+            ops.append(
+                MigrationOp(
+                    description=f"create_index_{_extract_index_name(idx_sql)}",
+                    sql=idx_sql,
+                    target="index",
+                )
+            )
     else:
         existing_details = _apply_rename_translation(
             _existing_column_details(query, schema, canonical_name),
@@ -622,6 +648,16 @@ def _diff_concrete_class(
                     target="index",
                 )
             )
+        for idx_sql in _emit_vector_indexes(
+            cls, table_name=bindings_name, schema=schema, if_not_exists=True
+        ):
+            ops.append(
+                MigrationOp(
+                    description=f"create_index_{_extract_index_name(idx_sql)}",
+                    sql=idx_sql,
+                    target="index",
+                )
+            )
     else:
         existing_bdetails = _apply_rename_translation(
             _existing_column_details(query, schema, bindings_name),
@@ -687,6 +723,37 @@ def _diff_concrete_class(
         ):
             idx_name = _extract_index_name(idx_sql)
             if idx_name is not None and idx_name in existing_idxs:
+                continue
+            ops.append(
+                MigrationOp(
+                    description=f"create_index_{idx_name or 'unnamed'}",
+                    sql=idx_sql,
+                    target="index",
+                )
+            )
+        for idx_sql in _emit_vector_indexes(
+            cls, table_name=bindings_name, schema=schema, if_not_exists=True
+        ):
+            idx_name = _extract_index_name(idx_sql)
+            if idx_name is not None and idx_name in existing_idxs:
+                continue
+            ops.append(
+                MigrationOp(
+                    description=f"create_index_{idx_name or 'unnamed'}",
+                    sql=idx_sql,
+                    target="index",
+                )
+            )
+
+    # Vector indexes on the canonical table — same idempotent pattern as
+    # bindings: only emit if the index isn't already present.
+    if canonical_name in db_tables:
+        existing_can_idxs = _existing_indexes(query, schema, canonical_name)
+        for idx_sql in _emit_vector_indexes(
+            cls, table_name=canonical_name, schema=schema, if_not_exists=True
+        ):
+            idx_name = _extract_index_name(idx_sql)
+            if idx_name is not None and idx_name in existing_can_idxs:
                 continue
             ops.append(
                 MigrationOp(
