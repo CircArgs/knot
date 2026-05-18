@@ -3,7 +3,7 @@
 **knot** is a reflective ontology compiler — a pure Python library that
 takes a typed dataclass spec (classes, slots, sources, source bindings,
 constraints) and emits the runtime artifacts (postgres DDL, resolved
-views, per-slot weight seed, batch writes, migration ops, query SQL).
+views, per-slot weight seed, batch writes, query SQL).
 
 Branch `library/v0` is the focused library. Anything that talks to a
 connection, serves HTTP, holds runtime state, or assembles a GraphQL
@@ -17,6 +17,12 @@ builds around it. The earlier monorepo (API service + UI + ingest + ER
   ingest path inside `knot/`. Compile functions return SQL strings;
   the host runs them (and binds params for the few write/seed
   emitters that emit named placeholders).
+- **No migration runtime.** knot emits the *target* schema as
+  canonical DDL (`Spec.ddl()`); teams run that through their existing
+  schema-diff tool (sqldef / Atlas / dbmate / …) to produce
+  migrations against a live DB. Rationale + tool recs are in the
+  **Schema deployment** section below. knot is a compiler, not a
+  migration engine.
 - **Postgres-only today.** All emitters target postgres. A future
   Trino / Spark / cypher dialect lands as a sibling module
   (`expr_sql_trino.py`, `query_sql_trino.py`, etc.) — same dispatch
@@ -81,6 +87,124 @@ scheduler, no ER policy, no auth, no response shape. It is a
 This is the design intent behind every "the host owns this" line in
 the rest of this document. The library's job ends at the SQL
 string (plus the named-placeholder dict, where one is needed).
+
+## Schema deployment
+
+knot's contract is **"here's the target schema; you deploy it."**
+`Spec.ddl(schema=…)` returns one canonical CREATE script — schema,
+extension (when needed), all tables, indexes, FK constraints, views.
+Idempotent throughout (`IF NOT EXISTS` / `CREATE OR REPLACE`). For
+first deploys, run it as-is. For migrations against a live DB, feed
+the script through a schema-diff tool. **knot deliberately does not
+own the diff.**
+
+### Why
+
+The schema-diff problem is hard, well-explored, and *orthogonal* to
+"compile a typed spec to SQL." Mature tools (sqldef, Atlas, dbmate)
+have years of edge-case shake-out — composite types, generated
+columns, expression defaults, partitions, drift detection — that
+knot would have to rediscover one bug at a time. Teams also have
+strong opinions about migration tooling; locking the spec to one
+engine would be the wrong fight. The architecturally honest answer
+to a senior engineer asking "what about migrations" is *"knot
+compiles, your migration tool diffs"* — same posture as "knot emits
+SQL, your host opens connections."
+
+### Tool recommendations
+
+| tool | when to pick it |
+|---|---|
+| **[sqldef](https://github.com/sqldef/sqldef)** (`psqldef`) | one binary, declarative, multi-dialect. Reads target DDL + live DB and emits reconciling SQL. The simplest pipeline; the default recommendation for new deployments. |
+| **[Atlas](https://atlasgo.io/)** | richer ops (CI integration, versioned migrations, drift detection); heavier tool. Pick when migration governance matters or you want first-class drift alerts. |
+| **[dbmate](https://github.com/amacneil/dbmate)** | imperative migrations + manual SQL. Pick if the team already runs imperative migrations and just wants knot's emitted DDL as the starting point for hand-authored steps. |
+| **Alembic / Flyway / Liquibase** | language-/JVM-specific. Use the "raw SQL" file mode and paste in `Spec.ddl()` output. |
+
+### Process
+
+The deploy loop:
+
+```bash
+# 1. Spec change — edit the Python spec module.
+
+# 2. Emit the target schema.
+python -c "from your_spec import spec; print(spec.ddl(schema='knot_data'))" > target.sql
+
+# 3. Dry-run the diff against live.
+psqldef --dry-run --user knot --password knot --port 5433 knot < target.sql
+
+# 4. Review the proposed migration. If good, apply.
+psqldef --user knot --password knot --port 5433 knot < target.sql
+
+# 5. Run knot's data-layer seed — INSERT-only, ON CONFLICT DO NOTHING.
+python -c "
+from your_spec import spec
+from knot.compile.weight import emit_weight_seed
+for sql, params in emit_weight_seed(spec, schema='knot_data'):
+    pg.execute(sql, params)
+"
+```
+
+### What `Spec.ddl()` covers vs. doesn't
+
+**Covers** (schema concerns — knot's job):
+- `CREATE SCHEMA IF NOT EXISTS …`
+- `CREATE EXTENSION IF NOT EXISTS vector;` (gated on any VECTOR slot)
+- `source_weight` table (runtime weight-policy table)
+- Per concrete class: canonical table, bindings table (SCD2), partial
+  btree indexes (current / source-lookup), HNSW indexes (one per
+  vector slot per table), FK ALTER constraints
+- Per concrete class: `_resolved` view (argmax-over-weight) and
+  `_all_sources` view (per-source jsonb provenance)
+- Per virtual class: filtered view over its parent's canonical table
+
+**Doesn't cover** (host / migration-tool concerns):
+- **`source_weight` seed rows** — separate emitter
+  (`emit_weight_seed()`). Data, not schema; run after the DDL.
+- **Backfills** — adding a NOT NULL column to a non-empty table
+  needs an `UPDATE` first. knot emits the column; the host (or the
+  migration tool's pre-script) backfills.
+- **Data migrations** — vector dim changes need re-embedding every
+  row, type changes might need value coercion. knot emits the new
+  schema shape; the host owns repopulation.
+- **Drift detection / audit / rollback** — your migration tool's job.
+
+### History — why `diff_against_db` was removed
+
+Earlier `library/v0` shipped `knot.compile.migrate.diff_against_db` —
+an Alembic-style autogen that introspected the live DB and produced
+reconciling SQL (`MigrationOp` lists, destructive flags, target
+categorization). Roughly 1000 lines + tests; worked for the simple
+cases. Removed in favor of "emit target, delegate diff" for four
+concrete reasons:
+
+1. **Trust problem.** Selling knot to a team meant asking them to
+   take a homegrown autogen on faith for the load-bearing piece of
+   any deploy. Senior engineers correctly push back on *"the diff is
+   automatic and we wrote it ourselves."* The pitch is much easier
+   when knot owns the schema and a battle-tested external tool owns
+   the diff.
+2. **Edge-case tail.** sqldef and Atlas have years of shake-out on
+   cases knot would have to rediscover: composite types,
+   generated/computed columns, expression defaults, partitions,
+   inheritance, role/grant management. Each one would be a bug
+   filed against knot.
+3. **Concrete vector breakage.** Adding `VECTOR` slots immediately
+   surfaced three bugs in the autogen — HNSW indexes dropped on
+   every diff, silent dim mismatch (`vector(384) → vector(768)`),
+   silent metric mismatch (`cosine → l2`). Each fix required
+   bespoke introspection (`pg_attribute.atttypmod`, `pg_index` +
+   `pg_opclass`). This previewed the maintenance shape: every new
+   postgres feature would need bespoke handling in knot. Not its
+   job.
+4. **Posture consistency.** knot is a *compiler*. "Compiler emits
+   target, external tool reconciles" is the same shape as the rest
+   of the library's host-boundary lines. `init_sql(query_fn=…)`
+   was the one place that quietly violated it.
+
+The migrate code lives in git history before the removal commit
+(grep `diff_against_db` in the log). Don't reintroduce — see
+"What NOT to do."
 
 ## Constraint enforcement
 
@@ -165,14 +289,12 @@ knot/
     __init__.py
     ddl.py             # canonical tables + bindings tables + indexes
                        # + FK ALTERs + source_weight table + virtual
-                       # class views
+                       # class views — Spec.ddl() emits the full
+                       # target schema in one script
     resolver.py        # per-(source, class, slot) argmax resolved views
     constraints.py     # constraint validation SELECTs
     data_io.py         # batch SCD2 writes (close-out + insert)
     weight.py          # source_weight INSERT-only seed
-    migrate.py         # diff_against_db (Alembic-style autogen) — the
-                       # single source of truth for "what SQL to run";
-                       # ``Spec.init_sql`` is a one-line façade over it
     expr_sql.py        # @singledispatch compile_sql over Expr nodes
     query_sql.py       # @singledispatch compile_query over Query nodes
 tests/
@@ -344,10 +466,15 @@ holds operations that genuinely span the whole graph:
 ```python
 spec.validate()                                # raises SpecError if malformed
 
-# Schema deploy or migrate — one SQL script, ready to execute.
-sql = spec.init_sql(schema="knot_data")        # query_fn=None → full create
-sql = spec.init_sql(query_fn=q, schema="knot_data")  # introspect → diff only
-pg.execute(sql)
+# Target schema — one canonical CREATE script for the whole spec.
+# Idempotent (IF NOT EXISTS / CREATE OR REPLACE throughout). For first
+# deploys, execute directly. For migrations against a live DB, pipe
+# through a schema-diff tool — knot doesn't own the diff. See the
+# "Schema deployment" section below.
+sql = spec.ddl(schema="knot_data")
+pg.execute(sql)                                # first deploy
+# … or for migration:
+#   python -c "print(spec.ddl(schema='knot_data'))" | psqldef --dry-run …
 
 checks = spec.emit_validation(schema="knot_data")              # [(name, sql), …]
 ```
@@ -377,10 +504,12 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
   raises ``SpecError`` instead of compiling. Free functions in
   ``knot.compile.*`` do not validate — they're the back door for
   "compile this known-broken spec anyway" cases (mostly tests).
-- ``init_sql`` is a thin shim over ``diff_against_db``:
-  ``query_fn=None`` substitutes an empty-DB callable, so an empty
-  schema gets the full create sequence and a populated schema gets
-  only the delta. One code path, two modes.
+- ``Spec.ddl(schema=…)`` returns the canonical CREATE script — the
+  *target* schema, no diffing. Migrations against a live DB are an
+  external tool's job (sqldef / Atlas / dbmate / …). knot's prior
+  ``init_sql(query_fn=…)`` / ``diff_against_db`` autogen is removed;
+  see "Schema deployment" for the rationale and "What NOT to do"
+  for the retention rule.
 - ``Query.sql`` returns a SQL string with literals inlined — no
   parameter list, the host calls ``cur.execute(sql)`` and is done.
 - The binding compile methods (``binding.write_sql``,
@@ -473,6 +602,13 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
   compile path — purely documentation. If a team wants to label
   the spec, that lives in the codebase (filename, module name,
   repo), not on the dataclass.
+- Don't reintroduce ``knot.compile.migrate`` / ``diff_against_db``
+  or any flavor of "introspect the live DB and emit reconciling
+  SQL." Schema deployment is a tool-delegation problem (sqldef /
+  Atlas / dbmate); knot's job ends at ``Spec.ddl()``. The full
+  rationale + tool recommendations are in the **Schema deployment**
+  section; the prior code is in git history if you want to read why
+  it didn't earn its keep.
 
 ## Smell audit — patterns we've eliminated
 
@@ -490,10 +626,11 @@ the same shape as anything below?"
 | **Label-only fields** | ``Spec.id``, ``Spec.version`` | Never embedded in SQL, never structural. Just typing overhead at construction. | A required field that's never read by ``compile/*``. Drop it. |
 | **Defaulted opinions** | trust as float in [0, 1] with CHECK constraint; ``schema="knot_data"`` default; ``base_trust=0.67`` | Hid a calibration / probability / naming opinion that didn't earn its keep. | A default that's "the conventional thing for this domain" rather than "the simplest thing that compiles". Make it required, or drop the value entirely (rename to be opaque). |
 | **Per-entity redeclaration of universal facts** | ``cls.slot("canonical_id", types.TEXT, identifier=True)`` on every class | Same line, every class, every spec. Identifier slot is a spec-level convention; per-class declaration is noise. | A line that gets copy-pasted across N entities. Promote to a spec-level field, apply automatically. |
-| **Spec versioning by duplication** | notebook's ``spec_v1`` / ``spec_v2`` / ``spec_v3`` rebuilt the whole spec for each "version" | Hides the actual migration story (mutate one spec, ``init_sql`` diffs against live DB). Fake versioning. | Multiple spec objects with overlapping definitions. Mutate one spec in place; expose a stage marker for marimo-style cell deps. |
+| **Spec versioning by duplication** | notebook's ``spec_v1`` / ``spec_v2`` / ``spec_v3`` rebuilt the whole spec for each "version" | Hides the actual migration story (mutate one spec, re-emit ``Spec.ddl()``, let the migration tool diff against live). Fake versioning. | Multiple spec objects with overlapping definitions. Mutate one spec in place; expose a stage marker for marimo-style cell deps. |
 | **Strings where objects exist** | ``emit_assign_canonical(source_name="imdb", class_name="Movie")``; ``Query.target_suffix: str = "_resolved"`` threaded through every ``compile_sql`` variant | The user has the ``Source`` / ``OntologyClass`` objects in scope, and the compile path has the ``Layer`` enum — strings force name-lookups and turn typos into runtime "relation does not exist" errors. | A kwarg / field that takes a string when an enum or already-resolved object would carry the same information. Take the typed value (``Layer.RESOLVED`` / the ``Source`` object). |
 | **Spec-level operations that span all entities** | ``spec.emit_batch_write([ClassWrites…])`` taking a list when each binding could just expose its own ``.write_sql()`` | The "do this for many entities" function bundles what should be N independent operations. Host can compose them via the language (loops, transactions) without a library helper. | A spec method that loops over entities calling the same per-entity emitter. Move the work onto each entity; let the host iterate. |
 | **Silent semantic defaults** | ``cls.where(...)`` / ``.order_by(...)`` / etc. on ``OntologyClass`` silently routed to ``<class>_resolved`` | The layer choice (resolved vs raw bindings vs per-source provenance) is load-bearing semantics — picking one by default hid the choice. ``Query.from_source(s)`` compounded it by producing valid SQL against the wrong layer (filtered ``source_name`` on the resolved view → zero rows, no error). | A method that silently picks one of several semantically-different shapes. Force the choice to surface: three entry points (``cls.resolved``, ``cls.all_sources``, ``cls.from_source(s)``) each *return* a Query rather than letting one mode masquerade as the default. |
+| **Owning a concern outside the compiler's scope** | ``knot.compile.migrate.diff_against_db`` — Alembic-style autogen that introspected the live DB and emitted reconciling SQL. ~1k lines + tests. Worked for simple cases but added a homegrown autogen as a load-bearing piece of every deploy. | Forced the pitch *"the diff is automatic and we wrote it ourselves"* on a team — the exact pitch any senior engineer pushes back on. Also created an open-ended edge-case maintenance commitment (every new postgres feature → bespoke introspection logic in knot; vector slots immediately surfaced HNSW over-drop + silent dim/metric mismatch). | A subsystem whose job overlaps with a mature external tool (sqldef, Atlas, dbmate for migrations) and whose correctness story depends on edge-case introspection. Delete it and document the delegation pattern; "knot compiles, your tool reconciles" is the same posture as "knot emits SQL, your host opens connections." |
 
 When adding a new API surface, run through this list. If the new
 shape matches any row, propose the alternative before committing.
