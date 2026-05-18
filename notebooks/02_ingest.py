@@ -24,12 +24,12 @@ def _(mo):
 
 @app.cell
 def _():
-    import json
     import uuid
 
+    import pandas as pd
     import psycopg
 
-    return json, psycopg, uuid
+    return pd, psycopg, uuid
 
 
 @app.cell
@@ -48,8 +48,11 @@ def _():
 def _(psycopg, spec, uuid):
     # Host plumbing + deploy. Schema name is a throwaway per-run id.
     pg = psycopg.connect(
-        host="localhost", port=5433,
-        user="knot", password="knot", dbname="knot",
+        host="localhost",
+        port=5433,
+        user="knot",
+        password="knot",
+        dbname="knot",
         autocommit=True,
     )
     schema = f"knot_play_{uuid.uuid4().hex[:8]}"
@@ -59,29 +62,22 @@ def _(psycopg, spec, uuid):
 
 
 @app.cell
-def _(json):
+def _(pd):
     # Load real sample data from disk — imdb's movies.json. Each row
     # carries:
     #   * `source_identifier` — imdb's own key (e.g. "tt1838941").
     #     This is the only stable identity imdb knows about; knot's
     #     cross-source `canonical_id` doesn't exist yet — ER assigns
-    #     it later (see 03_er).
+    #     it later (see 04_er).
     #   * the class slots (`title`, `year`, `director`) as native values.
     #   * extras (`imdb_rating`, `num_votes`, `box_office_usd`, …) that
     #     aren't in the spec — they ride along in the row dict and land
     #     in `raw_payload jsonb` on the binding row, recoverable later
     #     without re-fetching from imdb.
-    #
-    # In a real worker this loader would be a pandas DataFrame from a
-    # CSV/parquet, a Kafka pull, an HTTP fetch — anything that yields a
-    # list[dict]. knot only cares about the dict shape.
-    from pathlib import Path
-
-    DATA = Path("../data/movies/imdb/movies.json")
-    rows = json.loads(DATA.read_text())
-    print(f"loaded {len(rows)} rows; first one:")
-    rows[0]
-    return (rows,)
+    raw_df = pd.read_json("../data/movies/imdb/movies.json")
+    print(f"loaded {len(raw_df)} rows")
+    raw_df.head()
+    return (raw_df,)
 
 
 @app.cell
@@ -98,19 +94,21 @@ def _(imdb_movie_b, schema):
 
 
 @app.cell
-def _(close_out, insert, json, pg, rows):
+def _(close_out, insert, pg, raw_df):
     # Run both statements with the rows bound as a single jsonb param.
+    # raw_df → JSON via DataFrame.to_json (records orientation = a JSON
+    # array of dicts, which is what jsonb_array_elements expects).
     # For an autocommit connection each cur.execute commits independently;
     # wrap in pg.transaction() if you want atomic close_out + insert.
-    payload = json.dumps(rows)
+    payload = raw_df.to_json(orient="records")
     with pg.cursor() as _cur:
-        _cur.execute(close_out, {'rows': payload})
-        _cur.execute(insert, {'rows': payload})
+        _cur.execute(close_out, {"rows": payload})
+        _cur.execute(insert, {"rows": payload})
     return
 
 
 @app.cell
-def _(imdb, movie, pg, schema):
+def _(imdb, movie, pd, pg, schema):
     # Verify via ``movie.from_source(imdb)`` — one source's claims about
     # Movie. This is a Query over the raw bindings layer (one row per
     # source_identifier) scoped to ``source_name = 'imdb'``. The
@@ -122,12 +120,7 @@ def _(imdb, movie, pg, schema):
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
-    sql = q.sql(schema=schema)
-    with pg.cursor() as _cur:
-        _cur.execute(sql)
-        cols = [d.name for d in _cur.description]
-        for row in _cur.fetchall():
-            print(dict(zip(cols, row)))
+    pd.read_sql_query(q.sql(schema=schema), pg)
     return
 
 

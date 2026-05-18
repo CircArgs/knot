@@ -62,6 +62,11 @@ ignore = [
 # they're the package's public surface declaration. The underscore
 # convention marks private; non-underscored re-exports are public.
 "__init__.py" = ["F401"]
+# Marimo notebooks: bare expressions at cell end are how cells emit
+# their displayed value (df / spec / SCHEMA / …). B018 ("useless
+# expression") flags them; the rule doesn't understand marimo's
+# cell semantics.
+"notebooks/*.py" = ["B018"]
 
 [tool.ruff.lint.isort]
 # isort profile=black parity:

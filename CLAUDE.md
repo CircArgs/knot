@@ -115,28 +115,52 @@ SQL, your host opens connections."
 
 | tool | when to pick it |
 |---|---|
-| **[sqldef](https://github.com/sqldef/sqldef)** (`psqldef`) | one binary, declarative, multi-dialect. Reads target DDL + live DB and emits reconciling SQL. The simplest pipeline; the default recommendation for new deployments. |
-| **[Atlas](https://atlasgo.io/)** | richer ops (CI integration, versioned migrations, drift detection); heavier tool. Pick when migration governance matters or you want first-class drift alerts. |
+| **[Atlas](https://atlasgo.io/)** (`atlas schema diff` / `apply`) | **Tested with knot 2026-05-18; the default recommendation.** Single Go binary, first-class `pgvector` support (handles `vector(N)` columns and HNSW indexes with operator classes — `vector_cosine_ops` / `_l2_ops` / `_ip_ops`). Needs a clean throwaway "dev DB" to render the desired state; trivial to provision (one `CREATE DATABASE atlas_dev`). The community edition ignores views entirely — which is fine, knot's CREATE OR REPLACE views run as a second step after the schema diff. |
+| **[sqldef](https://github.com/sqldef/sqldef)** (`psqldef`) | Lightweight (one binary, no dev DB needed) but **its postgres parser is fragile against knot's bindings DDL today** (v3.11.1 segfaults on the SCD2 table shape; tracked upstream). Avoid until that's fixed; revisit once a fix lands. |
 | **[dbmate](https://github.com/amacneil/dbmate)** | imperative migrations + manual SQL. Pick if the team already runs imperative migrations and just wants knot's emitted DDL as the starting point for hand-authored steps. |
 | **Alembic / Flyway / Liquibase** | language-/JVM-specific. Use the "raw SQL" file mode and paste in `Spec.ddl()` output. |
 
 ### Process
 
-The deploy loop:
+The two-phase deploy loop with Atlas:
 
 ```bash
+# One-time: create the dev DB Atlas uses to render desired state.
+docker exec knot-postgres psql -U knot -d knot \
+  -c "CREATE DATABASE atlas_dev"
+
 # 1. Spec change — edit the Python spec module.
 
-# 2. Emit the target schema.
-python -c "from your_spec import spec; print(spec.ddl(schema='knot_data'))" > target.sql
+# 2. Emit the target schema *without* views (Atlas community can't
+#    manage views; knot rebuilds them in step 4).
+python -c "
+from your_spec import spec
+print(spec.ddl(schema='knot_data', include_views=False))
+" > target.sql
 
-# 3. Dry-run the diff against live.
-psqldef --dry-run --user knot --password knot --port 5433 knot < target.sql
+# 3. Diff against the live DB; review, then apply.
+atlas schema diff \
+  --from "postgres://knot:knot@localhost:5433/knot?sslmode=disable" \
+  --to "file://target.sql" \
+  --dev-url "postgres://knot:knot@localhost:5433/atlas_dev?sslmode=disable" \
+  -s knot_data
 
-# 4. Review the proposed migration. If good, apply.
-psqldef --user knot --password knot --port 5433 knot < target.sql
+atlas schema apply \
+  --url "postgres://knot:knot@localhost:5433/knot?sslmode=disable" \
+  --to "file://target.sql" \
+  --dev-url "postgres://knot:knot@localhost:5433/atlas_dev?sslmode=disable" \
+  -s knot_data
 
-# 5. Run knot's data-layer seed — INSERT-only, ON CONFLICT DO NOTHING.
+# 4. Rebuild views (idempotent CREATE OR REPLACE; depends on no live
+#    data, always safe).
+python -c "
+from your_spec import spec
+import psycopg
+pg = psycopg.connect(...).execute(spec.ddl(schema='knot_data'))
+"
+
+# 5. Seed weight rows for any new (source, class, slot) triples —
+#    INSERT-only, ON CONFLICT DO NOTHING.
 python -c "
 from your_spec import spec
 from knot.compile.weight import emit_weight_seed
@@ -144,6 +168,9 @@ for sql, params in emit_weight_seed(spec, schema='knot_data'):
     pg.execute(sql, params)
 "
 ```
+
+Notebook **03_migration** walks through this loop end-to-end with a
+toy spec; review there for the live shape.
 
 ### What `Spec.ddl()` covers vs. doesn't
 

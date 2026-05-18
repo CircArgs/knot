@@ -27,9 +27,10 @@ def _(mo):
 def _():
     import uuid
 
+    import pandas as pd
     import psycopg
 
-    return psycopg, uuid
+    return pd, psycopg, uuid
 
 
 @app.cell
@@ -87,37 +88,23 @@ def _(pg, schema, spec):
 
 
 @app.cell
-def _(pg, schema):
-    # What landed? Ask postgres directly via information_schema —
-    # describe-style introspection, not a knot read. For Person + Movie
-    # we expect:
-    #   - 1 invariant table: source_weight
-    #   - 2 canonical tables: person, movie
-    #   - 2 bindings tables: person_bindings, movie_bindings
-    #   - 2 resolved views: person_resolved, movie_resolved
-    #   - 2 all-sources views: person_all_sources, movie_all_sources
-    with pg.cursor() as cur:
-        cur.execute(
-            """
-            SELECT t.table_name, t.table_type,
-                   c.column_name, c.data_type, c.is_nullable
-            FROM information_schema.tables t
-            JOIN information_schema.columns c
-              USING (table_schema, table_name)
-            WHERE t.table_schema = %s
-            ORDER BY t.table_type, t.table_name, c.ordinal_position
-            """,
-            (schema,),
-        )
-        rows = cur.fetchall()
-
-    current = None
-    for name, kind, col, dtype, nullable in rows:
-        if name != current:
-            print(f"\n{kind:11s}  {name}")
-            current = name
-        null = "" if nullable == "YES" else " NOT NULL"
-        print(f"               {col:24s} {dtype}{null}")
+def _(pd, pg, schema):
+    # What landed? Ask postgres via information_schema. For Person +
+    # Movie we expect: 1 invariant table (source_weight), 2 canonical
+    # tables, 2 bindings tables, 2 resolved views, 2 all-sources views.
+    introspect = pd.read_sql_query(
+        """
+        SELECT t.table_name, t.table_type,
+               c.column_name, c.data_type, c.is_nullable
+        FROM information_schema.tables t
+        JOIN information_schema.columns c USING (table_schema, table_name)
+        WHERE t.table_schema = %(schema)s
+        ORDER BY t.table_type, t.table_name, c.ordinal_position
+        """,
+        pg,
+        params={"schema": schema},
+    )
+    introspect
     return
 
 

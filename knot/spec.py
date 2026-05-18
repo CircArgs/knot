@@ -1170,22 +1170,48 @@ class Spec:
     #   - ``binding.close_out_sql()``           retract a claim (SourceBinding)
     # ------------------------------------------------------------------
 
-    def ddl(self, *, schema: str = "knot_data") -> str:
+    def ddl(
+        self,
+        *,
+        schema: str = "knot_data",
+        include_views: bool = True,
+    ) -> str:
         """Return the canonical CREATE script for this spec — schema,
-        extension (when needed), tables, indexes, FK constraints,
+        extension (when needed), tables, indexes, FK constraints, and
         views. Idempotent throughout (``IF NOT EXISTS`` /
-        ``CREATE OR REPLACE``).
+        ``CREATE OR REPLACE``); safe to re-run against the live DB.
 
         For first deploys, execute directly. For migrations against a
         live DB, pipe the output through a schema-diff tool
         (sqldef / Atlas / dbmate / …) — knot doesn't own the diff.
         See CLAUDE.md §"Schema deployment" for rationale and tool
         recommendations.
+
+        Set ``include_views=False`` when piping through a migration
+        tool whose parser doesn't handle knot's view DDL (psqldef
+        v3 trips on ``FILTER (WHERE …)`` in the ``_all_sources``
+        provenance views). The standard two-phase recipe:
+
+            sqldef-tool < spec.ddl(include_views=False)   # schema
+            pg.execute(spec.ddl(schema=…))                # views
+
+        Views are unconditional ``CREATE OR REPLACE`` and depend on
+        no live data, so the second call is always safe to run after
+        the migration tool finishes.
         """
         self.validate()
         from knot.compile.ddl import emit_ddl
 
-        return "\n\n".join(emit_ddl(self, schema=schema))
+        return "\n\n".join(
+            emit_ddl(
+                self,
+                schema=schema,
+                if_not_exists=True,
+                emit_resolved_views=include_views,
+                emit_all_sources_views=include_views,
+                emit_virtual_views=include_views,
+            )
+        )
 
     def emit_validation(self, **kwargs: Any) -> Any:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates

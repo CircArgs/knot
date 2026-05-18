@@ -45,6 +45,7 @@ def emit_ddl(
     emit_bindings: bool = True,
     emit_resolved_views: bool = True,
     emit_all_sources_views: bool = True,
+    emit_virtual_views: bool = True,
     emit_fk_references: bool = True,
     emit_indexes: bool = True,
     emit_weight_table: bool = True,
@@ -194,17 +195,18 @@ def emit_ddl(
                         )
                     )
             case VirtualClass():
-                stmts.append(
-                    _emit_view(cls, schema=schema, if_not_exists=if_not_exists)
-                )
-                if emit_descriptions and cls.description:
+                if emit_virtual_views:
                     stmts.append(
-                        _comment_on(
-                            "VIEW",
-                            f"{schema}.{cls.name.lower()}",
-                            cls.description,
-                        )
+                        _emit_view(cls, schema=schema, if_not_exists=if_not_exists)
                     )
+                    if emit_descriptions and cls.description:
+                        stmts.append(
+                            _comment_on(
+                                "VIEW",
+                                f"{schema}.{cls.name.lower()}",
+                                cls.description,
+                            )
+                        )
             # Abstract OntologyClass falls through (no table).
 
     # Second pass: FK constraints on canonical class tables. Emitted
