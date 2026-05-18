@@ -257,3 +257,110 @@ def test_bindings_table_slots_nullable_pk_drops_canonical(movie_spec):
     assert "year integer," in bindings or "year integer\n" in bindings
     # PK excludes canonical_id so it can start NULL
     assert "PRIMARY KEY (source_name, source_identifier, valid_from)" in bindings
+
+
+# ---------------------------------------------------------------------------
+# Vector slots — pgvector extension + HNSW indexes
+# ---------------------------------------------------------------------------
+
+
+def _spec_with_vector_slot(metric: str = "cosine"):
+    from knot import Spec, types
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    movie.slot("title", types.TEXT)
+    movie.slot("title_embedding", types.VECTOR(384, metric=metric))
+    spec.add_source("imdb").bind(movie)
+    return spec
+
+
+def test_vector_extension_only_when_used(movie_spec):
+    # No vector slot in the standard movie_spec fixture.
+    assert all("CREATE EXTENSION" not in s for s in emit_ddl(movie_spec))
+
+
+def test_vector_extension_emitted_once_when_used():
+    stmts = emit_ddl(_spec_with_vector_slot())
+    ext_stmts = [s for s in stmts if "CREATE EXTENSION" in s]
+    assert ext_stmts == ["CREATE EXTENSION IF NOT EXISTS vector;"]
+
+
+def test_vector_column_on_canonical_and_bindings():
+    stmts = emit_ddl(_spec_with_vector_slot())
+    canonical = next(
+        s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
+    )
+    bindings = next(s for s in stmts if "movie_bindings" in s)
+    assert "title_embedding vector(384)" in canonical
+    assert "title_embedding vector(384)" in bindings
+
+
+def test_vector_hnsw_index_per_table_with_metric_ops():
+    stmts = emit_ddl(_spec_with_vector_slot(metric="cosine"))
+    hnsw = [s for s in stmts if "USING hnsw" in s]
+    # One index on the canonical table, one on the bindings table.
+    assert len(hnsw) == 2
+    assert any(
+        "movie_title_embedding_hnsw_idx" in s and "vector_cosine_ops" in s for s in hnsw
+    )
+    assert any(
+        "movie_bindings_title_embedding_hnsw_idx" in s and "vector_cosine_ops" in s
+        for s in hnsw
+    )
+
+
+def test_vector_hnsw_picks_ops_class_per_metric():
+    for metric, ops in (
+        ("cosine", "vector_cosine_ops"),
+        ("l2", "vector_l2_ops"),
+        ("ip", "vector_ip_ops"),
+    ):
+        stmts = emit_ddl(_spec_with_vector_slot(metric=metric))
+        hnsw = [s for s in stmts if "USING hnsw" in s]
+        assert hnsw, metric
+        assert all(ops in s for s in hnsw), (metric, hnsw)
+
+
+def test_vector_hnsw_respects_if_not_exists():
+    stmts = emit_ddl(_spec_with_vector_slot(), if_not_exists=True)
+    hnsw = [s for s in stmts if "USING hnsw" in s]
+    assert hnsw
+    assert all("CREATE INDEX IF NOT EXISTS" in s for s in hnsw)
+
+
+def test_vector_hnsw_suppressed_when_indexes_disabled():
+    stmts = emit_ddl(_spec_with_vector_slot(), emit_indexes=False)
+    assert all("USING hnsw" not in s for s in stmts)
+    # Extension + column still emit — column type and the extension
+    # are not indexes.
+    assert any("CREATE EXTENSION" in s for s in stmts)
+    assert any("title_embedding vector(384)" in s for s in stmts)
+
+
+def test_vector_bindings_index_skipped_when_bindings_skipped():
+    stmts = emit_ddl(_spec_with_vector_slot(), emit_bindings=False)
+    hnsw = [s for s in stmts if "USING hnsw" in s]
+    # Only the canonical-table index remains.
+    assert len(hnsw) == 1
+    assert "movie_bindings" not in hnsw[0]
+
+
+def test_vector_construction_rejects_bad_dim():
+    import pytest
+
+    from knot import types
+
+    with pytest.raises(ValueError, match="positive integer"):
+        types.VECTOR(0)
+    with pytest.raises(ValueError, match="positive integer"):
+        types.VECTOR(-1)
+
+
+def test_vector_construction_rejects_unknown_metric():
+    import pytest
+
+    from knot import types
+
+    with pytest.raises(ValueError, match="metric"):
+        types.VECTOR(384, metric="manhattan")

@@ -153,8 +153,9 @@ knot/
                        # Constraint, Severity, ClassKind
   ast/                 # spec-layer primitives — no SQL knowledge
     __init__.py
-    types.py           # types.TEXT, …, types.ARRAY(…) — the canonical
-                       # type surface
+    types.py           # types.TEXT, …, types.ARRAY(…), types.VECTOR(…) —
+                       # the canonical type surface (Vector backed by
+                       # pgvector + HNSW)
     expr.py            # Expr AST: Ref, FkRef, FkChainRef, Compare,
                        # BoolOp, Not, IsNull, InList, Between, Exists,
                        # CountRel, Raw, This, Aggregate + ``this``
@@ -233,7 +234,19 @@ movie.slot("title", types.TEXT, required=True)
 movie.slot("year", types.INTEGER)
 movie.slot("director", person)             # FK — pass the class directly
 movie.slot("genres", types.ARRAY(types.TEXT))
+movie.slot("title_embedding", types.VECTOR(384))   # pgvector + HNSW
 ```
+
+**Vector slots** lower to `vector(N)` columns plus a per-column HNSW
+index (operator class picked by the slot's `metric=` kwarg —
+`"cosine"` / `"l2"` / `"ip"`). The deploy SQL gets a single `CREATE
+EXTENSION IF NOT EXISTS vector;` prepended when any vector slot is
+present. Embedding values themselves are runtime data the host (an
+embedding worker, usually separate from the ingest worker) computes
+and binds via the connector — knot never sees vectors, same as it
+never sees rows. The postgres image needs pgvector installed; the
+vanilla `postgres:16-alpine` knot's compose has historically used
+won't satisfy a spec that declares a `VECTOR` slot.
 
 **Sources and bindings** — source-method-chained. Weight is its
 own concern, set separately via `set_default_weight` / `set_weight`

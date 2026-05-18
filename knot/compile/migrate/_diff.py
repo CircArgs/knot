@@ -729,7 +729,17 @@ def _diff_column_type_and_nullability(
 
     ops: list[MigrationOp] = []
     expected_type = _pg_type(slot.type)
-    if existing.pg_type != expected_type:
+    # Vector dim isn't exposed in information_schema; introspect returns
+    # bare ``vector`` and ``_pg_type`` produces ``vector(N)``. Treat the
+    # type as matching when both sides agree it's a vector — a dim
+    # mismatch isn't safely auto-migratable anyway (would require
+    # re-embedding every row), so leave that to a manual ALTER.
+    spec_is_vector = expected_type.startswith("vector(")
+    existing_is_vector = existing.pg_type == "vector"
+    types_match = existing.pg_type == expected_type or (
+        spec_is_vector and existing_is_vector
+    )
+    if not types_match:
         ops.append(
             MigrationOp(
                 description=f"alter_column_type_{table}_{slot.name}",

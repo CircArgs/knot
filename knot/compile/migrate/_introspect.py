@@ -87,11 +87,15 @@ _NORMALIZE_DATA_TYPE: dict[str, str] = {
 def _normalize_pg_type(data_type: str, udt_name: str | None) -> str:
     """Map an ``information_schema.columns.data_type`` to the same
     string ``_pg_type`` produces. Handles arrays via ``udt_name`` (the
-    underscore-prefixed element type name)."""
+    underscore-prefixed element type name), and pgvector columns via
+    ``USER-DEFINED`` + ``udt_name='vector'`` (dim not exposed in
+    information_schema — diff comparison handles the missing dim)."""
     if data_type == "ARRAY":
         if udt_name and udt_name.startswith("_"):
             return _normalize_pg_type(udt_name[1:], None) + "[]"
         return "?[]"
+    if data_type == "USER-DEFINED" and udt_name == "vector":
+        return "vector"
     return _NORMALIZE_DATA_TYPE.get(data_type, data_type)
 
 

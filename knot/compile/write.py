@@ -32,7 +32,7 @@ statements in a single ``pg.transaction()``.
 
 from __future__ import annotations
 
-from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
+from knot.ast.types import Array, ClassRef, Primitive, TypeExpression, Vector
 from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,8 @@ _PRIMITIVE_TO_JSONB_CAST: dict[Primitive, str] = {
 
 def _jsonb_cast(t: TypeExpression) -> str:
     """Return a postgres cast suffix that pulls a typed value out of a
-    jsonb-element row. Handles primitive, array, and class-ref slots."""
+    jsonb-element row. Handles primitive, array, class-ref, and
+    vector slots."""
     match t:
         case Primitive():
             return _PRIMITIVE_TO_JSONB_CAST[t]
@@ -76,6 +77,11 @@ def _jsonb_cast(t: TypeExpression) -> str:
             return f"::{_jsonb_cast(inner).removeprefix('::')}[]"
         case ClassRef():
             return "::text"
+        case Vector(dim=dim):
+            # pgvector accepts its text form (``"[0.1, 0.2, ...]"``)
+            # via direct cast — that's what ``r->>'col'`` produces for
+            # a json array of floats.
+            return f"::vector({dim})"
     raise TypeError(f"unhandled type: {type(t).__name__}")
 
 
@@ -139,6 +145,9 @@ def _passthrough_value(slot: Slot, raw_field: str) -> str:
         return f"raw.{raw_field}{_PRIMITIVE_TO_JSONB_CAST[slot.type]}"
     if isinstance(slot.type, ClassRef):
         return f"raw.{raw_field}::text"
+    if isinstance(slot.type, Vector):
+        # Same shape as Primitive — pgvector parses the text form.
+        return f"raw.{raw_field}::vector({slot.type.dim})"
     if isinstance(slot.type, Array):
         # Array passthrough needs the original jsonb element (text →
         # text[] doesn't cast directly). Use the preserved ``__raw_payload``.

@@ -19,7 +19,7 @@ with an extra ``(source_name, source_identifier)`` layer and SCD2
 from __future__ import annotations
 
 from knot.ast.select import Layer
-from knot.ast.types import Array, ClassRef, Primitive, TypeExpression
+from knot.ast.types import Array, ClassRef, Primitive, TypeExpression, Vector
 from knot.compile.expr import compile_sql
 from knot.spec import (
     ClassKind,
@@ -107,6 +107,12 @@ def emit_ddl(
 
     stmts: list[str] = [f"CREATE SCHEMA IF NOT EXISTS {schema};"]
 
+    # pgvector extension — only emit when the spec actually uses it.
+    # Idempotent via IF NOT EXISTS; database superuser may be required
+    # the first time it runs depending on the postgres install.
+    if _spec_has_vector_slot(spec):
+        stmts.append("CREATE EXTENSION IF NOT EXISTS vector;")
+
     # Invariant weight-policy table — must exist before any resolved
     # view that LEFT JOINs against it.
     if emit_weight_table:
@@ -124,6 +130,15 @@ def emit_ddl(
                 stmts.append(
                     _emit_table(cls, schema=schema, if_not_exists=if_not_exists)
                 )
+                if emit_indexes:
+                    stmts.extend(
+                        _emit_vector_indexes(
+                            cls,
+                            table_name=cls.name.lower(),
+                            schema=schema,
+                            if_not_exists=if_not_exists,
+                        )
+                    )
                 if emit_descriptions:
                     stmts.extend(_emit_class_comments(cls, schema=schema))
                 if emit_bindings:
@@ -141,6 +156,14 @@ def emit_ddl(
                                 cls,
                                 schema=schema,
                                 bindings_suffix=bindings_suffix,
+                                if_not_exists=if_not_exists,
+                            )
+                        )
+                        stmts.extend(
+                            _emit_vector_indexes(
+                                cls,
+                                table_name=f"{cls.name.lower()}{bindings_suffix}",
+                                schema=schema,
                                 if_not_exists=if_not_exists,
                             )
                         )
@@ -221,7 +244,50 @@ def _pg_type(t: TypeExpression) -> str:
             # canonical_id FK, stored as text. The cross-table FK
             # constraint is added by the second-pass ALTER TABLE.
             return "text"
+        case Vector(dim=dim):
+            # pgvector type. The HNSW index is emitted separately so a
+            # spec with vector slots needs the ``vector`` extension
+            # present (knot emits ``CREATE EXTENSION IF NOT EXISTS
+            # vector`` once at the top of init_sql when any vector slot
+            # exists).
+            return f"vector({dim})"
     raise TypeError(f"unhandled type expression: {type(t).__name__}")
+
+
+def _spec_has_vector_slot(spec: Spec) -> bool:
+    """True if any concrete class in ``spec`` declares a vector slot.
+    Used to gate ``CREATE EXTENSION IF NOT EXISTS vector;`` emission."""
+    for cls in spec.classes:
+        if not isinstance(cls, OntologyClass) or cls.kind != ClassKind.CONCRETE:
+            continue
+        for slot in cls.effective_slots():
+            if isinstance(slot.type, Vector):
+                return True
+    return False
+
+
+def _emit_vector_indexes(
+    cls: OntologyClass,
+    *,
+    table_name: str,
+    schema: str,
+    if_not_exists: bool,
+) -> list[str]:
+    """One HNSW index per vector slot on ``cls``, against ``table_name``.
+    The operator class is picked by the slot's metric (``cosine`` ⇒
+    ``vector_cosine_ops``, etc.)."""
+    maybe_if_not_exists = "IF NOT EXISTS " if if_not_exists else ""
+    out: list[str] = []
+    for slot in cls.effective_slots():
+        if not isinstance(slot.type, Vector):
+            continue
+        idx = f"{table_name}_{slot.name}_hnsw_idx"
+        out.append(
+            f"CREATE INDEX {maybe_if_not_exists}{idx}\n"
+            f"    ON {schema}.{table_name}\n"
+            f"    USING hnsw ({slot.name} {slot.type.hnsw_ops});"
+        )
+    return out
 
 
 # ---------------------------------------------------------------------------
