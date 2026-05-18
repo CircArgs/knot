@@ -48,8 +48,8 @@ def _():
 def _(psycopg, uuid):
     # Host plumbing — psycopg connection + a fresh per-run schema name
     # so re-running the notebook never collides with prior runs. We don't
-    # create the schema here: init_sql emits ``CREATE SCHEMA IF NOT EXISTS``
-    # as its first statement.
+    # create the schema here: ``Spec.ddl()`` emits ``CREATE SCHEMA IF NOT
+    # EXISTS`` as its first statement.
     pg = psycopg.connect(
         host="localhost",
         port=5433,
@@ -65,19 +65,24 @@ def _(psycopg, uuid):
 
 @app.cell
 def _(schema, spec):
-    # Visualize the SQL knot would run against an empty schema. Nothing
-    # executes yet — just the script. Notice the order: schema → weight
-    # table → canonical tables → bindings tables → indexes → FK alters
-    # → resolved views → all-sources views → weight seed inserts.
-    print(spec.init_sql(schema=schema))
+    # The canonical target schema for the spec, as one SQL script.
+    # Nothing executes yet — just the text. Notice the order: schema
+    # → weight table → canonical tables → bindings tables → indexes
+    # → FK alters → resolved views → all-sources views.
+    #
+    # For migrations against a live DB, you wouldn't pg.execute this
+    # directly — you'd pipe it through sqldef (or Atlas, dbmate, …)
+    # to get a reconciling diff. See 03_migration for that loop.
+    print(spec.ddl(schema=schema))
     return
 
 
 @app.cell
 def _(pg, schema, spec):
-    # Run the script. ``pg.execute`` accepts a multi-statement string;
-    # the autocommit connection commits each statement as it runs.
-    pg.execute(spec.init_sql(schema=schema))
+    # First deploy against an empty schema: just run the script. Every
+    # statement is idempotent (IF NOT EXISTS / CREATE OR REPLACE), so
+    # re-running is a no-op.
+    pg.execute(spec.ddl(schema=schema))
     return
 
 

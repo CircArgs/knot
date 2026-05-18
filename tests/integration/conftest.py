@@ -89,19 +89,6 @@ def schema(pg) -> Iterator[str]:
         pg.execute(f"DROP SCHEMA IF EXISTS {name} CASCADE")
 
 
-@pytest.fixture()
-def query_fn(pg, schema):
-    """A ``QueryFn``-shaped callable for ``diff_against_db``. Wraps
-    ``cursor.execute`` and returns ``fetchall()``."""
-
-    def run(sql: str, params: tuple[Any, ...]) -> list[tuple[Any, ...]]:
-        with pg.cursor() as cur:
-            cur.execute(sql, params)
-            return cur.fetchall()
-
-    return run
-
-
 def exec_many(pg, statements: list[str]) -> None:
     """Run a list of DDL/DML statements in order against ``pg``."""
     with pg.cursor() as cur:

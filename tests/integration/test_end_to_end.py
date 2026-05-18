@@ -2,20 +2,21 @@
 
 Each test gets a fresh schema. We:
   1. Build a Spec
-  2. Apply emit_ddl + emit_weight_seed to the schema
+  2. Apply Spec.ddl() + emit_weight_seed to the schema
   3. Exercise the write path (binding.write_sql / binding.close_out_sql)
   4. Query the resolved view + validation SELECTs and assert behavior
-  5. Evolve the spec, run diff_against_db, apply the ops, repeat
 
 The whole point is to verify the SQL we emit is not just well-formed
 but semantically correct against postgres 16.
+
+Schema evolution against a live DB is delegated to external migration
+tools (sqldef / Atlas / dbmate); see CLAUDE.md §"Schema deployment".
 """
 
 from __future__ import annotations
 
 from knot import Spec, types
 from knot.compile import (
-    diff_against_db,
     emit_ddl,
     emit_validation,
     emit_weight_seed,
@@ -597,272 +598,6 @@ def test_constraint_validation_finds_violations(pg, schema):
 
 
 # ---------------------------------------------------------------------------
-# Spec evolution
-# ---------------------------------------------------------------------------
-
-
-def test_evolve_add_slot_preserves_existing_data(pg, schema, query_fn):
-    spec = _movies_only_spec()
-    _deploy(pg, spec, schema)
-
-    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(
-        pg,
-        spec,
-        imdb_b,
-        [
-            {
-                "canonical_id": "m1",
-                "source_identifier": "tt1",
-                "name": "M1",
-                "year": 1925,
-                "runtime_minutes": 75,
-            },
-        ],
-        schema=schema,
-    )
-
-    # Evolve: add `original_language` slot.
-    spec2 = _movies_only_spec()
-    movie = next(c for c in spec2.classes if c.name == "Movie")
-    movie.slot("original_language", types.TEXT)
-
-    ops = diff_against_db(spec2, query_fn, schema=schema)
-    assert any(op.description == "add_column_movie_original_language" for op in ops)
-    exec_many(pg, [op.sql for op in ops])
-
-    # Existing row preserved; new column is NULL.
-    with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year, original_language FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
-        year, lang = cur.fetchone()
-    assert year == 1925
-    assert lang is None
-
-
-def test_operator_tunes_weight_changes_winner(pg, schema, query_fn):
-    """Weight values live in postgres; operators tune them via plain
-    UPDATE statements. INSERT-only seed semantics mean the spec is
-    *not* the authoritative knob at runtime — once the table is
-    seeded, the operator owns it."""
-    spec = _movies_only_spec()
-    _deploy(pg, spec, schema)
-
-    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    tmdb_b = next(b for b in spec.source_bindings if b.source.name == "tmdb")
-    _write_claim(
-        pg,
-        spec,
-        imdb_b,
-        [
-            {
-                "canonical_id": "m1",
-                "source_identifier": "tt1",
-                "name": "M1",
-                "year": 1925,
-                "runtime_minutes": 75,
-            },
-        ],
-        schema=schema,
-    )
-    _write_claim(
-        pg,
-        spec,
-        tmdb_b,
-        [
-            {
-                "canonical_id": "m1",
-                "source_identifier": "tmdb-1",
-                "name": "M1",
-                "year": 1928,
-                "runtime_minutes": 73,
-            },
-        ],
-        schema=schema,
-    )
-
-    # Before: IMDB wins (0.85 > 0.7) → year=1925.
-    with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
-        assert cur.fetchone()[0] == 1925
-
-    # Operator decides TMDB's `year` is more reliable than IMDB's —
-    # plain UPDATE against the runtime table. No redeploy.
-    with pg.cursor() as cur:
-        cur.execute(
-            f"UPDATE {schema}.source_weight SET weight = 0.9 "
-            f"WHERE source_name = 'tmdb' AND class_name = 'Movie' AND slot_name = 'year'"
-        )
-
-    # After: TMDB wins → year=1928.
-    with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT year FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
-        assert cur.fetchone()[0] == 1928
-
-
-def test_weight_seed_does_not_clobber_operator_tuning(pg, schema, query_fn):
-    """The migration emitter is INSERT-only: redeploying the spec must
-    leave operator-tuned weight values alone."""
-    spec = _movies_only_spec()
-    _deploy(pg, spec, schema)
-
-    # Operator tunes a weight value at runtime.
-    with pg.cursor() as cur:
-        cur.execute(
-            f"UPDATE {schema}.source_weight SET weight = 0.42 "
-            f"WHERE source_name = 'imdb' AND class_name = 'Movie' AND slot_name = 'year'"
-        )
-
-    # Redeploy (spec unchanged from initial); seed must NOT overwrite.
-    spec2 = _movies_only_spec()
-    ops = diff_against_db(spec2, query_fn, schema=schema)
-    weight_ops = [op for op in ops if op.target == "weight_seed"]
-    # No (source, class, slot) rows are new → nothing to INSERT.
-    assert weight_ops == []
-
-    with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT weight FROM {schema}.source_weight "
-            f"WHERE source_name = 'imdb' AND class_name = 'Movie' AND slot_name = 'year'"
-        )
-        assert cur.fetchone()[0] == 0.42  # operator's value preserved
-
-
-def test_evolve_rename_slot_preserves_data(pg, schema, query_fn):
-    spec = _movies_only_spec()
-    _deploy(pg, spec, schema)
-
-    imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    _write_claim(
-        pg,
-        spec,
-        imdb_b,
-        [
-            {
-                "canonical_id": "m1",
-                "source_identifier": "tt1",
-                "name": "M1",
-                "year": 1925,
-                "runtime_minutes": 75,
-            },
-        ],
-        schema=schema,
-    )
-
-    # Evolve: rename runtime_minutes → length_min.
-    spec2 = Spec(identifier_slot_name="canonical_id")
-    movie = spec2.add_class("Movie")
-    movie.slot("name", types.TEXT, required=True)
-    movie.slot("year", types.INTEGER)
-    movie.slot("length_min", types.INTEGER)  # was runtime_minutes
-    imdb = spec2.add_source("imdb")
-    tmdb = spec2.add_source("tmdb")
-    imdb.bind(movie).set_default_weight(0.85)
-    tmdb.bind(movie).set_default_weight(0.7)
-
-    ops = diff_against_db(
-        spec2,
-        query_fn,
-        schema=schema,
-        allow_destructive=True,
-        renames={"Movie": {"runtime_minutes": "length_min"}},
-    )
-    rename_ops = [op for op in ops if op.description.startswith("rename_column_")]
-    assert len(rename_ops) == 2  # canonical + bindings
-    exec_many(pg, [op.sql for op in ops])
-
-    # Data preserved under the new name.
-    with pg.cursor() as cur:
-        cur.execute(
-            f"SELECT length_min FROM {schema}.movie_resolved WHERE canonical_id = 'm1'"
-        )
-        assert cur.fetchone()[0] == 75
-
-
-def test_evolve_drop_slot_with_destructive_opt_in(pg, schema, query_fn):
-    spec = _movies_only_spec()
-    _deploy(pg, spec, schema)
-
-    # Drop `runtime_minutes` from the spec.
-    spec2 = Spec(identifier_slot_name="canonical_id")
-    movie = spec2.add_class("Movie")
-    movie.slot("name", types.TEXT, required=True)
-    movie.slot("year", types.INTEGER)
-    imdb = spec2.add_source("imdb")
-    imdb.bind(movie).set_default_weight(0.85)
-
-    # Without destructive opt-in: no drop emitted (filtered out).
-    ops = diff_against_db(spec2, query_fn, schema=schema)
-    assert not any(op.description.startswith("drop_column_movie_runtime") for op in ops)
-
-    # With destructive opt-in: drop emitted.
-    ops = diff_against_db(spec2, query_fn, schema=schema, allow_destructive=True)
-    drops = [op for op in ops if op.description.startswith("drop_column_")]
-    assert any("drop_column_movie_runtime_minutes" == op.description for op in drops)
-    exec_many(pg, [op.sql for op in ops])
-
-    # Column gone.
-    with pg.cursor() as cur:
-        cur.execute(
-            "SELECT column_name FROM information_schema.columns "
-            "WHERE table_schema = %s AND table_name = 'movie' "
-            "ORDER BY column_name",
-            (schema,),
-        )
-        cols = {r[0] for r in cur.fetchall()}
-    assert "runtime_minutes" not in cols
-    assert "year" in cols
-
-
-# ---------------------------------------------------------------------------
-# init_sql — unified one-string deploy / migrate
-# ---------------------------------------------------------------------------
-
-
-def test_init_sql_from_scratch_creates_everything(pg, schema):
-    """Single-call deploy from an empty schema: ``spec.init_sql()`` with
-    no query_fn emits one SQL script that creates everything."""
-    spec = _movies_only_spec()
-    spec.enable_corrections()
-
-    sql = spec.init_sql(schema=schema)
-    pg.execute(sql)
-
-    # Weight seeded per (source, class, slot).
-    # Movie has 3 non-identifier slots; 3 sources × 3 slots = 9 rows.
-    with pg.cursor() as cur:
-        cur.execute(f"SELECT count(*) FROM {schema}.source_weight")
-        assert cur.fetchone()[0] == 9
-
-        cur.execute(
-            "SELECT viewname FROM pg_views WHERE schemaname = %s",
-            (schema,),
-        )
-        views = {r[0] for r in cur.fetchall()}
-    assert "movie_resolved" in views
-
-
-def test_init_sql_diff_mode_emits_only_changes(pg, schema, query_fn):
-    """``spec.init_sql(query_fn=…)`` introspects the live DB and emits
-    just the migration delta — no churn for a fully-deployed spec."""
-    spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
-
-    # Same spec again, this time diffed against the live DB.
-    delta = spec.init_sql(query_fn=query_fn, schema=schema)
-    # The only ops should be CREATE OR REPLACE VIEW for the resolved
-    # views (the migration emitter always re-emits views idempotently
-    # so they reflect the current spec body).
-    assert "CREATE TABLE" not in delta
-    assert "ALTER TABLE" not in delta
-
-
-# ---------------------------------------------------------------------------
 # ER helpers — assign_canonical, recanonicalize, er_metadata
 # ---------------------------------------------------------------------------
 
@@ -871,7 +606,7 @@ def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
     """Ingest a binding row with canonical_id=NULL; resolved view skips
     it; assign_canonical makes it visible."""
     spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -909,7 +644,7 @@ def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
 def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
     """Re-running assign_canonical on an already-assigned row is a no-op."""
     spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -947,7 +682,7 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
     """Reassigning canonical_id keeps the old binding row (closed) plus
     a new open binding row with the corrected id."""
     spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -995,7 +730,7 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
     """assign_canonical with er_metadata writes the dict into the
     binding row's er_metadata jsonb column."""
     spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -1046,7 +781,7 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
     """When recanonicalize is called without er_metadata, the new row
     inherits the closed row's er_metadata verbatim."""
     spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -1102,7 +837,7 @@ def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
     """Recanonicalize with er_metadata stamps the new row with a
     fresh payload; the closed row keeps the original."""
     spec = _movies_only_spec()
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 

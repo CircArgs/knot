@@ -53,7 +53,7 @@ def _(psycopg, spec, uuid):
         autocommit=True,
     )
     schema = f"knot_play_{uuid.uuid4().hex[:8]}"
-    pg.execute(spec.init_sql(schema=schema))
+    pg.execute(spec.ddl(schema=schema))
     schema
     return pg, schema
 

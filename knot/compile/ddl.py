@@ -248,7 +248,7 @@ def _pg_type(t: TypeExpression) -> str:
             # pgvector type. The HNSW index is emitted separately so a
             # spec with vector slots needs the ``vector`` extension
             # present (knot emits ``CREATE EXTENSION IF NOT EXISTS
-            # vector`` once at the top of init_sql when any vector slot
+            # vector`` once at the top of Spec.ddl() when any vector slot
             # exists).
             return f"vector({dim})"
     raise TypeError(f"unhandled type expression: {type(t).__name__}")

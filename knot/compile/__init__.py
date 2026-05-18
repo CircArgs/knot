@@ -10,10 +10,10 @@ Each emitter is a free function on the corresponding module:
   - ``knot.compile.write.emit_binding_write_sql`` SCD2 write SQL templates
                                                   for one binding (close-out + insert)
 
-The spec itself lives in Python code (see ``knot.spec`` / ``knot.expr``).
-Migrations diff the in-memory spec against the live postgres schema at
-deploy time (Alembic-style autogenerate); knot does not persist the
-spec to a meta-table.
+knot is a *compiler*: ``Spec.ddl(schema=…)`` emits the canonical
+target schema. Schema migrations against a live DB are delegated to
+external tools (sqldef / Atlas / dbmate / …); see CLAUDE.md
+§"Schema deployment".
 
 Public surface is re-exported here for convenience.
 """
@@ -21,7 +21,6 @@ Public surface is re-exported here for convenience.
 from knot.compile.constraints import emit_validation, emit_validation_union
 from knot.compile.ddl import emit_ddl
 from knot.compile.expr import compile_sql
-from knot.compile.migrate import MigrationOp, diff_against_db
 from knot.compile.query import compile_query
 from knot.compile.resolver import (
     emit_all_sources_view,

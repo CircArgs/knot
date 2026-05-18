@@ -25,7 +25,7 @@ Validation happens at two levels:
   - Cross-entity: ``Spec.validate()`` raises ``SpecError`` if the spec
     has any well-formedness errors (orphan references, missing
     identifier slots, duplicate names, etc.). The façade methods
-    (``init_sql``, ``Query.sql`` etc.) call it automatically.
+    (``ddl``, ``Query.sql`` etc.) call it automatically.
 
 Body validation (typos in slot references) is caught at construction
 time by the builder: ``movie.col.nonexistent`` raises ``KeyError``
@@ -883,7 +883,7 @@ class Spec:
     No per-class identifier override — if a class genuinely needs a
     different identifier shape, that's outside knot's single-team
     posture. No spec-level ``id`` or ``version`` either: the deploy
-    schema (``init_sql(schema=…)``) is the only structural name knot
+    schema (``ddl(schema=…)``) is the only structural name knot
     cares about. If you want to label the spec for your team, do it
     in the codebase (filename, module name, repo).
     """
@@ -1160,7 +1160,7 @@ class Spec:
     #
     # Three methods, three concerns:
     #   - validate        — well-formedness check
-    #   - init_sql        — schema deploy / migrate (one SQL script)
+    #   - ddl             — canonical target schema (one CREATE script)
     #   - emit_validation — runtime constraint checks (per-rule SELECTs)
     # Per-entity runtime methods live on the entity:
     #   - ``query.sql(schema=…)``               read (Query AST node)
@@ -1170,38 +1170,22 @@ class Spec:
     #   - ``binding.close_out_sql()``           retract a claim (SourceBinding)
     # ------------------------------------------------------------------
 
-    def init_sql(
-        self,
-        query_fn: Any = None,
-        *,
-        schema: str = "knot_data",
-        allow_destructive: bool = False,
-    ) -> str:
-        """Return a single SQL script that brings the target schema
-        into alignment with this spec.
+    def ddl(self, *, schema: str = "knot_data") -> str:
+        """Return the canonical CREATE script for this spec — schema,
+        extension (when needed), tables, indexes, FK constraints,
+        views. Idempotent throughout (``IF NOT EXISTS`` /
+        ``CREATE OR REPLACE``).
 
-        - ``query_fn=None`` → full from-scratch DDL (assumes empty schema).
-        - ``query_fn=callable`` → introspect the live DB; emit only
-          the migration ops needed. ``callable`` matches the
-          ``diff_against_db`` query interface:
-          ``(sql, params) -> list[tuple]``.
-
-        Validates the spec first. Statements are blank-line separated
-        and ``;``-terminated; the host runs the whole thing as one
-        multi-statement script.
+        For first deploys, execute directly. For migrations against a
+        live DB, pipe the output through a schema-diff tool
+        (sqldef / Atlas / dbmate / …) — knot doesn't own the diff.
+        See CLAUDE.md §"Schema deployment" for rationale and tool
+        recommendations.
         """
         self.validate()
-        if query_fn is None:
+        from knot.compile.ddl import emit_ddl
 
-            def query_fn(_sql: str, _params: tuple) -> list:  # empty DB
-                return []
-
-        from knot.compile.migrate import diff_against_db
-
-        ops = diff_against_db(
-            self, query_fn, schema=schema, allow_destructive=allow_destructive
-        )
-        return "\n\n".join(op.sql for op in ops)
+        return "\n\n".join(emit_ddl(self, schema=schema))
 
     def emit_validation(self, **kwargs: Any) -> Any:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates
