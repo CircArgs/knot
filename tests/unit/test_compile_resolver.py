@@ -18,14 +18,14 @@ def test_resolved_view_per_concrete_class(movie_spec):
 
 
 def test_resolved_view_targets_bindings_table_with_valid_to_null(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie)
     assert "FROM knot_data.movie_bindings" in v
     assert "b.valid_to IS NULL" in v
 
 
 def test_resolved_view_left_joins_weight_table(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie)
     # Resolver reads weight from a runtime table via LEFT JOIN on the
     # (source, class, slot) triple. The class/slot filters scope to
@@ -56,7 +56,7 @@ def test_resolved_view_no_inline_case_when():
 
 
 def test_resolved_view_one_row_per_canonical_id(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie)
     # Outer FROM enumerates DISTINCT canonical_ids with at least one
     # currently-open binding.
@@ -66,7 +66,7 @@ def test_resolved_view_one_row_per_canonical_id(movie_spec):
 def test_resolved_view_inherited_slots_present(movie_spec):
     # Movie inherits `name` from Title; the resolved view should
     # project it.
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie)
     assert " AS name" in v
     assert " AS year" in v
@@ -74,7 +74,7 @@ def test_resolved_view_inherited_slots_present(movie_spec):
 
 
 def test_resolved_view_skips_identifier_in_select_list(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie)
     # canonical_id appears as the outer projection but NOT as a
     # winner subquery (no `AS canonical_id` on a SELECT b.canonical_id…).
@@ -88,13 +88,13 @@ def test_resolved_view_parses_postgres(movie_spec):
 
 
 def test_resolved_view_if_not_exists_swaps_create(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie, if_not_exists=True)
     assert v.startswith("CREATE OR REPLACE VIEW")
 
 
 def test_resolved_view_kwargs_threading(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(
         movie_spec,
         movie,
@@ -158,7 +158,7 @@ def test_all_sources_view_per_concrete_class(movie_spec):
 def test_all_sources_view_uses_jsonb_object_agg(movie_spec):
     from knot.compile import emit_all_sources_view
 
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_all_sources_view(movie_spec, movie)
     assert "jsonb_object_agg" in v
     assert "jsonb_build_object('value', b.year, 'weight'," in v
@@ -169,7 +169,7 @@ def test_all_sources_view_uses_jsonb_object_agg(movie_spec):
 def test_all_sources_view_per_slot_weight_join(movie_spec):
     from knot.compile import emit_all_sources_view
 
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_all_sources_view(movie_spec, movie)
     # Each non-identifier slot gets its own LEFT JOIN aliased w_<slot>.
     assert "LEFT JOIN knot_data.source_weight w_year" in v
@@ -182,7 +182,7 @@ def test_all_sources_view_per_slot_weight_join(movie_spec):
 def test_all_sources_view_groups_by_identifier(movie_spec):
     from knot.compile import emit_all_sources_view
 
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_all_sources_view(movie_spec, movie)
     assert "GROUP BY b.canonical_id" in v
     assert "WHERE b.valid_to IS NULL AND b.canonical_id IS NOT NULL" in v
@@ -198,7 +198,7 @@ def test_all_sources_view_parses_postgres(movie_spec):
 def test_all_sources_view_if_not_exists_swaps_create(movie_spec):
     from knot.compile import emit_all_sources_view
 
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_all_sources_view(movie_spec, movie, if_not_exists=True)
     assert v.startswith("CREATE OR REPLACE VIEW")
 
@@ -206,7 +206,7 @@ def test_all_sources_view_if_not_exists_swaps_create(movie_spec):
 def test_all_sources_view_kwargs_threading(movie_spec):
     from knot.compile import emit_all_sources_view
 
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     v = emit_all_sources_view(
         movie_spec,
         movie,

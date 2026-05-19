@@ -60,9 +60,9 @@ def _():
     # source, no embeddings.
     from movies_spec import spec
 
-    print("BEFORE — classes:", [c.name for c in spec.classes])
-    print("BEFORE — sources:", [s.name for s in spec.sources])
-    print("BEFORE — Movie slots:", [s.name for s in spec.classes[1].slots])
+    print("BEFORE — classes:", list(spec.classes))
+    print("BEFORE — sources:", list(spec.sources))
+    print("BEFORE — Movie slots:", [s.name for s in spec.classes["Movie"].slots])
     return (spec,)
 
 
@@ -83,9 +83,9 @@ def _(mo):
 def _(spec):
     import movies_spec.full  # noqa: F401  — imported for side effect
 
-    print("AFTER — classes:", [c.name for c in spec.classes])
-    print("AFTER — sources:", [s.name for s in spec.sources])
-    print("AFTER — Movie slots:", [s.name for s in spec.classes[1].slots])
+    print("AFTER — classes:", list(spec.classes))
+    print("AFTER — sources:", list(spec.sources))
+    print("AFTER — Movie slots:", [s.name for s in spec.classes["Movie"].slots])
     return
 
 

@@ -125,7 +125,7 @@ def emit_ddl(
             )
         )
 
-    for cls in spec.classes:
+    for cls in spec.classes.values():
         match cls:
             case OntologyClass(kind=ClassKind.CONCRETE):
                 stmts.append(
@@ -259,7 +259,7 @@ def _pg_type(t: TypeExpression) -> str:
 def _spec_has_vector_slot(spec: Spec) -> bool:
     """True if any concrete class in ``spec`` declares a vector slot.
     Used to gate ``CREATE EXTENSION IF NOT EXISTS vector;`` emission."""
-    for cls in spec.classes:
+    for cls in spec.classes.values():
         if not isinstance(cls, OntologyClass) or cls.kind != ClassKind.CONCRETE:
             continue
         for slot in cls.effective_slots():

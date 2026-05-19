@@ -109,14 +109,14 @@ def test_duplicate_source_name_rejected():
 
 
 def test_duplicate_constraint_name_rejected(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     with pytest.raises(ValueError, match="already has a constraint"):
         movie.add_constraint("year_sane", body=movie.col.year > 0)
 
 
 def test_duplicate_binding_pair_rejected(movie_spec):
-    imdb = movie_spec.sources[0]
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    imdb = movie_spec.sources["imdb"]
+    movie = movie_spec.classes["Movie"]
     with pytest.raises(ValueError, match="already has a binding"):
         imdb.bind(movie)
 
@@ -127,19 +127,19 @@ def test_duplicate_binding_pair_rejected(movie_spec):
 
 
 def test_chain_walks_is_a(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     assert [c.name for c in movie.chain()] == ["Movie", "Title"]
 
 
 def test_get_slot_walks_inheritance(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     # 'name' is on Title, not Movie's own slots
     assert movie["name"].type is types.TEXT
     assert movie["name"].required is True
 
 
 def test_identifier_slot_walks_inheritance(movie_spec):
-    movie = next(c for c in movie_spec.classes if c.name == "Movie")
+    movie = movie_spec.classes["Movie"]
     # canonical_id is on Title (abstract); Movie inherits it
     assert movie.identifier_slot().name == "canonical_id"
 
@@ -200,7 +200,7 @@ def test_validate_concrete_missing_identifier():
     spec = Spec(identifier_slot_name="canonical_id")
     orphan = OntologyClass(name="Movie")
     orphan.slot("name", types.TEXT)
-    spec.classes.append(orphan)
+    spec.classes[orphan.name] = orphan
     errs = spec._validation_errors()
     assert any("no identifier" in e for e in errs)
 
@@ -249,9 +249,8 @@ def test_validate_virtual_class_is_a_missing():
     spec.add_class("Movie")
     # virtual references a class that's NOT in spec
     ghost = OntologyClass(name="Ghost")
-    spec.classes.append(
-        VirtualClass(name="Variant", is_a=ghost, definition=raw("1 = 1"))
-    )
+    variant = VirtualClass(name="Variant", is_a=ghost, definition=raw("1 = 1"))
+    spec.classes[variant.name] = variant
     errs = spec._validation_errors()
     assert any("virtual" in e and "Ghost" in e for e in errs)
 
@@ -261,7 +260,7 @@ def test_validate_strict_raises_with_all_errors():
     # Orphan concrete class (no identifier — bypasses add_class).
     orphan = OntologyClass(name="Movie")
     orphan.slot("name", types.TEXT)
-    spec.classes.append(orphan)
+    spec.classes[orphan.name] = orphan
     spec.constraints.append(
         Constraint(name="c", primary=OntologyClass(name="Ghost"), body=raw("1 = 1"))
     )

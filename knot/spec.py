@@ -425,11 +425,12 @@ class OntologyClass:
                 f"OntologyClass {self.name!r} not attached to a Spec — "
                 f"create via spec.add_class() rather than constructing directly"
             )
-        self._spec._check_unique_class_name(name)
+        if name in self._spec.classes:
+            raise ValueError(f"Spec already has a class named {name!r}")
         vc = VirtualClass(
             name=name, is_a=self, definition=where, description=description
         )
-        self._spec.classes.append(vc)
+        self._spec.classes[name] = vc
         return vc
 
     def corrections_binding(self) -> SourceBinding:
@@ -893,8 +894,13 @@ class Spec:
     """
 
     identifier_slot_name: str  # required — no default; e.g. "canonical_id"
-    classes: list[OntologyClass | VirtualClass] = field(default_factory=list)
-    sources: list[Source] = field(default_factory=list)
+    # ``classes`` and ``sources`` are dicts keyed by name. Lets the
+    # builder enforce uniqueness for free (vs. a separate
+    # ``_check_unique_class_name`` pass) and lets ``spec.classes["Movie"]``
+    # be the obvious lookup. Insertion order is preserved (Python 3.7+
+    # dict guarantee), so iteration order is still declaration order.
+    classes: dict[str, OntologyClass | VirtualClass] = field(default_factory=dict)
+    sources: dict[str, Source] = field(default_factory=dict)
     source_bindings: list[SourceBinding] = field(default_factory=list)
     constraints: list[Constraint] = field(default_factory=list)
     # ``None`` defaults to ``types.TEXT`` in __post_init__ (module-import
@@ -920,7 +926,8 @@ class Spec:
         mixins: list[OntologyClass] | None = None,
         description: str | None = None,
     ) -> OntologyClass:
-        self._check_unique_class_name(name)
+        if name in self.classes:
+            raise ValueError(f"Spec already has a class named {name!r}")
         cls = OntologyClass(
             name=name,
             kind=kind if isinstance(kind, ClassKind) else ClassKind(kind),
@@ -929,7 +936,7 @@ class Spec:
             description=description,
             _spec=self,
         )
-        self.classes.append(cls)
+        self.classes[name] = cls
         # Auto-add the spec's identifier slot — but only if no parent
         # in the is_a / mixin chain already contributes one. Skipping
         # the auto-add when inherited prevents the duplicate-identifier
@@ -949,10 +956,10 @@ class Spec:
                 f"{name!r} is a reserved source name — use "
                 f"spec.enable_corrections() instead of add_source()"
             )
-        if any(s.name == name for s in self.sources):
+        if name in self.sources:
             raise ValueError(f"Spec already has a source named {name!r}")
         s = Source(name=name, description=description, _spec=self)
-        self.sources.append(s)
+        self.sources[name] = s
         return s
 
     def enable_corrections(
@@ -975,16 +982,13 @@ class Spec:
         Idempotent: calling again is a no-op if the source already
         exists. Returns the (possibly pre-existing) ``Source`` object.
         """
-        existing = next(
-            (s for s in self.sources if s.name == CORRECTIONS_SOURCE_NAME),
-            None,
-        )
+        existing = self.sources.get(CORRECTIONS_SOURCE_NAME)
         if existing is not None:
             return existing
         source = Source(
             name=CORRECTIONS_SOURCE_NAME, description=description, _spec=self
         )
-        self.sources.append(source)
+        self.sources[CORRECTIONS_SOURCE_NAME] = source
         for cls in self.concrete_classes():
             binding = source.bind(cls)
             binding.set_default_weight(default_weight)
@@ -1017,8 +1021,8 @@ class Spec:
                 f"({self.identifier_slot_name!r} vs "
                 f"{other.identifier_slot_name!r})"
             )
-        for cls in other.classes:
-            if any(c.name == cls.name for c in self.classes):
+        for cls in other.classes.values():
+            if cls.name in self.classes:
                 raise ValueError(
                     f"Spec.include: class {cls.name!r} already exists "
                     f"in target spec — included parts cannot redeclare "
@@ -1029,22 +1033,18 @@ class Spec:
             # OntologyClass needs re-rooting.
             if isinstance(cls, OntologyClass):
                 cls._spec = self
-            self.classes.append(cls)
-        for src in other.sources:
-            if any(s.name == src.name for s in self.sources):
+            self.classes[cls.name] = cls
+        for src in other.sources.values():
+            if src.name in self.sources:
                 raise ValueError(
                     f"Spec.include: source {src.name!r} already exists in target spec"
                 )
             src._spec = self
-            self.sources.append(src)
+            self.sources[src.name] = src
         for binding in other.source_bindings:
             self.source_bindings.append(binding)
         for constraint in other.constraints:
             self.constraints.append(constraint)
-
-    def _check_unique_class_name(self, name: str) -> None:
-        if any(c.name == name for c in self.classes):
-            raise ValueError(f"Spec already has a class named {name!r}")
 
     # -- well-formedness validation --
 
@@ -1054,19 +1054,19 @@ class Spec:
         "classes that materialize a table"."""
         return [
             c
-            for c in self.classes
+            for c in self.classes.values()
             if isinstance(c, OntologyClass) and c.kind == ClassKind.CONCRETE
         ]
 
     def virtual_classes(self) -> list[VirtualClass]:
         """``VirtualClass`` entries — backed by a view, not a table."""
-        return [c for c in self.classes if isinstance(c, VirtualClass)]
+        return [c for c in self.classes.values() if isinstance(c, VirtualClass)]
 
     def class_by_name(self, name: str) -> OntologyClass | VirtualClass:
-        for c in self.classes:
-            if c.name == name:
-                return c
-        raise KeyError(f"Spec has no class named {name!r}")
+        try:
+            return self.classes[name]
+        except KeyError:
+            raise KeyError(f"Spec has no class named {name!r}") from None
 
     def _validation_errors(self) -> list[str]:
         """Internal: list cross-entity well-formedness errors.
@@ -1077,17 +1077,14 @@ class Spec:
         construction time by ``movie.col.<slot>`` raising ``KeyError``.
         """
         errs: list[str] = []
-        classes_by_name: dict[str, OntologyClass | VirtualClass] = {}
-        for c in self.classes:
-            if c.name in classes_by_name:
-                errs.append(f"duplicate class name {c.name!r}")
-            classes_by_name[c.name] = c
-
+        # ``classes`` is a dict keyed by name — duplicates can't happen
+        # via the public builder. (Direct ``classes[name] = cls`` with
+        # a mismatched key would still slip through; not worth guarding.)
         concrete_or_abstract: dict[str, OntologyClass] = {
-            c.name: c for c in self.classes if isinstance(c, OntologyClass)
+            c.name: c for c in self.classes.values() if isinstance(c, OntologyClass)
         }
 
-        for c in self.classes:
+        for c in self.classes.values():
             match c:
                 case OntologyClass():
                     if c.is_a is not None and c.is_a.name not in concrete_or_abstract:
@@ -1144,14 +1141,8 @@ class Spec:
                     f"constraint {con.name!r}.primary → {con.primary.name!r}: not in spec"
                 )
 
-        # Source name uniqueness
-        sources_by_name: dict[str, Source] = {}
-        for s in self.sources:
-            if s.name in sources_by_name:
-                errs.append(f"duplicate source name {s.name!r}")
-            sources_by_name[s.name] = s
-
-        # SourceBinding references
+        # SourceBinding references — sources dict already enforces
+        # name uniqueness.
         binding_keys: set[tuple[str, str]] = set()
         for b in self.source_bindings:
             key = (b.source.name, b.class_.name)
@@ -1160,7 +1151,7 @@ class Spec:
                     f"duplicate binding source={b.source.name!r} class={b.class_.name!r}"
                 )
             binding_keys.add(key)
-            if b.source.name not in sources_by_name:
+            if b.source.name not in self.sources:
                 errs.append(
                     f"binding source={b.source.name!r} class={b.class_.name!r}: source not in spec"
                 )
@@ -1187,7 +1178,7 @@ class Spec:
                     )
 
         # is_a / mixin cycle detection
-        for c in self.classes:
+        for c in self.classes.values():
             if isinstance(c, OntologyClass) and _participates_in_cycle(c):
                 errs.append(f"class {c.name!r} participates in an is_a / mixin cycle")
 

@@ -451,7 +451,7 @@ def test_user_correction_wins_over_declared_sources(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    movie = next(c for c in spec.classes if c.name == "Movie")
+    movie = spec.classes["Movie"]
     corr_b = movie.corrections_binding()
 
     _write_claim(
@@ -501,7 +501,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
-    movie = next(c for c in spec.classes if c.name == "Movie")
+    movie = spec.classes["Movie"]
     corr_b = movie.corrections_binding()
 
     _write_claim(
@@ -559,7 +559,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
 
 def test_constraint_validation_finds_violations(pg, schema):
     spec = _movies_only_spec()
-    movie = next(c for c in spec.classes if c.name == "Movie")
+    movie = spec.classes["Movie"]
     movie.add_constraint("year_sane", body=movie.col.year >= 1888)
     _deploy(pg, spec, schema)
 

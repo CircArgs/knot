@@ -228,7 +228,9 @@ def _(SCHEMA, engine, pd, pg, spec):
     # class, showing total bindings and how many already have a
     # canonical_id (ER status going into 05).
     concrete = [
-        c.name.lower() for c in spec.classes if c.__class__.__name__ == "OntologyClass"
+        c.name.lower()
+        for c in spec.classes.values()
+        if c.__class__.__name__ == "OntologyClass"
     ]
     union = " UNION ALL ".join(
         f"SELECT '{n}' AS class, COUNT(*) AS rows, "

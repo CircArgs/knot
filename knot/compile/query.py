@@ -125,11 +125,11 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
 
 
 def _lookup_class(spec: Spec, name: str) -> Any:
-    """Resolve a class name in ``spec``. Raises if missing."""
-    for c in spec.classes:
-        if c.name == name:
-            return c
-    raise KeyError(f"class {name!r} not found in spec")
+    """Resolve a class name in ``spec``. Raises ``KeyError`` if missing."""
+    try:
+        return spec.classes[name]
+    except KeyError:
+        raise KeyError(f"class {name!r} not found in spec") from None
 
 
 def _collect_chains(node: Expr, out: list[FkChainRef]) -> None:

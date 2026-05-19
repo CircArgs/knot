@@ -61,9 +61,9 @@ def _():
     # spec doesn't know about tmdb or the embedding slot yet.
     from movies_spec import spec
 
-    print("classes:", [c.name for c in spec.classes])
-    print("sources:", [s.name for s in spec.sources])
-    print("Movie slots:", [s.name for s in spec.classes[1].slots])
+    print("classes:", list(spec.classes))
+    print("sources:", list(spec.sources))
+    print("Movie slots:", [s.name for s in spec.classes["Movie"].slots])
     spec
     return (spec,)
 

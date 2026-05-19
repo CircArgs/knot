@@ -127,7 +127,7 @@ def emit_resolved_views(
 ) -> list[str]:
     """Return one ``CREATE VIEW`` per concrete class in ``spec``."""
     out: list[str] = []
-    for cls in spec.classes:
+    for cls in spec.classes.values():
         if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
             out.append(
                 emit_resolved_view(
@@ -234,7 +234,7 @@ def emit_all_sources_views(
 ) -> list[str]:
     """Return one ``CREATE VIEW <class>_all_sources`` per concrete class."""
     out: list[str] = []
-    for cls in spec.classes:
+    for cls in spec.classes.values():
         if isinstance(cls, OntologyClass) and cls.kind == ClassKind.CONCRETE:
             out.append(
                 emit_all_sources_view(
