@@ -12,7 +12,7 @@ and SQL, nothing hidden.
 import marimo
 
 __generated_with = "0.23.5"
-app = marimo.App()
+app = marimo.App(layout_file="layouts/00_demo.marimo.slides.json")
 
 
 @app.cell
@@ -59,21 +59,23 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    _src = (mo.notebook_dir() / "media_spec/person.py").read_text()
+    from _demo import read_source
+
+    _src = read_source(mo.notebook_dir() / "media_spec/person.py")
     mo.md(f"`media_spec/person.py`\n\n```python\n{_src}\n```")
-    return
+    return (read_source,)
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    _src = (mo.notebook_dir() / "media_spec/movies.py").read_text()
+def _(mo, read_source):
+    _src = read_source(mo.notebook_dir() / "media_spec/movies.py")
     mo.md(f"`media_spec/movies.py`\n\n```python\n{_src}\n```")
     return
 
 
 @app.cell(hide_code=True)
-def _(mo):
-    _src = (mo.notebook_dir() / "media_spec/base.py").read_text()
+def _(mo, read_source):
+    _src = read_source(mo.notebook_dir() / "media_spec/base.py")
     mo.md(
         f"`media_spec/base.py` — the package root creates `spec` once "
         f"and composes the domain parts:\n\n```python\n{_src}\n```"

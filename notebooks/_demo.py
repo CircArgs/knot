@@ -16,9 +16,15 @@ Module surface
 ``reset_atlas_dev()`` drops + recreates the dev database Atlas uses
                      to render the desired-state SQL; only 03_migrate
                      needs this
+``read_source(path)`` read a Python file as text with its module
+                     docstring stripped — used by the show-and-tell
+                     notebook to render spec files on slides
 """
 
 from __future__ import annotations
+
+import ast
+from pathlib import Path
 
 import psycopg
 from sqlalchemy import Engine, create_engine
@@ -49,6 +55,25 @@ def connect() -> tuple[psycopg.Connection, Engine]:
     )
     engine = create_engine(PG_URL)
     return pg, engine
+
+
+def read_source(path: str | Path) -> str:
+    """Read a Python file as source text, dropping the module-level
+    docstring (and the blank line after it) so slide views show only
+    the code that matters."""
+    text = Path(path).read_text()
+    tree = ast.parse(text)
+    if (
+        tree.body
+        and isinstance(tree.body[0], ast.Expr)
+        and isinstance(tree.body[0].value, ast.Constant)
+        and isinstance(tree.body[0].value.value, str)
+    ):
+        rest = text.splitlines()[tree.body[0].end_lineno :]
+        while rest and not rest[0].strip():
+            rest = rest[1:]
+        return "\n".join(rest)
+    return text
 
 
 def reset_atlas_dev() -> None:

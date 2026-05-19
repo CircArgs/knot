@@ -18,12 +18,14 @@ Module surface
 
 from knot import Spec, types
 
+# `part` is an APIRouter-style sub-spec — base.py composes it in.
 part = Spec(identifier_slot_name="canonical_id")
 
+# Person is shared across every domain — one class, many edges to it.
 person = part.add_class("Person")
 person.slot("name", types.TEXT, required=True)
 person.slot("birth_country", types.TEXT)
 person.slot("birth_year", types.INTEGER)
-person.slot("role_description", types.TEXT)  # podcasts feed shape
-person.slot("role_summary", types.TEXT)  # games feed shape
-person.slot("name_embedding", types.VECTOR(384))
+person.slot("role_description", types.TEXT)      # podcasts feed shape
+person.slot("role_summary", types.TEXT)          # games feed shape
+person.slot("name_embedding", types.VECTOR(384)) # pgvector + HNSW

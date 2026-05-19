@@ -10,32 +10,34 @@ demo surface; ``full.py`` adds games/podcasts/tv/webscraped on top.
 """
 
 from knot import Spec, types
-from media_spec.person import person
+from media_spec.person import person  # cross-domain FK target
 
+# Self-contained sub-spec — base.py composes it in.
 part = Spec(identifier_slot_name="canonical_id")
 
-# Movie class
+# Movie — title + year + director (FK to Person).
 movie = part.add_class("Movie")
 movie.slot("title", types.TEXT, required=True)
 movie.slot("year", types.INTEGER)
-movie.slot("director", person)  # FK
+movie.slot("director", person)                    # FK to Person
 movie.slot("runtime_minutes", types.INTEGER)
-movie.slot("title_embedding", types.VECTOR(384))
+movie.slot("title_embedding", types.VECTOR(384))  # pgvector + HNSW
 
-# MovieCredit — Person/Movie via role
+# MovieCredit — many-to-many Person↔Movie tagged with a role.
 movie_credit = part.add_class("MovieCredit")
 movie_credit.slot("role", types.TEXT, required=True)
 movie_credit.slot("movie", movie)
 movie_credit.slot("person", person)
 
-# Virtual subclass + constraint
+# Virtual subclass — movies that have a "director" credit.
 movie.add_virtual(
     "DirectedMovie",
     where=movie.has_any(movie_credit, role="director"),
 )
+# Cinema started in 1888 — anything earlier is a data bug.
 movie.add_constraint("year_sane", body=movie.col.year >= 1888)
 
-# Sources + their bindings
+# Three sources, each binding the same three classes.
 imdb = part.add_source("imdb")
 imdb_movie_b = imdb.bind(movie)
 imdb_person_b = imdb.bind(person)

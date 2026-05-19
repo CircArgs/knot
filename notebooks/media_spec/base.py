@@ -11,6 +11,8 @@ v1 surface (``person`` + ``movies``). ``full.py`` opts the rest in
 import IS the migration story.
 """
 
+# Same shape as FastAPI's main.py — one top-level spec; each domain
+# owns a "part" (the APIRouter analogue) composed in via spec.include().
 from _demo import SCHEMA
 
 from knot import Spec
