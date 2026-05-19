@@ -527,10 +527,17 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
 
 **Façade contract.**
 
-- Every method calls ``Spec.validate()`` first; an invalid spec
-  raises ``SpecError`` instead of compiling. Free functions in
-  ``knot.compile.*`` do not validate — they're the back door for
-  "compile this known-broken spec anyway" cases (mostly tests).
+- **Deploy-time methods validate; hot-path methods don't.**
+  ``Spec.ddl`` and ``Spec.emit_validation`` call ``Spec.validate()``
+  first (deploy / governance moments — bad spec → caught early).
+  ``Query.sql``, ``binding.write_sql``, ``binding.assign_canonical_sql``,
+  ``binding.recanonicalize_sql``, ``binding.close_out_sql`` *don't*
+  validate — they run per API request / per ingest batch / per ER
+  decision, and walking 17 classes + N bindings every call is
+  wasteful. Host is expected to ``spec.validate()`` once at startup
+  (or rely on ``Spec.ddl`` having done so at deploy). Free functions
+  in ``knot.compile.*`` likewise never validate — back door for
+  "compile this known-broken spec anyway" tests.
 - ``Spec.ddl(schema=…)`` returns the canonical CREATE script — the
   *target* schema, no diffing. Migrations against a live DB are an
   external tool's job (sqldef / Atlas / dbmate / …). knot's prior

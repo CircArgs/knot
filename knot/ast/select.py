@@ -124,7 +124,11 @@ class Query:
                 "cls.resolved / .all_sources / .from_source(...), or use "
                 "knot.compile.query.compile_query(q, spec=spec) directly"
             )
-        self._spec.validate()
+        # Deliberately no ``spec.validate()`` here — Query.sql is a
+        # hot path (every API request) and we trust the spec was
+        # validated at startup (Spec.ddl does it on deploy, or call
+        # spec.validate() manually after composition). Walking 17
+        # classes + N bindings per request is wasteful.
         from knot.compile.query import compile_query
 
         return compile_query(self, spec=self._spec, schema=schema)

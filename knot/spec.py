@@ -804,7 +804,11 @@ class SourceBinding:
                 f"binding {self.source.name!r} → {self.class_.name!r} "
                 f"is not attached to a Spec"
             )
-        self.source._spec.validate()
+        # Deliberately no ``spec.validate()`` here — write_sql is a
+        # hot path (per-batch ingest) and we trust the spec was
+        # validated at deploy time. The other per-binding helpers
+        # (assign_canonical_sql, recanonicalize_sql, close_out_sql)
+        # already skip validate for the same reason.
         from knot.compile.write import emit_binding_write_sql
 
         return emit_binding_write_sql(
