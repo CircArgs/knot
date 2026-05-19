@@ -103,11 +103,15 @@ def _(SentenceTransformer):
 
 
 @app.cell
-def _(SCHEMA, model, engine, pd, pg):
+def _(model, movie, engine, pd, pg):
+    # Use the per-class accessor instead of f-string-baking the
+    # bindings table name. One place to change the suffix convention;
+    # the notebook stays declarative.
+    table = movie.bindings_table_name
     unembedded = pd.read_sql_query(
         f"""
         SELECT source_name, source_identifier, valid_from, title
-        FROM {SCHEMA}.movie_bindings
+        FROM {table}
         WHERE title_embedding IS NULL
         """,
         engine,
@@ -121,7 +125,7 @@ def _(SCHEMA, model, engine, pd, pg):
         ):
             cur.execute(
                 f"""
-                UPDATE {SCHEMA}.movie_bindings
+                UPDATE {table}
                 SET title_embedding = %(vec)s::vector(384)
                 WHERE source_name = %(sn)s
                   AND source_identifier = %(si)s
@@ -133,12 +137,12 @@ def _(SCHEMA, model, engine, pd, pg):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(movie, engine, pd, pg):
     # Confirm: every row now has an embedding.
     pd.read_sql_query(
         f"""
         SELECT source_name, COUNT(*) AS rows, COUNT(title_embedding) AS embedded
-        FROM {SCHEMA}.movie_bindings
+        FROM {movie.bindings_table_name}
         GROUP BY source_name
         ORDER BY source_name
         """,
@@ -172,13 +176,13 @@ def _(mo):
 
 
 @app.cell
-def _(SCHEMA, imdb_movie_b, json, engine, pd, pg, uuid):
+def _(imdb_movie_b, json, movie, engine, pd, pg, uuid):
     # Phase 1: mint canonical_id for every imdb row. imdb is the
     # "anchor" — in production you'd pick the most trusted source
     # or use a deterministic key.
     imdb_rows = pd.read_sql_query(
         f"SELECT source_identifier, title "
-        f"FROM {SCHEMA}.movie_bindings "
+        f"FROM {movie.bindings_table_name} "
         f"WHERE source_name = 'imdb' AND canonical_id IS NULL",
         engine,
     )
@@ -199,9 +203,10 @@ def _(SCHEMA, imdb_movie_b, json, engine, pd, pg, uuid):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(movie, engine, pd, pg):
     # Phase 2 (read): for each tmdb row, find the nearest imdb row.
     # CROSS JOIN LATERAL drives the per-row k-NN.
+    bindings = movie.bindings_table_name
     candidates = pd.read_sql_query(
         f"""
         SELECT
@@ -211,10 +216,10 @@ def _(SCHEMA, engine, pd, pg):
             i.title              AS imdb_title,
             i.canonical_id       AS imdb_canonical,
             (t.title_embedding <=> i.title_embedding) AS distance
-        FROM {SCHEMA}.movie_bindings t
+        FROM {bindings} t
         CROSS JOIN LATERAL (
             SELECT source_identifier, title, canonical_id, title_embedding
-            FROM {SCHEMA}.movie_bindings
+            FROM {bindings}
             WHERE source_name = 'imdb' AND canonical_id IS NOT NULL
             ORDER BY title_embedding <=> t.title_embedding
             LIMIT 1
@@ -288,14 +293,14 @@ def _(SCHEMA, movie, engine, pd, pg):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(movie, engine, pd, pg):
     # Per-canonical breakdown — how many sources contributed to each.
     pd.read_sql_query(
         f"""
         SELECT canonical_id,
                jsonb_object_agg(source_name, source_identifier) AS sources,
                COUNT(*) AS source_count
-        FROM {SCHEMA}.movie_bindings
+        FROM {movie.bindings_table_name}
         WHERE canonical_id IS NOT NULL AND valid_to IS NULL
         GROUP BY canonical_id
         ORDER BY source_count DESC, canonical_id

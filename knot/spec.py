@@ -378,6 +378,64 @@ class OntologyClass:
         return self._query(Layer.BINDINGS).where(Raw(f"source_name = '{src}'"))
 
     # ------------------------------------------------------------------
+    # Name accessors — qualified table / view names hosts use when
+    # writing raw SQL (e.g. k-NN candidate generation in the ER
+    # notebook). One place to change the suffix convention.
+    # ------------------------------------------------------------------
+
+    def _require_spec(self) -> Spec:
+        if self._spec is None:
+            raise RuntimeError(
+                f"OntologyClass {self.name!r} is not attached to a Spec "
+                f"(create via spec.add_class(...))"
+            )
+        return self._spec
+
+    @property
+    def canonical_table_name(self) -> str:
+        """``"<schema>.<class>"`` — fully qualified name of the
+        canonical table. Reads ``schema`` from the owning spec."""
+        spec = self._require_spec()
+        return f"{spec.schema}.{self.name.lower()}"
+
+    @property
+    def bindings_table_name(self) -> str:
+        """``"<schema>.<class>_bindings"`` — fully qualified name of
+        the SCD2 bindings table."""
+        spec = self._require_spec()
+        return f"{spec.schema}.{self.name.lower()}_bindings"
+
+    @property
+    def resolved_view_name(self) -> str:
+        """``"<schema>.<class>_resolved"`` — fully qualified name of
+        the resolver's argmax view."""
+        spec = self._require_spec()
+        return f"{spec.schema}.{self.name.lower()}_resolved"
+
+    @property
+    def all_sources_view_name(self) -> str:
+        """``"<schema>.<class>_all_sources"`` — fully qualified name
+        of the per-source jsonb provenance view."""
+        spec = self._require_spec()
+        return f"{spec.schema}.{self.name.lower()}_all_sources"
+
+    @property
+    def bindings(self) -> list[SourceBinding]:
+        """All ``SourceBinding`` rows on the spec that bind THIS
+        class. Saves callers from filtering ``spec.source_bindings``
+        by hand."""
+        spec = self._require_spec()
+        return [b for b in spec.source_bindings if b.class_ is self]
+
+    def binding_for(self, source: Source) -> SourceBinding | None:
+        """The (at most one) ``SourceBinding`` linking this class to
+        ``source``. Returns ``None`` if no binding exists."""
+        for b in self.bindings:
+            if b.source is source:
+                return b
+        return None
+
+    # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.
     # Spec is the registrar (add_class, add_source); per-entity facts live
     # on the entity they describe.
@@ -567,6 +625,17 @@ class Source:
 
     def __post_init__(self) -> None:
         _check_name("Source", self.name)
+
+    @property
+    def bindings(self) -> list[SourceBinding]:
+        """All ``SourceBinding`` rows on the spec owned by THIS source.
+        Saves callers from filtering ``spec.source_bindings``."""
+        if self._spec is None:
+            raise RuntimeError(
+                f"Source {self.name!r} is not attached to a Spec "
+                f"(create via spec.add_source(...))"
+            )
+        return [b for b in self._spec.source_bindings if b.source is self]
 
     def bind(
         self,
@@ -849,6 +918,12 @@ class SourceBinding:
                 f"is not attached to a Spec"
             )
         return self.source._spec
+
+    @property
+    def bindings_table_name(self) -> str:
+        """``"<schema>.<class>_bindings"`` — the table this binding
+        writes to. Same as ``self.class_.bindings_table_name``."""
+        return self.class_.bindings_table_name
 
 
 # ---------------------------------------------------------------------------

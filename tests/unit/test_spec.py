@@ -122,6 +122,72 @@ def test_duplicate_binding_pair_rejected(movie_spec):
 
 
 # ---------------------------------------------------------------------------
+# Per-entity accessors — qualified table/view names + binding lookups
+# ---------------------------------------------------------------------------
+
+
+def test_class_qualified_table_and_view_names(movie_spec):
+    movie = movie_spec.classes["Movie"]
+    assert movie.canonical_table_name == "knot_data.movie"
+    assert movie.bindings_table_name == "knot_data.movie_bindings"
+    assert movie.resolved_view_name == "knot_data.movie_resolved"
+    assert movie.all_sources_view_name == "knot_data.movie_all_sources"
+
+
+def test_class_names_track_spec_schema():
+    spec = Spec(identifier_slot_name="canonical_id", schema="custom_schema")
+    movie = spec.add_class("Movie")
+    assert movie.canonical_table_name == "custom_schema.movie"
+    assert movie.bindings_table_name == "custom_schema.movie_bindings"
+
+
+def test_class_bindings_property(movie_spec):
+    movie = movie_spec.classes["Movie"]
+    bindings = movie.bindings
+    # movie_spec has one source (imdb) bound to Movie.
+    assert len(bindings) == 1
+    assert bindings[0].class_ is movie
+
+
+def test_class_binding_for_source(movie_spec):
+    movie = movie_spec.classes["Movie"]
+    imdb = movie_spec.sources["imdb"]
+    binding = movie.binding_for(imdb)
+    assert binding is not None
+    assert binding.source is imdb
+    assert binding.class_ is movie
+
+
+def test_class_binding_for_unbound_source_returns_none(movie_spec):
+    movie = movie_spec.classes["Movie"]
+    tmdb = movie_spec.add_source("tmdb")  # not bound to Movie yet
+    assert movie.binding_for(tmdb) is None
+
+
+def test_source_bindings_property(movie_spec):
+    imdb = movie_spec.sources["imdb"]
+    bindings = imdb.bindings
+    # movie_spec's imdb is bound to Movie + Credit (per the fixture).
+    assert all(b.source is imdb for b in bindings)
+    assert len(bindings) >= 1
+
+
+def test_binding_table_name_matches_class(movie_spec):
+    movie = movie_spec.classes["Movie"]
+    imdb = movie_spec.sources["imdb"]
+    binding = movie.binding_for(imdb)
+    assert binding.bindings_table_name == movie.bindings_table_name
+
+
+def test_accessors_raise_when_class_not_attached_to_spec():
+    from knot import OntologyClass
+
+    cls = OntologyClass(name="Loose")  # bypasses spec.add_class
+    with pytest.raises(RuntimeError, match="not attached to a Spec"):
+        _ = cls.canonical_table_name
+
+
+# ---------------------------------------------------------------------------
 # Inheritance + lookup
 # ---------------------------------------------------------------------------
 
