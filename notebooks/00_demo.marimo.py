@@ -22,55 +22,38 @@ def _():
     return (mo,)
 
 
-# ---------------------------------------------------------------------------
-# 1. title
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        # knot
+    mo.md(r"""
+    # knot
 
-        a reflective ontology compiler
+    a reflective ontology compiler
 
-        *typed Python spec → postgres DDL · resolved views · SCD2 writes · query SQL*
-        """
-    )
+    *typed Python spec → postgres DDL · resolved views · SCD2 writes · query SQL*
+    """)
     return
 
 
-# ---------------------------------------------------------------------------
-# 2. the pitch
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## the contract
+    mo.md(r"""
+    ## the contract
 
-        - **knot is a compiler.** Every method returns a SQL string.
-        - **Pure Python library.** No HTTP, no connection pool, no scheduler.
-        - **Postgres-only today.** Other dialects = sibling dispatch tables.
-        - **No migration runtime.** `Spec.ddl()` emits the target;
-          you pipe it through Atlas / sqldef / dbmate.
-        - **The host owns connections, transactions, ER policy.**
-        """
-    )
+    - **knot is a compiler.** Every method returns a SQL string.
+    - **Pure Python library.** No HTTP, no connection pool, no scheduler.
+    - **Postgres-only today.** Other dialects = sibling dispatch tables.
+    - **No migration runtime.** `Spec.ddl()` emits the target;
+      you pipe it through Atlas / sqldef / dbmate.
+    - **The host owns connections, transactions, ER policy.**
+    """)
     return
 
 
-# ---------------------------------------------------------------------------
-# 3. just define some classes — render the actual spec files as code
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## just define some classes")
+    mo.md(r"""
+    ## just define some classes
+    """)
     return
 
 
@@ -78,36 +61,33 @@ def _(mo):
 def _(mo):
     from pathlib import Path
 
-    src = Path("media_spec/person.py").read_text()
-    mo.md(f"`media_spec/person.py`\n\n```python\n{src}\n```")
+    _src = Path("media_spec/person.py").read_text()
+    mo.md(f"`media_spec/person.py`\n\n```python\n{_src}\n```")
     return (Path,)
 
 
 @app.cell(hide_code=True)
 def _(Path, mo):
-    src = Path("media_spec/movies.py").read_text()
-    mo.md(f"`media_spec/movies.py`\n\n```python\n{src}\n```")
+    _src = Path("media_spec/movies.py").read_text()
+    mo.md(f"`media_spec/movies.py`\n\n```python\n{_src}\n```")
     return
 
 
 @app.cell(hide_code=True)
 def _(Path, mo):
-    src = Path("media_spec/base.py").read_text()
+    _src = Path("media_spec/base.py").read_text()
     mo.md(
         f"`media_spec/base.py` — the package root creates `spec` once "
-        f"and composes the domain parts:\n\n```python\n{src}\n```"
+        f"and composes the domain parts:\n\n```python\n{_src}\n```"
     )
     return
 
 
-# ---------------------------------------------------------------------------
-# 4. what you get — the spec object
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## what you get")
+    mo.md(r"""
+    ## what you get
+    """)
     return
 
 
@@ -120,21 +100,21 @@ def _():
 
 @app.cell(hide_code=True)
 def _(mo, spec):
-    mo.md(
-        f"""
-        - **classes:** {", ".join(spec.classes)}
-        - **sources:** {", ".join(spec.sources)}
-        - **bindings:** {len(spec.source_bindings)}
-        - **constraints:** {len(spec.constraints)}
-        - **schema:** `{spec.schema}`
-        """
-    )
+    mo.md(f"""
+    - **classes:** {", ".join(spec.classes)}
+    - **sources:** {", ".join(spec.sources)}
+    - **bindings:** {len(spec.source_bindings)}
+    - **constraints:** {len(spec.constraints)}
+    - **schema:** `{spec.schema}`
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"### class graph")
+    mo.md(r"""
+    ### class graph
+    """)
     return
 
 
@@ -146,14 +126,11 @@ def _(mo, spec):
     return
 
 
-# ---------------------------------------------------------------------------
-# 5. the DDL — render spec.ddl() as SQL
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## ask for the SQL")
+    mo.md(r"""
+    ## ask for the SQL
+    """)
     return
 
 
@@ -168,14 +145,11 @@ def _(mo, spec):
     return (ddl,)
 
 
-# ---------------------------------------------------------------------------
-# 6. apply to a live DB
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## apply to a live DB")
+    mo.md(r"""
+    ## apply to a live DB
+    """)
     return
 
 
@@ -196,7 +170,9 @@ def _(ddl, pg):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"### what landed")
+    mo.md(r"""
+    ### what landed
+    """)
     return
 
 
@@ -218,22 +194,15 @@ def _(SCHEMA, engine):
     return (pd,)
 
 
-# ---------------------------------------------------------------------------
-# 7. anatomy of a bindings table — SCD2 + raw_payload
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## a bindings table
+    mo.md(r"""
+    ## a bindings table
 
-        SCD2 + raw_payload. Every source's claim is preserved with
-        validity bounds; unmodeled extras land in `raw_payload`
-        verbatim.
-        """
-    )
+    SCD2 + raw_payload. Every source's claim is preserved with
+    validity bounds; unmodeled extras land in `raw_payload`
+    verbatim.
+    """)
     return
 
 
@@ -252,14 +221,11 @@ def _(SCHEMA, engine, pd):
     return
 
 
-# ---------------------------------------------------------------------------
-# 8. load some real data
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## load some real data")
+    mo.md(r"""
+    ## load some real data
+    """)
     return
 
 
@@ -270,14 +236,11 @@ def _(pd):
     return (rows_df,)
 
 
-# ---------------------------------------------------------------------------
-# 9. ingest via binding.write_sql()
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## ask the binding for write SQL")
+    mo.md(r"""
+    ## ask the binding for write SQL
+    """)
     return
 
 
@@ -300,15 +263,17 @@ def _(close_out, insert, pg, rows_df):
     import json
 
     payload = rows_df.to_json(orient="records")
-    with pg.cursor() as cur:
-        cur.execute(close_out, {"rows": payload})
-        cur.execute(insert, {"rows": payload})
+    with pg.cursor() as _cur:
+        _cur.execute(close_out, {"rows": payload})
+        _cur.execute(insert, {"rows": payload})
     return (json,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"### what landed (queried via knot's `from_source`)")
+    mo.md(r"""
+    ### what landed (queried via knot's `from_source`)
+    """)
     return
 
 
@@ -316,30 +281,23 @@ def _(mo):
 def _(engine, pd):
     from media_spec import imdb, movie
 
-    q = (
+    _q = (
         movie.from_source(imdb)
         .order_by(movie.col.year, "desc")
         .limit(10)
         .select(movie.col.title, movie.col.year)
     )
-    pd.read_sql_query(q.sql(), engine)
-    return imdb, movie
-
-
-# ---------------------------------------------------------------------------
-# 10. grow the spec — the migration moment
-# ---------------------------------------------------------------------------
+    pd.read_sql_query(_q.sql(), engine)
+    return (movie,)
 
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## grow the spec
+    mo.md(r"""
+    ## grow the spec
 
-        Add a file. Compose it in. The spec object grows.
-        """
-    )
+    Add a file. Compose it in. The spec object grows.
+    """)
     return
 
 
@@ -371,7 +329,9 @@ def _(mo, spec):
 
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"### class graph (full)")
+    mo.md(r"""
+    ### class graph (full)
+    """)
     return
 
 
@@ -383,30 +343,23 @@ def _(mo, spec):
     return
 
 
-# ---------------------------------------------------------------------------
-# 11. migrate — pipe spec.ddl() through atlas
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## migrate
+    mo.md(r"""
+    ## migrate
 
-        ```bash
-        atlas schema diff \
-          --from postgres://…/knot \
-          --to file://target.sql \
-          --dev-url postgres://…/atlas_dev \
-          -s knot_demo
-        ```
+    ```bash
+    atlas schema diff \
+      --from postgres://…/knot \
+      --to file://target.sql \
+      --dev-url postgres://…/atlas_dev \
+      -s knot_demo
+    ```
 
-        knot emits the target; Atlas reconciles. knot's posture is
-        the same as "we don't open connections" — the schema-diff
-        is someone else's job.
-        """
-    )
+    knot emits the target; Atlas reconciles. knot's posture is
+    the same as "we don't open connections" — the schema-diff
+    is someone else's job.
+    """)
     return
 
 
@@ -458,43 +411,33 @@ def _(pg, spec):
     return
 
 
-# ---------------------------------------------------------------------------
-# 12. read substrate — query API → compiled SQL
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(r"## read substrate")
+    mo.md(r"""
+    ## read substrate
+    """)
     return
 
 
 @app.cell(hide_code=True)
 def _(mo, movie):
-    q = movie.resolved.order_by(movie.col.year, "desc").limit(5)
+    _q = movie.resolved.order_by(movie.col.year, "desc").limit(5)
     mo.md(
         f"```python\nmovie.resolved.order_by(movie.col.year, 'desc').limit(5)\n```\n\n"
-        f"compiles to:\n\n```sql\n{q.sql()}\n```"
+        f"compiles to:\n\n```sql\n{_q.sql()}\n```"
     )
     return
 
 
-# ---------------------------------------------------------------------------
-# 13. embeddings — populate the VECTOR slot
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## embeddings
+    mo.md(r"""
+    ## embeddings
 
-        A worker fills `title_embedding` for every unembedded row.
-        knot owns the schema (`vector(384)` + HNSW); the encoder
-        choice is host policy.
-        """
-    )
+    A worker fills `title_embedding` for every unembedded row.
+    knot owns the schema (`vector(384)` + HNSW); the encoder
+    choice is host policy.
+    """)
     return
 
 
@@ -510,40 +453,35 @@ def _(engine, movie, pd, pg):
         engine,
     )
     vecs = model.encode(rows["title"].tolist(), normalize_embeddings=True)
-    with pg.cursor() as cur:
-        for (sn, si, vf, _), v in zip(rows.itertuples(index=False), vecs, strict=False):
-            cur.execute(
+    with pg.cursor() as _cur:
+        for (_sn, _si, _vf, __), _v in zip(
+            rows.itertuples(index=False), vecs, strict=False
+        ):
+            _cur.execute(
                 f"UPDATE {movie.bindings_table_name} SET title_embedding = "
                 f"%(v)s::vector(384) WHERE source_name = %(sn)s "
                 f"AND source_identifier = %(si)s AND valid_from = %(vf)s",
-                {"v": str(v.tolist()), "sn": sn, "si": si, "vf": vf},
+                {"v": str(_v.tolist()), "sn": _sn, "si": _si, "vf": _vf},
             )
     print(f"embedded {len(rows)} imdb titles")
     return
 
 
-# ---------------------------------------------------------------------------
-# 14. ER — k-NN + assign_canonical
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## entity resolution
+    mo.md(r"""
+    ## entity resolution
 
-        For a real ER stage you'd ingest a second source and k-NN
-        cross-source via the HNSW index. For this slide deck we
-        just mint canonicals for the imdb rows so the resolved
-        view has something to show.
-        """
-    )
+    For a real ER stage you'd ingest a second source and k-NN
+    cross-source via the HNSW index. For this slide deck we
+    just mint canonicals for the imdb rows so the resolved
+    view has something to show.
+    """)
     return
 
 
 @app.cell
-def _(imdb_movie_b, json, pd, pg, engine, movie):
+def _(engine, imdb_movie_b, json, movie, pd, pg):
     import uuid
 
     imdb_rows = pd.read_sql_query(
@@ -552,40 +490,33 @@ def _(imdb_movie_b, json, pd, pg, engine, movie):
         engine,
     )
     assign = imdb_movie_b.assign_canonical_sql()
-    with pg.cursor() as cur:
-        for si in imdb_rows["source_identifier"]:
-            cur.execute(
+    with pg.cursor() as _cur:
+        for _si in imdb_rows["source_identifier"]:
+            _cur.execute(
                 assign,
                 {
                     "canonical_id": f"m_{uuid.uuid4().hex[:10]}",
-                    "source_identifier": si,
+                    "source_identifier": _si,
                     "er_metadata": json.dumps({"method": "mint"}),
                 },
             )
     # Upsert a runtime weight so the resolver has something > 0 for imdb.
-    with pg.cursor() as cur:
+    with pg.cursor() as _cur:
         upsert = imdb_movie_b.upsert_weight_sql()
         for slot in ("title", "year", "director", "runtime_minutes"):
-            cur.execute(upsert, {"slot_name": slot, "weight": 0.85})
+            _cur.execute(upsert, {"slot_name": slot, "weight": 0.85})
     print(f"minted {len(imdb_rows)} canonical_ids + set imdb weights")
     return
 
 
-# ---------------------------------------------------------------------------
-# 15. the resolved view fills
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## the resolved view fills
+    mo.md(r"""
+    ## the resolved view fills
 
-        Same `movie.resolved` query as before — now it returns
-        rows.
-        """
-    )
+    Same `movie.resolved` query as before — now it returns
+    rows.
+    """)
     return
 
 
@@ -598,27 +529,20 @@ def _(engine, movie, pd):
     return
 
 
-# ---------------------------------------------------------------------------
-# 16. recap
-# ---------------------------------------------------------------------------
-
-
 @app.cell(hide_code=True)
 def _(mo):
-    mo.md(
-        r"""
-        ## that's the loop
+    mo.md(r"""
+    ## that's the loop
 
-        - **typed Python spec** (`Spec`, `OntologyClass`, `Source`, `SourceBinding`)
-        - → **canonical SQL** (`spec.ddl()`)
-        - → **schema deployed** (host or Atlas)
-        - → **SCD2 ingest** (`binding.write_sql()`)
-        - → **ER + weights at runtime** (`binding.assign_canonical_sql()`, `binding.upsert_weight_sql()`)
-        - → **read substrate** (`cls.resolved`, `cls.from_source(s)`, `cls.all_sources`)
+    - **typed Python spec** (`Spec`, `OntologyClass`, `Source`, `SourceBinding`)
+    - → **canonical SQL** (`spec.ddl()`)
+    - → **schema deployed** (host or Atlas)
+    - → **SCD2 ingest** (`binding.write_sql()`)
+    - → **ER + weights at runtime** (`binding.assign_canonical_sql()`, `binding.upsert_weight_sql()`)
+    - → **read substrate** (`cls.resolved`, `cls.from_source(s)`, `cls.all_sources`)
 
-        knot is a compiler. The host composes.
-        """
-    )
+    knot is a compiler. The host composes.
+    """)
     return
 
 
