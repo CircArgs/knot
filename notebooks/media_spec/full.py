@@ -29,4 +29,5 @@ spec.include(_podcasts.part)
 spec.include(_tv.part)
 spec.include(_webscraped.part)
 
+# optional explicit validate. # .ddl validates internally before returning
 spec.validate()
