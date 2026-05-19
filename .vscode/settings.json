@@ -1,15 +1,13 @@
 {
     // Open *.marimo.py files with the marimo VS Code extension's
-    // custom editor (renders the notebook UI). Plain *.py files
-    // continue to open in the default text editor.
-    //
-    // The editor ID below targets the official marimo extension
-    // (marketplace: `marimo-team.vscode-marimo`). If it isn't
-    // installed the file falls through to the default text editor —
-    // so this association is a no-op without the extension and
-    // doesn't break plain-text browsing.
+    // notebook editor. The extension (`marimo-team.vscode-marimo`)
+    // contributes a notebook type with `priority: "option"`, meaning
+    // it normally requires the user to pick "Open with > marimo
+    // Notebook" — this association overrides that and forces marimo
+    // as the default for the *.marimo.py pattern. Plain *.py files
+    // continue to open in the regular text editor.
     "workbench.editorAssociations": {
-        "*.marimo.py": "marimo-team.vscode-marimo.notebook-editor"
+        "*.marimo.py": "marimo-notebook"
     },
     // Keep type checking + linting working on the notebook sources.
     // marimo files are still valid Python modules.
