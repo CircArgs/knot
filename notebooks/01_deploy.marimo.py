@@ -118,5 +118,46 @@ def _(SCHEMA, engine, pd, pg):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Visualize the v1 spec
+
+    Classes + FK relationships. Rectangles = concrete classes (have
+    a table); hexagons = virtual subclasses (a SQL view over the
+    parent table). Edges are FK slots, labelled with the slot name.
+    """)
+    return
+
+
+@app.cell
+def _(mo, spec):
+    from _viz import class_graph
+
+    mo.mermaid(class_graph(spec))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## Bindings view
+
+    Which sources publish which classes. Stadiums = sources;
+    dotted edges = "this source publishes this class." For v1
+    there's only `imdb` bound to `Movie`; in 03_migrate this view
+    fills out across 14 sources × 11 concrete classes.
+    """)
+    return
+
+
+@app.cell
+def _(mo, spec):
+    from _viz import binding_graph
+
+    mo.mermaid(binding_graph(spec))
+    return
+
+
 if __name__ == "__main__":
     app.run()

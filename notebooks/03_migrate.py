@@ -89,6 +89,49 @@ def _(spec):
     return
 
 
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Visualize the spec shape
+
+    Class graph: 17 concrete classes + 1 virtual (DirectedMovie),
+    FK edges by slot name. Persons sit at the centre — every
+    domain's `Credit` class has an FK to it, since "a person who
+    directed a movie" and "a person who hosted a podcast" are the
+    same identity in the canonical knowledge graph.
+    """)
+    return
+
+
+@app.cell
+def _(mo, spec):
+    from _viz import class_graph
+
+    mo.mermaid(class_graph(spec))
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ### Source/binding graph
+
+    14 sources fanning out across the classes. tmdb + imdb show up
+    in both movies and tv (they're cross-domain catalog sources);
+    Person is the most-bound class (every domain's source publishes
+    Person rows).
+    """)
+    return
+
+
+@app.cell
+def _(mo, spec):
+    from _viz import binding_graph
+
+    mo.mermaid(binding_graph(spec))
+    return
+
+
 @app.cell
 def _(connect, reset_atlas_dev):
     # Live postgres + Atlas dev DB. Atlas needs a clean throwaway DB
