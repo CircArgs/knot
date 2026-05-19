@@ -10,10 +10,12 @@ VENV="${VENV:-../.venv}"
 PY="$VENV/bin/python"
 MARIMO="$VENV/bin/marimo"
 
-# Every .py except the shared spec module + this script's helpers.
+# Every .py except shared helpers (``_*.py`` private modules) and
+# the spec package (``movies_spec/`` is a directory, not a top-level
+# .py file, so the glob skips it automatically).
 for src in *.py; do
     case "$src" in
-        movies_spec.py) continue ;;
+        _*.py) continue ;;
     esac
     out="${src%.py}.ipynb"
     echo "→ $src → $out"

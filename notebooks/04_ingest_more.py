@@ -41,10 +41,9 @@ def _(mo):
 @app.cell
 def _():
     import pandas as pd
-    import psycopg
-    from sqlalchemy import create_engine
+    from _demo import SCHEMA, connect
 
-    return create_engine, pd, psycopg
+    return SCHEMA, connect, pd
 
 
 @app.cell
@@ -58,19 +57,9 @@ def _():
 
 
 @app.cell
-def _(create_engine, psycopg):
-    pg = psycopg.connect(
-        host="localhost",
-        port=5433,
-        user="knot",
-        password="knot",
-        dbname="knot",
-        autocommit=True,
-    )
-    engine = create_engine("postgresql+psycopg://knot:knot@localhost:5433/knot")
-    SCHEMA = "knot_demo"
-    SCHEMA
-    return SCHEMA, engine, pg
+def _(connect):
+    pg, engine = connect()
+    return engine, pg
 
 
 @app.cell(hide_code=True)

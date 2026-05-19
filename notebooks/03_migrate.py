@@ -49,10 +49,9 @@ def _():
     from pathlib import Path
 
     import pandas as pd
-    import psycopg
-    from sqlalchemy import create_engine
+    from _demo import SCHEMA, connect, reset_atlas_dev
 
-    return Path, create_engine, pd, psycopg, subprocess
+    return Path, SCHEMA, connect, pd, reset_atlas_dev, subprocess
 
 
 @app.cell
@@ -91,32 +90,12 @@ def _(spec):
 
 
 @app.cell
-def _(create_engine, psycopg):
-    # Live postgres + atlas dev DB. Atlas needs a clean throwaway
-    # DB to render the desired schema into; we drop+recreate it each
-    # run so it starts empty.
-    pg = psycopg.connect(
-        host="localhost",
-        port=5433,
-        user="knot",
-        password="knot",
-        dbname="knot",
-        autocommit=True,
-    )
-    engine = create_engine("postgresql+psycopg://knot:knot@localhost:5433/knot")
-    with psycopg.connect(
-        host="localhost",
-        port=5433,
-        user="knot",
-        password="knot",
-        dbname="postgres",
-        autocommit=True,
-    ) as admin:
-        admin.execute("DROP DATABASE IF EXISTS atlas_dev")
-        admin.execute("CREATE DATABASE atlas_dev")
-    SCHEMA = "knot_demo"
-    SCHEMA
-    return SCHEMA, engine, pg
+def _(connect, reset_atlas_dev):
+    # Live postgres + Atlas dev DB. Atlas needs a clean throwaway DB
+    # to render the desired schema into; reset it each run.
+    pg, engine = connect()
+    reset_atlas_dev()
+    return engine, pg
 
 
 @app.cell(hide_code=True)

@@ -49,10 +49,9 @@ def _(mo):
 @app.cell
 def _():
     import pandas as pd
-    import psycopg
-    from sqlalchemy import create_engine
+    from _demo import SCHEMA, connect
 
-    return create_engine, pd, psycopg
+    return SCHEMA, connect, pd
 
 
 @app.cell
@@ -70,23 +69,13 @@ def _():
 
 
 @app.cell
-def _(create_engine, psycopg):
-    # Fixed schema name `knot_demo` shared by every notebook in the
-    # arc — they chain. 01 drops + recreates so re-runs are clean;
-    # 02..05 assume the schema exists from the previous step.
-    pg = psycopg.connect(
-        host="localhost",
-        port=5433,
-        user="knot",
-        password="knot",
-        dbname="knot",
-        autocommit=True,
-    )
-    engine = create_engine("postgresql+psycopg://knot:knot@localhost:5433/knot")
-    SCHEMA = "knot_demo"
+def _(SCHEMA, connect):
+    # ``_demo.connect()`` returns (psycopg, sqlalchemy engine). SCHEMA
+    # is the fixed throwaway schema name every notebook uses; they
+    # chain. 01 drops + recreates so re-runs are clean.
+    pg, engine = connect()
     pg.execute(f"DROP SCHEMA IF EXISTS {SCHEMA} CASCADE")
-    SCHEMA
-    return SCHEMA, engine, pg
+    return engine, pg
 
 
 @app.cell

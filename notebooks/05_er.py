@@ -44,11 +44,10 @@ def _():
     import uuid
 
     import pandas as pd
-    import psycopg
+    from _demo import SCHEMA, connect
     from sentence_transformers import SentenceTransformer
-    from sqlalchemy import create_engine
 
-    return SentenceTransformer, create_engine, json, pd, psycopg, uuid
+    return SCHEMA, SentenceTransformer, connect, json, pd, uuid
 
 
 @app.cell
@@ -64,19 +63,9 @@ def _():
 
 
 @app.cell
-def _(create_engine, psycopg):
-    pg = psycopg.connect(
-        host="localhost",
-        port=5433,
-        user="knot",
-        password="knot",
-        dbname="knot",
-        autocommit=True,
-    )
-    engine = create_engine("postgresql+psycopg://knot:knot@localhost:5433/knot")
-    SCHEMA = "knot_demo"
-    SCHEMA
-    return SCHEMA, engine, pg
+def _(connect):
+    pg, engine = connect()
+    return engine, pg
 
 
 @app.cell
