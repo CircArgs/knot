@@ -50,8 +50,8 @@ def _():
 def _():
     # Compose .full — registers every domain's classes + sources +
     # bindings on the shared spec object.
-    import movies_spec.full  # noqa: F401
-    from movies_spec import spec
+    import media_spec.full  # noqa: F401
+    from media_spec import spec
 
     return (spec,)
 

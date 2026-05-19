@@ -18,9 +18,9 @@ def _(mo):
 
     The team wants knot to cover more than movies: video games,
     podcasts, TV, and the messy webscraped mentions feed. Each
-    new domain is a file in `movies_spec/` — `games.py`,
+    new domain is a file in `media_spec/` — `games.py`,
     `podcasts.py`, `tv.py`, `webscraped.py`. Activating them is
-    one import: `import movies_spec.full`.
+    one import: `import media_spec.full`.
 
     That import IS the migration. It mutates the same shared
     `spec` object the v1 notebooks (`01_deploy`, `02_ingest`) ran
@@ -58,7 +58,7 @@ def _():
 def _():
     # The spec as it stood after 01_deploy: base entities only, one
     # source, no embeddings.
-    from movies_spec import spec
+    from media_spec import spec
 
     print("BEFORE — classes:", list(spec.classes))
     print("BEFORE — sources:", list(spec.sources))
@@ -69,7 +69,7 @@ def _():
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## Compose in `movies_spec.full`
+    ## Compose in `media_spec.full`
 
     This single line is the entire spec change. The module mutates
     the shared `spec` object — adds the `title_embedding VECTOR(384)`
@@ -81,7 +81,7 @@ def _(mo):
 
 @app.cell
 def _(spec):
-    import movies_spec.full  # noqa: F401  — imported for side effect
+    import media_spec.full  # noqa: F401  — imported for side effect
 
     print("AFTER — classes:", list(spec.classes))
     print("AFTER — sources:", list(spec.sources))

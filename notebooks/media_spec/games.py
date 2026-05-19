@@ -5,7 +5,7 @@ person.py via cross-domain import.
 """
 
 from knot import Spec, types
-from movies_spec.person import person
+from media_spec.person import person
 
 part = Spec(identifier_slot_name="canonical_id")
 

@@ -40,7 +40,7 @@ def _():
 def _():
     # Same shared spec module as 01_deploy. We only need the imdb
     # binding for ingest — the spec import surface stays minimal.
-    from movies_spec import imdb, imdb_movie_b, movie
+    from media_spec import imdb, imdb_movie_b, movie
 
     return imdb, imdb_movie_b, movie
 

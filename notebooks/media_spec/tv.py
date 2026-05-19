@@ -16,8 +16,8 @@ Requires: ``movies.part`` already included in the parent spec.
 """
 
 from knot import Spec, types
-from movies_spec.movies import imdb, tmdb
-from movies_spec.person import person
+from media_spec.movies import imdb, tmdb
+from media_spec.person import person
 
 part = Spec(identifier_slot_name="canonical_id")
 

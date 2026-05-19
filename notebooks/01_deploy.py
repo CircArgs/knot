@@ -25,7 +25,7 @@ def _(mo):
     4. 04_ingest_more — ingest the 55 bindings the migration enabled
     5. 05_er — compute Movie embeddings, run ER, watch the resolver fill
 
-    The spec is the package `movies_spec/`, structured like a
+    The spec is the package `media_spec/`, structured like a
     FastAPI app:
 
     | file | what it owns |
@@ -39,9 +39,9 @@ def _(mo):
     | `webscraped.py` | Mention class + 4 low-trust scraper sources |
     | `full.py`       | composes the migration-time domains onto v1 |
 
-    Loading `movies_spec` gives you the v1: `base + person + movies`.
+    Loading `spec` gives you the v1: `base + person + movies`.
     The other domains stay opt-in until 03_migrate imports
-    `movies_spec.full`.
+    `media_spec.full`.
     """)
     return
 
@@ -56,10 +56,10 @@ def _():
 
 @app.cell
 def _():
-    # ``from movies_spec import spec`` → spec object with the BASE
-    # entities only. movies_spec.full has not been imported, so the
+    # ``from media_spec import spec`` → spec object with the BASE
+    # entities only. media_spec.full has not been imported, so the
     # spec doesn't know about tmdb or the embedding slot yet.
-    from movies_spec import spec
+    from media_spec import spec
 
     print("classes:", list(spec.classes))
     print("sources:", list(spec.sources))

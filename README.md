@@ -44,7 +44,7 @@ end-to-end:
 
 1. **01_deploy** — deploy the v1 spec (Person + Movie + imdb)
 2. **02_ingest** — ingest imdb movies → bindings (canonical_id NULL)
-3. **03_migrate** — `import movies_spec.full` grows the spec to
+3. **03_migrate** — `import media_spec.full` grows the spec to
    17 classes / 14 sources / 56 bindings (movies + games + podcasts +
    tv + webscraped mentions); Atlas diffs + applies the schema
    change against the live DB
@@ -55,7 +55,7 @@ end-to-end:
 The spec is a package, FastAPI-router style:
 
 ```
-notebooks/movies_spec/
+notebooks/media_spec/
   base.py         # spec = Spec(...)
   person.py       # Person + extensions
   movies.py       # Movie + MovieCredit + 3 sources

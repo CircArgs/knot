@@ -1,7 +1,7 @@
 # isort: skip_file
 """Compose the migration-time domains onto the v1 spec.
 
-Loading ``movies_spec`` gives you the v1 (base + person + movies).
+Loading ``spec`` gives you the v1 (base + person + movies).
 Loading THIS module includes the four additional domains —
 ``games`` / ``podcasts`` / ``tv`` / ``webscraped`` — by calling
 ``spec.include(domain.part)`` on each.
@@ -16,13 +16,13 @@ webscraped.py runs, those handles point at the parent spec.
 ``# isort: skip_file`` keeps the hand-ordered narrative.
 """
 
-import movies_spec  # noqa: F401  — ensures v1 has loaded first
-from movies_spec.base import spec
+import media_spec  # noqa: F401  — ensures v1 has loaded first
+from media_spec.base import spec
 
-from movies_spec import games as _games
-from movies_spec import podcasts as _podcasts
-from movies_spec import tv as _tv
-from movies_spec import webscraped as _webscraped
+from media_spec import games as _games
+from media_spec import podcasts as _podcasts
+from media_spec import tv as _tv
+from media_spec import webscraped as _webscraped
 
 spec.include(_games.part)
 spec.include(_podcasts.part)
