@@ -10,14 +10,13 @@ VENV="${VENV:-../.venv}"
 PY="$VENV/bin/python"
 MARIMO="$VENV/bin/marimo"
 
-# Every .py except shared helpers (``_*.py`` private modules) and
-# the spec package (``movies_spec/`` is a directory, not a top-level
-# .py file, so the glob skips it automatically).
-for src in *.py; do
-    case "$src" in
-        _*.py) continue ;;
-    esac
-    out="${src%.py}.ipynb"
+# marimo notebooks use the ``.marimo.py`` convention so the VS Code
+# extension can claim them via workbench.editorAssociations without
+# stealing every .py in the project. Plain ``.py`` files
+# (``_demo.py``, ``_viz.py``, the ``media_spec/`` package) stay
+# regular Python files.
+for src in *.marimo.py; do
+    out="${src%.marimo.py}.ipynb"
     echo "→ $src → $out"
     # marimo export → ipynb (NO --include-outputs; that would execute
     # the notebook and we want NotebookClient to be the only executor
