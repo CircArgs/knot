@@ -332,6 +332,9 @@ class OntologyClass:
     #                         keyed by source_name with {value, weight}
     #   cls.from_source(s)    one source's claims about this class —
     #                         raw bindings, scoped to source ``s``
+    #   cls.unresolved        bindings still waiting on ER —
+    #                         ``canonical_id IS NULL`` across every
+    #                         source. The ER worker's work-to-do view.
     #
     # All return ``Query`` and chain the same fluent surface
     # (``.where`` / ``.order_by`` / ``.limit`` / ``.offset`` /
@@ -376,6 +379,17 @@ class OntologyClass:
         # appear here. Defense-in-depth escape kept.
         src = source.name.replace("'", "''")
         return self._query(Layer.BINDINGS).where(Raw(f"source_name = '{src}'"))
+
+    @property
+    def unresolved(self) -> Query:
+        """Bindings still waiting on entity resolution: rows in
+        ``<class>_bindings`` with ``canonical_id IS NULL``, across
+        every source. The ER worker's work-to-do view. Chain
+        ``.where(...)`` to scope to a particular source or filter on
+        slot values."""
+        from knot.ast.expr import Raw
+
+        return self._query(Layer.BINDINGS).where(Raw("canonical_id IS NULL"))
 
     # ------------------------------------------------------------------
     # Name accessors — qualified table / view names hosts use when

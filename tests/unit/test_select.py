@@ -348,6 +348,26 @@ def test_from_source_chains_with_where():
     assert "AND" in sql
 
 
+def test_unresolved_targets_bindings_with_null_canonical():
+    spec, movie = _make_movie_spec()
+    q = movie.unresolved
+    assert q.layer is Layer.BINDINGS
+    sql = q.sql()
+    assert "FROM knot_data.movie_bindings" in sql
+    assert "canonical_id IS NULL" in sql
+
+
+def test_unresolved_chains_with_where():
+    spec, movie = _make_movie_spec()
+    imdb = spec.add_source("imdb")
+    imdb.bind(movie)
+    q = movie.unresolved.where(movie.col.year >= 2000)
+    sql = q.sql()
+    assert "canonical_id IS NULL" in sql
+    assert "knot_data.movie_bindings.year >= 2000" in sql
+    assert "AND" in sql
+
+
 def test_abstract_class_blocks_query_entry_points():
     """Virtual/abstract classes can't be queried — they have no relation."""
     from knot.spec import ClassKind
@@ -360,3 +380,5 @@ def test_abstract_class_blocks_query_entry_points():
         _ = movie.all_sources
     with pytest.raises(ValueError, match="only concrete classes"):
         _ = movie.from_source(spec.add_source("imdb"))
+    with pytest.raises(ValueError, match="only concrete classes"):
+        _ = movie.unresolved

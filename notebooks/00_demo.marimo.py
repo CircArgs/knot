@@ -288,7 +288,7 @@ def _(engine, pd):
         .select(movie.col.title, movie.col.year)
     )
     pd.read_sql_query(_q.sql(), engine)
-    return (movie,)
+    return imdb, movie
 
 
 @app.cell(hide_code=True)
@@ -481,14 +481,19 @@ def _(mo):
 
 
 @app.cell
-def _(engine, imdb_movie_b, json, movie, pd, pg):
+def _(engine, imdb, imdb_movie_b, json, movie, pd, pg):
     import uuid
 
-    imdb_rows = pd.read_sql_query(
-        f"SELECT source_identifier FROM {movie.bindings_table_name} "
-        f"WHERE source_name = 'imdb' AND canonical_id IS NULL",
-        engine,
+    from knot.ast.expr import Raw
+
+    # cls.unresolved = the ER worker's work-to-do view —
+    # every binding with canonical_id IS NULL, across all sources.
+    # Chain a .where to scope to imdb specifically.
+    _q = movie.unresolved.where(Raw(f"source_name = '{imdb.name}'")).select(
+        Raw("source_identifier")
     )
+    imdb_rows = pd.read_sql_query(_q.sql(), engine)
+
     assign = imdb_movie_b.assign_canonical_sql()
     with pg.cursor() as _cur:
         for _si in imdb_rows["source_identifier"]:

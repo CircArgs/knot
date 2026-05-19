@@ -7,10 +7,11 @@ lives in ``knot/compile/query_sql.py`` (singledispatch sibling of
 The user surface is fluent immutable: every builder method on
 ``Query`` (``.where()``, ``.order_by()``, ``.limit()``, etc.) returns
 a new ``Query`` — the AST is never mutated. ``OntologyClass`` exposes
-three explicit layer-targeted entry points that *return* a ``Query``:
+four explicit layer-targeted entry points that *return* a ``Query``:
 ``cls.resolved`` (argmax view), ``cls.all_sources`` (per-source jsonb
-provenance), and ``cls.from_source(s)`` (one source's raw bindings).
-There is no default — every read declares its layer.
+provenance), ``cls.from_source(s)`` (one source's raw bindings), and
+``cls.unresolved`` (bindings still waiting on ER, across every
+source). There is no default — every read declares its layer.
 
 The AST carries ``class_name`` as a string (same convention as ``Ref``
 in ``knot.ast.expr``) so the node itself is decoupled from
@@ -67,8 +68,9 @@ class Query:
     fluent: every builder returns a new ``Query`` via ``replace``.
 
     ``_spec`` is a back-reference set by the class-side entry points
-    (``OntologyClass.resolved`` / ``.all_sources`` / ``.from_source``)
-    so ``q.sql(schema=...)`` knows which spec to compile against. It's
+    (``OntologyClass.resolved`` / ``.all_sources`` / ``.from_source`` /
+    ``.unresolved``) so ``q.sql(schema=...)`` knows which spec to
+    compile against. It's
     intentionally private and excluded from repr/compare so the AST
     still behaves like pure data for tests and equality checks.
     """
@@ -117,8 +119,9 @@ class Query:
         if self._spec is None:
             raise RuntimeError(
                 "Query has no spec back-reference — build it via "
-                "cls.resolved / .all_sources / .from_source(...), or use "
-                "knot.compile.query.compile_query(q, spec=spec) directly"
+                "cls.resolved / .all_sources / .from_source(...) / "
+                ".unresolved, or use knot.compile.query.compile_query"
+                "(q, spec=spec) directly"
             )
         from knot.compile.query import compile_query
 
