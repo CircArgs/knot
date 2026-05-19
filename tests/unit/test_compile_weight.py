@@ -1,9 +1,24 @@
-"""knot.compile.weight — source_weight DDL + INSERT-only seed."""
+"""knot.compile.weight — runtime read + upsert SQL emitters.
+
+Weights are runtime-only (no spec-level seed). These tests verify
+the SQL templates the host runs to read + write per-(source, class,
+slot) weight values in the ``source_weight`` table.
+"""
 
 import sqlglot
 
 from knot import Spec, types
-from knot.compile import emit_ddl, emit_weight_seed
+from knot.compile import (
+    emit_ddl,
+    emit_read_weights_sql,
+    emit_source_read_weights_sql,
+    emit_upsert_weight_sql,
+    emit_upsert_weights_sql,
+)
+
+# ---------------------------------------------------------------------------
+# Weight TABLE (still emitted by emit_ddl; only the seed is gone)
+# ---------------------------------------------------------------------------
 
 
 def test_weight_table_emitted_by_default(movie_spec):
@@ -15,7 +30,6 @@ def test_weight_table_emitted_by_default(movie_spec):
     assert "class_name" in weight
     assert "slot_name" in weight
     assert "weight" in weight and "double precision" in weight
-    # Probability range CHECK is gone — weights are opaque floats.
     assert "CHECK" not in weight
     assert "PRIMARY KEY (source_name, class_name, slot_name)" in weight
     sqlglot.parse_one(weight, dialect="postgres")
@@ -40,89 +54,94 @@ def test_weight_table_name_kwarg(movie_spec):
         s for s in stmts if "custom_weight" in s and s.startswith("CREATE TABLE")
     )
     assert "knot_data.custom_weight" in weight
-    # Resolver views should also reference the renamed table.
     view = next(s for s in stmts if "_resolved AS" in s)
     assert "knot_data.custom_weight" in view
 
 
-def test_seed_emits_one_row_per_non_identifier_slot(movie_spec):
-    """movie_spec has one binding (imdb → Movie) and Movie has slots
-    canonical_id (identifier — no row), year, runtime_minutes, genres,
-    name (inherited from Title). The identifier slot is excluded.
-    """
-    seeds = emit_weight_seed(movie_spec)
-    slots = sorted(p[2] for _, p in seeds)
-    assert slots == ["genres", "name", "runtime_minutes", "year"]
-    for sql, params in seeds:
-        assert "INSERT INTO knot_data.source_weight" in sql
-        assert "ON CONFLICT (source_name, class_name, slot_name) DO NOTHING" in sql
-        assert params[0] == "imdb"
-        assert params[1] == "Movie"
+# ---------------------------------------------------------------------------
+# Runtime read SQL
+# ---------------------------------------------------------------------------
 
 
-def test_seed_uses_default_weight_for_unmapped_slots(movie_spec):
-    """Slots without an explicit per-slot weight inherit default_weight=0.85."""
-    seeds = emit_weight_seed(movie_spec)
-    # 'genres' isn't mapped explicitly → default_weight
-    genres = next(p for _, p in seeds if p[2] == "genres")
-    assert genres[3] == 0.85
-
-
-def test_seed_multi_source_one_class():
-    spec = Spec(identifier_slot_name="canonical_id")
-    movie = spec.add_class("Movie")
-    movie.slot("year", types.INTEGER)
-    imdb = spec.add_source("imdb")
-    tmdb = spec.add_source("tmdb")
-    imdb.bind(movie).set_default_weight(0.85)
-    tmdb.bind(movie).set_default_weight(0.7)
-    seeds = emit_weight_seed(spec)
-    rows = sorted([(p[0], p[1], p[2], p[3]) for _, p in seeds])
-    assert rows == [("imdb", "Movie", "year", 0.85), ("tmdb", "Movie", "year", 0.7)]
-
-
-def test_seed_empty_spec_no_seeds():
-    spec = Spec(identifier_slot_name="canonical_id")
-    assert emit_weight_seed(spec) == []
-
-
-def test_seed_sql_parses_postgres(movie_spec):
-    for sql, _ in emit_weight_seed(movie_spec):
-        sqlglot.parse_one(sql, dialect="postgres")
-
-
-def test_seed_schema_kwarg(movie_spec):
-    seeds = emit_weight_seed(movie_spec, schema="alt", weight_table_name="custom")
-    sql = seeds[0][0]
-    assert "INSERT INTO alt.custom" in sql
-
-
-def test_explicit_per_slot_weight_overrides_default():
-    """``binding.set_weight(slot, value)`` overrides ``default_weight``
-    for that one slot at seed time."""
+def _movie_binding():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     movie.slot("title", types.TEXT)
     imdb = spec.add_source("imdb")
-    binding = imdb.bind(movie).set_default_weight(0.5)
-    binding.set_weight("year", 0.95)
-    seeds = emit_weight_seed(spec)
-    year_row = next(p for _, p in seeds if p[2] == "year")
-    title_row = next(p for _, p in seeds if p[2] == "title")
-    assert year_row[3] == 0.95  # explicit
-    assert title_row[3] == 0.5  # default_weight fallback
+    return spec, imdb.bind(movie)
 
 
-def test_weight_can_exceed_one():
-    """No probability constraint — weights are opaque floats. Setting
-    weight=1000 (or negative, or float-min) is fine."""
-    spec = Spec(identifier_slot_name="canonical_id")
+def test_read_weights_sql_selects_for_one_binding():
+    _, binding = _movie_binding()
+    sql = emit_read_weights_sql(binding)
+    assert "SELECT slot_name, weight" in sql
+    assert "FROM knot_data.source_weight" in sql
+    assert "source_name = 'imdb'" in sql
+    assert "class_name = 'Movie'" in sql
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_read_weights_sql_respects_schema_on_spec():
+    spec = Spec(identifier_slot_name="canonical_id", schema="alt")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
-    imdb = spec.add_source("imdb")
-    binding = imdb.bind(movie).set_default_weight(1000.0)
-    binding.set_weight("year", -5.0)
-    seeds = emit_weight_seed(spec)
-    year_row = next(p for _, p in seeds if p[2] == "year")
-    assert year_row[3] == -5.0
+    binding = spec.add_source("imdb").bind(movie)
+    assert "FROM alt.source_weight" in emit_read_weights_sql(binding)
+
+
+def test_source_read_weights_sql_scopes_to_source():
+    _, binding = _movie_binding()
+    sql = emit_source_read_weights_sql(binding.source)
+    assert "SELECT class_name, slot_name, weight" in sql
+    where = sql.split("WHERE")[1]
+    assert "source_name = 'imdb'" in where
+    # Source scope is by source_name only — class is in the SELECT
+    # projection, not in the WHERE predicate.
+    assert "class_name =" not in where
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+# ---------------------------------------------------------------------------
+# Runtime upsert SQL — single + bulk
+# ---------------------------------------------------------------------------
+
+
+def test_upsert_weight_sql_single_slot():
+    _, binding = _movie_binding()
+    sql = emit_upsert_weight_sql(binding)
+    assert "INSERT INTO knot_data.source_weight" in sql
+    assert "'imdb'" in sql and "'Movie'" in sql
+    assert "%(slot_name)s" in sql and "%(weight)s" in sql
+    assert "ON CONFLICT (source_name, class_name, slot_name)" in sql
+    assert "DO UPDATE SET weight = EXCLUDED.weight" in sql
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_upsert_weights_sql_bulk_via_jsonb():
+    _, binding = _movie_binding()
+    sql = emit_upsert_weights_sql(binding)
+    assert "INSERT INTO knot_data.source_weight" in sql
+    assert "jsonb_each(%(weights)s::jsonb)" in sql
+    assert "ON CONFLICT (source_name, class_name, slot_name)" in sql
+    assert "DO UPDATE SET weight = EXCLUDED.weight" in sql
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_binding_facade_methods_match_free_functions():
+    _, binding = _movie_binding()
+    assert binding.read_weights_sql() == emit_read_weights_sql(binding)
+    assert binding.upsert_weight_sql() == emit_upsert_weight_sql(binding)
+    assert binding.upsert_weights_sql() == emit_upsert_weights_sql(binding)
+
+
+def test_weight_emitters_raise_when_binding_unattached():
+    import pytest
+
+    from knot import Source, SourceBinding
+
+    src = Source(name="unattached")
+    cls = _movie_binding()[1].class_
+    binding = SourceBinding(source=src, class_=cls)
+    with pytest.raises(RuntimeError, match="not attached to a Spec"):
+        binding.read_weights_sql()

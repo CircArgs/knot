@@ -21,10 +21,10 @@ mention.slot("subject_person", person)
 mention.slot("text_excerpt", types.TEXT)
 mention.slot("sentiment", types.TEXT)
 
-for _src_name, _w in [
-    ("blog_review_aggregator", 0.45),
-    ("fan_wiki", 0.40),
-    ("letterboxd_user_reviews", 0.35),
-    ("reddit_film_discussion", 0.30),
-]:
-    part.add_source(_src_name).bind(mention).set_default_weight(_w)
+for _src_name in (
+    "blog_review_aggregator",
+    "fan_wiki",
+    "letterboxd_user_reviews",
+    "reddit_film_discussion",
+):
+    part.add_source(_src_name).bind(mention)

@@ -2,7 +2,8 @@
 
 Each test gets a fresh schema. We:
   1. Build a Spec
-  2. Apply Spec.ddl() + emit_weight_seed to the schema
+  2. Apply Spec.ddl() to the schema + upsert runtime weights
+     via binding.upsert_weight_sql()
   3. Exercise the write path (binding.write_sql / binding.close_out_sql)
   4. Query the resolved view + validation SELECTs and assert behavior
 
@@ -16,25 +17,35 @@ tools (sqldef / Atlas / dbmate); see CLAUDE.md §"Schema deployment".
 from __future__ import annotations
 
 from knot import Spec, types
-from knot.compile import (
-    emit_ddl,
-    emit_validation,
-    emit_weight_seed,
-)
+from knot.compile import emit_ddl, emit_validation
 from tests.integration.conftest import exec_many, exec_with_params
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
+# Per-source runtime weight; upserted in _deploy after the schema
+# lands. Same shape as the resolved view's per-source argmax —
+# imdb beats tmdb when both report the same slot. The
+# ``_user_corrections`` synthetic source gets a dominating weight so
+# corrections beat any declared source.
+_SOURCE_WEIGHTS = {"imdb": 0.85, "tmdb": 0.7, "_user_corrections": 1e6}
+
 
 def _deploy(pg, spec: Spec, schema: str) -> None:
-    """Apply emit_ddl + emit_weight_seed to ``schema`` so the DB
-    matches ``spec``."""
+    """Apply emit_ddl to ``schema``, then upsert runtime weights for
+    every (source, slot) pair on a binding into ``source_weight`` so
+    the resolver's argmax has a defined ordering."""
     exec_many(pg, emit_ddl(spec, schema=schema))
     with pg.cursor() as cur:
-        for sql, params in emit_weight_seed(spec, schema=schema):
-            cur.execute(sql, params)
+        for binding in spec.source_bindings:
+            weight = _SOURCE_WEIGHTS.get(binding.source.name, 0.0)
+            upsert = binding.upsert_weight_sql()
+            ident = binding.identifier_slot.name
+            for slot in binding.class_.effective_slots():
+                if slot.name == ident:
+                    continue
+                cur.execute(upsert, {"slot_name": slot.name, "weight": weight})
 
 
 def _movies_only_spec(schema: str) -> Spec:
@@ -47,8 +58,8 @@ def _movies_only_spec(schema: str) -> Spec:
 
     imdb = spec.add_source("imdb")
     tmdb = spec.add_source("tmdb")
-    imdb.bind(movie).set_default_weight(0.85)
-    tmdb.bind(movie).set_default_weight(0.7)
+    imdb.bind(movie)
+    tmdb.bind(movie)
     return spec
 
 

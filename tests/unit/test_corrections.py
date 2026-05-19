@@ -4,10 +4,7 @@ import pytest
 import sqlglot
 
 from knot import CORRECTIONS_SOURCE_NAME, SourceBinding, Spec, types
-from knot.compile import (
-    emit_close_out_sql,
-    emit_weight_seed,
-)
+from knot.compile import emit_close_out_sql
 
 # ---------------------------------------------------------------------------
 # Spec.enable_corrections
@@ -19,7 +16,7 @@ def test_enable_corrections_registers_source_and_per_class_bindings():
     spec.add_class("Movie")
     spec.add_class("Person")
 
-    src = spec.enable_corrections(default_weight=0.99)
+    src = spec.enable_corrections()
     assert src.name == CORRECTIONS_SOURCE_NAME
     binding_pairs = {(b.source.name, b.class_.name) for b in spec.source_bindings}
     assert (CORRECTIONS_SOURCE_NAME, "Movie") in binding_pairs
@@ -58,23 +55,18 @@ def test_corrections_source_name_is_reserved():
         spec.add_source(CORRECTIONS_SOURCE_NAME)
 
 
-def test_corrections_default_weight_dominates():
-    """``enable_corrections`` seeds the corrections binding with a
-    very large default_weight (1e6 by default) so corrections win the
-    resolver's argmax against any declared source."""
+def test_corrections_binding_exposes_runtime_weight_emitters():
+    """``enable_corrections`` no longer takes a default_weight kwarg —
+    weights are runtime-only. The host upserts a dominating weight at
+    runtime via the binding's ``upsert_weight_sql``."""
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
+    movie.slot("title", types.TEXT)
     spec.enable_corrections()
     b = movie.corrections_binding()
-    assert b.default_weight == 1e6
-
-
-def test_corrections_custom_default_weight():
-    spec = Spec(identifier_slot_name="canonical_id")
-    movie = spec.add_class("Movie")
-    spec.enable_corrections(default_weight=12.5)
-    b = movie.corrections_binding()
-    assert b.default_weight == 12.5
+    sql = b.upsert_weight_sql()
+    assert "INSERT INTO knot_data.source_weight" in sql
+    assert f"'{CORRECTIONS_SOURCE_NAME}'" in sql
 
 
 def test_corrections_binding_raises_when_disabled():
@@ -153,7 +145,7 @@ def test_close_out_sql_via_binding_method_matches_free_function():
 
 
 # ---------------------------------------------------------------------------
-# End-to-end: corrections write through binding.write_sql + weight seed
+# End-to-end: corrections write through binding.write_sql
 # ---------------------------------------------------------------------------
 
 
@@ -169,18 +161,3 @@ def test_corrections_write_uses_same_scd2_machinery():
     assert "source_name = '_user_corrections'" in close_out
     assert "INSERT INTO knot_data.movie_bindings" in insert
     assert "'_user_corrections'" in insert  # baked in as INSERT SELECT literal
-
-
-def test_corrections_appear_in_weight_seed():
-    spec = Spec(identifier_slot_name="canonical_id")
-    movie = spec.add_class("Movie")
-    movie.slot("year", types.INTEGER)
-    spec.enable_corrections(default_weight=0.95)
-    seeds = emit_weight_seed(spec)
-    # One row per (source, class, non-identifier-slot). Corrections binds
-    # to every concrete class with the same default_weight applied to
-    # every non-identifier slot.
-    correction_seed = next(
-        (sql, p) for sql, p in seeds if p[0] == CORRECTIONS_SOURCE_NAME
-    )
-    assert correction_seed[1] == [CORRECTIONS_SOURCE_NAME, "Movie", "year", 0.95]

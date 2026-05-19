@@ -646,12 +646,10 @@ class Source:
         """Create a binding from this source to ``cls`` and register it
         on the owning spec.
 
-        Weight starts at ``DEFAULT_WEIGHT`` for every slot. To set it,
-        call ``binding.set_default_weight(...)`` or
-        ``binding.set_weight(slot, value)`` on the returned binding —
-        weight is the resolver's argmax key, declared separately from
-        "what this source publishes". The score itself is opaque to
-        knot: any float will do, the higher one wins."""
+        Weights are runtime-only — set them via
+        ``binding.upsert_weight_sql()`` after deploy. Until then,
+        every slot resolves at weight 0 (``COALESCE`` in the resolver
+        view); the operator owns calibration end-to-end."""
         if self._spec is None:
             raise RuntimeError(
                 f"Source {self.name!r} not attached to a Spec — create via "
@@ -672,13 +670,6 @@ class Source:
 # treats this like any other source — a high weight in source_weight
 # is what makes corrections "win" the per-slot argmax tie-break.
 CORRECTIONS_SOURCE_NAME: str = "_user_corrections"
-
-# Default per-slot weight applied to a fresh binding. Opaque to knot;
-# higher wins. Operators tune by calling
-# ``binding.set_default_weight(...)`` / ``binding.set_weight(slot,
-# value)`` at spec build time, or by ``UPDATE`` on ``source_weight``
-# at runtime. Module constant so adapters can rebind it before import.
-DEFAULT_WEIGHT: float = 1.0
 
 
 @dataclass(slots=True)
@@ -749,9 +740,7 @@ class SourceBinding:
 
     source: Source
     class_: OntologyClass
-    default_weight: float = DEFAULT_WEIGHT
     slot_mappings: dict[str, SlotMapping] = field(default_factory=dict)
-    slot_weights: dict[str, float] = field(default_factory=dict)
     description: str | None = None
 
     @property
@@ -761,7 +750,8 @@ class SourceBinding:
         return self.class_.identifier_slot()
 
     # ------------------------------------------------------------------
-    # Ingest-mapping declaration (no weight here — see set_weight below).
+    # Ingest-mapping declaration. Weight is a separate concern owned
+    # entirely at runtime — see read_weights_sql / upsert_weight_sql.
     # ------------------------------------------------------------------
 
     def slot(
@@ -778,8 +768,8 @@ class SourceBinding:
           tuple of strings when ``sql`` references multiple raw fields.
         - ``sql`` is the optional postgres expression over those fields.
 
-        Weight is set separately via ``set_default_weight`` /
-        ``set_weight`` — those are the only knobs that touch weight.
+        No weight kwarg — weights are runtime-only. Use
+        ``binding.upsert_weight_sql()`` to set values after deploy.
         """
         # Validate the class slot exists (raises KeyError on typo).
         self.class_.get_slot(class_slot)
@@ -803,42 +793,6 @@ class SourceBinding:
         return SlotMapping(
             class_slot=class_slot_name, source_slot=(class_slot_name,), sql=None
         )
-
-    # ------------------------------------------------------------------
-    # Weight API — separate concern from ingest mapping. Weight is the
-    # resolver's argmax key; mapping is "how to project the row".
-    # ------------------------------------------------------------------
-
-    def set_default_weight(self, value: float) -> SourceBinding:
-        """Default weight for any non-identifier slot that doesn't have
-        a per-slot override. Applies to every slot of this binding
-        unless overridden via ``set_weight(slot, value)``.
-
-        Weights are opaque floats — knot does no calibration check,
-        the higher value wins."""
-        self.default_weight = value
-        return self
-
-    def set_weight(self, slot: str, value: float) -> SourceBinding:
-        """Per-slot weight override for one non-identifier slot.
-        Replaces the default for this slot only. Rejected on the
-        identifier slot (identity is not argmax-resolved)."""
-        slot_obj = self.class_.get_slot(slot)
-        if slot_obj is self.identifier_slot:
-            raise ValueError(
-                f"weight is meaningless on the identifier slot "
-                f"{slot!r} — identity is not argmax-resolved"
-            )
-        self.slot_weights[slot] = value
-        return self
-
-    def weight_for(self, class_slot_name: str) -> float:
-        """Effective weight for ``class_slot_name``: the slot's explicit
-        value (from ``set_weight``) if set, otherwise the binding's
-        ``default_weight``."""
-        if class_slot_name in self.slot_weights:
-            return self.slot_weights[class_slot_name]
-        return self.default_weight
 
     # ------------------------------------------------------------------
     # Runtime helpers — ingest, ER. Methods on the binding because the
@@ -924,6 +878,41 @@ class SourceBinding:
         """``"<schema>.<class>_bindings"`` — the table this binding
         writes to. Same as ``self.class_.bindings_table_name``."""
         return self.class_.bindings_table_name
+
+    # ------------------------------------------------------------------
+    # Weight runtime — read + upsert SQL for this binding's
+    # (source, class, *) rows in ``source_weight``. Weights are
+    # runtime-only; the host owns calibration entirely.
+    # ------------------------------------------------------------------
+
+    def read_weights_sql(self) -> str:
+        """SELECT this binding's currently-stored weights — rows of
+        ``(slot_name, weight)``. Empty result means no runtime tuning
+        has happened for this (source, class) yet; resolver falls
+        back to 0. See ``knot.compile.weight.emit_read_weights_sql``."""
+        self._require_spec()
+        from knot.compile.weight import emit_read_weights_sql
+
+        return emit_read_weights_sql(self)
+
+    def upsert_weight_sql(self) -> str:
+        """Set the weight for ONE slot — INSERT … ON CONFLICT UPDATE.
+        Host binds ``%(slot_name)s`` and ``%(weight)s``. See
+        ``knot.compile.weight.emit_upsert_weight_sql``."""
+        self._require_spec()
+        from knot.compile.weight import emit_upsert_weight_sql
+
+        return emit_upsert_weight_sql(self)
+
+    def upsert_weights_sql(self) -> str:
+        """Bulk-set N weights in one statement — INSERT … ON CONFLICT
+        UPDATE driven by ``jsonb_each(%(weights)s::jsonb)``. Host
+        binds a JSON object ``{slot_name: weight, …}``. See
+        ``knot.compile.weight.emit_upsert_weights_sql``."""
+        self._require_spec()
+        from knot.compile.weight import emit_upsert_weights_sql
+
+        return emit_upsert_weights_sql(self)
 
 
 # ---------------------------------------------------------------------------
@@ -1030,19 +1019,20 @@ class Spec:
     def enable_corrections(
         self,
         *,
-        default_weight: float = 1e6,
         description: str | None = "human overrides",
     ) -> Source:
         """Register the ``_user_corrections`` synthetic source and bind
         it to every concrete ``OntologyClass`` in the spec.
 
-        A large ``default_weight`` (1e6 by default) means corrections
-        dominate the resolver's argmax against any declared source.
-        Operators tune per-slot via ``UPDATE source_weight SET weight =
-        … WHERE source_name = '_user_corrections' AND class_name =
-        '<X>' AND slot_name = '<Y>'`` without touching the spec, or
-        call ``cls.corrections_binding().set_weight(slot, value)`` to
-        set per-slot values at spec build time.
+        Weights are runtime-only: corrections start at weight 0 (the
+        resolver's COALESCE fallback). The operator decides how
+        dominant corrections should be by upserting weights via the
+        usual runtime API:
+
+            cur.execute(
+                cls.corrections_binding().upsert_weight_sql(),
+                {"slot_name": "title", "weight": 1e6},
+            )
 
         Idempotent: calling again is a no-op if the source already
         exists. Returns the (possibly pre-existing) ``Source`` object.
@@ -1055,8 +1045,7 @@ class Spec:
         )
         self.sources[CORRECTIONS_SOURCE_NAME] = source
         for cls in self.concrete_classes():
-            binding = source.bind(cls)
-            binding.set_default_weight(default_weight)
+            source.bind(cls)
         return source
 
     def include(self, other: Spec) -> None:

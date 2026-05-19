@@ -28,7 +28,12 @@ from knot.compile.resolver import (
     emit_resolved_view,
     emit_resolved_views,
 )
-from knot.compile.weight import emit_weight_seed
+from knot.compile.weight import (
+    emit_read_weights_sql,
+    emit_source_read_weights_sql,
+    emit_upsert_weight_sql,
+    emit_upsert_weights_sql,
+)
 from knot.compile.write import (
     emit_assign_canonical_sql,
     emit_binding_write_sql,

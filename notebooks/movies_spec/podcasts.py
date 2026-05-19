@@ -34,6 +34,6 @@ _PODCAST_CLASSES = [podcast, podcast_episode, person, podcast_credit]
 apple_podcasts = part.add_source("apple_podcasts")
 spotify = part.add_source("spotify")
 listennotes = part.add_source("listennotes")
-for _src, _w in [(apple_podcasts, 0.80), (listennotes, 0.75), (spotify, 0.70)]:
+for _src in [apple_podcasts, listennotes, spotify]:
     for _cls in _PODCAST_CLASSES:
-        _src.bind(_cls).set_default_weight(_w)
+        _src.bind(_cls)

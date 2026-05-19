@@ -36,7 +36,6 @@ from knot.ast.select import Layer, OrderBy, Query
 from knot.ast.types import Vector
 from knot.spec import (
     CORRECTIONS_SOURCE_NAME,
-    DEFAULT_WEIGHT,
     ClassKind,
     Constraint,
     OntologyClass,

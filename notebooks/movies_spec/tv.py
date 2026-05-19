@@ -51,11 +51,11 @@ tv_credit.slot("person", person)
 # tvdb — TV-only source, owned by this part
 tvdb = part.add_source("tvdb")
 for _cls in [show, season, tv_episode, tv_credit, person]:
-    tvdb.bind(_cls).set_default_weight(0.80)
+    tvdb.bind(_cls)
 
 # Reuse tmdb + imdb for TV bindings. Their .bind() lands on the
 # already-included parent spec's source_bindings list.
 _TV_CLASSES = [show, season, tv_episode, tv_credit]
-for _src, _w in [(tmdb, 0.70), (imdb, 0.85)]:
+for _src in [tmdb, imdb]:
     for _cls in _TV_CLASSES:
-        _src.bind(_cls).set_default_weight(_w)
+        _src.bind(_cls)

@@ -41,6 +41,6 @@ _GAME_CLASSES = [studio, platform, game, release, person, game_credit]
 igdb = part.add_source("igdb")
 giant_bomb = part.add_source("giant_bomb")
 steam = part.add_source("steam")
-for _src, _w in [(igdb, 0.85), (giant_bomb, 0.80), (steam, 0.65)]:
+for _src in [igdb, giant_bomb, steam]:
     for _cls in _GAME_CLASSES:
-        _src.bind(_cls).set_default_weight(_w)
+        _src.bind(_cls)

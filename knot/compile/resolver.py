@@ -73,8 +73,8 @@ def emit_resolved_view(
 
     The view depends on ``<schema>.<weight_table_name>`` existing —
     emit it via ``emit_ddl`` (which creates the table) before
-    deploying this view, and seed it via
-    ``knot.compile.weight.emit_weight_seed`` to populate the rows.
+    deploying this view, and upsert rows at runtime via
+    ``binding.upsert_weight_sql()`` / ``upsert_weights_sql()``.
     """
     if cls.kind != ClassKind.CONCRETE:
         raise ValueError(

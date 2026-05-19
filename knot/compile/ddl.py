@@ -96,8 +96,8 @@ def emit_ddl(
         When True, emit the invariant ``<schema>.<weight_table_name>``
         (default ``source_weight``) that carries the runtime
         per-(source, class, slot) weight. The resolver views
-        ``LEFT JOIN`` against this table; seed its rows from the spec
-        via ``knot.compile.weight.emit_weight_seed``.
+        ``LEFT JOIN`` against this table; the host upserts rows at
+        runtime via ``binding.upsert_weight_sql()``.
     emit_descriptions
         When True, follow each entity with ``COMMENT ON TABLE / COLUMN /
         VIEW`` for any non-empty ``description`` fields.

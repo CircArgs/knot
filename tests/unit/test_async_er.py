@@ -12,7 +12,7 @@ def _basic_spec():
     movie.slot("title", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
     imdb = spec.add_source("imdb")
-    binding = imdb.bind(movie).set_default_weight(0.85)
+    binding = imdb.bind(movie)
     return spec, binding
 
 
