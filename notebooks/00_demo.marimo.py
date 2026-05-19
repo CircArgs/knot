@@ -59,23 +59,21 @@ def _(mo):
 
 @app.cell(hide_code=True)
 def _(mo):
-    from pathlib import Path
-
-    _src = Path("media_spec/person.py").read_text()
+    _src = (mo.notebook_dir() / "media_spec/person.py").read_text()
     mo.md(f"`media_spec/person.py`\n\n```python\n{_src}\n```")
-    return (Path,)
+    return
 
 
 @app.cell(hide_code=True)
-def _(Path, mo):
-    _src = Path("media_spec/movies.py").read_text()
+def _(mo):
+    _src = (mo.notebook_dir() / "media_spec/movies.py").read_text()
     mo.md(f"`media_spec/movies.py`\n\n```python\n{_src}\n```")
     return
 
 
 @app.cell(hide_code=True)
-def _(Path, mo):
-    _src = Path("media_spec/base.py").read_text()
+def _(mo):
+    _src = (mo.notebook_dir() / "media_spec/base.py").read_text()
     mo.md(
         f"`media_spec/base.py` — the package root creates `spec` once "
         f"and composes the domain parts:\n\n```python\n{_src}\n```"
@@ -230,8 +228,8 @@ def _(mo):
 
 
 @app.cell
-def _(pd):
-    rows_df = pd.read_json("../data/movies/imdb/movies.json")
+def _(mo, pd):
+    rows_df = pd.read_json(mo.notebook_dir() / "../data/movies/imdb/movies.json")
     rows_df.head()
     return (rows_df,)
 
