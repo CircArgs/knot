@@ -72,7 +72,7 @@ def _(connect):
 def _(SCHEMA, movie, engine, pd, pg):
     # Resolved view is empty going in: every row's canonical_id is
     # NULL, the view filters those out.
-    resolved_before = pd.read_sql_query(movie.resolved.sql(schema=SCHEMA), engine)
+    resolved_before = pd.read_sql_query(movie.resolved.sql(), engine)
     print(f"resolved rows BEFORE ER: {len(resolved_before)}")
     resolved_before
     return
@@ -184,7 +184,7 @@ def _(SCHEMA, imdb_movie_b, json, engine, pd, pg, uuid):
     )
     print(f"minting {len(imdb_rows)} canonical_ids for imdb")
 
-    assign_imdb = imdb_movie_b.assign_canonical_sql(schema=SCHEMA)
+    assign_imdb = imdb_movie_b.assign_canonical_sql()
     with pg.cursor() as cur:
         for si in imdb_rows["source_identifier"]:
             cur.execute(
@@ -237,7 +237,7 @@ def _(SCHEMA, candidates, json, pg, tmdb_movie_b, uuid):
     matched = int((candidates["distance"] <= THRESHOLD).sum())
     print(f"matched {matched}/{len(candidates)} tmdb rows at distance ≤ {THRESHOLD}")
 
-    assign_tmdb = tmdb_movie_b.assign_canonical_sql(schema=SCHEMA)
+    assign_tmdb = tmdb_movie_b.assign_canonical_sql()
     with pg.cursor() as cur:
         for row in candidates.itertuples(index=False):
             if row.distance <= THRESHOLD:
@@ -281,7 +281,7 @@ def _(mo):
 @app.cell
 def _(SCHEMA, movie, engine, pd, pg):
     pd.read_sql_query(
-        movie.resolved.order_by(movie.col.year, "desc").limit(15).sql(schema=SCHEMA),
+        movie.resolved.order_by(movie.col.year, "desc").limit(15).sql(),
         engine,
     )
     return

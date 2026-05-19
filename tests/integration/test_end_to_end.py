@@ -37,9 +37,9 @@ def _deploy(pg, spec: Spec, schema: str) -> None:
             cur.execute(sql, params)
 
 
-def _movies_only_spec() -> Spec:
+def _movies_only_spec(schema: str) -> Spec:
     """Single class Movie with year + runtime, IMDB + TMDB sources."""
-    spec = Spec(identifier_slot_name="canonical_id")
+    spec = Spec(identifier_slot_name="canonical_id", schema=schema)
     movie = spec.add_class("Movie")
     movie.slot("name", types.TEXT, required=True)
     movie.slot("year", types.INTEGER)
@@ -60,7 +60,7 @@ def _write_claim(
     *,
     schema: str,
 ) -> None:
-    close_out, insert = binding.write_sql(schema=schema)
+    close_out, insert = binding.write_sql()
     payload = _json(rows)
     with pg.cursor() as cur:
         cur.execute(close_out, {"rows": payload})
@@ -86,7 +86,7 @@ def _assign(
 ) -> None:
     with pg.cursor() as cur:
         cur.execute(
-            binding.assign_canonical_sql(schema=schema),
+            binding.assign_canonical_sql(),
             {
                 "canonical_id": canonical_id,
                 "source_identifier": source_identifier,
@@ -106,7 +106,7 @@ def _recan(
 ) -> None:
     with pg.cursor() as cur:
         cur.execute(
-            binding.recanonicalize_sql(schema=schema),
+            binding.recanonicalize_sql(),
             {
                 "new_canonical_id": new_canonical_id,
                 "source_identifier": source_identifier,
@@ -121,7 +121,7 @@ def _recan(
 
 
 def test_emit_ddl_creates_real_tables(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     with pg.cursor() as cur:
@@ -137,7 +137,7 @@ def test_emit_ddl_creates_real_tables(pg, schema):
 
 
 def test_emit_ddl_creates_resolved_view(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     with pg.cursor() as cur:
@@ -150,7 +150,7 @@ def test_emit_ddl_creates_resolved_view(pg, schema):
 
 
 def test_emit_ddl_creates_indexes(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     with pg.cursor() as cur:
@@ -166,7 +166,7 @@ def test_emit_ddl_creates_indexes(pg, schema):
 
 def test_weight_seed_populates_source_weight(pg, schema):
     """One row per (source, class, non-identifier slot)."""
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     with pg.cursor() as cur:
@@ -190,7 +190,7 @@ def test_weight_seed_populates_source_weight(pg, schema):
 
 
 def test_resolved_view_picks_higher_accuracy_source(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -244,7 +244,7 @@ def test_all_sources_view_aggregates_per_source_jsonb(pg, schema):
     slot keyed by source name, with {value, weight} payload — so both
     sources show up for ``year`` even though only one wins in the
     resolved view."""
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -302,7 +302,7 @@ def test_resolved_view_falls_back_per_slot(pg, schema):
     """If IMDB has a NULL for `runtime_minutes` but TMDB has a value,
     TMDB wins for that slot even though IMDB has higher overall
     accuracy. Per-slot argmax, not per-row."""
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -350,7 +350,7 @@ def test_resolved_view_falls_back_per_slot(pg, schema):
 
 def test_raw_payload_preserves_unmapped_fields(pg, schema):
     """Fields not declared as slots ride along in raw_payload."""
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -385,7 +385,7 @@ def test_raw_payload_preserves_unmapped_fields(pg, schema):
 def test_scd2_close_out_on_repeated_write(pg, schema):
     """Writing the same (canonical_id, source, source_identifier) again
     closes out the prior row and inserts a new one."""
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -446,7 +446,7 @@ def test_scd2_close_out_on_repeated_write(pg, schema):
 
 
 def test_user_correction_wins_over_declared_sources(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     spec.enable_corrections()
     _deploy(pg, spec, schema)
 
@@ -496,7 +496,7 @@ def test_user_correction_wins_over_declared_sources(pg, schema):
 
 
 def test_correction_withdraw_falls_back_to_source(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     spec.enable_corrections()
     _deploy(pg, spec, schema)
 
@@ -538,7 +538,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
     # Withdraw the correction.
     exec_with_params(
         pg,
-        corr_b.close_out_sql(schema=schema),
+        corr_b.close_out_sql(),
         {
             "canonical_id": "m1",
             "source_identifier": "curator-42",
@@ -558,7 +558,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
 
 
 def test_constraint_validation_finds_violations(pg, schema):
-    spec = _movies_only_spec()
+    spec = _movies_only_spec(schema)
     movie = spec.classes["Movie"]
     movie.add_constraint("year_sane", body=movie.col.year >= 1888)
     _deploy(pg, spec, schema)
@@ -605,8 +605,8 @@ def test_constraint_validation_finds_violations(pg, schema):
 def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
     """Ingest a binding row with canonical_id=NULL; resolved view skips
     it; assign_canonical makes it visible."""
-    spec = _movies_only_spec()
-    pg.execute(spec.ddl(schema=schema))
+    spec = _movies_only_spec(schema)
+    pg.execute(spec.ddl())
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -643,8 +643,8 @@ def test_unresolved_ingest_invisible_until_canonical_assigned(pg, schema):
 
 def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
     """Re-running assign_canonical on an already-assigned row is a no-op."""
-    spec = _movies_only_spec()
-    pg.execute(spec.ddl(schema=schema))
+    spec = _movies_only_spec(schema)
+    pg.execute(spec.ddl())
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -681,8 +681,8 @@ def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
 def test_recanonicalize_preserves_scd2_history(pg, schema):
     """Reassigning canonical_id keeps the old binding row (closed) plus
     a new open binding row with the corrected id."""
-    spec = _movies_only_spec()
-    pg.execute(spec.ddl(schema=schema))
+    spec = _movies_only_spec(schema)
+    pg.execute(spec.ddl())
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -729,8 +729,8 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
 def test_assign_canonical_stamps_er_metadata(pg, schema):
     """assign_canonical with er_metadata writes the dict into the
     binding row's er_metadata jsonb column."""
-    spec = _movies_only_spec()
-    pg.execute(spec.ddl(schema=schema))
+    spec = _movies_only_spec(schema)
+    pg.execute(spec.ddl())
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -780,8 +780,8 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
 def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
     """When recanonicalize is called without er_metadata, the new row
     inherits the closed row's er_metadata verbatim."""
-    spec = _movies_only_spec()
-    pg.execute(spec.ddl(schema=schema))
+    spec = _movies_only_spec(schema)
+    pg.execute(spec.ddl())
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 
@@ -836,8 +836,8 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
 def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
     """Recanonicalize with er_metadata stamps the new row with a
     fresh payload; the closed row keeps the original."""
-    spec = _movies_only_spec()
-    pg.execute(spec.ddl(schema=schema))
+    spec = _movies_only_spec(schema)
+    pg.execute(spec.ddl())
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
 

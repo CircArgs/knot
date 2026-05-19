@@ -86,7 +86,7 @@ def _(SCHEMA, spec):
     # FK alters → resolved views → all-sources views.
     #
     # No CREATE EXTENSION vector — the base spec has no vector slot.
-    print(spec.ddl(schema=SCHEMA))
+    print(spec.ddl())
     return
 
 
@@ -95,7 +95,7 @@ def _(SCHEMA, pg, spec):
     # First deploy against an empty schema: execute directly. Every
     # statement is idempotent (CREATE TABLE IF NOT EXISTS / CREATE OR
     # REPLACE VIEW), so re-running is a no-op.
-    pg.execute(spec.ddl(schema=SCHEMA))
+    pg.execute(spec.ddl())
     return
 
 

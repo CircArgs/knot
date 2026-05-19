@@ -182,7 +182,7 @@ def _(SCHEMA, feeds, pd, pg):
             for r in rows:
                 r["source_identifier"] = f"{r['source_identifier']}#{r['canonical_id']}"
         payload = _json.dumps(rows)
-        close_out, insert = binding.write_sql(schema=SCHEMA)
+        close_out, insert = binding.write_sql()
         with pg.cursor() as cur:
             cur.execute(close_out, {"rows": payload})
             cur.execute(insert, {"rows": payload})

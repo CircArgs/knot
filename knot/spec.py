@@ -777,15 +777,11 @@ class SourceBinding:
     # those at the call site.
     # ------------------------------------------------------------------
 
-    def write_sql(
-        self,
-        *,
-        schema: str = "knot_data",
-        bindings_suffix: str = "_bindings",
-    ) -> tuple[str, str]:
+    def write_sql(self, *, bindings_suffix: str = "_bindings") -> tuple[str, str]:
         """Return ``(close_out_sql, insert_sql)`` for this binding's
         SCD2 write. Both reference a single ``%(rows)s::jsonb``
-        parameter — the host's connector binds the rows.
+        parameter — the host's connector binds the rows. Schema comes
+        from the spec the binding's source is attached to.
 
         Run both statements in one transaction::
 
@@ -796,76 +792,63 @@ class SourceBinding:
 
         Multi-binding atomic write: call ``binding.write_sql()`` per
         binding, run all the statements in one ``pg.transaction()``.
-        Constraint enforcement is the host's concern — run
-        ``spec.emit_validation()`` after the write inside the same
-        transaction and roll back if any return rows.
         """
+        spec = self._require_spec()
+        # Deliberately no ``spec.validate()`` here — write_sql is a
+        # hot path (per-batch ingest) and we trust the spec was
+        # validated at deploy time.
+        from knot.compile.write import emit_binding_write_sql
+
+        return emit_binding_write_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
+    def assign_canonical_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return the SQL template that assigns a ``canonical_id`` to
+        one unresolved binding row. Three named placeholders —
+        ``%(canonical_id)s``, ``%(source_identifier)s``,
+        ``%(er_metadata)s`` (None to leave unchanged, JSON string to
+        set). Host binds via ``cur.execute(sql, params)``."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_assign_canonical_sql
+
+        return emit_assign_canonical_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
+    def recanonicalize_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return the SQL template that reassigns a binding row's
+        ``canonical_id``, preserving history via SCD2. Three named
+        placeholders — ``%(new_canonical_id)s``,
+        ``%(source_identifier)s``, ``%(er_metadata)s`` (None inherits
+        the closed row's metadata; JSON string overrides)."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_recanonicalize_sql
+
+        return emit_recanonicalize_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
+    def close_out_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return the SQL template that closes out one open binding
+        row without inserting a replacement. Two named placeholders
+        — ``%(canonical_id)s``, ``%(source_identifier)s``. Used to
+        retract a source's claim."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_close_out_sql
+
+        return emit_close_out_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
+    def _require_spec(self) -> Spec:
+        """Internal — resolve the binding's owning ``Spec`` or raise."""
         if self.source._spec is None:
             raise RuntimeError(
                 f"binding {self.source.name!r} → {self.class_.name!r} "
                 f"is not attached to a Spec"
             )
-        # Deliberately no ``spec.validate()`` here — write_sql is a
-        # hot path (per-batch ingest) and we trust the spec was
-        # validated at deploy time. The other per-binding helpers
-        # (assign_canonical_sql, recanonicalize_sql, close_out_sql)
-        # already skip validate for the same reason.
-        from knot.compile.write import emit_binding_write_sql
-
-        return emit_binding_write_sql(
-            self, schema=schema, bindings_suffix=bindings_suffix
-        )
-
-    def assign_canonical_sql(
-        self,
-        *,
-        schema: str = "knot_data",
-        bindings_suffix: str = "_bindings",
-    ) -> str:
-        """Return the SQL template that assigns a ``canonical_id`` to
-        one unresolved binding row. Three named placeholders —
-        ``%(canonical_id)s``, ``%(source_identifier)s``,
-        ``%(er_metadata)s`` (None to leave unchanged, JSON string to
-        set). Host binds via ``cur.execute(sql, params)``. See
-        ``knot.compile.write.emit_assign_canonical_sql``."""
-        from knot.compile.write import emit_assign_canonical_sql
-
-        return emit_assign_canonical_sql(
-            self, schema=schema, bindings_suffix=bindings_suffix
-        )
-
-    def recanonicalize_sql(
-        self,
-        *,
-        schema: str = "knot_data",
-        bindings_suffix: str = "_bindings",
-    ) -> str:
-        """Return the SQL template that reassigns a binding row's
-        ``canonical_id``, preserving history via SCD2. Three named
-        placeholders — ``%(new_canonical_id)s``,
-        ``%(source_identifier)s``, ``%(er_metadata)s`` (None inherits
-        the closed row's metadata; JSON string overrides). See
-        ``knot.compile.write.emit_recanonicalize_sql``."""
-        from knot.compile.write import emit_recanonicalize_sql
-
-        return emit_recanonicalize_sql(
-            self, schema=schema, bindings_suffix=bindings_suffix
-        )
-
-    def close_out_sql(
-        self,
-        *,
-        schema: str = "knot_data",
-        bindings_suffix: str = "_bindings",
-    ) -> str:
-        """Return the SQL template that closes out one open binding
-        row without inserting a replacement. Two named placeholders
-        — ``%(canonical_id)s``, ``%(source_identifier)s``. Used to
-        retract a source's claim. See
-        ``knot.compile.write.emit_close_out_sql``."""
-        from knot.compile.write import emit_close_out_sql
-
-        return emit_close_out_sql(self, schema=schema, bindings_suffix=bindings_suffix)
+        return self.source._spec
 
 
 # ---------------------------------------------------------------------------
@@ -894,6 +877,13 @@ class Spec:
     """
 
     identifier_slot_name: str  # required — no default; e.g. "canonical_id"
+    # Schema is set once on the root Spec (or on sub-specs that compile
+    # in isolation). Every façade method — Spec.ddl, Query.sql,
+    # binding.write_sql, etc. — reads ``self.schema`` (no ``schema=``
+    # kwargs). The free emitters in ``knot.compile.*`` still take
+    # ``schema=…`` as a kwarg for tests / cases that want to retarget
+    # without mutating the spec.
+    schema: str = "knot_data"
     # ``classes`` and ``sources`` are dicts keyed by name. Lets the
     # builder enforce uniqueness for free (vs. a separate
     # ``_check_unique_class_name`` pass) and lets ``spec.classes["Movie"]``
@@ -1217,12 +1207,7 @@ class Spec:
     #   - ``binding.close_out_sql()``           retract a claim (SourceBinding)
     # ------------------------------------------------------------------
 
-    def ddl(
-        self,
-        *,
-        schema: str = "knot_data",
-        include_views: bool = True,
-    ) -> str:
+    def ddl(self, *, include_views: bool = True) -> str:
         """Return the canonical CREATE script for this spec — schema,
         extension (when needed), tables, indexes, FK constraints, and
         views. Idempotent throughout (``IF NOT EXISTS`` /
@@ -1234,13 +1219,15 @@ class Spec:
         See CLAUDE.md §"Schema deployment" for rationale and tool
         recommendations.
 
-        Set ``include_views=False`` when piping through a migration
-        tool whose parser doesn't handle knot's view DDL (psqldef
-        v3 trips on ``FILTER (WHERE …)`` in the ``_all_sources``
-        provenance views). The standard two-phase recipe:
+        Schema name comes from ``self.schema`` (set once on the spec
+        at construction time). Set ``include_views=False`` when piping
+        through a migration tool whose parser doesn't handle knot's
+        view DDL (psqldef v3 trips on ``FILTER (WHERE …)`` in the
+        ``_all_sources`` provenance views). The standard two-phase
+        recipe:
 
             sqldef-tool < spec.ddl(include_views=False)   # schema
-            pg.execute(spec.ddl(schema=…))                # views
+            pg.execute(spec.ddl())                        # views
 
         Views are unconditional ``CREATE OR REPLACE`` and depend on
         no live data, so the second call is always safe to run after
@@ -1252,7 +1239,7 @@ class Spec:
         return "\n\n".join(
             emit_ddl(
                 self,
-                schema=schema,
+                schema=self.schema,
                 if_not_exists=True,
                 emit_resolved_views=include_views,
                 emit_all_sources_views=include_views,
@@ -1260,13 +1247,14 @@ class Spec:
             )
         )
 
-    def emit_validation(self, **kwargs: Any) -> Any:
+    def emit_validation(self) -> list[tuple[str, str]]:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates
-        the spec first. See ``knot.compile.constraints.emit_validation``."""
+        the spec first; schema comes from ``self.schema``. See
+        ``knot.compile.constraints.emit_validation``."""
         self.validate()
         from knot.compile.constraints import emit_validation
 
-        return emit_validation(self, **kwargs)
+        return emit_validation(self, schema=self.schema)
 
 
 class SpecError(ValueError):

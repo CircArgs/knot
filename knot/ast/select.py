@@ -108,30 +108,21 @@ class Query:
     # Spec back-reference lets the host call ``q.sql(...)`` directly.
     # ------------------------------------------------------------------
 
-    def sql(
-        self,
-        *,
-        schema: str = "knot_data",
-    ) -> str:
+    def sql(self) -> str:
         """Compile this query to a postgres SQL string against its owning
-        spec. Literals are inlined; there's no positional-parameter list
-        to bind. Validates the spec first; raises ``SpecError`` if
-        malformed and ``RuntimeError`` if this Query wasn't built via
-        a spec's class (no back-reference)."""
+        spec — schema name comes from the spec. Literals are inlined;
+        no positional-parameter list to bind. No validation (hot path).
+        Raises ``RuntimeError`` if this Query wasn't built via a spec's
+        class (no back-reference)."""
         if self._spec is None:
             raise RuntimeError(
                 "Query has no spec back-reference — build it via "
                 "cls.resolved / .all_sources / .from_source(...), or use "
                 "knot.compile.query.compile_query(q, spec=spec) directly"
             )
-        # Deliberately no ``spec.validate()`` here — Query.sql is a
-        # hot path (every API request) and we trust the spec was
-        # validated at startup (Spec.ddl does it on deploy, or call
-        # spec.validate() manually after composition). Walking 17
-        # classes + N bindings per request is wasteful.
         from knot.compile.query import compile_query
 
-        return compile_query(self, spec=self._spec, schema=schema)
+        return compile_query(self, spec=self._spec, schema=self._spec.schema)
 
     def with_spec(self, spec: Spec) -> Query:
         """Return a copy of this query bound to ``spec``. Useful when

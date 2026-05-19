@@ -115,7 +115,7 @@ def _(mo):
 @app.cell
 def _(Path, SCHEMA, spec):
     target_sql = Path("/tmp/knot_target.sql")
-    target_sql.write_text(spec.ddl(schema=SCHEMA, include_views=False))
+    target_sql.write_text(spec.ddl(include_views=False))
     print(f"wrote {target_sql} ({target_sql.stat().st_size} bytes)")
     return (target_sql,)
 
@@ -210,7 +210,7 @@ def _(mo):
 
 @app.cell
 def _(SCHEMA, pg, spec):
-    pg.execute(spec.ddl(schema=SCHEMA))
+    pg.execute(spec.ddl())
     return
 
 

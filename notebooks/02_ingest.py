@@ -76,7 +76,7 @@ def _(SCHEMA, imdb_movie_b):
     # `binding.write_sql()` returns two SQL templates — both reference
     # a single `%(rows)s::jsonb` parameter. knot never touches the
     # rows; the host's connector binds them at execute time.
-    close_out, insert = imdb_movie_b.write_sql(schema=SCHEMA)
+    close_out, insert = imdb_movie_b.write_sql()
     print("--- close_out ---")
     print(close_out)
     print("\n--- insert ---")
@@ -109,7 +109,7 @@ def _(SCHEMA, imdb, movie, engine, pd, pg):
         .limit(10)
         .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
-    pd.read_sql_query(q.sql(schema=SCHEMA), engine)
+    pd.read_sql_query(q.sql(), engine)
     return
 
 

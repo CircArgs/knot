@@ -11,6 +11,8 @@ v1 surface (``person`` + ``movies``). ``full.py`` opts the rest in
 import IS the migration story.
 """
 
+from _demo import SCHEMA
+
 from knot import Spec
 
-spec = Spec(identifier_slot_name="canonical_id")
+spec = Spec(identifier_slot_name="canonical_id", schema=SCHEMA)

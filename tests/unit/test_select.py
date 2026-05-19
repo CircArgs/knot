@@ -314,7 +314,7 @@ def test_resolved_targets_resolved_view():
     spec, movie = _make_movie_spec()
     q = movie.resolved
     assert q.layer is Layer.RESOLVED
-    sql = q.sql(schema="knot_data")
+    sql = q.sql()
     assert "FROM knot_data.movie_resolved" in sql
 
 
@@ -322,7 +322,7 @@ def test_all_sources_targets_provenance_view():
     spec, movie = _make_movie_spec()
     q = movie.all_sources
     assert q.layer is Layer.ALL_SOURCES
-    sql = q.sql(schema="knot_data")
+    sql = q.sql()
     assert "FROM knot_data.movie_all_sources" in sql
 
 
@@ -332,7 +332,7 @@ def test_from_source_targets_bindings_with_filter():
     imdb.bind(movie)
     q = movie.from_source(imdb)
     assert q.layer is Layer.BINDINGS
-    sql = q.sql(schema="knot_data")
+    sql = q.sql()
     assert "FROM knot_data.movie_bindings" in sql
     assert "source_name = 'imdb'" in sql
 
@@ -342,7 +342,7 @@ def test_from_source_chains_with_where():
     imdb = spec.add_source("imdb")
     imdb.bind(movie)
     q = movie.from_source(imdb).where(movie.col.year >= 2000)
-    sql = q.sql(schema="knot_data")
+    sql = q.sql()
     assert "source_name = 'imdb'" in sql
     assert "knot_data.movie_bindings.year >= 2000" in sql
     assert "AND" in sql
