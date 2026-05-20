@@ -83,7 +83,9 @@ class Query:
     offset_value: int | None = None
     projection: tuple[Expr, ...] | None = None
     layer: Layer = Layer.RESOLVED
-    lock_mode: str | None = None  # "for_update" | "for_update_skip_locked" | "for_share"
+    lock_mode: str | None = (
+        None  # "for_update" | "for_update_skip_locked" | "for_share"
+    )
     _spec: Any = field(default=None, repr=False, compare=False)
 
     def where(self, predicate: Expr) -> Query:

@@ -37,8 +37,10 @@ from knot.compile.weight import (
 )
 from knot.compile.write import (
     emit_assign_canonical_sql,
+    emit_assign_canonicals_sql,
     emit_binding_write_sql,
     emit_recanonicalize_sql,
     emit_retract_sql,
     emit_update_slot_sql,
+    emit_validate_rows_sql,
 )

@@ -105,8 +105,7 @@ def test_count_of_column_is_count_col_not_count_star():
 def test_group_by_renders_between_where_and_order_by():
     spec, movie = _make_movie_spec()
     q = (
-        movie.resolved
-        .where(movie.col.year >= 1900)
+        movie.resolved.where(movie.col.year >= 1900)
         .group_by(movie.col.year)
         .select(movie.col.year, count())
         .order_by(movie.col.year, "desc")
@@ -122,15 +121,13 @@ def test_group_by_renders_between_where_and_order_by():
 def test_group_by_appends_not_replaces():
     spec, movie = _make_movie_spec()
     q = (
-        movie.resolved
-        .group_by(movie.col.year)
+        movie.resolved.group_by(movie.col.year)
         .group_by(movie.col.title)  # appends
         .select(count())
     )
     sql = q.sql()
     assert (
-        "GROUP BY knot_data.movie_resolved.year, knot_data.movie_resolved.title"
-        in sql
+        "GROUP BY knot_data.movie_resolved.year, knot_data.movie_resolved.title" in sql
     )
 
 
@@ -151,8 +148,7 @@ def test_aggregate_composes_with_comparison_in_order_by():
     """count() returns a value-expr so order_by(count(), 'desc') works."""
     spec, movie = _make_movie_spec()
     q = (
-        movie.resolved
-        .group_by(movie.col.year)
+        movie.resolved.group_by(movie.col.year)
         .select(movie.col.year, count())
         .order_by(count(), "desc")
         .limit(10)
@@ -172,8 +168,7 @@ def test_emitted_aggregate_sql_parses_postgres():
         movie.resolved.select(count()),
         movie.resolved.select(count(movie.col.year), avg(movie.col.year)),
         (
-            movie.resolved
-            .where(movie.col.year >= 1900)
+            movie.resolved.where(movie.col.year >= 1900)
             .group_by(movie.col.year)
             .select(movie.col.year, count(), avg(movie.col.runtime))
             .order_by(movie.col.year, "desc")

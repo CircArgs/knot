@@ -24,6 +24,7 @@ from functools import singledispatch
 from typing import Any
 
 from knot.ast.expr import (
+    AggExpr,
     Aggregate,
     Between,
     BoolOp,
@@ -36,7 +37,6 @@ from knot.ast.expr import (
     InList,
     IsNull,
     Literal,
-    AggExpr,
     Not,
     Raw,
     Ref,
@@ -92,8 +92,14 @@ def _(
 ) -> str:
     op = _VECTOR_DISTANCE_OP[node.metric]
     col = f"{schema}.{node.class_name.lower()}{layer}.{node.slot_name}"
-    # pgvector's text form: '[0.1, 0.2, ...]'. We inline literals
-    # (Query.sql() inlines all literals — there's no parameter list).
+    if isinstance(node.target, VectorRef):
+        # Cross-row distance: both sides are typed columns — no cast needed.
+        other = compile_sql(
+            node.target, schema=schema, layer=layer, outer_class=outer_class
+        )
+        return f"({col} {op} {other})"
+    # Literal vector — pgvector's text form: '[0.1, 0.2, ...]'.
+    # Query.sql() inlines all literals — there's no parameter list.
     literal = "[" + ", ".join(repr(float(v)) for v in node.target) + "]"
     return f"({col} {op} '{literal}'::vector({node.dim}))"
 

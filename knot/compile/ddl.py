@@ -179,20 +179,27 @@ def emit_ddl(
                             if_not_exists=if_not_exists,
                         )
                     )
-            case VirtualClass():
-                if emit_virtual_views:
-                    stmts.append(
-                        _emit_view(cls, schema=schema, if_not_exists=if_not_exists)
-                    )
-                    if emit_descriptions and cls.description:
-                        stmts.append(
-                            _comment_on(
-                                "VIEW",
-                                f"{schema}.{cls.name.lower()}",
-                                cls.description,
-                            )
-                        )
+            # VirtualClass handled below in dependency order.
             # Abstract OntologyClass falls through (no table).
+
+    # Emit virtual views in topological order (shallowest depth first) so
+    # a nested virtual's CREATE VIEW can reference its parent virtual's
+    # view, which must already exist.
+    if emit_virtual_views:
+        virtual_classes = sorted(
+            (c for c in spec.classes.values() if isinstance(c, VirtualClass)),
+            key=_virtual_depth,
+        )
+        for vc in virtual_classes:
+            stmts.append(_emit_view(vc, schema=schema, if_not_exists=if_not_exists))
+            if emit_descriptions and vc.description:
+                stmts.append(
+                    _comment_on(
+                        "VIEW",
+                        f"{schema}.{vc.name.lower()}",
+                        vc.description,
+                    )
+                )
 
     return stmts
 
@@ -281,22 +288,43 @@ def _create_view(*, if_not_exists: bool) -> str:
     return "CREATE OR REPLACE VIEW" if if_not_exists else "CREATE VIEW"
 
 
+def _virtual_depth(vc: VirtualClass) -> int:
+    """Depth of ``vc`` in the virtual is_a chain (0 = parent is OntologyClass)."""
+    depth = 0
+    node = vc.is_a
+    while isinstance(node, VirtualClass):
+        depth += 1
+        node = node.is_a
+    return depth
+
+
 def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
-    parent = vc.is_a.name.lower()
-    # Virtual classes filter their parent's *resolved* view — the
-    # canonical table is identity-only and has no slot columns to
-    # filter on. The outer FROM is <parent>_resolved, so correlated
-    # ``this.<Parent>`` refs inside Aggregate predicates bind there.
+    # The concrete root class drives the ``this.<Name>`` binding for
+    # correlated aggregates — it flows unchanged through the nested
+    # SELECT * chain, so every level binds against the same outer row.
+    concrete_root = vc.concrete_root()
+
+    # FROM targets the IMMEDIATE parent:
+    #   - OntologyClass parent → <parent>_resolved
+    #   - VirtualClass parent  → <parent_virtual_name> (the parent's own view)
+    if isinstance(vc.is_a, OntologyClass):
+        from_clause = f"{schema}.{vc.is_a.name.lower()}_resolved"
+    else:
+        from_clause = f"{schema}.{vc.is_a.name.lower()}"
+
+    # WHERE contains ONLY this virtual's own definition.  The parent
+    # virtual's view already filters by its own definition, so we don't
+    # re-AND it here.
     body_sql = compile_sql(
         vc.definition,
         schema=schema,
         layer=Layer.RESOLVED,
-        outer_class=vc.is_a.name,
+        outer_class=concrete_root.name,
     )
     return (
         f"{_create_view(if_not_exists=if_not_exists)} "
         f"{schema}.{vc.name.lower()} AS\n"
-        f"SELECT * FROM {schema}.{parent}_resolved\n"
+        f"SELECT * FROM {from_clause}\n"
         f"WHERE {body_sql};"
     )
 

@@ -530,15 +530,58 @@ class OntologyClass:
             f"call spec.enable_corrections() first"
         )
 
+    def explain_winner_sql(
+        self,
+        *,
+        slot: str | None = None,
+        schema: str = "knot_data",
+        bindings_suffix: str = "_bindings",
+        weight_table: str = "source_weight",
+    ) -> str:
+        """Return a SQL SELECT explaining who won the resolver argmax for
+        each (canonical_id, slot_name) pair.
+
+        One row per (canonical_id, slot_name, source_name) with columns:
+        ``canonical_id``, ``slot_name``, ``source_name``, ``slot_value``
+        (text), ``weight`` (float or NULL), ``is_winner`` (boolean),
+        ``margin`` (winner − second for winning rows, NULL for losers).
+
+        Parameters
+        ----------
+        slot
+            When given, restrict to that one slot; a typo raises
+            ``KeyError``.  When ``None``, emit for all non-identifier
+            slots.
+        schema
+            Postgres schema (default ``"knot_data"``).
+        bindings_suffix
+            Bindings table suffix (default ``"_bindings"``).
+        weight_table
+            Weight-policy table name (default ``"source_weight"``).
+        """
+        from knot.compile.explain import emit_explain_winner_sql
+
+        return emit_explain_winner_sql(
+            self,
+            slot=slot,
+            schema=schema,
+            bindings_suffix=bindings_suffix,
+            weight_table=weight_table,
+        )
+
 
 @dataclass(slots=True)
 class VirtualClass:
     """A virtual class — materialized as a SQL view over an is_a parent
     table, rows selected by the ``definition`` predicate. The definition
-    is an ``Expr`` produced by the semantic builder, not raw SQL."""
+    is an ``Expr`` produced by the semantic builder, not raw SQL.
+
+    ``is_a`` may be an ``OntologyClass`` (rooted directly in a concrete
+    class's resolved view) or another ``VirtualClass`` (nested virtual —
+    the view filters from the parent virtual's view)."""
 
     name: str
-    is_a: OntologyClass
+    is_a: OntologyClass | VirtualClass
     definition: Expr
     description: str | None = None
 
@@ -552,6 +595,43 @@ class VirtualClass:
                 f"(credit.col.role == 'director')).any()); "
                 f"got {type(self.definition).__name__}"
             )
+
+    def concrete_root(self) -> OntologyClass:
+        """Walk up the ``is_a`` chain and return the concrete
+        ``OntologyClass`` at the base of this virtual's lineage."""
+        node: OntologyClass | VirtualClass = self.is_a
+        while isinstance(node, VirtualClass):
+            node = node.is_a
+        return node
+
+    def _spec_ref(self) -> Spec | None:
+        """Return the ``Spec`` this virtual belongs to by walking up to
+        the concrete root (which carries the ``_spec`` back-reference)."""
+        return self.concrete_root()._spec
+
+    def add_virtual(
+        self,
+        name: str,
+        *,
+        where: Expr,
+        description: str | None = None,
+    ) -> VirtualClass:
+        """Define a virtual subclass of this virtual class — rows that
+        satisfy both this virtual's definition AND ``where``. Materialized
+        as a SQL view filtering from this virtual's own view."""
+        spec = self._spec_ref()
+        if spec is None:
+            raise RuntimeError(
+                f"VirtualClass {self.name!r} not attached to a Spec — "
+                f"create via cls.add_virtual() rather than constructing directly"
+            )
+        if name in spec.classes:
+            raise ValueError(f"Spec already has a class named {name!r}")
+        vc = VirtualClass(
+            name=name, is_a=self, definition=where, description=description
+        )
+        spec.classes[name] = vc
+        return vc
 
 
 # ---------------------------------------------------------------------------
@@ -822,6 +902,20 @@ class SourceBinding:
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
+    def assign_canonicals_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return the SQL template that assigns ``canonical_id`` to a
+        batch of unresolved binding rows in one round-trip. Single
+        ``%(assignments)s::jsonb`` placeholder — host binds a JSON
+        array of ``{canonical_id, source_identifier, er_metadata}``
+        objects. Idempotency identical to ``assign_canonical_sql``:
+        already-stamped rows are strict no-ops."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_assign_canonicals_sql
+
+        return emit_assign_canonicals_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
     def recanonicalize_sql(self, *, bindings_suffix: str = "_bindings") -> str:
         """Return the SQL template that reassigns a binding row's
         ``canonical_id``, preserving history via SCD2. Three named
@@ -844,6 +938,28 @@ class SourceBinding:
         from knot.compile.write import emit_retract_sql
 
         return emit_retract_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
+    def validate_rows_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return a SELECT SQL template that validates rows BEFORE upsert.
+
+        Takes the same ``%(rows)s::jsonb`` parameter as ``write_sql()``
+        and returns a result set of violations — zero rows means every
+        input row is well-formed. Schema comes from the owning spec.
+
+        Output columns: ``row_index`` (BIGINT, 0-based), ``source_identifier``
+        (TEXT), ``violation_kind`` (TEXT), ``slot_name`` (TEXT), ``detail``
+        (TEXT).
+
+        Checks structural shape and primitive coercibility; semantic
+        constraints (range, FK existence, business rules) are post-write
+        concerns — run ``spec.emit_validation()`` inside the same
+        transaction after the upsert."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_validate_rows_sql
+
+        return emit_validate_rows_sql(
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
@@ -1180,10 +1296,23 @@ class Spec:
                                 f"concrete class {c.name!r} has multiple identifier slots: {names}"
                             )
                 case VirtualClass():
-                    if c.is_a.name not in concrete_or_abstract:
-                        errs.append(
-                            f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
-                        )
+                    # is_a may be OntologyClass or VirtualClass (nested virtual).
+                    if isinstance(c.is_a, OntologyClass):
+                        if c.is_a.name not in concrete_or_abstract:
+                            errs.append(
+                                f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
+                            )
+                    else:
+                        # Parent is another VirtualClass — must be in spec.
+                        if c.is_a.name not in self.classes:
+                            errs.append(
+                                f"virtual class {c.name!r}.is_a → {c.is_a.name!r}: not in spec"
+                            )
+
+        # Virtual is_a cycle detection (separate from OntologyClass cycle check).
+        for c in self.classes.values():
+            if isinstance(c, VirtualClass) and _virtual_in_cycle(c):
+                errs.append(f"virtual class {c.name!r} participates in an is_a cycle")
 
         # Constraint references
         constraint_names: set[str] = set()
@@ -1330,6 +1459,25 @@ class SpecError(ValueError):
 # Validation helpers (module-level so they can be unit-tested in isolation
 # and don't pollute Spec's instance namespace)
 # ---------------------------------------------------------------------------
+
+
+def _virtual_in_cycle(vc: VirtualClass) -> bool:
+    """True iff ``vc`` would appear in its own virtual is_a chain.
+
+    Walks the ``is_a`` chain upward; stops at an ``OntologyClass``
+    (concrete root — no cycle possible from there). Returns ``True``
+    the moment we re-encounter ``vc`` itself."""
+    seen: set[int] = set()
+    node = vc.is_a
+    while isinstance(node, VirtualClass):
+        if node is vc:
+            return True
+        if id(node) in seen:
+            # Hit a cycle that doesn't include vc — stop to avoid infinite loop.
+            return False
+        seen.add(id(node))
+        node = node.is_a
+    return False
 
 
 def _participates_in_cycle(cls: OntologyClass) -> bool:

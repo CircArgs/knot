@@ -14,6 +14,7 @@ rather than at compilation.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -151,14 +152,36 @@ class VectorRef(Expr, _ValueExpr):
     metric: str  # "cosine" | "l2" | "ip"
     dim: int
 
-    def distance_to(self, target: Any) -> VectorDistance:
+    def distance_to(self, target: VectorRef | Sequence[float]) -> VectorDistance:
         """Return a float-valued ``VectorDistance`` expression between
         this slot and ``target``. The operator is picked from the
         slot's declared ``metric`` — ``<=>`` for cosine, ``<->`` for
         l2, ``<#>`` for ip — matching the slot's HNSW index, so
         ``order_by(slot.distance_to(v)).limit(k)`` uses the index.
         Compose freely: chain ``.where(...)`` before for filtering,
-        ``.select(slot.distance_to(v))`` to surface the distance, etc."""
+        ``.select(slot.distance_to(v))`` to surface the distance, etc.
+
+        ``target`` may be a literal vector (list/tuple of floats) or
+        another ``VectorRef`` for cross-row distance (renders as
+        ``col_a <op> col_b`` — no ``::vector(N)`` cast, both sides
+        are typed columns). Cross-row refs must share the same
+        ``metric`` and ``dim``."""
+        if isinstance(target, VectorRef):
+            if target.metric != self.metric:
+                raise ValueError(
+                    f"distance_to: metric mismatch ({self.metric!r} vs {target.metric!r})"
+                )
+            if target.dim != self.dim:
+                raise ValueError(
+                    f"distance_to: dim mismatch ({self.dim} vs {target.dim})"
+                )
+            return VectorDistance(
+                class_name=self.class_name,
+                slot_name=self.slot_name,
+                target=target,
+                metric=self.metric,
+                dim=self.dim,
+            )
         return VectorDistance(
             class_name=self.class_name,
             slot_name=self.slot_name,
@@ -170,16 +193,20 @@ class VectorRef(Expr, _ValueExpr):
 
 @dataclass(frozen=True, slots=True)
 class VectorDistance(Expr, _ValueExpr):
-    """Float-valued distance between a vector slot and a literal
-    target vector, rendered with the operator picked by the slot's
-    ``metric``. Composes anywhere a float column-level expression
-    does — ``.order_by``, ``.select``, comparison (``> 0.3``), etc.
+    """Float-valued distance between a vector slot and a target,
+    rendered with the operator picked by the slot's ``metric``.
+    Composes anywhere a float column-level expression does —
+    ``.order_by``, ``.select``, comparison (``> 0.3``), etc.
     HNSW index gets used when this expression drives an ``ORDER BY``
-    with a ``LIMIT``."""
+    with a ``LIMIT``.
+
+    ``target`` is either a literal vector (``tuple[float, ...]``) or
+    a ``VectorRef`` for cross-row distance (renders as
+    ``col_a <op> col_b`` — no ``::vector(N)`` cast)."""
 
     class_name: str
     slot_name: str
-    target: tuple[float, ...]
+    target: tuple[float, ...] | VectorRef
     metric: str
     dim: int
 

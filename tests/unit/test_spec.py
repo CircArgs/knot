@@ -415,3 +415,81 @@ def test_correlated_aggregate_typo_in_slot_raises():
     credit.slot("movie", movie)
     with pytest.raises(KeyError, match="role"):
         ((credit.col.movie == this.Movie) & (credit.col.role == "director")).any()
+
+
+# ---------------------------------------------------------------------------
+# Virtual-of-virtual spec tests
+# ---------------------------------------------------------------------------
+
+
+def test_add_virtual_on_virtual_class_creates_nested_virtual():
+    """vc.add_virtual(...) creates a VirtualClass with is_a pointing at vc."""
+    from knot import raw
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    directed = movie.add_virtual("DirectedMovie", where=raw("1 = 1"))
+    recent = directed.add_virtual("RecentDirectedMovie", where=movie.col.year >= 2000)
+
+    assert isinstance(recent, VirtualClass)
+    assert recent.is_a is directed
+    assert "RecentDirectedMovie" in spec.classes
+
+
+def test_nested_virtual_concrete_root():
+    """concrete_root() walks the chain and returns the OntologyClass."""
+    from knot import raw
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    v1 = movie.add_virtual("V1", where=raw("1 = 1"))
+    v2 = v1.add_virtual("V2", where=raw("1 = 1"))
+    v3 = v2.add_virtual("V3", where=raw("1 = 1"))
+
+    assert v1.concrete_root() is movie
+    assert v2.concrete_root() is movie
+    assert v3.concrete_root() is movie
+
+
+def test_validate_accepts_virtual_of_virtual():
+    """Spec.validate() accepts a valid virtual-of-virtual chain."""
+    from knot import raw
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    directed = movie.add_virtual("DirectedMovie", where=raw("1 = 1"))
+    directed.add_virtual("RecentDirectedMovie", where=raw("1 = 1"))
+    # Should not raise.
+    errs = spec._validation_errors()
+    assert not any("virtual" in e for e in errs)
+
+
+def test_validate_rejects_virtual_is_a_missing_from_spec():
+    """A VirtualClass whose is_a VirtualClass is not in the spec is an error."""
+    from knot import raw
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    spec.add_class("Movie")
+    ghost_vc = VirtualClass(
+        name="Ghost", is_a=OntologyClass(name="Movie"), definition=raw("1 = 1")
+    )
+    # child references ghost_vc which is NOT in spec.classes
+    child = VirtualClass(name="Child", is_a=ghost_vc, definition=raw("1 = 1"))
+    spec.classes[child.name] = child
+    errs = spec._validation_errors()
+    assert any("Child" in e and "Ghost" in e for e in errs)
+
+
+def test_validate_rejects_virtual_is_a_cycle():
+    """A cycle in the virtual is_a chain is detected and reported."""
+    from knot import raw
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    v1 = movie.add_virtual("V1", where=raw("1 = 1"))
+    v2 = v1.add_virtual("V2", where=raw("1 = 1"))
+    # Force a cycle: V1.is_a = V2 (V1 → V2 → V1)
+    object.__setattr__(v1, "is_a", v2)
+    errs = spec._validation_errors()
+    assert any("cycle" in e for e in errs)

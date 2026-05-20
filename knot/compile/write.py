@@ -213,6 +213,198 @@ def _emit_class_upsert(
 # ---------------------------------------------------------------------------
 
 
+def emit_validate_rows_sql(
+    binding: SourceBinding,
+    *,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> str:
+    """Return one SELECT SQL template that validates rows BEFORE upsert.
+
+    Takes the same ``%(rows)s::jsonb`` parameter as ``write_sql()`` and
+    returns a result set of violations — zero rows means every input row
+    is well-formed.
+
+    Output columns:
+
+    - ``row_index``         BIGINT  — 0-based index into the input array
+    - ``source_identifier`` TEXT    — pulled from the row payload
+    - ``violation_kind``    TEXT    — one of:
+        ``missing_source_identifier``, ``missing_required_slot``,
+        ``type_coercion_failed``
+    - ``slot_name``         TEXT    — offending slot (NULL for
+        ``missing_source_identifier``)
+    - ``detail``            TEXT    — human-readable description
+
+    Validation scope (structural / primitive-coercibility checks only):
+
+    - **missing_source_identifier** — ``source_identifier`` absent or
+      JSON null.
+    - **missing_required_slot** — a required non-identifier slot is
+      absent or JSON null.  The identifier slot is excluded (ER stamps
+      it post-ingest; it's never present in the raw payload).
+    - **type_coercion_failed** — lightweight structural pre-checks via
+      regex (INTEGER, FLOAT) or jsonb introspection (VECTOR dim/type,
+      BOOLEAN, DATE, TIMESTAMP).  TEXT and ClassRef slots are skipped
+      (any string is valid).  Array slots are skipped (the ARRAY
+      subquery handles heterogeneous content and no cheap structural
+      check exists).
+
+    Semantic constraints (range, FK existence, business rules) are
+    post-write concerns — run ``spec.emit_validation()`` after the
+    upsert inside the same transaction.
+
+    Slots with an explicit ``sql`` mapping are skipped for
+    type-coercion checks: the SQL expression is user-owned and knot
+    cannot safely pre-validate its output type.
+
+    Usage::
+
+        sql = binding.validate_rows_sql()
+        with pg.cursor() as cur:
+            cur.execute(sql, {"rows": json.dumps(rows)})
+            violations = cur.fetchall()
+            bad_indices = {v["row_index"] for v in violations if v["violation_kind"] != "missing_source_identifier"}
+    """
+    _check_concrete(binding.class_)
+    cls = binding.class_
+
+    parts: list[str] = []
+
+    # CTE: expand rows with 0-based index
+    input_cte = (
+        "WITH input AS (\n"
+        "  SELECT (row_number() OVER ()) - 1 AS row_index,\n"
+        "         r AS payload\n"
+        "  FROM jsonb_array_elements(%(rows)s::jsonb) AS r\n"
+        ")"
+    )
+
+    # Check 1: missing source_identifier
+    parts.append(
+        "SELECT\n"
+        "  row_index,\n"
+        "  NULL::text AS source_identifier,\n"
+        "  'missing_source_identifier'::text AS violation_kind,\n"
+        "  NULL::text AS slot_name,\n"
+        "  'source_identifier is required'::text AS detail\n"
+        "FROM input\n"
+        "WHERE payload->>'source_identifier' IS NULL"
+    )
+
+    # Check 2: missing required slots (non-identifier)
+    for slot in cls.effective_slots():
+        if slot.identifier:
+            continue
+        if not slot.required:
+            continue
+        m = binding.effective_mapping(slot.name)
+        src_field = m.source_slot[0]
+        slot_literal = _sql_literal(slot.name)
+        src_literal = _sql_literal(src_field)
+        parts.append(
+            f"SELECT\n"
+            f"  row_index,\n"
+            f"  payload->>'source_identifier',\n"
+            f"  'missing_required_slot'::text AS violation_kind,\n"
+            f"  {slot_literal}::text AS slot_name,\n"
+            f"  'required slot was absent or null'::text AS detail\n"
+            f"FROM input\n"
+            f"WHERE NOT (payload ? {src_literal})\n"
+            f"   OR payload->>{src_literal} IS NULL"
+        )
+
+    # Check 3: type coercion pre-checks per slot type
+    for slot in cls.effective_slots():
+        if slot.identifier:
+            continue
+        m = binding.effective_mapping(slot.name)
+        # Skip slots with an explicit SQL expression — user owns the transform
+        if m.sql is not None:
+            continue
+        src_field = m.source_slot[0]
+        slot_literal = _sql_literal(slot.name)
+        src_literal = _sql_literal(src_field)
+
+        check: str | None = _type_precheck(slot.type, src_field, src_literal)
+        if check is None:
+            continue
+
+        detail = _type_precheck_detail(slot.type)
+        detail_literal = _sql_literal(detail)
+        parts.append(
+            f"SELECT\n"
+            f"  row_index,\n"
+            f"  payload->>'source_identifier',\n"
+            f"  'type_coercion_failed'::text AS violation_kind,\n"
+            f"  {slot_literal}::text AS slot_name,\n"
+            f"  {detail_literal}::text AS detail\n"
+            f"FROM input\n"
+            f"WHERE payload ? {src_literal}\n"
+            f"  AND payload->>{src_literal} IS NOT NULL\n"
+            f"  AND {check}"
+        )
+
+    union_body = "\nUNION ALL\n".join(parts)
+    return f"{input_cte}\n{union_body};"
+
+
+def _type_precheck(t: TypeExpression, src_field: str, src_literal: str) -> str | None:
+    """Return a WHERE-fragment (truthy = violation) for structural pre-checks,
+    or None when no cheap check is available for this type."""
+    match t:
+        case Primitive.INTEGER:
+            return f"payload->>{src_literal} !~ '^-?[0-9]+$'"
+        case Primitive.FLOAT:
+            # Accept integers too (e.g. "1" is a valid float)
+            return (
+                f"payload->>{src_literal} !~ '^-?[0-9]+(\\.[0-9]+)?([eE][+-]?[0-9]+)?$'"
+            )
+        case Primitive.BOOLEAN:
+            return (
+                f"lower(payload->>{src_literal}) "
+                f"NOT IN ('true', 'false', '1', '0', 'yes', 'no', 't', 'f')"
+            )
+        case Primitive.DATE:
+            return f"payload->>{src_literal} !~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}$'"
+        case Primitive.TIMESTAMP:
+            # ISO 8601: YYYY-MM-DDThh:mm:ss… or YYYY-MM-DD hh:mm:ss…
+            return (
+                f"payload->>{src_literal} "
+                f"!~ '^[0-9]{{4}}-[0-9]{{2}}-[0-9]{{2}}[T ][0-9]{{2}}:[0-9]{{2}}'"
+            )
+        case Vector(dim=dim):
+            return (
+                f"NOT (jsonb_typeof(payload->'{src_field}') = 'array'\n"
+                f"     AND jsonb_array_length(payload->'{src_field}') = {dim})"
+            )
+        case Primitive.TEXT | ClassRef() | Array():
+            # TEXT: any string is valid; ClassRef: FK is a text id (any string valid);
+            # Array: heterogeneous jsonb — no cheap structural check.
+            return None
+        case _:
+            return None
+
+
+def _type_precheck_detail(t: TypeExpression) -> str:
+    """Human-readable detail string for a type_coercion_failed violation."""
+    match t:
+        case Primitive.INTEGER:
+            return "value is not a valid integer"
+        case Primitive.FLOAT:
+            return "value is not a valid float"
+        case Primitive.BOOLEAN:
+            return "value is not a valid boolean"
+        case Primitive.DATE:
+            return "value is not a valid date (expected YYYY-MM-DD)"
+        case Primitive.TIMESTAMP:
+            return "value is not a valid timestamp (expected ISO 8601)"
+        case Vector(dim=dim):
+            return f"value is not a jsonb array of length {dim}"
+        case _:
+            return "type coercion failed"
+
+
 def emit_binding_write_sql(
     binding: SourceBinding,
     *,
@@ -446,6 +638,98 @@ def emit_assign_canonical_sql(
     ]
     # Chain of write-only CTEs needs an outer SELECT to be a valid
     # postgres statement; the SELECT 1 is the tail.
+    return "WITH " + ",\n".join(all_ctes) + "\nSELECT 1;"
+
+
+def emit_assign_canonicals_sql(
+    binding: SourceBinding,
+    *,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> str:
+    """Return the SQL template that assigns ``canonical_id`` to a batch
+    of previously-unresolved binding rows in one round-trip.
+
+    Same three-step atomic chain as ``emit_assign_canonical_sql`` —
+    stamp + forward-FK-translation + backward-fan-out — but driven by
+    ``jsonb_to_recordset(%(assignments)s::jsonb)`` so the ER worker can
+    mint thousands per statement. Idempotency semantics are identical:
+    the stamp UPDATE filters ``AND canonical_id IS NULL``, so rows
+    already stamped are strict no-ops; each fan-out CTE is gated on
+    ``EXISTS (SELECT 1 FROM stamp WHERE source_identifier = ...)`` so
+    previously-stamped rows never force-rewrite referencing FK columns.
+
+    Single ``%(assignments)s::jsonb`` placeholder — host binds a JSON
+    array of objects, each with ``canonical_id``, ``source_identifier``,
+    and ``er_metadata`` (null to leave unchanged)::
+
+        cur.execute(binding.assign_canonicals_sql(), {
+            "assignments": json.dumps([
+                {"canonical_id": "m_x", "source_identifier": "tt001",
+                 "er_metadata": {"run_id": "r42"}},
+                {"canonical_id": "m_y", "source_identifier": "tt002",
+                 "er_metadata": None},
+            ])
+        })
+    """
+    _check_concrete(binding.class_)
+    cls = binding.class_
+    ident_name = cls.identifier_slot().name
+    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
+
+    # Forward FK translation set-clauses — same logic as the singular,
+    # but source_identifier comes from the recordset alias ``a``.
+    set_clauses = [
+        f"{ident_name} = a.canonical_id",
+        "er_metadata = COALESCE(a.er_metadata, b.er_metadata)",
+    ]
+    for slot in cls.effective_slots():
+        if not isinstance(slot.type, ClassRef):
+            continue
+        target = slot.type.target
+        target_table = _bindings_id(target, schema=schema, suffix=bindings_suffix)
+        target_ident = target.identifier_slot().name
+        lookup = (
+            f"(SELECT {target_ident} FROM {target_table} "
+            f"WHERE source_name = {source_literal} "
+            f"AND source_identifier = b.{slot.name} "
+            f"AND {target_ident} IS NOT NULL LIMIT 1)"
+        )
+        set_clauses.append(f"{slot.name} = COALESCE({lookup}, b.{slot.name})")
+
+    set_block = ",\n    ".join(set_clauses)
+
+    # Backward fan-out — one CTE per (referencing_class, fk_slot).
+    # Gated on EXISTS (SELECT 1 FROM stamp WHERE source_identifier = r.source_identifier)
+    # per-row so a re-run on already-stamped rows never force-rewrites.
+    fanout_ctes: list[str] = []
+    for ref_cls, ref_slot in cls.referrers:
+        ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
+        cte_name = f"fanout_{ref_cls.name.lower()}_{ref_slot.name}"
+        fanout_ctes.append(
+            f"{cte_name} AS (\n"
+            f"  UPDATE {ref_table} AS r\n"
+            f"  SET {ref_slot.name} = s.canonical_id\n"
+            f"  FROM stamp AS s\n"
+            f"  WHERE r.source_name = {source_literal}\n"
+            f"    AND r.{ref_slot.name} = s.source_identifier\n"
+            f")"
+        )
+
+    all_ctes = [
+        f"stamp AS (\n"
+        f"  UPDATE {table} AS b\n"
+        f"  SET {set_block}\n"
+        f"  FROM jsonb_to_recordset(%(assignments)s::jsonb)\n"
+        f"       AS a(canonical_id text, source_identifier text, er_metadata jsonb)\n"
+        f"  WHERE b.source_name = {source_literal}\n"
+        f"    AND b.source_identifier = a.source_identifier\n"
+        f"    AND b.{ident_name} IS NULL\n"
+        f"  RETURNING b.{ident_name} AS canonical_id, b.source_identifier\n"
+        f")",
+        *fanout_ctes,
+    ]
     return "WITH " + ",\n".join(all_ctes) + "\nSELECT 1;"
 
 

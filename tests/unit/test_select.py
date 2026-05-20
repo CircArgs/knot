@@ -433,10 +433,8 @@ def test_bindings_col_accessor_emits_typed_refs():
     spec, movie = _make_movie_spec()
     imdb = spec.add_source("imdb")
     imdb.bind(movie)
-    q = (
-        movie.unresolved
-        .where(movie.bindings_col.source_name == "imdb")
-        .select(movie.bindings_col.source_identifier, movie.col.title)
+    q = movie.unresolved.where(movie.bindings_col.source_name == "imdb").select(
+        movie.bindings_col.source_identifier, movie.col.title
     )
     sql = q.sql()
     assert "source_name = 'imdb'" in sql
@@ -447,7 +445,7 @@ def test_bindings_col_accessor_emits_typed_refs():
 def test_bindings_col_rejects_typo():
     spec, movie = _make_movie_spec()
     with pytest.raises(KeyError, match="not a bindings-table column"):
-        movie.bindings_col.not_a_real_column
+        _ = movie.bindings_col.not_a_real_column
 
 
 def test_bindings_col_rejects_spec_slot_name():
@@ -456,7 +454,7 @@ def test_bindings_col_rejects_spec_slot_name():
     spec, movie = _make_movie_spec()
     # 'year' is a spec slot on Movie, not a bindings-table column.
     with pytest.raises(KeyError, match="not a bindings-table column"):
-        movie.bindings_col.year
+        _ = movie.bindings_col.year
 
 
 def test_abstract_class_blocks_query_entry_points():

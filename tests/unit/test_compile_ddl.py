@@ -318,3 +318,137 @@ def test_vector_construction_rejects_unknown_metric():
 
     with pytest.raises(ValueError, match="metric"):
         types.VECTOR(384, metric="manhattan")
+
+
+# ---------------------------------------------------------------------------
+# Virtual-of-virtual DDL tests
+# ---------------------------------------------------------------------------
+
+
+def _spec_with_nested_virtual() -> tuple[Spec, object, object, object]:
+    """A spec with Movie → DirectedMovie (virtual) → RecentDirectedMovie
+    (virtual-of-virtual). Returns (spec, movie, directed_movie, recent_directed)."""
+    from knot import Spec, this, types
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    credit = spec.add_class("Credit")
+    credit.slot("role", types.TEXT, required=True)
+    credit.slot("movie", movie)
+
+    directed_movie = movie.add_virtual(
+        "DirectedMovie",
+        where=(
+            (credit.col.movie == this.Movie) & (credit.col.role == "director")
+        ).any(),
+    )
+    recent_directed = directed_movie.add_virtual(
+        "RecentDirectedMovie",
+        where=movie.col.year >= 2000,
+    )
+    return spec, movie, directed_movie, recent_directed
+
+
+def test_virtual_of_virtual_from_clause_targets_parent_virtual():
+    """The nested virtual's FROM clause references the parent virtual's view,
+    not the concrete class's _resolved view."""
+    spec, _movie, _directed, _recent = _spec_with_nested_virtual()
+    stmts = emit_ddl(spec)
+    # Match on the header line so we don't confuse the body referencing _resolved.
+    recent_view = next(
+        s
+        for s in stmts
+        if s.split("\n", 1)[0].lower().startswith("create")
+        and "recentdirectedmovie" in s.split("\n", 1)[0].lower()
+    )
+    assert "FROM knot_data.directedmovie" in recent_view
+    # The FROM target should be the parent virtual, not _resolved.
+    from_target = recent_view.split("FROM", 1)[1].split("WHERE")[0].strip()
+    assert "_resolved" not in from_target
+
+
+def test_virtual_of_virtual_where_contains_only_own_definition():
+    """The nested virtual's WHERE only contains its own predicate.
+    The parent virtual's definition is NOT re-ANDed into the child."""
+    spec, _movie, _directed, _recent = _spec_with_nested_virtual()
+    stmts = emit_ddl(spec)
+    recent_view = next(
+        s
+        for s in stmts
+        if s.split("\n", 1)[0].lower().startswith("create")
+        and "recentdirectedmovie" in s.split("\n", 1)[0].lower()
+    )
+    # The child's definition is year >= 2000; parent's is the EXISTS aggregate.
+    # Confirm year filter appears and EXISTS subquery is NOT in child WHERE.
+    where_part = recent_view.split("WHERE", 1)[1]
+    assert "year" in where_part
+    # The parent virtual's correlated-EXISTS predicate should not be here.
+    assert "EXISTS" not in where_part
+
+
+def test_virtual_of_virtual_parent_emitted_before_child():
+    """Parent virtual view must appear before child virtual view in the DDL."""
+    spec, _movie, _directed, _recent = _spec_with_nested_virtual()
+    stmts = emit_ddl(spec)
+
+    # Match on the first line of each statement (the CREATE VIEW ... AS header)
+    # to avoid false positives from view bodies that reference _resolved views.
+    def _header(s: str) -> str:
+        return s.split("\n", 1)[0].lower()
+
+    virtual_view_stmts = [
+        s
+        for s in stmts
+        if "VIEW" in s
+        and "_resolved" not in _header(s)
+        and "_all_sources" not in _header(s)
+    ]
+    # View names are lowercased: directedmovie, recentdirectedmovie.
+    directed_idx = next(
+        i
+        for i, s in enumerate(virtual_view_stmts)
+        if "knot_data.directedmovie" in _header(s)
+    )
+    recent_idx = next(
+        i
+        for i, s in enumerate(virtual_view_stmts)
+        if "knot_data.recentdirectedmovie" in _header(s)
+    )
+    assert directed_idx < recent_idx, "parent virtual must precede child virtual in DDL"
+
+
+def test_three_level_virtual_chain():
+    """concrete → v1 → v2 → v3: all three views emitted, in depth order."""
+    from knot import Spec, types
+    from knot.ast.expr import Raw
+
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime_minutes", types.INTEGER)
+
+    v1 = movie.add_virtual("V1", where=Raw("year >= 1900"))
+    v2 = v1.add_virtual("V2", where=Raw("year >= 1950"))
+    _v3 = v2.add_virtual("V3", where=Raw("year >= 2000"))
+
+    stmts = emit_ddl(spec)
+    # Filter on the header line only (body may reference _resolved views).
+    virtual_views = [
+        s
+        for s in stmts
+        if "VIEW" in s
+        and "_resolved" not in s.split("\n", 1)[0]
+        and "_all_sources" not in s.split("\n", 1)[0]
+    ]
+    # Match by view name in header (name appears right before " AS\n").
+    v1_idx = next(i for i, s in enumerate(virtual_views) if "knot_data.v1 AS" in s)
+    v2_idx = next(i for i, s in enumerate(virtual_views) if "knot_data.v2 AS" in s)
+    v3_idx = next(i for i, s in enumerate(virtual_views) if "knot_data.v3 AS" in s)
+    assert v1_idx < v2_idx < v3_idx
+
+    # Verify FROM chain: V2 FROM v1, V3 FROM v2.
+    v2_stmt = virtual_views[v2_idx]
+    assert "FROM knot_data.v1" in v2_stmt
+    v3_stmt = virtual_views[v3_idx]
+    assert "FROM knot_data.v2" in v3_stmt

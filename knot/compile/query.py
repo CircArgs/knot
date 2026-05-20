@@ -105,9 +105,7 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
 
     if node.grouping:
         group_parts = [
-            compile_sql(
-                g, schema=schema, layer=layer, outer_class=node.class_name
-            )
+            compile_sql(g, schema=schema, layer=layer, outer_class=node.class_name)
             for g in node.grouping
         ]
         parts.append("GROUP BY " + ", ".join(group_parts))
