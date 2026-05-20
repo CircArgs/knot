@@ -791,6 +791,24 @@ class SourceBinding:
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
+    def update_slot_sql(
+        self, slot_name: str, *, bindings_suffix: str = "_bindings"
+    ) -> str:
+        """Return the SQL template that updates ONE slot value across
+        a batch of existing binding rows. One named placeholder —
+        ``%(rows)s::jsonb`` — same batched shape as ``write_sql``,
+        but a slot-level UPDATE not a full upsert. Each row in the
+        jsonb payload carries ``source_identifier`` plus the slot
+        value (named by ``slot_name``). Use for embedding worker
+        backfills + any 'fill one column on rows already ingested'
+        pattern. Refuses to target the identifier slot."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_update_slot_sql
+
+        return emit_update_slot_sql(
+            self, slot_name, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
     def _require_spec(self) -> Spec:
         """Internal — resolve the binding's owning ``Spec`` or raise."""
         if self.source._spec is None:

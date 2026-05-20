@@ -104,13 +104,19 @@ def _(SentenceTransformer):
 
 @app.cell
 def _(engine, model, movie, pd, pg, spec):
-    # Read via knot: cls.from_source per source + .where(col.is_null())
-    # gives "rows where this column is NULL." The UPDATE for vector
-    # backfill is the one host-owned raw SQL — knot has no in-place
-    # slot-update API yet (gap tracked separately).
-    _all = []
+    # Read + write fully through knot:
+    #   cls.from_source(s).where(col.is_null())    → unembedded rows
+    #   binding.update_slot_sql("title_embedding") → batched UPDATE
+    # The embedding worker batches per source and pipes one jsonb
+    # payload per source through the slot-update API.
+    import json as _json
+
+    _total = 0
     for _src in spec.sources.values():
         if _src.name == "_user_corrections":
+            continue
+        _binding = movie.binding_for(_src)
+        if _binding is None:
             continue
         _df = pd.read_sql_query(
             movie.from_source(_src)
@@ -118,26 +124,21 @@ def _(engine, model, movie, pd, pg, spec):
                  .sql(),
             engine,
         )
-        if not _df.empty:
-            _all.append(_df[["source_name", "source_identifier", "title"]])
-    unembedded = pd.concat(_all, ignore_index=True) if _all else pd.DataFrame()
-    embeddings = model.encode(unembedded["title"].tolist(), normalize_embeddings=True)
-    print(f"encoded {len(unembedded)} titles → {embeddings.shape}")
-
-    _table = movie.bindings_table_name
-    with pg.cursor() as _cur:
-        for (_sn, _si, _), _vec in zip(
-            unembedded.itertuples(index=False), embeddings, strict=False
-        ):
+        if _df.empty:
+            continue
+        _vecs = model.encode(_df["title"].tolist(), normalize_embeddings=True)
+        _payload = [
+            {"source_identifier": _sid, "title_embedding": _v.tolist()}
+            for _sid, _v in zip(_df["source_identifier"], _vecs, strict=False)
+        ]
+        with pg.cursor() as _cur:
             _cur.execute(
-                f"""
-                UPDATE {_table}
-                SET title_embedding = %(vec)s::vector(384)
-                WHERE source_name = %(sn)s
-                  AND source_identifier = %(si)s
-                """,
-                {"vec": str(_vec.tolist()), "sn": _sn, "si": _si},
+                _binding.update_slot_sql("title_embedding"),
+                {"rows": _json.dumps(_payload)},
             )
+        _total += len(_df)
+        print(f"  {_src.name}: embedded {len(_df)} titles")
+    print(f"embedded {_total} titles total")
     return
 
 

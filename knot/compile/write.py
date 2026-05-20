@@ -282,6 +282,57 @@ def emit_retract_sql(
     )
 
 
+def emit_update_slot_sql(
+    binding: SourceBinding,
+    slot_name: str,
+    *,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> str:
+    """Return the SQL template that updates ONE slot value on existing
+    binding rows. Batched via ``%(rows)s::jsonb`` — same shape as
+    ``write_sql()``, but a slot-level UPDATE instead of a full upsert.
+
+    Use for embedding-worker backfills + any other "fill one column
+    on rows already ingested" pattern. The host binds rows as JSON,
+    each row carrying ``source_identifier`` + the slot value::
+
+        sql = binding.update_slot_sql("title_embedding")
+        rows = [
+            {"source_identifier": "tt001", "title_embedding": [0.1, ...]},
+            {"source_identifier": "tt002", "title_embedding": [0.2, ...]},
+        ]
+        cur.execute(sql, {"rows": json.dumps(rows)})
+
+    Type-correct cast picked from the slot's declared type (vector,
+    primitive, array, FK — all handled by the same _jsonb_extract
+    helper used by write_sql).
+
+    Raises ``KeyError`` if ``slot_name`` doesn't exist on the binding's
+    class. Refuses to update the identifier slot — that's an ER
+    decision, use ``assign_canonical_sql`` / ``recanonicalize_sql``.
+    """
+    _check_concrete(binding.class_)
+    cls = binding.class_
+    slot = cls.get_slot(slot_name)  # KeyError on typo
+    if slot.identifier:
+        raise ValueError(
+            f"update_slot_sql can't target the identifier slot "
+            f"({slot_name!r}); use assign_canonical_sql / "
+            f"recanonicalize_sql for canonical_id changes"
+        )
+    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
+    value_expr = _jsonb_extract(slot)
+    return (
+        f"UPDATE {table} AS b\n"
+        f"SET {slot.name} = {value_expr}\n"
+        f"FROM jsonb_array_elements(%(rows)s::jsonb) AS r\n"
+        f"WHERE b.source_name = {source_literal}\n"
+        f"  AND b.source_identifier = (r->>'source_identifier');"
+    )
+
+
 # ---------------------------------------------------------------------------
 # ER helpers — canonical_id assignment + reassignment
 # ---------------------------------------------------------------------------

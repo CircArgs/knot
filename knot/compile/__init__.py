@@ -40,4 +40,5 @@ from knot.compile.write import (
     emit_binding_write_sql,
     emit_recanonicalize_sql,
     emit_retract_sql,
+    emit_update_slot_sql,
 )
