@@ -15,6 +15,7 @@ _EXPECTED_COLUMNS = {
     "violation_kind",
     "slot_name",
     "detail",
+    "payload",
 }
 
 
@@ -341,7 +342,25 @@ def test_classref_slot_no_type_check():
 
 
 # ---------------------------------------------------------------------------
-# 19. Zero-rows when no typeable slots (only TEXT)
+# 19. payload column present in every SELECT branch
+# ---------------------------------------------------------------------------
+
+
+def test_payload_column_present_in_every_branch():
+    spec, binding = _make_spec_with_types()
+    sql = emit_validate_rows_sql(binding)
+    # Every UNION ALL branch must project payload.
+    # Count SELECT blocks and verify each has "payload".
+    branches = sql.split("UNION ALL")
+    for i, branch in enumerate(branches):
+        # Strip the leading CTE and trailing semicolon from first/last.
+        assert "payload" in branch, (
+            f"branch {i} missing 'payload' column:\n{branch[:300]}"
+        )
+
+
+# ---------------------------------------------------------------------------
+# 20. Zero-rows when no typeable slots (only TEXT)  [was 19]
 # ---------------------------------------------------------------------------
 
 

@@ -34,11 +34,11 @@ before the expression tree is built. No post-hoc SQL parsing required.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import Any
 
-from knot.ast.expr import Expr, FkRef, Ref, VectorRef
+from knot.ast.expr import CountRel, Exists, Expr, FkRef, Ref, VectorRef
 from knot.ast.select import Layer, Query
 from knot.ast.types import ClassRef, TypeExpression, Vector, _coerce_type
 
@@ -182,6 +182,73 @@ class _BindingsColAccess:
             )
         cls = object.__getattribute__(self, "_cls")
         return Ref(class_name=cls.name, slot_name=name)
+
+
+# ---------------------------------------------------------------------------
+# ReverseRef — reverse-FK navigator (spec layer, not AST)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(slots=True)
+class ReverseRef:
+    """Navigator for reverse FK traversal: rows on ``other_cls`` whose
+    ``fk_slot_name`` column points at ``primary_cls``.
+
+    Not directly usable as an ``Expr`` — materialize it into a correlated
+    subquery with ``.count()``, ``.any()``, or ``.none()``, optionally
+    filtered first with ``.where(predicate)``::
+
+        person.back(credit, "person").count() > 2
+        person.back(credit, "person").where(credit.col.role == "director").any()
+    """
+
+    primary_cls: Any  # OntologyClass
+    other_cls: Any  # OntologyClass
+    fk_slot_name: str
+    where_clause: Expr | None = None
+
+    def where(self, predicate: Expr) -> ReverseRef:
+        """Narrow the reverse-FK row-set to those that also satisfy
+        ``predicate``. Chainable; multiple calls AND together."""
+        combined = (
+            predicate if self.where_clause is None else self.where_clause & predicate
+        )
+        return replace(self, where_clause=combined)
+
+    def count(self) -> CountRel:
+        """``(SELECT COUNT(*) FROM other WHERE other.fk = primary.id
+        [AND where_clause])``."""
+        return CountRel(
+            other_class_name=self.other_cls.name,
+            fk_slot_name=self.fk_slot_name,
+            primary_class_name=self.primary_cls.name,
+            primary_identifier=self.primary_cls.identifier_slot().name,
+            where=self.where_clause,
+        )
+
+    def any(self) -> Exists:
+        """``EXISTS (SELECT 1 FROM other WHERE other.fk = primary.id
+        [AND where_clause])``."""
+        return Exists(
+            other_class_name=self.other_cls.name,
+            fk_slot_name=self.fk_slot_name,
+            primary_class_name=self.primary_cls.name,
+            primary_identifier=self.primary_cls.identifier_slot().name,
+            where=self.where_clause,
+            negated=False,
+        )
+
+    def none(self) -> Exists:
+        """``NOT EXISTS (SELECT 1 FROM other WHERE other.fk = primary.id
+        [AND where_clause])``."""
+        return Exists(
+            other_class_name=self.other_cls.name,
+            fk_slot_name=self.fk_slot_name,
+            primary_class_name=self.primary_cls.name,
+            primary_identifier=self.primary_cls.identifier_slot().name,
+            where=self.where_clause,
+            negated=True,
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -460,6 +527,34 @@ class OntologyClass:
                 if isinstance(slot.type, ClassRef) and slot.type.target is self:
                     out.append((other, slot))
         return out
+
+    def back(self, other_cls: OntologyClass, fk_slot_name: str) -> ReverseRef:
+        """Return a :class:`ReverseRef` navigator for rows on ``other_cls``
+        whose ``fk_slot_name`` column points at this class.
+
+        Validates at call time that ``(other_cls, fk_slot_name)`` is a
+        declared ``ClassRef`` pointing here — ``KeyError`` on typo.
+
+        Use with ``.count()``, ``.any()``, ``.none()`` (and optionally
+        ``.where(predicate)`` before materializing)::
+
+            person.back(credit, "person").count() > 2
+            person.back(credit, "person")
+                  .where(credit.col.role == "director")
+                  .any()
+        """
+        referrer_pairs = [(cls, sl) for cls, sl in self.referrers]
+        for cls, sl in referrer_pairs:
+            if cls is other_cls and sl.name == fk_slot_name:
+                return ReverseRef(
+                    primary_cls=self,
+                    other_cls=other_cls,
+                    fk_slot_name=fk_slot_name,
+                )
+        raise KeyError(
+            f"no FK from {other_cls.name!r}.{fk_slot_name!r} → {self.name!r}; "
+            f"known referrers: " + str([(c.name, s.name) for c, s in self.referrers])
+        )
 
     # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.
@@ -1400,6 +1495,33 @@ class Spec:
     #   - ``binding.recanonicalize_sql()``      ER reassign (SourceBinding)
     #   - ``binding.retract_sql()``             retract a claim (SourceBinding)
     # ------------------------------------------------------------------
+
+    def views_ddl(self) -> str:
+        """Emit ONLY the ``CREATE OR REPLACE VIEW`` statements — resolved,
+        all_sources, and virtual class views. Use in the two-phase Atlas
+        deploy pattern after the schema-diff tool has applied table changes:
+        views rebuild idempotently and never lose data.
+
+        Companion to ``ddl(include_views=False)``::
+
+            sqldef-tool < spec.ddl(include_views=False)   # tables + indexes
+            pg.execute(spec.views_ddl())                  # views
+        """
+        self.validate()
+        from knot.compile.ddl import emit_ddl
+
+        stmts = emit_ddl(
+            self,
+            schema=self.schema,
+            if_not_exists=True,
+            emit_bindings=False,
+            emit_resolved_views=True,
+            emit_all_sources_views=True,
+            emit_virtual_views=True,
+            emit_indexes=False,
+            emit_weight_table=False,
+        )
+        return "\n\n".join(stmts)
 
     def ddl(self, *, include_views: bool = True) -> str:
         """Return the canonical CREATE script for this spec — schema,

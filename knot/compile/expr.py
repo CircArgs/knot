@@ -41,6 +41,7 @@ from knot.ast.expr import (
     Raw,
     Ref,
     This,
+    TupleCompare,
     VectorDistance,
     VectorRef,
 )
@@ -286,6 +287,29 @@ def _(
         )
         return f"NOT EXISTS (SELECT 1 FROM {sub_table} WHERE {pred_sql} AND NOT ({cond_sql}))"
     raise ValueError(f"unknown Aggregate.kind: {node.kind}")
+
+
+@compile_sql.register
+def _(
+    node: TupleCompare, *, schema: str, layer: Layer, outer_class: str | None = None
+) -> str:
+    lhs = (
+        "("
+        + ", ".join(
+            compile_sql(e, schema=schema, layer=layer, outer_class=outer_class)
+            for e in node.lefts
+        )
+        + ")"
+    )
+    rhs = (
+        "("
+        + ", ".join(
+            compile_sql(e, schema=schema, layer=layer, outer_class=outer_class)
+            for e in node.rights
+        )
+        + ")"
+    )
+    return f"{lhs} {node.op} {rhs}"
 
 
 @compile_sql.register

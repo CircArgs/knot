@@ -235,6 +235,8 @@ def emit_validate_rows_sql(
     - ``slot_name``         TEXT    — offending slot (NULL for
         ``missing_source_identifier``)
     - ``detail``            TEXT    — human-readable description
+    - ``payload``           JSONB   — the full input row (so callers can
+      route violations to a review queue without re-correlating)
 
     Validation scope (structural / primitive-coercibility checks only):
 
@@ -287,7 +289,8 @@ def emit_validate_rows_sql(
         "  NULL::text AS source_identifier,\n"
         "  'missing_source_identifier'::text AS violation_kind,\n"
         "  NULL::text AS slot_name,\n"
-        "  'source_identifier is required'::text AS detail\n"
+        "  'source_identifier is required'::text AS detail,\n"
+        "  payload\n"
         "FROM input\n"
         "WHERE payload->>'source_identifier' IS NULL"
     )
@@ -308,7 +311,8 @@ def emit_validate_rows_sql(
             f"  payload->>'source_identifier',\n"
             f"  'missing_required_slot'::text AS violation_kind,\n"
             f"  {slot_literal}::text AS slot_name,\n"
-            f"  'required slot was absent or null'::text AS detail\n"
+            f"  'required slot was absent or null'::text AS detail,\n"
+            f"  payload\n"
             f"FROM input\n"
             f"WHERE NOT (payload ? {src_literal})\n"
             f"   OR payload->>{src_literal} IS NULL"
@@ -338,7 +342,8 @@ def emit_validate_rows_sql(
             f"  payload->>'source_identifier',\n"
             f"  'type_coercion_failed'::text AS violation_kind,\n"
             f"  {slot_literal}::text AS slot_name,\n"
-            f"  {detail_literal}::text AS detail\n"
+            f"  {detail_literal}::text AS detail,\n"
+            f"  payload\n"
             f"FROM input\n"
             f"WHERE payload ? {src_literal}\n"
             f"  AND payload->>{src_literal} IS NOT NULL\n"

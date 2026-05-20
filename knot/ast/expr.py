@@ -486,6 +486,63 @@ this = _ThisAccess()
 # ---------------------------------------------------------------------------
 
 
+@dataclass(frozen=True, slots=True)
+class TupleCompare(Expr):
+    """Tuple-row comparison — ``(a, b, ...) <op> (v1, v2, ...)``.
+
+    Postgres semantically lexicographic. The canonical keyset-pagination
+    shape: ``where(tuple_lt((year, canonical_id), (cursor_y, cursor_id)))``.
+    All elements on the left side must be ``Expr`` nodes (typically ``Ref``
+    or ``FkRef``); right-side values are coerced to ``Literal`` via
+    ``_as_expr``."""
+
+    op: str  # "<" | "<=" | ">" | ">="
+    lefts: tuple[Expr, ...]
+    rights: tuple[Expr, ...]
+
+    def __post_init__(self) -> None:
+        if self.op not in ("<", "<=", ">", ">="):
+            raise ValueError(
+                f"TupleCompare.op must be a lex-order comparator "
+                f"(<, <=, >, >=), got {self.op!r}"
+            )
+        if not self.lefts:
+            raise ValueError("TupleCompare requires at least one column")
+        if len(self.lefts) != len(self.rights):
+            raise ValueError(
+                f"TupleCompare arity mismatch: "
+                f"{len(self.lefts)} left vs {len(self.rights)} right"
+            )
+
+
+def _tuple_cmp(op: str, lefts: Any, rights: Any) -> TupleCompare:
+    return TupleCompare(
+        op=op,
+        lefts=tuple(lefts),
+        rights=tuple(_as_expr(v) for v in rights),
+    )
+
+
+def tuple_lt(lefts: Any, rights: Any) -> TupleCompare:
+    """``(a, b) < (v1, v2)`` — keyset pagination "before" cursor."""
+    return _tuple_cmp("<", lefts, rights)
+
+
+def tuple_le(lefts: Any, rights: Any) -> TupleCompare:
+    """``(a, b) <= (v1, v2)``."""
+    return _tuple_cmp("<=", lefts, rights)
+
+
+def tuple_gt(lefts: Any, rights: Any) -> TupleCompare:
+    """``(a, b) > (v1, v2)`` — keyset pagination "after" cursor."""
+    return _tuple_cmp(">", lefts, rights)
+
+
+def tuple_ge(lefts: Any, rights: Any) -> TupleCompare:
+    """``(a, b) >= (v1, v2)``."""
+    return _tuple_cmp(">=", lefts, rights)
+
+
 def lit(value: Any) -> Literal:
     """Wrap a Python value as an Expr literal."""
     return Literal(value=value)
