@@ -952,7 +952,12 @@ class SourceBinding:
     # those at the call site.
     # ------------------------------------------------------------------
 
-    def write_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+    def write_sql(
+        self,
+        *,
+        bindings_suffix: str = "_bindings",
+        returning: str | list[str] | None = None,
+    ) -> str:
         """Return one upsert SQL template for this binding. References a
         single ``%(rows)s::jsonb`` parameter — the host's connector
         binds the rows. Schema comes from the spec the binding's source
@@ -973,6 +978,11 @@ class SourceBinding:
 
         Multi-binding atomic write: call ``binding.write_sql()`` per
         binding, run all the statements in one ``pg.transaction()``.
+
+        ``returning`` — append a ``RETURNING`` clause for mutation
+        resolvers that need the upserted row back atomically. ``None``
+        (default) omits the clause; ``"*"`` returns all columns; a list
+        of slot names returns those columns (``KeyError`` on typo).
         """
         spec = self._require_spec()
         # Deliberately no ``spec.validate()`` here — write_sql is a
@@ -981,7 +991,10 @@ class SourceBinding:
         from knot.compile.write import emit_binding_write_sql
 
         return emit_binding_write_sql(
-            self, schema=spec.schema, bindings_suffix=bindings_suffix
+            self,
+            schema=spec.schema,
+            bindings_suffix=bindings_suffix,
+            returning=returning,
         )
 
     def assign_canonical_sql(self, *, bindings_suffix: str = "_bindings") -> str:
@@ -1125,6 +1138,23 @@ class SourceBinding:
         from knot.compile.weight import emit_upsert_weights_sql
 
         return emit_upsert_weights_sql(self)
+
+    def delete_weight_sql(
+        self,
+        slot_name: str,
+        *,
+        weight_table_name: str = "source_weight",
+    ) -> str:
+        """DELETE the ``(source, class, slot)`` weight row, reverting to
+        the resolver's ``COALESCE(weight, 0)`` fallback. ``KeyError`` on
+        unknown ``slot_name``. See
+        ``knot.compile.weight.emit_delete_weight_sql``."""
+        self._require_spec()
+        from knot.compile.weight import emit_delete_weight_sql
+
+        return emit_delete_weight_sql(
+            self, slot_name, weight_table_name=weight_table_name
+        )
 
 
 # ---------------------------------------------------------------------------
@@ -1563,14 +1593,28 @@ class Spec:
             )
         )
 
-    def emit_validation(self) -> list[tuple[str, str]]:
+    def emit_validation(
+        self,
+        *,
+        scope_to_source_identifiers: dict[str, list[str]] | None = None,
+    ) -> list[tuple[str, str]]:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates
         the spec first; schema comes from ``self.schema``. See
-        ``knot.compile.constraints.emit_validation``."""
+        ``knot.compile.constraints.emit_validation``.
+
+        ``scope_to_source_identifiers`` — when provided, each validation
+        SELECT is restricted to the canonical_ids touched by that batch
+        (delta-only validation). Maps ``source_name`` → list of
+        ``source_identifier`` values. ``None`` or empty dict = full-table
+        validation (the default)."""
         self.validate()
         from knot.compile.constraints import emit_validation
 
-        return emit_validation(self, schema=self.schema)
+        return emit_validation(
+            self,
+            schema=self.schema,
+            scope_to_source_identifiers=scope_to_source_identifiers,
+        )
 
 
 class SpecError(ValueError):

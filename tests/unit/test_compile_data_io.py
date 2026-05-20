@@ -179,3 +179,43 @@ def test_severity_warning_does_not_affect_write_sql():
     src = spec.add_source("imdb")
     b = src.bind(movie)
     assert "warn_only" not in emit_binding_write_sql(b)
+
+
+# ---------------------------------------------------------------------------
+# returning= kwarg on emit_binding_write_sql / binding.write_sql
+# ---------------------------------------------------------------------------
+
+
+def test_returning_none_unchanged(movie_spec):
+    b = movie_spec.source_bindings[0]
+    default_sql = emit_binding_write_sql(b)
+    explicit_none_sql = emit_binding_write_sql(b, returning=None)
+    assert default_sql == explicit_none_sql
+    assert "RETURNING" not in default_sql
+
+
+def test_returning_star_appends_returning_star(movie_spec):
+    b = movie_spec.source_bindings[0]
+    sql = emit_binding_write_sql(b, returning="*")
+    assert "RETURNING *" in sql
+    assert sql.rstrip().endswith(";")
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_returning_slot_list_appends_named_columns(movie_spec):
+    b = movie_spec.source_bindings[0]
+    sql = emit_binding_write_sql(b, returning=["year", "name"])
+    assert "RETURNING year, name" in sql
+    assert sql.rstrip().endswith(";")
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_returning_bad_slot_raises_key_error(movie_spec):
+    b = movie_spec.source_bindings[0]
+    with pytest.raises(KeyError, match="bogus_slot"):
+        emit_binding_write_sql(b, returning=["bogus_slot"])
+
+
+def test_write_sql_facade_passes_returning(movie_spec):
+    b = movie_spec.source_bindings[0]
+    assert b.write_sql(returning="*") == emit_binding_write_sql(b, returning="*")

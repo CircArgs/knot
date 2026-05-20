@@ -145,3 +145,39 @@ def test_weight_emitters_raise_when_binding_unattached():
     binding = SourceBinding(source=src, class_=cls)
     with pytest.raises(RuntimeError, match="not attached to a Spec"):
         binding.read_weights_sql()
+
+
+# ---------------------------------------------------------------------------
+# emit_delete_weight_sql
+# ---------------------------------------------------------------------------
+
+
+def test_delete_weight_sql_renders_delete():
+    from knot.compile import emit_delete_weight_sql
+
+    _, binding = _movie_binding()
+    sql = emit_delete_weight_sql(binding, "year")
+    assert sql.startswith("DELETE FROM knot_data.source_weight")
+    assert "source_name = 'imdb'" in sql
+    assert "class_name = 'Movie'" in sql
+    assert "slot_name = 'year'" in sql
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_delete_weight_sql_bad_slot_raises():
+    import pytest
+
+    from knot.compile import emit_delete_weight_sql
+
+    _, binding = _movie_binding()
+    with pytest.raises(KeyError):
+        emit_delete_weight_sql(binding, "nonexistent_slot")
+
+
+def test_delete_weight_sql_facade_matches_free_function():
+    from knot.compile import emit_delete_weight_sql
+
+    _, binding = _movie_binding()
+    assert binding.delete_weight_sql("title") == emit_delete_weight_sql(
+        binding, "title"
+    )

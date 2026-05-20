@@ -104,6 +104,32 @@ def emit_upsert_weights_sql(
     )
 
 
+def emit_delete_weight_sql(
+    binding: SourceBinding,
+    slot_name: str,
+    *,
+    weight_table_name: str = "source_weight",
+) -> str:
+    """DELETE the ``(source, class, slot)`` weight row, reverting to the
+    resolver's ``COALESCE(weight, 0)`` fallback.
+
+    Validates ``slot_name`` against the binding's class — ``KeyError`` on
+    typo. Returns a single DELETE statement with all three key columns
+    inlined as literals (no placeholders).
+    """
+    binding.class_.get_slot(slot_name)  # KeyError on typo
+    spec = binding._require_spec()
+    src = "'" + binding.source.name.replace("'", "''") + "'"
+    cls = "'" + binding.class_.name.replace("'", "''") + "'"
+    slot = "'" + slot_name.replace("'", "''") + "'"
+    return (
+        f"DELETE FROM {spec.schema}.{weight_table_name}\n"
+        f"WHERE source_name = {src}\n"
+        f"  AND class_name = {cls}\n"
+        f"  AND slot_name = {slot};"
+    )
+
+
 def emit_source_read_weights_sql(
     source: Source,
     *,

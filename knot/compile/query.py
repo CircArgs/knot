@@ -6,11 +6,14 @@ strings; literal values are inlined at compile time so there is no
 positional parameter list to thread through to the driver.
 
 JOIN assembly: a pre-pass walks the query AST (where / order_by /
-projection) collecting every ``FkChainRef``. Each unique
-``(source_class, fk_slot, target_class)`` step becomes one JOIN.
-Aliasing is currently coarse — one JOIN per target class, assuming a
-single FK chain per target per query. Multi-hop and same-target-twice
-need richer aliasing; deferred until a real query requires it.
+projection) collecting every ``FkChainRef``. Each unique chain prefix
+(source_class + FK slot path) gets one aliased JOIN. Two FK slots that
+point at the same target class get distinct aliases — e.g.
+``movie_director`` vs ``movie_writer`` — so postgres never sees a
+duplicate table reference. The alias scheme is defined in
+``knot.compile._aliases.chain_alias`` and used identically here and
+in the ``FkChainRef`` expr compiler so column references always match
+the alias assigned to their JOIN.
 
 Adding a second SQL dialect (Trino / Spark) is a new module
 (``query_sql_trino.py``) with its own dispatch table — same
@@ -36,6 +39,7 @@ from knot.ast.expr import (
     Not,
 )
 from knot.ast.select import Query
+from knot.compile._aliases import chain_alias
 from knot.compile.expr import compile_sql
 from knot.spec import Spec
 
@@ -70,24 +74,28 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
         for r in node.projection:
             _collect_chains(r, chains)
 
-    # Build JOIN clauses. Each step gets one JOIN, deduplicated by the
-    # ``(source_class, fk_slot, target_class)`` triple.
-    seen: set[tuple[str, str, str]] = set()
+    # Build JOIN clauses. Each chain prefix gets one aliased JOIN,
+    # deduplicated by alias (= source_class + fk slot path). Two FK
+    # slots pointing at the same target class get distinct aliases so
+    # postgres never sees a duplicate table reference.
+    seen: set[str] = set()
     joins: list[str] = []
     for chain_ref in chains:
-        source_class = chain_ref.source_class
-        for fk_slot, target_class in chain_ref.chain:
-            key = (source_class, fk_slot, target_class)
-            if key not in seen:
-                seen.add(key)
+        # ``lhs`` tracks the left-hand side of the ON clause: the
+        # schema-qualified primary table for the first hop, then the
+        # alias of the previous hop for every subsequent hop.
+        lhs = f"{schema}.{chain_ref.source_class.lower()}{layer}"
+        for i, (fk_slot, target_class) in enumerate(chain_ref.chain):
+            alias = chain_alias(chain_ref.source_class, chain_ref.chain[: i + 1])
+            if alias not in seen:
+                seen.add(alias)
                 target_cls = _lookup_class(spec, target_class)
                 target_ident = target_cls.identifier_slot().name
                 joins.append(
-                    f"JOIN {schema}.{target_class.lower()}{layer} "
-                    f"ON {schema}.{target_class.lower()}{layer}.{target_ident} "
-                    f"= {schema}.{source_class.lower()}{layer}.{fk_slot}"
+                    f"JOIN {schema}.{target_class.lower()}{layer} AS {alias} "
+                    f"ON {alias}.{target_ident} = {lhs}.{fk_slot}"
                 )
-            source_class = target_class
+            lhs = alias
 
     parts = [f"SELECT {select_sql}", f"FROM {table}"]
     parts.extend(joins)

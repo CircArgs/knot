@@ -211,6 +211,41 @@ class VectorDistance(Expr, _ValueExpr):
     dim: int
 
 
+@dataclass(frozen=True, slots=True)
+class TargetExists(Expr):
+    """Boolean predicate: the FK column's value matches a canonical_id on
+    the target class's resolved (or other) view. Produced by
+    ``FkRef.target_exists()``.
+
+    Renders as::
+
+        [NOT] EXISTS (
+          SELECT 1 FROM <schema>.<target_class><layer>
+          WHERE <schema>.<target_class><layer>.<target_identifier_slot>
+              = <schema>.<fk_class><layer>.<fk_slot_name>
+        )
+
+    ``target_identifier_slot`` defaults to ``"canonical_id"`` — the
+    universal identifier slot name in knot. Pass a different value only
+    when a spec uses a non-standard identifier slot name AND you need to
+    match against that slot directly (rare)."""
+
+    fk_class_name: str
+    fk_slot_name: str
+    target_class_name: str
+    target_identifier_slot: str = "canonical_id"
+    negated: bool = False
+
+    def __invert__(self) -> TargetExists:
+        return TargetExists(
+            fk_class_name=self.fk_class_name,
+            fk_slot_name=self.fk_slot_name,
+            target_class_name=self.target_class_name,
+            target_identifier_slot=self.target_identifier_slot,
+            negated=not self.negated,
+        )
+
+
 @dataclass(frozen=True, eq=False, slots=True)
 class FkRef(Expr, _ValueExpr):
     """A reference to a FK slot. Used as a value, it renders as the FK
@@ -234,6 +269,31 @@ class FkRef(Expr, _ValueExpr):
             source_class=self.class_name,
             chain=((self.slot_name, self.target_class_name),),
             terminal_slot=attr,
+        )
+
+    def target_exists(
+        self, target_identifier_slot: str = "canonical_id"
+    ) -> TargetExists:
+        """Boolean predicate: this FK column's value matches some
+        ``canonical_id`` (or ``target_identifier_slot``) in the target
+        class's resolved view. Use in constraints, virtual class
+        definitions, or ``.where(...)`` clauses to assert referential
+        integrity at the resolved layer::
+
+            credit.col.movie.target_exists()
+            # → EXISTS (SELECT 1 FROM <schema>.movie_resolved
+            #            WHERE movie_resolved.canonical_id
+            #                = credit_resolved.movie)
+
+        Negate with ``~``::
+
+            ~credit.col.movie.target_exists()
+        """
+        return TargetExists(
+            fk_class_name=self.class_name,
+            fk_slot_name=self.slot_name,
+            target_class_name=self.target_class_name,
+            target_identifier_slot=target_identifier_slot,
         )
 
 
@@ -513,6 +573,45 @@ class TupleCompare(Expr):
                 f"TupleCompare arity mismatch: "
                 f"{len(self.lefts)} left vs {len(self.rights)} right"
             )
+
+
+@dataclass(frozen=True, slots=True)
+class TupleIn(Expr):
+    """Tuple-row IN-list: ``(a, b, ...) IN ((v1, w1, ...), ...)``.
+
+    Use for batched DataLoader lookups by composite keys::
+
+        where(tuple_in([movie.col.year, movie.col.title],
+                       [(2020, "Tenet"), (1994, "Pulp Fiction")]))
+
+    All elements in ``lefts`` must be ``Expr`` nodes; ``values`` is a
+    tuple of same-arity value tuples (any Python primitive). ``negated``
+    switches to ``NOT IN``."""
+
+    lefts: tuple[Expr, ...]
+    values: tuple[tuple[Any, ...], ...]
+    negated: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.lefts:
+            raise ValueError("TupleIn requires at least one column")
+        for v in self.values:
+            if len(v) != len(self.lefts):
+                raise ValueError(
+                    f"TupleIn arity mismatch: {len(v)} values vs {len(self.lefts)} columns"
+                )
+
+
+def tuple_in(lefts: Any, values: Any) -> TupleIn:
+    """``(a, b) IN ((v1, w1), (v2, w2))`` — batched composite-key lookup."""
+    return TupleIn(lefts=tuple(lefts), values=tuple(tuple(r) for r in values))
+
+
+def tuple_not_in(lefts: Any, values: Any) -> TupleIn:
+    """``(a, b) NOT IN ((v1, w1), (v2, w2))``."""
+    return TupleIn(
+        lefts=tuple(lefts), values=tuple(tuple(r) for r in values), negated=True
+    )
 
 
 def _tuple_cmp(op: str, lefts: Any, rights: Any) -> TupleCompare:

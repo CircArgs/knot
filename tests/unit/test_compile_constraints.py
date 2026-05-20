@@ -121,3 +121,65 @@ def test_emit_validation_union_empty_spec():
     spec = Spec(identifier_slot_name="canonical_id")
     spec.add_class("Movie")
     assert emit_validation_union(spec) is None
+
+
+# ---------------------------------------------------------------------------
+# scope_to_source_identifiers — delta-only validation
+# ---------------------------------------------------------------------------
+
+
+def _constraint_spec():
+    spec = Spec(identifier_slot_name="canonical_id")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    movie.add_constraint("year_sane", body=movie.col.year >= 1888)
+    return spec
+
+
+def test_scope_none_produces_unscoped_sql():
+    spec = _constraint_spec()
+    rewrites = dict(emit_validation(spec, scope_to_source_identifiers=None))
+    sql = rewrites["year_sane"]
+    assert "IN (" not in sql
+    assert "canonical_id IS NOT NULL" not in sql
+
+
+def test_scope_empty_dict_equals_none():
+    spec = _constraint_spec()
+    unscoped = dict(emit_validation(spec))["year_sane"]
+    scoped = dict(emit_validation(spec, scope_to_source_identifiers={}))["year_sane"]
+    assert unscoped == scoped
+
+
+def test_scope_single_source_inlines_subquery():
+    spec = _constraint_spec()
+    rewrites = dict(
+        emit_validation(
+            spec,
+            scope_to_source_identifiers={"imdb": ["tt001", "tt002"]},
+        )
+    )
+    sql = rewrites["year_sane"]
+    assert "canonical_id IN" in sql
+    assert "movie_bindings" in sql
+    assert "('imdb', 'tt001')" in sql
+    assert "('imdb', 'tt002')" in sql
+    assert "canonical_id IS NOT NULL" in sql
+    sqlglot.parse_one(sql, dialect="postgres")
+
+
+def test_scope_multi_source_inlines_all_pairs():
+    spec = _constraint_spec()
+    rewrites = dict(
+        emit_validation(
+            spec,
+            scope_to_source_identifiers={
+                "imdb": ["tt001"],
+                "tmdb": ["m999"],
+            },
+        )
+    )
+    sql = rewrites["year_sane"]
+    assert "('imdb', 'tt001')" in sql
+    assert "('tmdb', 'm999')" in sql
+    sqlglot.parse_one(sql, dialect="postgres")

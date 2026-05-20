@@ -415,6 +415,7 @@ def emit_binding_write_sql(
     *,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
+    returning: str | list[str] | None = None,
 ) -> str:
     """Return one upsert SQL template for the binding. References a
     single ``%(rows)s::jsonb`` parameter — the host's connector binds
@@ -436,14 +437,39 @@ def emit_binding_write_sql(
     Constraint enforcement is the host's concern — run
     ``spec.emit_validation()`` SELECTs after the write inside the
     same transaction and roll back if any return rows.
+
+    ``returning`` — append a ``RETURNING`` clause for mutation resolvers
+    that need the upserted row back atomically:
+
+    - ``None`` (default): no RETURNING clause
+    - ``"*"``: ``RETURNING *``
+    - list of slot names: ``RETURNING slot1, slot2, …``
+      (validated against the class's effective slots; ``KeyError`` on typo)
     """
     _check_concrete(binding.class_)
-    return _emit_class_upsert(
+    sql = _emit_class_upsert(
         binding,
         schema=schema,
         bindings_suffix=bindings_suffix,
         rows_param="rows",
     )
+    if returning is None:
+        return sql
+    if returning == "*":
+        returning_clause = "RETURNING *"
+    else:
+        if isinstance(returning, str):
+            returning = [returning]
+        eff_names = {s.name for s in binding.class_.effective_slots()}
+        for name in returning:
+            if name not in eff_names:
+                raise KeyError(
+                    f"returning: slot {name!r} not on class {binding.class_.name!r}; "
+                    f"valid slots: {sorted(eff_names)}"
+                )
+        returning_clause = "RETURNING " + ", ".join(returning)
+    # Strip the trailing semicolon, append RETURNING, re-add semicolon.
+    return sql.rstrip(";") + "\n" + returning_clause + ";"
 
 
 def emit_retract_sql(

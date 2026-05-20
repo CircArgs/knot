@@ -40,12 +40,15 @@ from knot.ast.expr import (
     Not,
     Raw,
     Ref,
+    TargetExists,
     This,
     TupleCompare,
+    TupleIn,
     VectorDistance,
     VectorRef,
 )
 from knot.ast.select import Layer
+from knot.compile._aliases import chain_alias
 
 
 @singledispatch
@@ -130,8 +133,8 @@ def _(
 def _(
     node: FkChainRef, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
-    target_class = node.chain[-1][1]
-    return f"{schema}.{target_class.lower()}{layer}.{node.terminal_slot}"
+    alias = chain_alias(node.source_class, node.chain)
+    return f"{alias}.{node.terminal_slot}"
 
 
 @compile_sql.register
@@ -227,6 +230,20 @@ def _(
 
 @compile_sql.register
 def _(
+    node: TargetExists, *, schema: str, layer: Layer, outer_class: str | None = None
+) -> str:
+    target_table = f"{schema}.{node.target_class_name.lower()}{layer}"
+    fk_table = f"{schema}.{node.fk_class_name.lower()}{layer}"
+    prefix = "NOT EXISTS" if node.negated else "EXISTS"
+    return (
+        f"{prefix} (SELECT 1 FROM {target_table} "
+        f"WHERE {target_table}.{node.target_identifier_slot} "
+        f"= {fk_table}.{node.fk_slot_name})"
+    )
+
+
+@compile_sql.register
+def _(
     node: CountRel, *, schema: str, layer: Layer, outer_class: str | None = None
 ) -> str:
     other_table = f"{schema}.{node.other_class_name.lower()}{layer}"
@@ -310,6 +327,25 @@ def _(
         + ")"
     )
     return f"{lhs} {node.op} {rhs}"
+
+
+@compile_sql.register
+def _(
+    node: TupleIn, *, schema: str, layer: Layer, outer_class: str | None = None
+) -> str:
+    lhs = (
+        "("
+        + ", ".join(
+            compile_sql(e, schema=schema, layer=layer, outer_class=outer_class)
+            for e in node.lefts
+        )
+        + ")"
+    )
+    vals = ", ".join(
+        "(" + ", ".join(_sql_literal(x) for x in row) + ")" for row in node.values
+    )
+    op = "NOT IN" if node.negated else "IN"
+    return f"{lhs} {op} ({vals})"
 
 
 @compile_sql.register

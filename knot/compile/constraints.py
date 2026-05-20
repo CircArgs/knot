@@ -44,17 +44,39 @@ def emit_validation(
     *,
     schema: str = "knot_data",
     layer: Layer = Layer.RESOLVED,
+    scope_to_source_identifiers: dict[str, list[str]] | None = None,
 ) -> list[tuple[str, str]]:
     """Return ``(constraint_name, validation_sql)`` pairs.
 
     Each ``validation_sql`` returns zero rows when the constraint holds
     and one row per violating canonical_id otherwise.
+
+    ``scope_to_source_identifiers`` — when provided, each validation
+    SELECT is restricted to the canonical_ids touched by that batch.
+    The dict maps ``source_name`` → list of ``source_identifier`` values.
+    Inlines the (source, identifier) tuples as SQL literals — no
+    parameter list (same posture as ``Query.sql``). ``None`` or empty
+    dict means no scoping (full-table validation, the default).
     """
+    # Build the optional IN-subquery fragment once (shared across all constraints).
+    scope_sql: str | None = None
+    if scope_to_source_identifiers:
+        pairs: list[str] = []
+        for src, idents in scope_to_source_identifiers.items():
+            src_lit = "'" + src.replace("'", "''") + "'"
+            for ident in idents:
+                ident_lit = "'" + ident.replace("'", "''") + "'"
+                pairs.append(f"({src_lit}, {ident_lit})")
+        if pairs:
+            pairs_sql = ", ".join(pairs)
+            scope_sql = pairs_sql  # stored; injected per-constraint below
+
     out: list[tuple[str, str]] = []
     for c in spec.constraints:
         primary = c.primary
         identifier = primary.identifier_slot()
         table = f"{schema}.{primary.name.lower()}{layer}"
+        bindings_table = f"{schema}.{primary.name.lower()}_bindings"
         message_literal = f"'{_escape_literal(c.message)}'" if c.message else "NULL"
         # outer_class threads the constraint's primary class through so
         # correlated ``this.<Primary>`` refs inside Aggregate predicates
@@ -62,6 +84,15 @@ def emit_validation(
         body_sql = compile_sql(
             c.body, schema=schema, layer=layer, outer_class=primary.name
         )
+        scope_clause = ""
+        if scope_sql is not None:
+            scope_clause = (
+                f"\n  AND {table}.{identifier.name} IN (\n"
+                f"    SELECT DISTINCT canonical_id FROM {bindings_table}\n"
+                f"    WHERE (source_name, source_identifier) IN ({scope_sql})\n"
+                f"      AND canonical_id IS NOT NULL\n"
+                f"  )"
+            )
         sql = (
             f"SELECT\n"
             f"    '{_escape_literal(c.name)}' AS rule_id,\n"
@@ -70,7 +101,7 @@ def emit_validation(
             f"    {message_literal} AS message,\n"
             f"    {identifier.name} AS offending_pk\n"
             f"FROM {table}\n"
-            f"WHERE NOT ({body_sql});"
+            f"WHERE NOT ({body_sql}){scope_clause};"
         )
         out.append((c.name, sql))
     return out
@@ -81,11 +112,18 @@ def emit_validation_union(
     *,
     schema: str = "knot_data",
     layer: Layer = Layer.RESOLVED,
+    scope_to_source_identifiers: dict[str, list[str]] | None = None,
 ) -> str | None:
     """Return a single ``UNION ALL`` of every constraint's validation
     SELECT, or ``None`` if the spec has no constraints."""
     parts = [
-        sql.rstrip(";") for _, sql in emit_validation(spec, schema=schema, layer=layer)
+        sql.rstrip(";")
+        for _, sql in emit_validation(
+            spec,
+            schema=schema,
+            layer=layer,
+            scope_to_source_identifiers=scope_to_source_identifiers,
+        )
     ]
     if not parts:
         return None

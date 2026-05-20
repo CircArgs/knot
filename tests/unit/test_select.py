@@ -147,31 +147,30 @@ def test_fk_walk_in_where():
     spec, movie, person = _make_movie_director_spec()
     q = movie.resolved.where(movie.col.director.birth_country == "USA")
     sql = compile_query(q, spec=spec, schema="knot_data")
-    # JOIN to Person on canonical_id = movie.director
+    # JOIN to Person, aliased by FK path: movie_director
     assert (
-        "JOIN knot_data.person_resolved ON knot_data.person_resolved.canonical_id "
-        "= knot_data.movie_resolved.director"
+        "JOIN knot_data.person_resolved AS movie_director "
+        "ON movie_director.canonical_id = knot_data.movie_resolved.director"
     ) in sql
-    # WHERE references the joined Person column
-    assert "knot_data.person_resolved.birth_country = 'USA'" in sql
+    # WHERE references the alias, not the full schema-qualified table
+    assert "movie_director.birth_country = 'USA'" in sql
 
 
 def test_fk_walk_in_projection():
     spec, movie, person = _make_movie_director_spec()
     q = movie.resolved.select(movie.col.title, movie.col.director.name)
     sql = compile_query(q, spec=spec, schema="knot_data")
-    assert (
-        "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
-    )
-    assert "JOIN knot_data.person_resolved" in sql
+    # FkChainRef renders via alias, not schema-qualified table name
+    assert "SELECT knot_data.movie_resolved.title, movie_director.name" in sql
+    assert "JOIN knot_data.person_resolved AS movie_director" in sql
 
 
 def test_fk_walk_in_order_by():
     spec, movie, person = _make_movie_director_spec()
     q = movie.resolved.order_by(movie.col.director.name, "desc")
     sql = compile_query(q, spec=spec, schema="knot_data")
-    assert "ORDER BY knot_data.person_resolved.name DESC" in sql
-    assert "JOIN knot_data.person_resolved" in sql
+    assert "ORDER BY movie_director.name DESC" in sql
+    assert "JOIN knot_data.person_resolved AS movie_director" in sql
 
 
 def test_fk_walk_dedupe_one_join():
@@ -181,7 +180,7 @@ def test_fk_walk_dedupe_one_join():
         movie.col.title, movie.col.director.name
     )
     sql = compile_query(q, spec=spec, schema="knot_data")
-    assert sql.count("JOIN knot_data.person_resolved") == 1
+    assert sql.count("JOIN knot_data.person_resolved AS movie_director") == 1
 
 
 def test_full_query_with_fk_walk():
@@ -193,11 +192,9 @@ def test_full_query_with_fk_walk():
         .select(movie.col.title, movie.col.director.name)
     )
     sql = compile_query(q, spec=spec, schema="knot_data")
-    assert (
-        "SELECT knot_data.movie_resolved.title, knot_data.person_resolved.name" in sql
-    )
+    assert "SELECT knot_data.movie_resolved.title, movie_director.name" in sql
     assert "FROM knot_data.movie_resolved" in sql
-    assert "JOIN knot_data.person_resolved" in sql
+    assert "JOIN knot_data.person_resolved AS movie_director" in sql
     assert "ORDER BY knot_data.movie_resolved.year DESC" in sql
     assert "LIMIT 10" in sql
 
@@ -471,3 +468,128 @@ def test_abstract_class_blocks_query_entry_points():
         _ = movie.from_source(spec.add_source("imdb"))
     with pytest.raises(ValueError, match="only concrete classes"):
         _ = movie.unresolved
+
+
+# ---------------------------------------------------------------------------
+# JOIN aliasing — same-target collision + multi-hop
+# ---------------------------------------------------------------------------
+
+
+def _make_two_fk_spec():
+    """Movie with TWO FK slots pointing at the same target (Person):
+    ``director`` and ``writer``. Reproduces Alex's reported collision."""
+    spec = Spec(identifier_slot_name="canonical_id")
+    person = spec.add_class("Person")
+    person.slot("name", types.TEXT)
+    person.slot("birth_country", types.TEXT)
+    movie = spec.add_class("Movie")
+    movie.slot("title", types.TEXT)
+    movie.slot("year", types.INTEGER)
+    movie.slot("director", person)
+    movie.slot("writer", person)
+    return spec, movie, person
+
+
+def _make_multihop_spec():
+    """Movie → director (Person) → employer (Company). Two-hop chain."""
+    spec = Spec(identifier_slot_name="canonical_id")
+    company = spec.add_class("Company")
+    company.slot("name", types.TEXT)
+    person = spec.add_class("Person")
+    person.slot("name", types.TEXT)
+    person.slot("employer", company)
+    movie = spec.add_class("Movie")
+    movie.slot("title", types.TEXT)
+    movie.slot("director", person)
+    return spec, movie, person, company
+
+
+def test_two_fks_same_target_produce_two_joins():
+    """Alex's collision case: director AND writer both point at Person.
+    A query selecting both must produce TWO JOINs with distinct aliases,
+    not a duplicate reference that postgres would reject."""
+    spec, movie, person = _make_two_fk_spec()
+    q = movie.resolved.select(
+        movie.col.title,
+        movie.col.director.name,
+        movie.col.writer.name,
+    )
+    sql = compile_query(q, spec=spec, schema="knot_data")
+
+    # Two distinct aliased JOINs against person_resolved
+    assert "JOIN knot_data.person_resolved AS movie_director" in sql
+    assert "JOIN knot_data.person_resolved AS movie_writer" in sql
+    assert sql.count("JOIN knot_data.person_resolved") == 2
+
+    # Each FkChainRef renders via its own alias
+    assert "movie_director.name" in sql
+    assert "movie_writer.name" in sql
+
+    # Sanity: no un-aliased bare person_resolved references in SELECT/WHERE
+    assert "knot_data.person_resolved.name" not in sql
+
+
+def test_two_fks_same_target_where_and_select():
+    """director and writer both used in WHERE and SELECT — still two JOINs."""
+    spec, movie, person = _make_two_fk_spec()
+    q = movie.resolved.where(
+        (movie.col.director.birth_country == "USA")
+        & (movie.col.writer.birth_country == "UK")
+    ).select(movie.col.title, movie.col.director.name, movie.col.writer.name)
+    sql = compile_query(q, spec=spec, schema="knot_data")
+
+    assert sql.count("JOIN knot_data.person_resolved") == 2
+    assert "movie_director.birth_country = 'USA'" in sql
+    assert "movie_writer.birth_country = 'UK'" in sql
+    assert "movie_director.name" in sql
+    assert "movie_writer.name" in sql
+
+
+def test_same_fk_chain_referenced_multiple_times_one_join():
+    """The same FK chain (movie.col.director.X) referenced in WHERE,
+    ORDER BY, and SELECT produces exactly one JOIN."""
+    spec, movie, person = _make_movie_director_spec()
+    q = (
+        movie.resolved.where(movie.col.director.birth_country == "USA")
+        .order_by(movie.col.director.name, "asc")
+        .select(movie.col.title, movie.col.director.name)
+    )
+    sql = compile_query(q, spec=spec, schema="knot_data")
+
+    assert sql.count("JOIN knot_data.person_resolved AS movie_director") == 1
+    assert "movie_director.birth_country = 'USA'" in sql
+    assert "ORDER BY movie_director.name ASC" in sql
+    assert "movie_director.name" in sql
+
+
+def test_multihop_chain_produces_chained_joins():
+    """Movie → director (Person) → employer (Company): two-hop chain
+    yields two JOINs, each referencing the previous alias.
+
+    FkChainRef supports multi-hop by constructing the chain tuple directly;
+    the compiler walks each prefix to emit one JOIN per hop."""
+    from knot.ast.expr import FkChainRef
+
+    spec, movie, person, company = _make_multihop_spec()
+
+    # Build a two-hop chain ref manually:
+    # Movie.director → Person, then Person.employer → Company, terminal: name
+    chain_ref = FkChainRef(
+        source_class="Movie",
+        chain=(("director", "Person"), ("employer", "Company")),
+        terminal_slot="name",
+    )
+    q = movie.resolved.select(movie.col.title, chain_ref)
+    sql = compile_query(q, spec=spec, schema="knot_data")
+
+    # First hop: movie_director aliases person_resolved, ON references primary table
+    assert "JOIN knot_data.person_resolved AS movie_director" in sql
+    assert "ON movie_director.canonical_id = knot_data.movie_resolved.director" in sql
+
+    # Second hop: movie_director_employer aliases company_resolved,
+    # ON references the previous alias (movie_director)
+    assert "JOIN knot_data.company_resolved AS movie_director_employer" in sql
+    assert "ON movie_director_employer.canonical_id = movie_director.employer" in sql
+
+    # Terminal column uses the final alias
+    assert "movie_director_employer.name" in sql

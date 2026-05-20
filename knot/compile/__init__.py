@@ -30,6 +30,7 @@ from knot.compile.resolver import (
     emit_resolved_views,
 )
 from knot.compile.weight import (
+    emit_delete_weight_sql,
     emit_read_weights_sql,
     emit_source_read_weights_sql,
     emit_upsert_weight_sql,
