@@ -650,9 +650,42 @@ inside knot. The host binds via the connector.
 ```python
 sql               = q.sql(schema="knot_data")                  # literals inlined
 sql_write         = binding.write_sql(schema="knot_data")      # %(rows)s::jsonb (upsert)
+sql_validate      = binding.validate_rows_sql(schema=…)        # %(rows)s::jsonb — pre-write per-row validator
+sql_update_slot   = binding.update_slot_sql("title_embedding") # %(rows)s::jsonb — per-slot UPDATE (backfill)
 sql_assign        = binding.assign_canonical_sql(schema=…)     # %(canonical_id)s, %(source_identifier)s, %(er_metadata)s
+sql_assigns       = binding.assign_canonicals_sql(schema=…)    # %(assignments)s::jsonb — batched ER mint
 sql_recan         = binding.recanonicalize_sql(schema=…)       # %(new_canonical_id)s, %(source_identifier)s, %(er_metadata)s
 sql_retract       = binding.retract_sql(schema=…)              # %(canonical_id)s, %(source_identifier)s — DELETE
+sql_explain       = movie.explain_winner_sql(slot="year")      # SELECT: per (canonical_id, source) value + weight + is_winner + margin
+```
+
+Read-side k-NN composes anywhere a value expression does:
+
+```python
+target = [0.1, 0.2, ...]  # literal vector
+q = (movie.from_source(imdb)
+          .order_by(movie.col.title_embedding.distance_to(target))
+          .limit(10)
+          .select(movie.col.title, movie.col.title_embedding.distance_to(target)))
+
+# Cross-row form: distance_to accepts another VectorRef
+q = (other_movie.from_source(tmdb)
+                .order_by(other.col.emb.distance_to(movie.col.emb))
+                .limit(5))
+# HNSW index ONLY fires on cls.from_source(s) queries (the resolved
+# view's per-slot argmax is a correlated subquery that blocks index
+# push-down). ML/blocking workflows route through from_source; serving-
+# side k-NN against the canonical view seq-scans unless the host
+# materializes its own view.
+```
+
+Virtual classes nest — `VirtualClass.add_virtual` chains, depth-
+ordered at DDL emit time:
+
+```python
+directed = movie.add_virtual("DirectedMovie", where=...)
+recent_directed = directed.add_virtual("RecentDirectedMovie",
+                                       where=movie.col.year >= 2000)
 ```
 
 The read path lives on the query, not the spec. The write/ER path
@@ -684,10 +717,14 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
 - ``Query.sql`` returns a SQL string with literals inlined — no
   parameter list, the host calls ``cur.execute(sql)`` and is done.
 - The binding compile methods (``binding.write_sql``,
-  ``binding.assign_canonical_sql``, ``binding.recanonicalize_sql``,
-  ``binding.retract_sql``) return SQL templates with named
-  placeholders (``%(rows)s::jsonb``, ``%(canonical_id)s``, …). The
-  host binds runtime data via its connector.
+  ``binding.validate_rows_sql``, ``binding.update_slot_sql``,
+  ``binding.assign_canonical_sql``, ``binding.assign_canonicals_sql``
+  (batched), ``binding.recanonicalize_sql``, ``binding.retract_sql``)
+  return SQL templates with named placeholders (``%(rows)s::jsonb``,
+  ``%(assignments)s::jsonb``, ``%(canonical_id)s``, …). The host
+  binds runtime data via its connector. Pre-write validation +
+  enforcement composition is the host's policy (see the "Constraint
+  enforcement" section).
 - ``emit_validation`` and ``emit_weight_seed`` return parameterized
   statements because their parameters are derived from the spec
   itself, not from runtime input.
