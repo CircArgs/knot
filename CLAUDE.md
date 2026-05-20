@@ -1,15 +1,59 @@
 # CLAUDE.md — knot library
 
-**knot** is a reflective ontology compiler — a pure Python library that
-takes a typed dataclass spec (classes, slots, sources, source bindings,
-constraints) and emits the runtime artifacts (postgres DDL, resolved
-views, per-slot weight seed, batch writes, query SQL).
+**knot** is a **multi-source MDM schema compiler** — a typed SQL
+compiler specialized for the problem of fusing N sources' claims
+about the same entities into one canonical view, with entity
+resolution as a first-class write primitive. Closest category-peer:
+jOOQ (typed SQL compiler, no connection ownership) / LinkML
+(declarative spec → DDL emission); closest problem-peer: MDM
+platforms (Reltio, Tamr, Senzing) — except knot ships only the
+compiler layer and hands runtime to the host.
 
-Branch `library/v0` is the focused library. Anything that talks to a
-connection, serves HTTP, holds runtime state, or assembles a GraphQL
-endpoint lives outside the library — in a *reference adapter* a team
-builds around it. The earlier monorepo (API service + UI + ingest + ER
-+ AI) is in git history on `draft-rfc` and `main`.
+## Purpose (locked-in north-star — every change must justify against these)
+
+1. **Compile a typed Python spec to postgres SQL.** Pure library,
+   no I/O. `Spec.ddl()` emits the target schema; `Query.sql()`
+   emits read SQL; `binding.{write,assign_canonical,recanonicalize,
+   retract,update_slot}_sql()` emit write SQL. The host runs the
+   strings.
+
+2. **Fuse multi-source claims into one canonical view.** N sources
+   publish bindings about the same entity; knot's `_resolved` view
+   picks per-slot winners via argmax over per-(source, class, slot)
+   weights, with `_all_sources` exposing per-source jsonb provenance.
+   The host tunes weights at runtime (`source_weight` is a live
+   policy table, not a baked-in constant).
+
+3. **Entity resolution as a first-class write primitive.**
+   `assign_canonical_sql` is one atomic CTE chain: stamp
+   `canonical_id`, forward-translate this row's FK columns
+   (source-id → canonical-id), backward-fan-out to every
+   referencing class's bindings, idempotency-gated.
+   `recanonicalize` cascades canonical-id changes graph-wide.
+   No ORM expresses this.
+
+4. **One typed predicate AST authors reads, virtuals, and
+   constraints.** `cls.col.year >= 1888` is the same Expr whether
+   it's a `.where(...)` clause, an `add_constraint(body=...)`, or
+   an `add_virtual(where=...)`. Notebooks must use this surface —
+   no raw SQL on the user side (only postgres catalog
+   introspection is exempt).
+
+5. **knot is a substrate, not a runtime.** No connections, no
+   scheduler, no migration engine, no ingest worker, no ER policy
+   decisions. The host owns all of that; knot just compiles.
+
+Branch `library/v0` was the focused-library line; the current
+working branch (`library/v0-substrate`) reinforces the substrate
+posture against any drift toward becoming an ORM (the surface looks
+ORM-shaped — typed query builder, fluent `.where().order_by()`,
+upserts, partial UPDATEs — but the semantic substrate underneath
+(resolved view, weight argmax, ER cascade) is what makes knot a
+different category). Anything that talks to a connection, serves
+HTTP, holds runtime state, or assembles a GraphQL endpoint lives
+outside the library — in a *reference adapter* a team builds around
+it. The earlier monorepo (API service + UI + ingest + ER + AI) is
+in git history on `draft-rfc` and `main`.
 
 ## Posture
 
