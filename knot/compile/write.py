@@ -321,15 +321,25 @@ def emit_assign_canonical_sql(
     """Return the SQL template that assigns a ``canonical_id`` to one
     previously-unresolved binding row.
 
-    Refuses to clobber an existing assignment: the ``WHERE`` clause
-    includes ``<ident> IS NULL``, so re-running is a no-op. To change
-    an already-assigned canonical_id, use ``emit_recanonicalize_sql``.
+    Three things happen atomically in one statement:
+
+    1. **Stamp** — set ``canonical_id`` on the binding row (no-op if
+       already set; ``emit_recanonicalize_sql`` is the way to change
+       an existing assignment).
+    2. **Forward FK translation** — for every ``ClassRef`` slot on
+       this class (e.g. ``Movie.director`` → Person), look up the
+       current value in the *target's* bindings table within the same
+       source's namespace; if the target binding has been ER-stamped,
+       rewrite the column from source-id to canonical-id. If the
+       target hasn't been ER'd yet, the column keeps its source-id
+       and the target's own ER stamp will fan out to fix it later
+       (see ``emit_assign_canonical_sql``'s backward fan-out, not yet
+       wired here).
+    3. **Register** — ``INSERT`` the new canonical_id into the
+       class's identity-registry table (``ON CONFLICT DO NOTHING``).
 
     SQL has three named placeholders — ``%(canonical_id)s``,
-    ``%(source_identifier)s``, ``%(er_metadata)s``. The
-    ``er_metadata`` column uses ``COALESCE`` so binding ``None`` keeps
-    the existing value; binding a JSON-serialized string overwrites.
-    Host binds::
+    ``%(source_identifier)s``, ``%(er_metadata)s``. Host binds::
 
         cur.execute(binding.assign_canonical_sql(), {
             "canonical_id":      "m_pulpfiction",
@@ -338,18 +348,92 @@ def emit_assign_canonical_sql(
         })
     """
     _check_concrete(binding.class_)
-    ident_name = binding.class_.identifier_slot().name
-    table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
+    cls = binding.class_
+    ident_name = cls.identifier_slot().name
+    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    canonical_table = f"{schema}.{cls.name.lower()}"
     source_literal = _sql_literal(binding.source.name)
-    return (
-        f"UPDATE {table}\n"
-        f"SET {ident_name} = %(canonical_id)s,\n"
-        f"    er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)\n"
-        f"WHERE source_name = {source_literal}\n"
-        f"  AND source_identifier = %(source_identifier)s\n"
-        f"  AND {ident_name} IS NULL\n"
-        f"  AND valid_to IS NULL;"
+
+    # Forward FK translation — for each ClassRef slot on this class,
+    # rewrite the column from source-id to the target's canonical_id
+    # (if the target binding has been ER'd; otherwise COALESCE keeps
+    # the source-id intact for a later backward fan-out to translate).
+    set_clauses = [
+        f"{ident_name} = %(canonical_id)s",
+        "er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)",
+    ]
+    for slot in cls.effective_slots():
+        if not isinstance(slot.type, ClassRef):
+            continue
+        target = slot.type.target
+        target_table = _bindings_id(target, schema=schema, suffix=bindings_suffix)
+        target_ident = target.identifier_slot().name
+        # Same-source assumption: an imdb credit's .movie field holds
+        # an imdb movie id, so we look it up in the target's bindings
+        # for THIS source. Cross-source FK references (e.g. corrections)
+        # are not handled here — they'd need a separate code path.
+        lookup = (
+            f"(SELECT {target_ident} FROM {target_table} "
+            f"WHERE source_name = {source_literal} "
+            f"AND source_identifier = {table}.{slot.name} "
+            f"AND {target_ident} IS NOT NULL "
+            f"AND valid_to IS NULL LIMIT 1)"
+        )
+        set_clauses.append(f"{slot.name} = COALESCE({lookup}, {table}.{slot.name})")
+
+    set_block = ",\n    ".join(set_clauses)
+    # Backward fan-out — for every (referencing_class, fk_slot) that
+    # points at this class, rewrite any referencing binding whose FK
+    # column still holds the just-stamped source-id. Same-source
+    # assumption: a referencing binding's FK column carries source-ids
+    # in the binding's own source's namespace, so we filter on the
+    # referencer's source_name = this stamp's source_name. The
+    # ``EXISTS (SELECT 1 FROM stamp)`` gates the whole fanout on the
+    # stamp UPDATE actually firing — re-running assign_canonical when
+    # the row was already stamped is a strict no-op, never a force-
+    # fanout that could corrupt existing canonical-id values.
+    fanout_ctes: list[str] = []
+    for ref_cls, ref_slot in cls.referrers:
+        ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
+        cte_name = f"fanout_{ref_cls.name.lower()}_{ref_slot.name}"
+        fanout_ctes.append(
+            f"{cte_name} AS (\n"
+            f"  UPDATE {ref_table}\n"
+            f"  SET {ref_slot.name} = %(canonical_id)s\n"
+            f"  WHERE EXISTS (SELECT 1 FROM stamp)\n"
+            f"    AND source_name = {source_literal}\n"
+            f"    AND {ref_slot.name} = %(source_identifier)s\n"
+            f"    AND valid_to IS NULL\n"
+            f")"
+        )
+
+    # Registry insert — driven by the UPDATE's RETURNING so it fires
+    # only when the stamp actually matched a row (not a phantom
+    # registration on an already-stamped re-run).
+    register_cte = (
+        f"register AS (\n"
+        f"  INSERT INTO {canonical_table} ({ident_name})\n"
+        f"  SELECT {ident_name} FROM stamp\n"
+        f"  ON CONFLICT ({ident_name}) DO NOTHING\n"
+        f")"
     )
+
+    all_ctes = [
+        f"stamp AS (\n"
+        f"  UPDATE {table}\n"
+        f"  SET {set_block}\n"
+        f"  WHERE source_name = {source_literal}\n"
+        f"    AND source_identifier = %(source_identifier)s\n"
+        f"    AND {ident_name} IS NULL\n"
+        f"    AND valid_to IS NULL\n"
+        f"  RETURNING {ident_name}\n"
+        f")",
+        register_cte,
+        *fanout_ctes,
+    ]
+    # Chain of write-only CTEs needs an outer SELECT to be a valid
+    # postgres statement; the SELECT 1 is the tail.
+    return "WITH " + ",\n".join(all_ctes) + "\nSELECT 1;"
 
 
 def emit_recanonicalize_sql(
@@ -400,15 +484,48 @@ def emit_recanonicalize_sql(
     select_cols.append("COALESCE(%(er_metadata)s::jsonb, er_metadata) AS er_metadata")
     select_cols.append("now() AS valid_from")
 
-    return (
-        f"WITH closed AS (\n"
-        f"    UPDATE {table} SET valid_to = now()\n"
-        f"    WHERE source_name = {source_literal}\n"
-        f"      AND source_identifier = %(source_identifier)s\n"
-        f"      AND valid_to IS NULL\n"
-        f"    RETURNING *\n"
-        f")\n"
-        f"INSERT INTO {table} ({', '.join(insert_cols)})\n"
-        f"SELECT {', '.join(select_cols)}\n"
-        f"FROM closed;"
-    )
+    canonical_table = f"{schema}.{binding.class_.name.lower()}"
+
+    # Cascade: every referencing class's bindings hold this row's OLD
+    # canonical_id in their FK column (post-original-ER). They need
+    # rewriting to the NEW canonical_id. Canonical-id rewrites are
+    # source-agnostic (no source_name filter) because canonical-ids
+    # are global. ``(SELECT canonical_id FROM closed)`` is a scalar
+    # subquery — at most one row; NULL if the close-out didn't fire,
+    # in which case the cascade's WHERE doesn't match anything.
+    cascade_ctes: list[str] = []
+    for ref_cls, ref_slot in binding.class_.referrers:
+        ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
+        cte_name = f"cascade_{ref_cls.name.lower()}_{ref_slot.name}"
+        cascade_ctes.append(
+            f"{cte_name} AS (\n"
+            f"  UPDATE {ref_table}\n"
+            f"  SET {ref_slot.name} = %(new_canonical_id)s\n"
+            f"  WHERE {ref_slot.name} = (SELECT {ident_name} FROM closed)\n"
+            f"    AND valid_to IS NULL\n"
+            f")"
+        )
+
+    all_ctes = [
+        f"closed AS (\n"
+        f"  UPDATE {table} SET valid_to = now()\n"
+        f"  WHERE source_name = {source_literal}\n"
+        f"    AND source_identifier = %(source_identifier)s\n"
+        f"    AND valid_to IS NULL\n"
+        f"  RETURNING *\n"
+        f")",
+        f"inserted AS (\n"
+        f"  INSERT INTO {table} ({', '.join(insert_cols)})\n"
+        f"  SELECT {', '.join(select_cols)}\n"
+        f"  FROM closed\n"
+        f")",
+        # Register the new canonical_id in the identity table — driven
+        # by ``FROM closed`` so it only fires when the close-out matched.
+        f"register AS (\n"
+        f"  INSERT INTO {canonical_table} ({ident_name})\n"
+        f"  SELECT %(new_canonical_id)s FROM closed\n"
+        f"  ON CONFLICT ({ident_name}) DO NOTHING\n"
+        f")",
+        *cascade_ctes,
+    ]
+    return "WITH " + ",\n".join(all_ctes) + "\nSELECT 1;"

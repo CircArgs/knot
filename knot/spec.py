@@ -449,6 +449,22 @@ class OntologyClass:
                 return b
         return None
 
+    @property
+    def referrers(self) -> list[tuple[OntologyClass, Slot]]:
+        """Every ``(class, slot)`` pair in the owning spec where
+        ``slot.type`` is a ``ClassRef`` pointing at this class. Used by
+        the ER write path to drive FK fan-out: when a canonical_id is
+        stamped on this class's binding, every referencing class's
+        bindings need their FK column rewritten from source-id to the
+        new canonical_id."""
+        spec = self._require_spec()
+        out: list[tuple[OntologyClass, Slot]] = []
+        for other in spec.concrete_classes():
+            for slot in other.effective_slots():
+                if isinstance(slot.type, ClassRef) and slot.type.target is self:
+                    out.append((other, slot))
+        return out
+
     # ------------------------------------------------------------------
     # Class-anchored builder methods — constraints, virtuals, corrections.
     # Spec is the registrar (add_class, add_source); per-entity facts live

@@ -45,32 +45,45 @@ def test_abstract_class_has_no_table(movie_spec):
     assert not any("knot_data.title (" in s for s in stmts)
 
 
-def test_concrete_inherits_slots_from_abstract(movie_spec):
+def test_canonical_is_identity_only(movie_spec):
+    # Under option-3 ER, the canonical table is an identity registry —
+    # just the identifier column(s). All slot values live in
+    # <class>_bindings; the resolved view computes argmax-over-bindings
+    # at read time. Slot columns on canonical would be dead schema.
     stmts = emit_ddl(movie_spec)
     movie_table = next(
         s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
     )
-    # year is Movie's own; name + canonical_id come from Title
-    assert "year integer" in movie_table
-    assert "name text" in movie_table
     assert "canonical_id text NOT NULL" in movie_table
+    assert "PRIMARY KEY (canonical_id)" in movie_table
+    # No slot columns on canonical.
+    assert "year integer" not in movie_table
+    assert "name text" not in movie_table
 
 
-def test_array_renders_as_postgres_array(movie_spec):
+def test_concrete_inherits_slots_into_bindings(movie_spec):
+    # Inherited-from-abstract slots land on the bindings table (where
+    # all slot values live), not the canonical table.
     stmts = emit_ddl(movie_spec)
-    movie_table = next(
-        s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
-    )
-    assert "genres text[]" in movie_table
+    bindings = next(s for s in stmts if "movie_bindings" in s and "CREATE TABLE" in s)
+    assert "year integer" in bindings
+    assert "name text" in bindings
 
 
-def test_classref_renders_as_text(movie_spec):
+def test_array_renders_as_postgres_array_on_bindings(movie_spec):
     stmts = emit_ddl(movie_spec)
-    credit_table = next(
-        s for s in stmts if "knot_data.credit (" in s and "_bindings" not in s
-    )
-    assert "movie text" in credit_table
-    assert "person text" in credit_table
+    bindings = next(s for s in stmts if "movie_bindings" in s and "CREATE TABLE" in s)
+    assert "genres text[]" in bindings
+
+
+def test_classref_renders_as_text_on_bindings(movie_spec):
+    # FK slots are text columns on the bindings table. Post-ER they
+    # hold canonical-ids (after option-3 forward translation + backward
+    # fan-out); pre-ER they hold the source's natural reference.
+    stmts = emit_ddl(movie_spec)
+    bindings = next(s for s in stmts if "credit_bindings" in s and "CREATE TABLE" in s)
+    assert "movie text" in bindings
+    assert "person text" in bindings
 
 
 def test_if_not_exists_kwarg(movie_spec):
@@ -99,77 +112,14 @@ def test_emit_descriptions_opt_in(movie_spec):
     assert any("COMMENT ON TABLE knot_data.movie" in s for s in with_desc)
 
 
-def test_fk_alters_emitted_for_classref_slots(movie_spec):
+def test_no_fk_alters_emitted(movie_spec):
+    # Under option-3 ER, FK columns live on the bindings table (which
+    # holds source-ids pre-ER, canonical-ids post-ER) — so postgres FK
+    # constraints would fail on pre-ER source-id values. Bindings stay
+    # loose by design; ER orchestration owns referential integrity,
+    # and the data-quality validators surface orphans. No FK ALTERs.
     stmts = emit_ddl(movie_spec)
-    fk_stmts = [s for s in stmts if s.startswith("ALTER TABLE")]
-    # Credit has two FK slots (movie, person). Title/Movie/Person have none.
-    assert len(fk_stmts) == 2
-    assert any(
-        "fk_credit_movie" in s and "REFERENCES knot_data.movie(canonical_id)" in s
-        for s in fk_stmts
-    )
-    assert any(
-        "fk_credit_person" in s and "REFERENCES knot_data.person(canonical_id)" in s
-        for s in fk_stmts
-    )
-
-
-def test_fk_alters_use_target_identifier_slot_name():
-    # Spec-level override of the identifier slot name. Every class
-    # gets `imdb_id` as its identifier; the FK references the
-    # target's identifier column.
-    spec = Spec(identifier_slot_name="imdb_id")
-    movie = spec.add_class("Movie")
-    credit = spec.add_class("Credit")
-    credit.slot("movie", movie)
-    stmts = emit_ddl(spec)
-    fk = next(s for s in stmts if s.startswith("ALTER TABLE knot_data.credit"))
-    assert "REFERENCES knot_data.movie(imdb_id)" in fk
-
-
-def test_fk_alters_idempotent_with_if_not_exists(movie_spec):
-    stmts = emit_ddl(movie_spec, if_not_exists=True)
-    alter_stmts = [s for s in stmts if s.startswith("ALTER TABLE")]
-    drops = [s for s in alter_stmts if "DROP CONSTRAINT IF EXISTS" in s]
-    adds = [s for s in alter_stmts if "ADD CONSTRAINT" in s]
-    assert len(drops) == 2  # one per FK
-    assert len(adds) == 2
-    # Drops precede their corresponding adds
-    assert alter_stmts[0].startswith("ALTER TABLE knot_data.credit DROP")
-    assert alter_stmts[1].startswith("ALTER TABLE knot_data.credit ADD")
-
-
-def test_fk_alters_can_be_disabled(movie_spec):
-    stmts = emit_ddl(movie_spec, emit_fk_references=False)
     assert not any(s.startswith("ALTER TABLE") for s in stmts)
-
-
-def test_fk_alters_not_emitted_for_bindings_table(movie_spec):
-    # The bindings table contains the same FK columns but should NOT
-    # carry REFERENCES — bindings may claim about canonicals that don't
-    # exist yet.
-    stmts = emit_ddl(movie_spec)
-    bindings_alters = [
-        s for s in stmts if s.startswith("ALTER TABLE") and "_bindings" in s
-    ]
-    assert bindings_alters == []
-
-
-def test_fk_alters_only_for_concrete_classes():
-    # Abstract classes don't get a canonical table → no ALTER TABLE.
-    spec = Spec(identifier_slot_name="canonical_id")
-    title = spec.add_class("Title", kind="abstract")
-    spec.add_class("Movie", is_a=title)
-    other = spec.add_class("Other")
-    other.slot("title", title)  # FK to abstract — questionable but allowed
-    stmts = emit_ddl(spec)
-    # No FK alter should reference an abstract class's nonexistent table.
-    # Currently we DO emit one (FK to title) — that would fail at run time
-    # because knot_data.title has no table. Document this as a known gap
-    # the validator should catch.
-    # For now just verify the alter exists targeting knot_data.title.
-    alter = next(s for s in stmts if "fk_other_title" in s)
-    assert "REFERENCES knot_data.title(canonical_id)" in alter
 
 
 def test_bindings_carry_raw_payload_jsonb_column(movie_spec):
@@ -265,7 +215,7 @@ def test_bindings_table_slots_nullable_pk_drops_canonical(movie_spec):
 
 
 def _spec_with_vector_slot(metric: str = "cosine"):
-    from knot import Spec, types
+    from knot import types
 
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
@@ -286,27 +236,28 @@ def test_vector_extension_emitted_once_when_used():
     assert ext_stmts == ["CREATE EXTENSION IF NOT EXISTS vector;"]
 
 
-def test_vector_column_on_canonical_and_bindings():
+def test_vector_column_on_bindings_only():
+    # Vectors are slot values, not identity — they live on bindings
+    # (where slot values live), not on the identity-only canonical
+    # table.
     stmts = emit_ddl(_spec_with_vector_slot())
     canonical = next(
         s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
     )
     bindings = next(s for s in stmts if "movie_bindings" in s)
-    assert "title_embedding vector(384)" in canonical
+    assert "title_embedding vector(384)" not in canonical
     assert "title_embedding vector(384)" in bindings
 
 
-def test_vector_hnsw_index_per_table_with_metric_ops():
+def test_vector_hnsw_index_only_on_bindings():
+    # One HNSW per vector slot — on bindings. Canonical has no vector
+    # columns to index.
     stmts = emit_ddl(_spec_with_vector_slot(metric="cosine"))
     hnsw = [s for s in stmts if "USING hnsw" in s]
-    # One index on the canonical table, one on the bindings table.
-    assert len(hnsw) == 2
-    assert any(
-        "movie_title_embedding_hnsw_idx" in s and "vector_cosine_ops" in s for s in hnsw
-    )
-    assert any(
-        "movie_bindings_title_embedding_hnsw_idx" in s and "vector_cosine_ops" in s
-        for s in hnsw
+    assert len(hnsw) == 1
+    assert (
+        "movie_bindings_title_embedding_hnsw_idx" in hnsw[0]
+        and "vector_cosine_ops" in hnsw[0]
     )
 
 
@@ -338,12 +289,12 @@ def test_vector_hnsw_suppressed_when_indexes_disabled():
     assert any("title_embedding vector(384)" in s for s in stmts)
 
 
-def test_vector_bindings_index_skipped_when_bindings_skipped():
+def test_vector_indexes_skipped_when_bindings_skipped():
+    # With bindings disabled there's nowhere left to host a vector
+    # column (canonical is identity-only) → no HNSW indexes emitted.
     stmts = emit_ddl(_spec_with_vector_slot(), emit_bindings=False)
     hnsw = [s for s in stmts if "USING hnsw" in s]
-    # Only the canonical-table index remains.
-    assert len(hnsw) == 1
-    assert "movie_bindings" not in hnsw[0]
+    assert hnsw == []
 
 
 def test_vector_construction_rejects_bad_dim():

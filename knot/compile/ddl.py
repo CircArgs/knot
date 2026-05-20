@@ -46,7 +46,6 @@ def emit_ddl(
     emit_resolved_views: bool = True,
     emit_all_sources_views: bool = True,
     emit_virtual_views: bool = True,
-    emit_fk_references: bool = True,
     emit_indexes: bool = True,
     emit_weight_table: bool = True,
     emit_descriptions: bool = False,
@@ -82,12 +81,6 @@ def emit_ddl(
         When False, skip the ``<class>_all_sources`` provenance views.
         Set to False for deployments that only need the resolved
         layer.
-    emit_fk_references
-        When True, emit ``ALTER TABLE … ADD CONSTRAINT … FOREIGN KEY``
-        for every ``ClassRef`` slot on every concrete canonical table,
-        targeting the referenced class's identifier column. Bindings
-        tables intentionally stay loose (a binding may claim about a
-        canonical that doesn't exist yet).
     emit_indexes
         When True, emit partial indexes on each ``<class>_bindings``
         table that match the resolver's per-slot lookup and the SCD2
@@ -131,15 +124,6 @@ def emit_ddl(
                 stmts.append(
                     _emit_table(cls, schema=schema, if_not_exists=if_not_exists)
                 )
-                if emit_indexes:
-                    stmts.extend(
-                        _emit_vector_indexes(
-                            cls,
-                            table_name=cls.name.lower(),
-                            schema=schema,
-                            if_not_exists=if_not_exists,
-                        )
-                    )
                 if emit_descriptions:
                     stmts.extend(_emit_class_comments(cls, schema=schema))
                 if emit_bindings:
@@ -208,15 +192,6 @@ def emit_ddl(
                             )
                         )
             # Abstract OntologyClass falls through (no table).
-
-    # Second pass: FK constraints on canonical class tables. Emitted
-    # after every CREATE TABLE so target tables exist regardless of
-    # spec.classes order.
-    if emit_fk_references:
-        for cls in spec.concrete_classes():
-            stmts.extend(
-                _emit_fk_alters(cls, schema=schema, if_not_exists=if_not_exists)
-            )
 
     return stmts
 
@@ -306,31 +281,32 @@ def _create_view(*, if_not_exists: bool) -> str:
 
 
 def _emit_table(cls: OntologyClass, *, schema: str, if_not_exists: bool) -> str:
+    # Canonical table is an identity registry — just the identifier
+    # column(s). All slot values live in <class>_bindings; the resolved
+    # view computes argmax-over-bindings at read time. Slot columns on
+    # canonical would be dead schema (never written, never read).
     columns: list[str] = []
     pk_cols: list[str] = []
     for slot in cls.effective_slots():
-        col = f"    {slot.name} {_pg_type(slot.type)}"
-        if slot.identifier or slot.required:
-            col += " NOT NULL"
-        columns.append(col)
-        if slot.identifier:
-            pk_cols.append(slot.name)
-    if pk_cols:
-        columns.append(f"    PRIMARY KEY ({', '.join(pk_cols)})")
+        if not slot.identifier:
+            continue
+        columns.append(f"    {slot.name} {_pg_type(slot.type)} NOT NULL")
+        pk_cols.append(slot.name)
+    columns.append(f"    PRIMARY KEY ({', '.join(pk_cols)})")
     body = ",\n".join(columns)
     return f"{_create_table(if_not_exists=if_not_exists)} {schema}.{cls.name.lower()} (\n{body}\n);"
 
 
 def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
     parent = vc.is_a.name.lower()
-    # VirtualClass.definition is an Expr (from knot.expr). The view
-    # selects from the *canonical* parent table, so refs in the
-    # predicate render with no resolved-suffix.
-    body_sql = compile_sql(vc.definition, schema=schema, layer=Layer.CANONICAL)
+    # Virtual classes filter their parent's *resolved* view — the
+    # canonical table is identity-only and has no slot columns to
+    # filter on.
+    body_sql = compile_sql(vc.definition, schema=schema, layer=Layer.RESOLVED)
     return (
         f"{_create_view(if_not_exists=if_not_exists)} "
         f"{schema}.{vc.name.lower()} AS\n"
-        f"SELECT * FROM {schema}.{parent}\n"
+        f"SELECT * FROM {schema}.{parent}_resolved\n"
         f"WHERE {body_sql};"
     )
 
@@ -403,46 +379,6 @@ def _emit_class_comments(cls: OntologyClass, *, schema: str) -> list[str]:
             out.append(
                 _comment_on("COLUMN", f"{table_id}.{slot.name}", slot.description)
             )
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Foreign-key constraint emission (second pass over the canonical tables)
-# ---------------------------------------------------------------------------
-
-
-def _emit_fk_alters(
-    cls: OntologyClass,
-    *,
-    schema: str,
-    if_not_exists: bool,
-) -> list[str]:
-    """For every ``ClassRef`` slot on ``cls``, emit an ``ALTER TABLE``
-    that adds a foreign-key constraint to the target's canonical
-    identifier. Only emitted for the canonical table — bindings tables
-    intentionally stay loose because a binding can claim about a
-    canonical that doesn't exist yet.
-
-    Constraint names are deterministic (``fk_<class>_<slot>``); when
-    ``if_not_exists`` is True the alter is preceded by ``DROP
-    CONSTRAINT IF EXISTS`` so the pass is idempotent.
-    """
-    table = f"{schema}.{cls.name.lower()}"
-    out: list[str] = []
-    for slot in cls.effective_slots():
-        if not isinstance(slot.type, ClassRef):
-            continue
-        target = slot.type.target
-        target_table = f"{schema}.{target.name.lower()}"
-        target_pk = target.identifier_slot().name
-        constraint = f"fk_{cls.name.lower()}_{slot.name}"
-        if if_not_exists:
-            out.append(f"ALTER TABLE {table} DROP CONSTRAINT IF EXISTS {constraint};")
-        out.append(
-            f"ALTER TABLE {table} ADD CONSTRAINT {constraint}\n"
-            f"    FOREIGN KEY ({slot.name}) "
-            f"REFERENCES {target_table}({target_pk});"
-        )
     return out
 
 

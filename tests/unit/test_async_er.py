@@ -114,3 +114,166 @@ def test_recanonicalize_er_metadata_uses_coalesce():
 def test_recanonicalize_parses_postgres():
     _, binding = _basic_spec()
     sqlglot.parse_one(emit_recanonicalize_sql(binding), dialect="postgres")
+
+
+# ---------------------------------------------------------------------------
+# Option-3 ER: forward FK translation, backward fan-out, recanonicalize cascade
+# ---------------------------------------------------------------------------
+
+
+def _movie_credit_spec():
+    """3-class spec: Person, Movie (FK director → Person), Credit
+    (FK movie → Movie, FK person → Person). One source: imdb. Returns
+    spec + bindings keyed by class name."""
+    spec = Spec(identifier_slot_name="canonical_id")
+    person = spec.add_class("Person")
+    person.slot("name", types.TEXT, required=True)
+    movie = spec.add_class("Movie")
+    movie.slot("title", types.TEXT, required=True)
+    movie.slot("director", person)
+    credit = spec.add_class("Credit")
+    credit.slot("role", types.TEXT)
+    credit.slot("movie", movie)
+    credit.slot("person", person)
+    imdb = spec.add_source("imdb")
+    bindings = {
+        "Person": imdb.bind(person),
+        "Movie": imdb.bind(movie),
+        "Credit": imdb.bind(credit),
+    }
+    return spec, bindings
+
+
+def test_assign_canonical_forward_translates_fk_slots():
+    """For each ClassRef slot on this class, the stamp UPDATE sets
+    the FK column by looking up canonical_id in the target's bindings
+    (same source) — COALESCE preserves the source-id if the target
+    hasn't been ER'd yet."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Movie"])
+    assert "director = COALESCE(" in sql
+    assert "SELECT canonical_id FROM knot_data.person_bindings" in sql
+    assert "AND source_identifier = knot_data.movie_bindings.director" in sql
+    assert "AND canonical_id IS NOT NULL" in sql
+
+
+def test_assign_canonical_backward_fanout_to_referrers():
+    """Stamping a canonical on Movie fans out to every class that
+    holds an FK to Movie (Credit.movie here), rewriting the FK column
+    in-place from source-id to the new canonical-id."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Movie"])
+    assert "fanout_credit_movie AS (" in sql
+    assert "UPDATE knot_data.credit_bindings" in sql
+    assert "SET movie = %(canonical_id)s" in sql
+    assert "AND movie = %(source_identifier)s" in sql
+
+
+def test_assign_canonical_fanout_gated_on_stamp():
+    """The fanout UPDATE is gated on ``EXISTS (SELECT 1 FROM stamp)``
+    so re-running assign on an already-stamped row is a strict no-op
+    (no force-fanout that could corrupt existing canonical-ids)."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Movie"])
+    assert "WHERE EXISTS (SELECT 1 FROM stamp)" in sql
+
+
+def test_assign_canonical_fanout_scopes_to_source():
+    """Backward fan-out filters referencing bindings by the stamp's
+    source_name — an imdb credit's .movie column holds an imdb id,
+    so we only rewrite imdb-scoped referencing rows."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Movie"])
+    fanout = sql[sql.index("fanout_credit_movie") :]
+    assert "source_name = 'imdb'" in fanout
+
+
+def test_assign_canonical_fanout_per_referrer_slot():
+    """One fanout CTE per (referencing_class, fk_slot) pair. Person
+    has two referrers — Movie.director and Credit.person — so
+    stamping a Person produces two fanout CTEs."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Person"])
+    assert "fanout_movie_director AS (" in sql
+    assert "fanout_credit_person AS (" in sql
+
+
+def test_assign_canonical_registers_in_canonical_table():
+    """The new canonical_id is INSERTed into the class's identity
+    registry table (canonical), gated on the stamp actually firing
+    (driven by ``FROM stamp`` so a no-op stamp = no phantom register)."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Movie"])
+    assert "INSERT INTO knot_data.movie (canonical_id)" in sql
+    assert "SELECT canonical_id FROM stamp" in sql
+    assert "ON CONFLICT (canonical_id) DO NOTHING" in sql
+
+
+def test_assign_canonical_no_referrers_no_fanout():
+    """A leaf class with no incoming FKs (e.g. Credit, which is only
+    a referrer, not a referent) produces no fanout CTEs."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Credit"])
+    assert "fanout_" not in sql
+
+
+def test_assign_canonical_no_fk_slots_no_forward_translation():
+    """A class with no ClassRef slots (Person here — only scalar
+    slots) emits no forward-translation SET clauses."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_assign_canonical_sql(bindings["Person"])
+    assert "SELECT canonical_id FROM knot_data." not in sql
+
+
+def test_recanonicalize_cascades_to_referrers():
+    """Recanonicalizing changes a row's canonical_id from m_old to
+    m_new; every referencing class's bindings that hold m_old must
+    be rewritten to m_new (canonical-id rewrite, source-agnostic)."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_recanonicalize_sql(bindings["Movie"])
+    assert "cascade_credit_movie AS (" in sql
+    assert "UPDATE knot_data.credit_bindings" in sql
+    assert "SET movie = %(new_canonical_id)s" in sql
+    assert "WHERE movie = (SELECT canonical_id FROM closed)" in sql
+
+
+def test_recanonicalize_cascade_source_agnostic():
+    """Cascade rewrites are canonical-id → canonical-id, so no
+    source_name filter (unlike the assign fanout which is scoped to
+    the stamp's source)."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_recanonicalize_sql(bindings["Movie"])
+    cascade = sql[sql.index("cascade_credit_movie") :]
+    assert "source_name = 'imdb'" not in cascade
+
+
+def test_recanonicalize_registers_new_canonical():
+    """Recanonicalize INSERTs the new canonical_id into the identity
+    registry table — driven by ``FROM closed`` so it only fires when
+    the close-out matched a row."""
+    _, bindings = _movie_credit_spec()
+    sql = emit_recanonicalize_sql(bindings["Movie"])
+    assert "register AS (" in sql
+    assert "INSERT INTO knot_data.movie (canonical_id)" in sql
+    assert "SELECT %(new_canonical_id)s FROM closed" in sql
+
+
+def test_assign_and_recanonicalize_parse_with_fanout():
+    """Full option-3 SQL (forward translation, fanout, register,
+    cascade) parses as valid postgres."""
+    _, bindings = _movie_credit_spec()
+    for b in bindings.values():
+        a_sql = (
+            emit_assign_canonical_sql(b)
+            .replace("%(canonical_id)s", "'CID'")
+            .replace("%(source_identifier)s", "'SID'")
+            .replace("%(er_metadata)s", "'{}'")
+        )
+        r_sql = (
+            emit_recanonicalize_sql(b)
+            .replace("%(new_canonical_id)s", "'NCID'")
+            .replace("%(source_identifier)s", "'SID'")
+            .replace("%(er_metadata)s", "'{}'")
+        )
+        sqlglot.parse_one(a_sql, dialect="postgres")
+        sqlglot.parse_one(r_sql, dialect="postgres")

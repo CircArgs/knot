@@ -37,6 +37,15 @@ builds around it. The earlier monorepo (API service + UI + ingest + ER
   constrain the range, calibrate them, or pretend they're
   probabilities. Whatever scoring algorithm produced the numbers owns
   that — knot just stores + reads.
+- **Canonical table is identity-only; slot values live in bindings.**
+  `<schema>.<class>` is a single-column identity registry
+  (`canonical_id PRIMARY KEY`). All slot values — including FK
+  columns — live in `<class>_bindings`. The resolved view computes
+  argmax over bindings + weights at read time. No FK constraints are
+  emitted anywhere (postgres can't FK to views, and bindings stay
+  loose pre-ER); referential integrity is enforced by ER orchestration
+  (see "Entity resolution + FK semantics" below) and surfaced by the
+  data-quality validators.
 - **Single-team posture.** Trusted authors of the spec, no
   multi-tenant defenses, no sandboxing.
 - **Sync.** The compiler is sync (pure transforms). Adapters wrap it
@@ -54,13 +63,23 @@ host processes that own postgres connections. The reference shape is
   normalization. Activities pull from the source, normalize, then
   call `binding.write_sql()` to get `(close_out_sql, insert_sql)`
   and execute each with `{"rows": rows}` bound by the driver.
-- **ER workers** (Temporal workflows). Look at unresolved bindings,
-  decide canonical_ids (whatever scoring / matching policy the team
-  owns), call `binding.assign_canonical_sql()` or
-  `binding.recanonicalize_sql()` and bind `{"canonical_id": …,
+- **ER workers** (Temporal workflows). Look at unresolved bindings
+  (`cls.unresolved`), decide canonical_ids (whatever scoring /
+  matching policy the team owns), call `binding.assign_canonical_sql()`
+  or `binding.recanonicalize_sql()` and bind `{"canonical_id": …,
   "source_identifier": …, "er_metadata": json.dumps({...}) or None}`
-  via the connector. Ingest cadence and ER cadence are independent
-  — that decoupling is why these are separate workflows.
+  via the connector. **Each call is one atomic statement that does
+  four things at once:** (1) stamp the binding's canonical_id,
+  (2) translate this row's own FK columns from source-id to
+  canonical-id (forward lookup against the target's bindings, same
+  source's namespace), (3) fan out to every referencing class's
+  bindings to rewrite their FK columns where they held the just-
+  stamped source-id (backward, also source-scoped), (4) register the
+  canonical_id in the identity table. Recanonicalize cascades
+  canonical-id rewrites to every referencing binding (source-
+  agnostic, since post-ER FK columns hold canonical-ids).
+  Ingest cadence and ER cadence are independent — that decoupling
+  is why these are separate workflows.
 - **Service API** (FastAPI / GraphQL / REST / whatever). Translates
   incoming requests into knot `Query` AST nodes using the spec's
   classes, calls `q.sql(schema=...)` to compile to a SQL string,
@@ -232,6 +251,65 @@ concrete reasons:
 The migrate code lives in git history before the removal commit
 (grep `diff_against_db` in the log). Don't reintroduce — see
 "What NOT to do."
+
+## Entity resolution + FK semantics
+
+knot's reads (the resolved view, virtual class views, FK-walking
+queries like `movie.col.director.name == "Tarantino"`) join on
+`canonical_id`. So FK columns on the bindings table need to *hold*
+canonical-ids by the time anything reads the resolved layer — even
+though sources naturally publish their own ids (e.g. imdb's
+`tt0110912` for Pulp Fiction's `director` field).
+
+The mechanism: every `binding.assign_canonical_sql()` call is one
+atomic statement (a chain of writable CTEs) that does **four things**:
+
+1. **Stamp** — `UPDATE <class>_bindings SET canonical_id = … WHERE
+   source_name = … AND source_identifier = … AND canonical_id IS NULL
+   AND valid_to IS NULL`. No-op re-runs by design.
+2. **Forward FK translation** — for each `ClassRef` slot on this
+   class, look up the column's current value in the target's
+   bindings table (same source's namespace) and rewrite from
+   source-id to the target's canonical-id. `COALESCE` keeps the
+   source-id if the target hasn't been ER'd yet — the next step
+   catches the orphan later.
+3. **Backward fan-out** — for each `(referencing_class, fk_slot)`
+   pair from `cls.referrers`, `UPDATE <ref_class>_bindings SET
+   <fk_slot> = <new_canonical_id> WHERE source_name = <this stamp's
+   source> AND <fk_slot> = <this stamp's source_identifier>`. Gated
+   on `EXISTS (SELECT 1 FROM stamp)` so a re-run on an already-
+   stamped row never force-fanouts (strict idempotency).
+4. **Register** — `INSERT INTO <class> (canonical_id) SELECT
+   canonical_id FROM stamp ON CONFLICT DO NOTHING`. Driven by the
+   stamp CTE so a no-op stamp doesn't phantom-register.
+
+`binding.recanonicalize_sql()` cascades canonical-id rewrites to
+referencing bindings (source-agnostic — post-ER FK columns hold
+canonical-ids, no source coupling).
+
+**Same-source assumption.** Step 2 + 3 assume a binding's FK column
+holds source-ids in the *binding's own source's* namespace
+(imdb credit's `.movie` is an imdb movie id). Sources that publish
+cross-source references — corrections specifically — bypass this
+shape; they should write the canonical-id directly into the FK
+column at ingest time. knot doesn't model corrections-source
+referential semantics; the host owns it.
+
+**Pre-ER FK orphans.** Bindings whose `canonical_id IS NULL` are
+filtered out of the resolved view (`WHERE canonical_id IS NOT
+NULL`), so unresolved orphans never surface in reads. The data-
+quality validators (`spec.emit_validation()`) can be extended to
+flag FK columns that still hold non-canonical-id-shaped values
+after the target's ER cadence has caught up.
+
+**Why no FK constraints.** FK columns live on the bindings table.
+Pre-ER they hold source-ids that don't exist in any canonical
+registry; post-ER they hold canonical-ids that do. A postgres FK
+constraint would fail at ingest time on every pre-ER source-id.
+DEFERRABLE doesn't help (source-ids may never become canonical-ids
+if the target source is never ingested). So bindings stay loose by
+design, and referential integrity is enforced by ER orchestration
+(steps 2 + 3 above) plus the data-quality scan.
 
 ## Constraint enforcement
 
