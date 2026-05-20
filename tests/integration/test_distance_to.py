@@ -149,9 +149,10 @@ def test_cross_row_knn_correct_ordering(pg, schema):
     with pg.cursor() as cur:
         cur.execute(fetch_q.sql())
         (target_emb,) = cur.fetchone()
-    # target_emb is a pgvector wrapper — convert to plain Python floats.
+    # psycopg returns pgvector columns as a string like '[0,1,0,0]' —
+    # parse it to a plain list of floats before passing to distance_to.
     # [0.0, 1.0, 0.0, 0.0] — closest to i5 is i4, then i3, i2.
-    target_vec = [float(v) for v in target_emb]
+    target_vec = json.loads(target_emb)
 
     # Step 2: k-NN query using the fetched vector as a literal.
     # This is the cross-row pattern: compute distance_to a runtime vector

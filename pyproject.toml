@@ -65,8 +65,10 @@ ignore = [
 # Marimo notebooks: bare expressions at cell end are how cells emit
 # their displayed value (df / spec / SCHEMA / …). B018 ("useless
 # expression") flags them; the rule doesn't understand marimo's
-# cell semantics.
-"notebooks/*.py" = ["B018"]
+# cell semantics. E402 likewise — imports are cell-scoped, not
+# module-scoped, so mid-file imports are normal.
+"notebooks/*.py" = ["B018", "E402"]
+"notebooks/*.ipynb" = ["B018", "E402"]
 
 [tool.ruff.lint.isort]
 # isort profile=black parity:

@@ -41,7 +41,7 @@ def _(mo):
 @app.cell
 def _():
     import pandas as pd
-    from _demo import SCHEMA, connect
+    from _demo import connect
 
     return connect, pd
 

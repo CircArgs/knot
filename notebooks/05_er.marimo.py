@@ -44,7 +44,7 @@ def _():
     import uuid
 
     import pandas as pd
-    from _demo import SCHEMA, connect
+    from _demo import connect
     from sentence_transformers import SentenceTransformer
 
     return SentenceTransformer, connect, json, pd, uuid
@@ -143,17 +143,24 @@ def _(engine, model, movie, pd, pg, spec):
 
 
 @app.cell
-def _(engine, movie, pd):
-    # Confirm: every row now has an embedding.
-    pd.read_sql_query(
-        f"""
-        SELECT source_name, COUNT(*) AS rows, COUNT(title_embedding) AS embedded
-        FROM {movie.bindings_table_name}
-        GROUP BY source_name
-        ORDER BY source_name
-        """,
-        engine,
-    )
+def _(engine, movie, pd, spec):
+    # Confirm: every row now has an embedding. Per-source via the knot
+    # read API — one from_source query per source, assembled in pandas.
+    from knot.ast.expr import count as _count
+
+    _rows = []
+    for _src in spec.sources.values():
+        _q = movie.from_source(_src).select(
+            _count(),
+            _count(movie.col.title_embedding),
+        )
+        _df = pd.read_sql_query(_q.sql(), engine)
+        _rows.append({
+            "source_name": _src.name,
+            "rows": int(_df.iloc[0, 0]),
+            "embedded": int(_df.iloc[0, 1]),
+        })
+    pd.DataFrame(_rows).sort_values("source_name").reset_index(drop=True)
     return
 
 
@@ -185,56 +192,82 @@ def _(mo):
 def _(engine, imdb_movie_b, json, movie, pd, pg, uuid):
     # Phase 1: mint canonical_id for every imdb row. imdb is the
     # "anchor" — in production you'd pick the most trusted source
-    # or use a deterministic key.
+    # or use a deterministic key. Read via from_source + unresolved
+    # filter; write via the BATCHED assign_canonicals_sql so the whole
+    # batch lands in one round-trip.
+    _imdb_src = imdb_movie_b.source
     imdb_rows = pd.read_sql_query(
-        f"SELECT source_identifier, title "
-        f"FROM {movie.bindings_table_name} "
-        f"WHERE source_name = 'imdb' AND canonical_id IS NULL",
+        movie.from_source(_imdb_src)
+             .where(movie.col.canonical_id.is_null())
+             .select(movie.bindings_col.source_identifier, movie.col.title)
+             .sql(),
         engine,
     )
     print(f"minting {len(imdb_rows)} canonical_ids for imdb")
 
-    assign_imdb = imdb_movie_b.assign_canonical_sql()
+    _assignments = [
+        {
+            "canonical_id": f"m_{uuid.uuid4().hex[:10]}",
+            "source_identifier": _si,
+            "er_metadata": {"method": "mint", "source": "imdb"},
+        }
+        for _si in imdb_rows["source_identifier"]
+    ]
     with pg.cursor() as _cur:
-        for _si in imdb_rows["source_identifier"]:
-            _cur.execute(
-                assign_imdb,
-                {
-                    "canonical_id": f"m_{uuid.uuid4().hex[:10]}",
-                    "source_identifier": _si,
-                    "er_metadata": json.dumps({"method": "mint", "source": "imdb"}),
-                },
-            )
+        _cur.execute(
+            imdb_movie_b.assign_canonicals_sql(),
+            {"assignments": json.dumps(_assignments)},
+        )
     return
 
 
 @app.cell
-def _(engine, movie, pd):
+def _(engine, json, movie, pd, spec, tmdb_movie_b):
     # Phase 2 (read): for each tmdb row, find the nearest imdb row.
-    # CROSS JOIN LATERAL drives the per-row k-NN.
-    bindings = movie.bindings_table_name
-    candidates = pd.read_sql_query(
-        f"""
-        SELECT
-            t.source_identifier  AS tmdb_id,
-            t.title              AS tmdb_title,
-            i.source_identifier  AS imdb_id,
-            i.title              AS imdb_title,
-            i.canonical_id       AS imdb_canonical,
-            (t.title_embedding <=> i.title_embedding) AS distance
-        FROM {bindings} t
-        CROSS JOIN LATERAL (
-            SELECT source_identifier, title, canonical_id, title_embedding
-            FROM {bindings}
-            WHERE source_name = 'imdb' AND canonical_id IS NOT NULL
-            ORDER BY title_embedding <=> t.title_embedding
-            LIMIT 1
-        ) i
-        WHERE t.source_name = 'tmdb' AND t.canonical_id IS NULL
-        ORDER BY distance
-        """,
+    # Two-query pattern via knot — one query for the tmdb rows needing
+    # ER, then a per-row k-NN against imdb using
+    # title_embedding.distance_to(target_vec). Per-row roundtrips, but
+    # every query is composed through the knot Query AST (no raw SQL).
+    # Production-scale ER would batch via a host-built lateral-join
+    # view; the demo prioritizes substrate fidelity.
+    _imdb_src = spec.sources["imdb"]
+    _tmdb_src = tmdb_movie_b.source
+
+    _emb = movie.col.title_embedding
+    _sid = movie.bindings_col.source_identifier
+    _cid = movie.col.canonical_id
+
+    tmdb_df = pd.read_sql_query(
+        movie.from_source(_tmdb_src)
+             .where(_cid.is_null())
+             .select(_sid, movie.col.title, _emb)
+             .sql(),
         engine,
     )
+
+    _hits = []
+    for _, _row in tmdb_df.iterrows():
+        _vec = _row["title_embedding"]
+        if isinstance(_vec, str):
+            _vec = json.loads(_vec)
+        _knn_q = (
+            movie.from_source(_imdb_src)
+                 .where(_cid.is_not_null())
+                 .order_by(_emb.distance_to(_vec))
+                 .limit(1)
+                 .select(_sid, movie.col.title, _cid, _emb.distance_to(_vec))
+        )
+        _hit = pd.read_sql_query(_knn_q.sql(), engine)
+        if not _hit.empty:
+            _hits.append({
+                "tmdb_id": _row["source_identifier"],
+                "tmdb_title": _row["title"],
+                "imdb_id": _hit.iloc[0, 0],
+                "imdb_title": _hit.iloc[0, 1],
+                "imdb_canonical": _hit.iloc[0, 2],
+                "distance": float(_hit.iloc[0, 3]),
+            })
+    candidates = pd.DataFrame(_hits).sort_values("distance").reset_index(drop=True)
     candidates.head(15)
     return (candidates,)
 
@@ -300,20 +333,19 @@ def _(engine, movie, pd):
 
 @app.cell
 def _(engine, movie, pd):
-    # Per-canonical breakdown — how many sources contributed to each.
-    pd.read_sql_query(
-        f"""
-        SELECT canonical_id,
-               jsonb_object_agg(source_name, source_identifier) AS sources,
-               COUNT(*) AS source_count
-        FROM {movie.bindings_table_name}
-        WHERE canonical_id IS NOT NULL
-        GROUP BY canonical_id
-        ORDER BY source_count DESC, canonical_id
-        LIMIT 15
-        """,
-        engine,
-    )
+    # Per-canonical breakdown via the all_sources view — its per-source
+    # jsonb columns already encode provenance; pandas counts how many
+    # sources contributed per canonical row.
+    _as = pd.read_sql_query(movie.all_sources.sql(), engine)
+    if "title" in _as.columns:
+        _as["source_count"] = _as["title"].apply(
+            lambda v: len(v) if isinstance(v, dict) else 0
+        )
+        _as.sort_values("source_count", ascending=False).head(15)[
+            ["canonical_id", "source_count", "title"]
+        ]
+    else:
+        _as.head(15)
     return
 
 
@@ -325,18 +357,14 @@ def _(mo):
     | knot | worker |
     |---|---|
     | `VECTOR(384)` column + HNSW index in `Spec.ddl()` | picked the encoder, dim, metric |
-    | `binding.write_sql()` for ingest | wrote the embedding-fill UPDATE loop |
-    | `binding.assign_canonical_sql()` for ER stamping | picked the threshold, blocking strategy, mint scheme |
-    | resolver views over canonical bindings | wrote the candidate-query SQL using `<=>` |
+    | `binding.update_slot_sql()` for embedding backfill | wrote the encoder loop |
+    | `binding.assign_canonicals_sql()` for batched ER stamping | picked the threshold, blocking strategy, mint scheme |
+    | `slot.distance_to(vec)` k-NN expression (HNSW-aware) | per-row candidate iteration / scoring |
     | `er_metadata jsonb` column on bindings | populated `{"method": ..., "distance": ...}` for audit |
 
-    The candidate-generation SQL is currently hand-written
-    (`<=>` against `movie_bindings`). A
-    `movie.col.title_embedding.distance(vec)` operator on the read
-    substrate would let the same query be expressed via the Query
-    AST. That's the natural next library addition — same shape as
-    FK walks and aggregates, one more Expr node + one more
-    `compile_sql.register`. Until then, raw SQL works.
+    Every cell above composes through knot expressions —
+    `from_source(s).where(...).order_by(slot.distance_to(v)).limit(k)`
+    is the substrate's k-NN form, no raw SQL required.
     """)
     return
 

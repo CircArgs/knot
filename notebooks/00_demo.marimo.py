@@ -331,22 +331,20 @@ def _(json, mo, pg, spec):
 
 
 @app.cell(hide_code=True)
-def _(SCHEMA, engine, pd):
-    pd.read_sql_query(
-        f"""
-        SELECT source_name AS source,
-               'Movie' AS class, COUNT(*) AS rows
-        FROM {SCHEMA}.movie_bindings GROUP BY source_name
-        UNION ALL
-        SELECT source_name, 'Person', COUNT(*)
-        FROM {SCHEMA}.person_bindings GROUP BY source_name
-        UNION ALL
-        SELECT source_name, 'MovieCredit', COUNT(*)
-        FROM {SCHEMA}.moviecredit_bindings GROUP BY source_name
-        ORDER BY class, source
-        """,
-        engine,
-    )
+def _(engine, pd, spec):
+    # Per-(source, class) row counts — all via knot's read API.
+    # cls.from_source(s) targets the raw bindings layer for one source;
+    # len(df) gives the count. Python assembles the cross-product.
+    _counts = []
+    for _cls_name in ("Movie", "Person", "MovieCredit"):
+        _cls = spec.classes[_cls_name]
+        for _src in spec.sources.values():
+            if _src.name == "_user_corrections":
+                continue
+            _df = pd.read_sql_query(_cls.from_source(_src).sql(), engine)
+            if not _df.empty:
+                _counts.append({"source": _src.name, "class": _cls_name, "rows": len(_df)})
+    pd.DataFrame(_counts).sort_values(["class", "source"]).reset_index(drop=True)
     return
 
 
@@ -746,14 +744,47 @@ def _(SCHEMA, engine, mo, pd):
 
 
 @app.cell
-def _(SCHEMA, engine, pd):
-    # First 5 movies that pass the DirectedMovie filter — rendered as
-    # a DataFrame so marimo formats it natively (no tabulate needed).
+def _(engine, pd, spec):
+    # First 5 movies that pass the DirectedMovie filter. Query movie.resolved
+    # with the same predicate that defines the DirectedMovie virtual view —
+    # identical SQL to reading the view directly, expressed via knot's AST.
+    from knot import this as _this
+
+    _movie = spec.classes["Movie"]
+    _credit = spec.classes["MovieCredit"]
+    _directed_pred = (
+        (_credit.col.movie == _this.Movie)
+        & (_credit.col.role == "director")
+    ).any()
     pd.read_sql_query(
-        f"SELECT canonical_id, title, year FROM {SCHEMA}.directedmovie "
-        f"ORDER BY year DESC LIMIT 5",
+        _movie.resolved
+        .where(_directed_pred)
+        .order_by(_movie.col.year, "desc")
+        .limit(5)
+        .select(_movie.col.title, _movie.col.year)
+        .sql(),
         engine,
     )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## DBA introspection — `explain_winner_sql`
+
+    `movie.explain_winner_sql(slot="year")` returns one row per
+    `(canonical_id, source_name)` showing each source's claim for that
+    slot, its weight, whether it won the argmax, and the margin over
+    the runner-up. Useful for auditing resolver decisions without
+    manually joining `source_weight` against the bindings table.
+    """)
+    return
+
+
+@app.cell
+def _(SCHEMA, engine, movie, pd):
+    pd.read_sql_query(movie.explain_winner_sql(slot="year", schema=SCHEMA), engine).head(10)
     return
 
 
