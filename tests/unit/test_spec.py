@@ -402,33 +402,16 @@ def test_col_access_resolves_inherited_slot():
     assert ref.slot_name == "name"
 
 
-def test_has_any_unknown_slot_kwarg_raises():
+def test_correlated_aggregate_typo_in_slot_raises():
+    """The correlated-aggregate form
+    ``(other.col.<fk> == this.Class).any()`` validates slot existence
+    via ``col`` access — a typo raises KeyError at expression-build
+    time (no separate FK inference to flag)."""
+    from knot import this
+
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("movie", movie)
-    # `role` doesn't exist on Credit — caught at expression build.
     with pytest.raises(KeyError, match="role"):
-        movie.has_any(credit, role="director")
-
-
-def test_has_any_no_fk_back_raises():
-    spec = Spec(identifier_slot_name="canonical_id")
-    movie = spec.add_class("Movie")
-    other = spec.add_class("Other")
-    # Other has no FK back to Movie.
-    with pytest.raises(ValueError, match="no FK back"):
-        movie.has_any(other)
-
-
-def test_has_any_ambiguous_fk_requires_via():
-    spec = Spec(identifier_slot_name="canonical_id")
-    person = spec.add_class("Person")
-    membership = spec.add_class("Membership")
-    membership.slot("user", person)
-    membership.slot("friend", person)
-    with pytest.raises(ValueError, match="multiple FKs"):
-        person.has_any(membership)
-    # Explicit via= resolves the ambiguity.
-    via = person.has_any(membership, via="user")
-    assert via.fk_slot_name == "user"
+        ((credit.col.movie == this.Movie) & (credit.col.role == "director")).any()

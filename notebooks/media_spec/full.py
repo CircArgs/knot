@@ -4,7 +4,7 @@
 Loading ``spec`` gives you the v1 (base + person + movies).
 Loading THIS module includes the four additional domains —
 ``games`` / ``podcasts`` / ``tv`` / ``webscraped`` — by calling
-``spec.include(domain.part)`` on each.
+``spec.include(domain.<domain>_subspec)`` on each.
 
 Same shape as a FastAPI app loading more routers at startup.
 
@@ -24,10 +24,10 @@ from media_spec import podcasts as _podcasts
 from media_spec import tv as _tv
 from media_spec import webscraped as _webscraped
 
-spec.include(_games.part)
-spec.include(_podcasts.part)
-spec.include(_tv.part)
-spec.include(_webscraped.part)
+spec.include(_games.games_subspec)
+spec.include(_podcasts.podcasts_subspec)
+spec.include(_tv.tv_subspec)
+spec.include(_webscraped.webscraped_subspec)
 
 # optional explicit validate. # .ddl validates internally before returning
 spec.validate()

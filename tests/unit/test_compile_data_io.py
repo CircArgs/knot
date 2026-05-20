@@ -1,4 +1,4 @@
-"""knot.compile.write — per-binding SCD2 write SQL emission."""
+"""knot.compile.write — per-binding upsert SQL emission."""
 
 import pytest
 import sqlglot
@@ -11,14 +11,12 @@ from knot.compile import emit_binding_write_sql
 # ---------------------------------------------------------------------------
 
 
-def test_returns_two_sql_strings(movie_spec):
+def test_returns_one_sql_string(movie_spec):
     b = movie_spec.source_bindings[0]
     out = emit_binding_write_sql(b)
-    assert isinstance(out, tuple)
-    assert len(out) == 2
-    close_out, insert = out
-    assert isinstance(close_out, str)
-    assert isinstance(insert, str)
+    assert isinstance(out, str)
+    assert "INSERT INTO" in out
+    assert "ON CONFLICT" in out
 
 
 def test_binding_write_sql_method_returns_same(movie_spec):
@@ -27,50 +25,66 @@ def test_binding_write_sql_method_returns_same(movie_spec):
 
 
 # ---------------------------------------------------------------------------
-# close-out shape
+# Upsert shape — single statement, ON CONFLICT DO UPDATE
 # ---------------------------------------------------------------------------
 
 
-def test_close_out_targets_bindings_table_with_jsonb_keys(movie_spec):
+def test_upsert_targets_bindings_table_and_bakes_source(movie_spec):
     b = movie_spec.source_bindings[0]
-    close_out, _ = emit_binding_write_sql(b)
-    assert "UPDATE knot_data.movie_bindings" in close_out
-    assert "SET valid_to = now()" in close_out
-    assert "source_name = 'imdb'" in close_out  # baked-in literal
-    assert "jsonb_array_elements(%(rows)s::jsonb)" in close_out
-    assert "AND b.valid_to IS NULL" in close_out
+    sql = emit_binding_write_sql(b)
+    assert "INSERT INTO knot_data.movie_bindings" in sql
+    assert "'imdb'" in sql  # baked-in source literal in the SELECT
+    assert "jsonb_array_elements(%(rows)s::jsonb)" in sql
 
 
-# ---------------------------------------------------------------------------
-# insert shape
-# ---------------------------------------------------------------------------
-
-
-def test_insert_includes_mapped_field_projection(movie_spec):
+def test_upsert_uses_pk_conflict_target(movie_spec):
     b = movie_spec.source_bindings[0]
-    _, insert = emit_binding_write_sql(b)
-    assert "INSERT INTO knot_data.movie_bindings" in insert
-    assert "source_name = 'imdb'" not in insert  # written as SELECT literal
-    assert "'imdb'" in insert
-    assert "jsonb_array_elements(%(rows)s::jsonb)" in insert
+    sql = emit_binding_write_sql(b)
+    assert "ON CONFLICT (source_name, source_identifier) DO UPDATE SET" in sql
+
+
+def test_upsert_preserves_canonical_id_and_er_metadata(movie_spec):
+    """ON CONFLICT DO UPDATE updates every slot the source provides,
+    but canonical_id and er_metadata are ER-owned and never overwritten
+    by a re-ingest."""
+    b = movie_spec.source_bindings[0]
+    sql = emit_binding_write_sql(b)
+    # Split on ON CONFLICT to inspect just the SET clause.
+    set_block = sql.split("ON CONFLICT", 1)[1]
+    assert "canonical_id = EXCLUDED" not in set_block
+    assert "er_metadata = EXCLUDED" not in set_block
+
+
+def test_upsert_overwrites_non_identity_slots(movie_spec):
+    b = movie_spec.source_bindings[0]
+    sql = emit_binding_write_sql(b)
+    set_block = sql.split("ON CONFLICT", 1)[1]
+    # Sample of non-identity slots from the movie_spec fixture.
+    assert "year = EXCLUDED.year" in set_block
+    assert "name = EXCLUDED.name" in set_block
+    assert "raw_payload = EXCLUDED.raw_payload" in set_block
+
+
+# ---------------------------------------------------------------------------
+# Insert SELECT shape
+# ---------------------------------------------------------------------------
 
 
 def test_insert_includes_raw_payload_column_and_projection(movie_spec):
     b = movie_spec.source_bindings[0]
-    _, insert = emit_binding_write_sql(b)
-    # raw_payload is the last column in the INSERT, sourced from r passthrough.
-    assert "raw_payload)" in insert
-    assert "r AS __raw_payload" in insert
-    assert "raw.__raw_payload" in insert
+    sql = emit_binding_write_sql(b)
+    assert "raw_payload)" in sql
+    assert "r AS __raw_payload" in sql
+    assert "raw.__raw_payload" in sql
 
 
 def test_insert_uses_jsonb_extraction_for_unmapped_passthrough(movie_spec):
     b = movie_spec.source_bindings[0]
-    _, insert = emit_binding_write_sql(b)
-    # `name` is unmapped — implicit passthrough at same name
-    assert "raw.name::text" in insert
+    sql = emit_binding_write_sql(b)
+    # `name` is unmapped — implicit passthrough at same name.
+    assert "raw.name::text" in sql
     # Arrays go through unnest+ARRAY round-trip via __raw_payload.
-    assert "jsonb_array_elements(raw.__raw_payload->'genres')" in insert
+    assert "jsonb_array_elements(raw.__raw_payload->'genres')" in sql
 
 
 # ---------------------------------------------------------------------------
@@ -94,11 +108,9 @@ def test_sql_shape_independent_of_row_count(movie_spec):
 
 def test_schema_and_suffix_kwargs(movie_spec):
     b = movie_spec.source_bindings[0]
-    close_out, insert = emit_binding_write_sql(b, schema="alt", bindings_suffix="__s")
-    assert "alt.movie__s" in close_out
-    assert "alt.movie__s" in insert
-    assert "knot_data.movie_bindings" not in close_out
-    assert "knot_data.movie_bindings" not in insert
+    sql = emit_binding_write_sql(b, schema="alt", bindings_suffix="__s")
+    assert "alt.movie__s" in sql
+    assert "knot_data.movie_bindings" not in sql
 
 
 # ---------------------------------------------------------------------------
@@ -112,9 +124,8 @@ def test_source_name_apostrophe_escaped():
     src = spec.add_source("o_brien")
     src.name = "o'brien"  # simulate an apostrophe
     b = src.bind(movie)
-    close_out, insert = emit_binding_write_sql(b)
-    assert "'o''brien'" in close_out
-    assert "'o''brien'" in insert
+    sql = emit_binding_write_sql(b)
+    assert "'o''brien'" in sql
 
 
 # ---------------------------------------------------------------------------
@@ -139,15 +150,12 @@ def test_abstract_class_rejected():
 
 def test_emitted_sql_parses_postgres(movie_spec):
     b = movie_spec.source_bindings[0]
-    close_out, insert = emit_binding_write_sql(b)
-    sqlglot.parse_one(close_out, dialect="postgres")
-    sqlglot.parse_one(insert, dialect="postgres")
+    sqlglot.parse_one(emit_binding_write_sql(b), dialect="postgres")
 
 
 # ---------------------------------------------------------------------------
-# Constraint enforcement is no longer baked into the write — host
-# concern. These tests cover what's left: the binding doesn't emit
-# any DO block, and Severity warnings have no impact on write SQL.
+# Constraint enforcement is host-side. Write SQL emits no DO blocks
+# regardless of constraint declarations on the spec.
 # ---------------------------------------------------------------------------
 
 
@@ -156,9 +164,7 @@ def test_write_emits_no_do_block_regardless_of_constraints(movie_spec):
     write_sql doesn't bundle it. Host runs ``spec.emit_validation()``
     separately after the write."""
     b = movie_spec.source_bindings[0]
-    close_out, insert = emit_binding_write_sql(b)
-    assert "DO $$" not in close_out
-    assert "DO $$" not in insert
+    assert "DO $$" not in emit_binding_write_sql(b)
 
 
 def test_severity_warning_does_not_affect_write_sql():
@@ -172,6 +178,4 @@ def test_severity_warning_does_not_affect_write_sql():
     )
     src = spec.add_source("imdb")
     b = src.bind(movie)
-    close_out, insert = emit_binding_write_sql(b)
-    assert "warn_only" not in close_out
-    assert "warn_only" not in insert
+    assert "warn_only" not in emit_binding_write_sql(b)

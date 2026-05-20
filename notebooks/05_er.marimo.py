@@ -47,7 +47,7 @@ def _():
     from _demo import SCHEMA, connect
     from sentence_transformers import SentenceTransformer
 
-    return SCHEMA, SentenceTransformer, connect, json, pd, uuid
+    return SentenceTransformer, connect, json, pd, uuid
 
 
 @app.cell
@@ -56,10 +56,10 @@ def _():
     # tmdb_movie_b lives in the movies.py domain file once .full
     # has been imported (it's defined there, full just composes).
     import media_spec.full  # noqa: F401
-    from media_spec import imdb_movie_b, movie
+    from media_spec import imdb_movie_b, movie, spec
     from media_spec.movies import tmdb_movie_b
 
-    return imdb_movie_b, movie, tmdb_movie_b
+    return imdb_movie_b, movie, spec, tmdb_movie_b
 
 
 @app.cell
@@ -69,7 +69,7 @@ def _(connect):
 
 
 @app.cell
-def _(SCHEMA, movie, engine, pd, pg):
+def _(engine, movie, pd):
     # Resolved view is empty going in: every row's canonical_id is
     # NULL, the view filters those out.
     resolved_before = pd.read_sql_query(movie.resolved.sql(), engine)
@@ -103,41 +103,46 @@ def _(SentenceTransformer):
 
 
 @app.cell
-def _(model, movie, engine, pd, pg):
-    # Use the per-class accessor instead of f-string-baking the
-    # bindings table name. One place to change the suffix convention;
-    # the notebook stays declarative.
-    table = movie.bindings_table_name
-    unembedded = pd.read_sql_query(
-        f"""
-        SELECT source_name, source_identifier, valid_from, title
-        FROM {table}
-        WHERE title_embedding IS NULL
-        """,
-        engine,
-    )
+def _(engine, model, movie, pd, pg, spec):
+    # Read via knot: cls.from_source per source + .where(col.is_null())
+    # gives "rows where this column is NULL." The UPDATE for vector
+    # backfill is the one host-owned raw SQL — knot has no in-place
+    # slot-update API yet (gap tracked separately).
+    _all = []
+    for _src in spec.sources.values():
+        if _src.name == "_user_corrections":
+            continue
+        _df = pd.read_sql_query(
+            movie.from_source(_src)
+                 .where(movie.col.title_embedding.is_null())
+                 .sql(),
+            engine,
+        )
+        if not _df.empty:
+            _all.append(_df[["source_name", "source_identifier", "title"]])
+    unembedded = pd.concat(_all, ignore_index=True) if _all else pd.DataFrame()
     embeddings = model.encode(unembedded["title"].tolist(), normalize_embeddings=True)
     print(f"encoded {len(unembedded)} titles → {embeddings.shape}")
 
-    with pg.cursor() as cur:
-        for (sn, si, vf, _), vec in zip(
+    _table = movie.bindings_table_name
+    with pg.cursor() as _cur:
+        for (_sn, _si, _), _vec in zip(
             unembedded.itertuples(index=False), embeddings, strict=False
         ):
-            cur.execute(
+            _cur.execute(
                 f"""
-                UPDATE {table}
+                UPDATE {_table}
                 SET title_embedding = %(vec)s::vector(384)
                 WHERE source_name = %(sn)s
                   AND source_identifier = %(si)s
-                  AND valid_from = %(vf)s
                 """,
-                {"vec": str(vec.tolist()), "sn": sn, "si": si, "vf": vf},
+                {"vec": str(_vec.tolist()), "sn": _sn, "si": _si},
             )
     return
 
 
 @app.cell
-def _(movie, engine, pd, pg):
+def _(engine, movie, pd):
     # Confirm: every row now has an embedding.
     pd.read_sql_query(
         f"""
@@ -176,7 +181,7 @@ def _(mo):
 
 
 @app.cell
-def _(imdb_movie_b, json, movie, engine, pd, pg, uuid):
+def _(engine, imdb_movie_b, json, movie, pd, pg, uuid):
     # Phase 1: mint canonical_id for every imdb row. imdb is the
     # "anchor" — in production you'd pick the most trusted source
     # or use a deterministic key.
@@ -189,13 +194,13 @@ def _(imdb_movie_b, json, movie, engine, pd, pg, uuid):
     print(f"minting {len(imdb_rows)} canonical_ids for imdb")
 
     assign_imdb = imdb_movie_b.assign_canonical_sql()
-    with pg.cursor() as cur:
-        for si in imdb_rows["source_identifier"]:
-            cur.execute(
+    with pg.cursor() as _cur:
+        for _si in imdb_rows["source_identifier"]:
+            _cur.execute(
                 assign_imdb,
                 {
                     "canonical_id": f"m_{uuid.uuid4().hex[:10]}",
-                    "source_identifier": si,
+                    "source_identifier": _si,
                     "er_metadata": json.dumps({"method": "mint", "source": "imdb"}),
                 },
             )
@@ -203,7 +208,7 @@ def _(imdb_movie_b, json, movie, engine, pd, pg, uuid):
 
 
 @app.cell
-def _(movie, engine, pd, pg):
+def _(engine, movie, pd):
     # Phase 2 (read): for each tmdb row, find the nearest imdb row.
     # CROSS JOIN LATERAL drives the per-row k-NN.
     bindings = movie.bindings_table_name
@@ -234,7 +239,7 @@ def _(movie, engine, pd, pg):
 
 
 @app.cell
-def _(SCHEMA, candidates, json, pg, tmdb_movie_b, uuid):
+def _(candidates, json, pg, tmdb_movie_b, uuid):
     # Phase 2 (write): threshold + assign. cos distance ≤ 0.20 →
     # similarity ≥ 0.80. Reasonable cut for all-MiniLM-L6-v2 on movie
     # titles; production tunes this against labeled data.
@@ -242,27 +247,27 @@ def _(SCHEMA, candidates, json, pg, tmdb_movie_b, uuid):
     matched = int((candidates["distance"] <= THRESHOLD).sum())
     print(f"matched {matched}/{len(candidates)} tmdb rows at distance ≤ {THRESHOLD}")
 
-    assign_tmdb = tmdb_movie_b.assign_canonical_sql()
-    with pg.cursor() as cur:
-        for row in candidates.itertuples(index=False):
-            if row.distance <= THRESHOLD:
-                canonical_id = row.imdb_canonical
-                method = "matched"
-                matched_imdb_id = row.imdb_id
+    _assign_tmdb = tmdb_movie_b.assign_canonical_sql()
+    with pg.cursor() as _cur:
+        for _row in candidates.itertuples(index=False):
+            if _row.distance <= THRESHOLD:
+                _canonical_id = _row.imdb_canonical
+                _method = "matched"
+                _matched_imdb_id = _row.imdb_id
             else:
-                canonical_id = f"m_{uuid.uuid4().hex[:10]}"
-                method = "mint"
-                matched_imdb_id = None
-            cur.execute(
-                assign_tmdb,
+                _canonical_id = f"m_{uuid.uuid4().hex[:10]}"
+                _method = "mint"
+                _matched_imdb_id = None
+            _cur.execute(
+                _assign_tmdb,
                 {
-                    "canonical_id": canonical_id,
-                    "source_identifier": row.tmdb_id,
+                    "canonical_id": _canonical_id,
+                    "source_identifier": _row.tmdb_id,
                     "er_metadata": json.dumps(
                         {
-                            "method": method,
-                            "distance": float(row.distance),
-                            "matched_imdb_id": matched_imdb_id,
+                            "method": _method,
+                            "distance": float(_row.distance),
+                            "matched_imdb_id": _matched_imdb_id,
                         }
                     ),
                 },
@@ -284,7 +289,7 @@ def _(mo):
 
 
 @app.cell
-def _(SCHEMA, movie, engine, pd, pg):
+def _(engine, movie, pd):
     pd.read_sql_query(
         movie.resolved.order_by(movie.col.year, "desc").limit(15).sql(),
         engine,
@@ -293,7 +298,7 @@ def _(SCHEMA, movie, engine, pd, pg):
 
 
 @app.cell
-def _(movie, engine, pd, pg):
+def _(engine, movie, pd):
     # Per-canonical breakdown — how many sources contributed to each.
     pd.read_sql_query(
         f"""
@@ -301,7 +306,7 @@ def _(movie, engine, pd, pg):
                jsonb_object_agg(source_name, source_identifier) AS sources,
                COUNT(*) AS source_count
         FROM {movie.bindings_table_name}
-        WHERE canonical_id IS NOT NULL AND valid_to IS NULL
+        WHERE canonical_id IS NOT NULL
         GROUP BY canonical_id
         ORDER BY source_count DESC, canonical_id
         LIMIT 15

@@ -1,10 +1,10 @@
-"""knot — _user_corrections synthetic source + close_out_sql."""
+"""knot — _user_corrections synthetic source + retract_sql."""
 
 import pytest
 import sqlglot
 
 from knot import CORRECTIONS_SOURCE_NAME, SourceBinding, Spec, types
-from knot.compile import emit_close_out_sql
+from knot.compile import emit_retract_sql
 
 # ---------------------------------------------------------------------------
 # Spec.enable_corrections
@@ -77,55 +77,55 @@ def test_corrections_binding_raises_when_disabled():
 
 
 # ---------------------------------------------------------------------------
-# binding.close_out_sql — used to withdraw a correction (no replacement INSERT)
+# binding.retract_sql — used to withdraw a correction (no replacement INSERT)
 # ---------------------------------------------------------------------------
 
 
-def test_close_out_sql_targets_correct_table_and_source():
+def test_retract_sql_targets_correct_table_and_source():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     spec.enable_corrections()
     b = movie.corrections_binding()
-    sql = emit_close_out_sql(b)
-    assert "UPDATE knot_data.movie_bindings" in sql
-    assert "SET valid_to = now()" in sql
+    sql = emit_retract_sql(b)
+    assert "DELETE FROM knot_data.movie_bindings" in sql
     assert "source_name = '_user_corrections'" in sql
     assert "%(canonical_id)s" in sql
     assert "%(source_identifier)s" in sql
-    assert "valid_to IS NULL" in sql
+    # No SCD2 valid_to filter anymore — retraction deletes the row.
+    assert "valid_to" not in sql
 
 
-def test_close_out_sql_parses_postgres():
+def test_retract_sql_parses_postgres():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     src = spec.add_source("imdb")
     b = src.bind(movie)
-    sqlglot.parse_one(emit_close_out_sql(b), dialect="postgres")
+    sqlglot.parse_one(emit_retract_sql(b), dialect="postgres")
 
 
-def test_close_out_sql_uses_class_identifier_column_name():
+def test_retract_sql_uses_class_identifier_column_name():
     # Spec-level override of identifier name.
     spec = Spec(identifier_slot_name="imdb_id")
     movie = spec.add_class("Movie")
     src = spec.add_source("imdb")
     b = src.bind(movie)
-    sql = emit_close_out_sql(b)
+    sql = emit_retract_sql(b)
     # The WHERE clause uses the actual identifier slot's column name,
     # not the literal "canonical_id".
     assert "imdb_id = %(canonical_id)s" in sql
 
 
-def test_close_out_sql_escapes_apostrophe_in_source_name():
+def test_retract_sql_escapes_apostrophe_in_source_name():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     src = spec.add_source("o_brien")
     src.name = "o'brien"  # simulate apostrophe
     b = src.bind(movie)
-    sql = emit_close_out_sql(b)
+    sql = emit_retract_sql(b)
     assert "'o''brien'" in sql
 
 
-def test_close_out_sql_rejects_abstract_class():
+def test_retract_sql_rejects_abstract_class():
     spec = Spec(identifier_slot_name="canonical_id")
     title = spec.add_class("Title", kind="abstract")
     src = spec.add_source("imdb")
@@ -133,15 +133,15 @@ def test_close_out_sql_rejects_abstract_class():
     b = SourceBinding(source=src, class_=title)
     spec.source_bindings.append(b)
     with pytest.raises(ValueError, match="abstract"):
-        emit_close_out_sql(b)
+        emit_retract_sql(b)
 
 
-def test_close_out_sql_via_binding_method_matches_free_function():
+def test_retract_sql_via_binding_method_matches_free_function():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     src = spec.add_source("imdb")
     b = src.bind(movie)
-    assert b.close_out_sql() == emit_close_out_sql(b)
+    assert b.retract_sql() == emit_retract_sql(b)
 
 
 # ---------------------------------------------------------------------------
@@ -149,15 +149,14 @@ def test_close_out_sql_via_binding_method_matches_free_function():
 # ---------------------------------------------------------------------------
 
 
-def test_corrections_write_uses_same_scd2_machinery():
+def test_corrections_write_uses_same_upsert_machinery():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     movie.slot("year", types.INTEGER)
     spec.enable_corrections()
     b = movie.corrections_binding()
-    close_out, insert = b.write_sql()
-    # Same SCD2 machinery as any other binding write.
-    assert "UPDATE knot_data.movie_bindings" in close_out
-    assert "source_name = '_user_corrections'" in close_out
-    assert "INSERT INTO knot_data.movie_bindings" in insert
-    assert "'_user_corrections'" in insert  # baked in as INSERT SELECT literal
+    sql = b.write_sql()
+    # Same upsert machinery as any other binding write.
+    assert "INSERT INTO knot_data.movie_bindings" in sql
+    assert "'_user_corrections'" in sql  # baked in as INSERT SELECT literal
+    assert "ON CONFLICT (source_name, source_identifier) DO UPDATE SET" in sql

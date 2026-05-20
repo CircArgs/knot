@@ -38,9 +38,9 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
-from knot.ast.expr import CountRel, Exists, Expr, FkRef, Ref
+from knot.ast.expr import Expr, FkRef, Ref, VectorRef
 from knot.ast.select import Layer, Query
-from knot.ast.types import ClassRef, TypeExpression, _coerce_type
+from knot.ast.types import ClassRef, TypeExpression, Vector, _coerce_type
 
 # ---------------------------------------------------------------------------
 # Enums (class-shape + constraint-severity — the type-expression enum lives
@@ -128,7 +128,7 @@ class _ColAccess:
             raise AttributeError(name)
         return self[name]
 
-    def __getitem__(self, name: str) -> Ref | FkRef:
+    def __getitem__(self, name: str) -> Ref | FkRef | VectorRef:
         cls = object.__getattribute__(self, "_cls")
         slot = cls.get_slot(name)
         if isinstance(slot.type, ClassRef):
@@ -136,6 +136,13 @@ class _ColAccess:
                 class_name=cls.name,
                 slot_name=name,
                 target_class_name=slot.type.target.name,
+            )
+        if isinstance(slot.type, Vector):
+            return VectorRef(
+                class_name=cls.name,
+                slot_name=name,
+                metric=slot.type.metric,
+                dim=slot.type.dim,
             )
         return Ref(class_name=cls.name, slot_name=name)
 
@@ -248,73 +255,6 @@ class OntologyClass:
         Either form raises ``KeyError`` on construction if the slot
         doesn't exist (including through is_a / mixin inheritance)."""
         return _ColAccess(self)
-
-    def has_any(
-        self,
-        other: OntologyClass,
-        *,
-        where: Expr | None = None,
-        via: str | None = None,
-        **slot_eq: Any,
-    ) -> Exists:
-        """∃ row in ``other`` linked back to ``self`` via an FK on
-        ``other``, optionally constrained by per-slot equality kwargs
-        and an additional ``where`` predicate.
-
-        The back-pointing FK is inferred from ``other.effective_slots()``
-        — exactly one slot must be a ``ClassRef`` to ``self``. If
-        multiple FKs match, pass ``via=<fk_slot_name>`` to disambiguate.
-        """
-        fk_slot = _infer_back_fk(other, target=self, via=via)
-        ident = self.identifier_slot()
-        return Exists(
-            other_class_name=other.name,
-            fk_slot_name=fk_slot.name,
-            primary_class_name=self.name,
-            primary_identifier=ident.name,
-            where=_combine_where(other, where, slot_eq),
-            negated=False,
-        )
-
-    def has_none(
-        self,
-        other: OntologyClass,
-        *,
-        where: Expr | None = None,
-        via: str | None = None,
-        **slot_eq: Any,
-    ) -> Exists:
-        """``NOT EXISTS`` form of ``has_any``."""
-        ex = self.has_any(other, where=where, via=via, **slot_eq)
-        return Exists(
-            other_class_name=ex.other_class_name,
-            fk_slot_name=ex.fk_slot_name,
-            primary_class_name=ex.primary_class_name,
-            primary_identifier=ex.primary_identifier,
-            where=ex.where,
-            negated=True,
-        )
-
-    def has_count(
-        self,
-        other: OntologyClass,
-        *,
-        where: Expr | None = None,
-        via: str | None = None,
-        **slot_eq: Any,
-    ) -> CountRel:
-        """``(SELECT COUNT(*) …)`` — value-expression comparable with
-        ``>``/``>=``/``==``/etc.:
-        ``movie.has_count(credit) >= 3``."""
-        fk_slot = _infer_back_fk(other, target=self, via=via)
-        ident = self.identifier_slot()
-        return CountRel(
-            other_class_name=other.name,
-            fk_slot_name=fk_slot.name,
-            primary_class_name=self.name,
-            primary_identifier=ident.name,
-            where=_combine_where(other, where, slot_eq),
-        )
 
     # ------------------------------------------------------------------
     # Read substrate — query entry points. Each returns a fresh ``Query``;
@@ -535,57 +475,6 @@ class OntologyClass:
         )
 
 
-def _infer_back_fk(
-    other: OntologyClass,
-    *,
-    target: OntologyClass,
-    via: str | None,
-) -> Slot:
-    """Find the slot on ``other`` whose ``type`` is a ``ClassRef`` to
-    ``target``. If ``via`` is given, require that specific slot."""
-    candidates = [
-        sl
-        for sl in other.effective_slots()
-        if isinstance(sl.type, ClassRef) and sl.type.target is target
-    ]
-    if via is not None:
-        chosen = [sl for sl in candidates if sl.name == via]
-        if not chosen:
-            raise ValueError(f"{other.name}.{via} is not a FK to {target.name!r}")
-        return chosen[0]
-    if not candidates:
-        raise ValueError(f"class {other.name!r} has no FK back to {target.name!r}")
-    if len(candidates) > 1:
-        names = ", ".join(c.name for c in candidates)
-        raise ValueError(
-            f"class {other.name!r} has multiple FKs to {target.name!r} "
-            f"({names}); disambiguate with via=<slot_name>"
-        )
-    return candidates[0]
-
-
-def _combine_where(
-    other: OntologyClass,
-    where: Expr | None,
-    slot_eq: dict[str, Any],
-) -> Expr | None:
-    """Combine the user's ``where=`` predicate with ``slot=value`` kwargs
-    (validated against ``other``'s effective slots) into a single Expr."""
-    clauses: list[Expr] = []
-    for slot_name, value in slot_eq.items():
-        # Validates the slot exists; raises KeyError on typo.
-        other.get_slot(slot_name)
-        clauses.append(Ref(class_name=other.name, slot_name=slot_name) == value)
-    if where is not None:
-        clauses.append(where)
-    if not clauses:
-        return None
-    combined = clauses[0]
-    for c in clauses[1:]:
-        combined = combined & c
-    return combined
-
-
 @dataclass(slots=True)
 class VirtualClass:
     """A virtual class — materialized as a SQL view over an is_a parent
@@ -602,7 +491,9 @@ class VirtualClass:
         if not isinstance(self.definition, Expr):
             raise TypeError(
                 f"VirtualClass {self.name!r}.definition must be an Expr "
-                f"(use the builder: e.g. movie.has_any(credit, ...)); "
+                f"(use the correlated-aggregate form: e.g. "
+                f"((credit.col.movie == this.Movie) & "
+                f"(credit.col.role == 'director')).any()); "
                 f"got {type(self.definition).__name__}"
             )
 
@@ -830,18 +721,24 @@ class SourceBinding:
     # those at the call site.
     # ------------------------------------------------------------------
 
-    def write_sql(self, *, bindings_suffix: str = "_bindings") -> tuple[str, str]:
-        """Return ``(close_out_sql, insert_sql)`` for this binding's
-        SCD2 write. Both reference a single ``%(rows)s::jsonb``
-        parameter — the host's connector binds the rows. Schema comes
-        from the spec the binding's source is attached to.
+    def write_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return one upsert SQL template for this binding. References a
+        single ``%(rows)s::jsonb`` parameter — the host's connector
+        binds the rows. Schema comes from the spec the binding's source
+        is attached to.
 
-        Run both statements in one transaction::
+        Run with::
 
-            close_out, insert = binding.write_sql()
-            with pg.transaction(), pg.cursor() as cur:
-                cur.execute(close_out, {"rows": rows})
-                cur.execute(insert,    {"rows": rows})
+            sql = binding.write_sql()
+            with pg.cursor() as cur:
+                cur.execute(sql, {"rows": rows})
+
+        Semantics: ``INSERT ... ON CONFLICT (source_name,
+        source_identifier) DO UPDATE`` — re-ingesting the same source's
+        same source_id upserts in place. ``canonical_id`` and
+        ``er_metadata`` are preserved across re-ingests (ER-owned);
+        every other slot + ``raw_payload`` gets overwritten from the
+        new payload.
 
         Multi-binding atomic write: call ``binding.write_sql()`` per
         binding, run all the statements in one ``pg.transaction()``.
@@ -882,15 +779,15 @@ class SourceBinding:
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
-    def close_out_sql(self, *, bindings_suffix: str = "_bindings") -> str:
-        """Return the SQL template that closes out one open binding
-        row without inserting a replacement. Two named placeholders
-        — ``%(canonical_id)s``, ``%(source_identifier)s``. Used to
-        retract a source's claim."""
+    def retract_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return the SQL template that retracts (deletes) one binding
+        row. Two named placeholders — ``%(canonical_id)s``,
+        ``%(source_identifier)s``. Used to withdraw a source's claim
+        entirely (DELETE; no row left)."""
         spec = self._require_spec()
-        from knot.compile.write import emit_close_out_sql
+        from knot.compile.write import emit_retract_sql
 
-        return emit_close_out_sql(
+        return emit_retract_sql(
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
@@ -1298,7 +1195,7 @@ class Spec:
     #   - ``binding.write_sql(schema=…)``       ingest (SourceBinding)
     #   - ``binding.assign_canonical_sql()``    ER stamp (SourceBinding)
     #   - ``binding.recanonicalize_sql()``      ER reassign (SourceBinding)
-    #   - ``binding.close_out_sql()``           retract a claim (SourceBinding)
+    #   - ``binding.retract_sql()``             retract a claim (SourceBinding)
     # ------------------------------------------------------------------
 
     def ddl(self, *, include_views: bool = True) -> str:

@@ -17,11 +17,12 @@ def test_resolved_view_per_concrete_class(movie_spec):
         assert "_resolved AS" in v
 
 
-def test_resolved_view_targets_bindings_table_with_valid_to_null(movie_spec):
+def test_resolved_view_targets_bindings_table(movie_spec):
     movie = movie_spec.classes["Movie"]
     v = emit_resolved_view(movie_spec, movie)
     assert "FROM knot_data.movie_bindings" in v
-    assert "b.valid_to IS NULL" in v
+    # No SCD2 filter; bindings table has one row per (source, source_id).
+    assert "valid_to" not in v
 
 
 def test_resolved_view_left_joins_weight_table(movie_spec):
@@ -185,7 +186,7 @@ def test_all_sources_view_groups_by_identifier(movie_spec):
     movie = movie_spec.classes["Movie"]
     v = emit_all_sources_view(movie_spec, movie)
     assert "GROUP BY b.canonical_id" in v
-    assert "WHERE b.valid_to IS NULL AND b.canonical_id IS NOT NULL" in v
+    assert "WHERE b.canonical_id IS NOT NULL" in v
 
 
 def test_all_sources_view_parses_postgres(movie_spec):

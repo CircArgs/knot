@@ -43,7 +43,7 @@ def _():
     import pandas as pd
     from _demo import SCHEMA, connect
 
-    return SCHEMA, connect, pd
+    return connect, pd
 
 
 @app.cell
@@ -83,7 +83,7 @@ def _(mo):
 
 
 @app.cell
-def _(spec):
+def _(mo, spec):
     # tmdb + imdb double-bind to both movies AND tv (sharing Person).
     # We pin "which domain to read from" per (source, class) — most
     # of the time it's just the source's primary domain.
@@ -130,16 +130,19 @@ def _(spec):
             return "tv"
         return SOURCE_DEFAULT_DOMAIN[src_name]
 
-    already_done = {("imdb", "Movie")}
+    # Anchor data paths on the notebook dir so the loop works whether
+    # marimo runs cells from /tmp/marimo_<pid>/ or the notebook dir.
+    _data_root = mo.notebook_dir() / "../data"
+    _already_done = {("imdb", "Movie")}
     feeds = []
-    for b in spec.source_bindings:
-        if b.source.name not in SOURCE_DEFAULT_DOMAIN:
+    for _b in spec.source_bindings:
+        if _b.source.name not in SOURCE_DEFAULT_DOMAIN:
             continue  # skip _user_corrections etc.
-        if (b.source.name, b.class_.name) in already_done:
+        if (_b.source.name, _b.class_.name) in _already_done:
             continue
-        domain = _domain_for(b.source.name, b.class_.name)
-        path = f"../data/{domain}/{b.source.name}/{DATA_FILE_FOR_CLASS[b.class_.name]}"
-        feeds.append((b, path))
+        _domain = _domain_for(_b.source.name, _b.class_.name)
+        _path = _data_root / _domain / _b.source.name / DATA_FILE_FOR_CLASS[_b.class_.name]
+        feeds.append((_b, str(_path.resolve())))
 
     print(f"{len(feeds)} ingest steps queued")
     return (feeds,)
@@ -151,15 +154,15 @@ def _(mo):
     ## Run the ingest
 
     For each `(binding, path)` pair: read the JSON, render
-    `binding.write_sql()`, run close-out + insert. Same shape per
-    iteration; the binding object knows which table and which
-    slot-mappings to use.
+    `binding.write_sql()`, run the upsert. Same shape per iteration;
+    the binding object knows which table and which slot-mappings to
+    use.
     """)
     return
 
 
 @app.cell
-def _(SCHEMA, feeds, pd, pg):
+def _(feeds, pd, pg):
     # Read each feed with json.load (not pd.read_json) because pandas
     # promotes int columns with any NaN to float, and 2120.0 won't
     # cast back to ::integer in postgres. json.load preserves the
@@ -167,34 +170,31 @@ def _(SCHEMA, feeds, pd, pg):
     import json as _json
     from pathlib import Path as _Path
 
-    summary = []
-    for binding, path in feeds:
-        rows = _json.loads(_Path(path).read_text())
+    _summary = []
+    for _binding, _path in feeds:
+        _rows = _json.loads(_Path(_path).read_text())
         # webscraped Mentions reuse the same URL as source_identifier
         # across rows that point at different canonical entities (the
         # same wiki page mentions multiple movies, etc.). knot's
-        # bindings PK is (source_name, source_identifier, valid_from)
-        # — to keep each Mention row distinct without losing the URL
-        # for traceability, suffix the URL with the canonical_id.
-        # Real-world fix: negotiate stable per-mention IDs with the
-        # scraper.
-        if binding.class_.name == "Mention":
-            for r in rows:
-                r["source_identifier"] = f"{r['source_identifier']}#{r['canonical_id']}"
-        payload = _json.dumps(rows)
-        close_out, insert = binding.write_sql()
-        with pg.cursor() as cur:
-            cur.execute(close_out, {"rows": payload})
-            cur.execute(insert, {"rows": payload})
-        summary.append(
+        # bindings PK is (source_name, source_identifier) — to keep
+        # each Mention row distinct, suffix the URL with the
+        # canonical_id. Real-world fix: negotiate stable per-mention
+        # IDs with the scraper.
+        if _binding.class_.name == "Mention":
+            for _r in _rows:
+                _r["source_identifier"] = f"{_r['source_identifier']}#{_r['canonical_id']}"
+        _payload = _json.dumps(_rows)
+        with pg.cursor() as _cur:
+            _cur.execute(_binding.write_sql(), {"rows": _payload})
+        _summary.append(
             {
-                "source": binding.source.name,
-                "class": binding.class_.name,
-                "rows": len(rows),
+                "source": _binding.source.name,
+                "class": _binding.class_.name,
+                "rows": len(_rows),
             }
         )
-    summary_df = pd.DataFrame(summary)
-    print(f"ingested {summary_df['rows'].sum()} total rows across {len(summary)} feeds")
+    summary_df = pd.DataFrame(_summary)
+    print(f"ingested {summary_df['rows'].sum()} total rows across {len(_summary)} feeds")
     summary_df
     return (summary_df,)
 
@@ -223,22 +223,23 @@ def _(summary_df):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg, spec):
-    # Live counts straight from postgres — one row per concrete
-    # class, showing total bindings and how many already have a
-    # canonical_id (ER status going into 05).
-    concrete = [
-        c.name.lower()
-        for c in spec.classes.values()
-        if c.__class__.__name__ == "OntologyClass"
-    ]
-    union = " UNION ALL ".join(
-        f"SELECT '{n}' AS class, COUNT(*) AS rows, "
-        f"COUNT(canonical_id) AS resolved "
-        f"FROM {SCHEMA}.{n}_bindings"
-        for n in concrete
-    )
-    pd.read_sql_query(union + " ORDER BY class", engine)
+def _(engine, pd, spec):
+    # One row per concrete class — total bindings + canonical_id
+    # coverage going into 05_er. Counts via cls.from_source per
+    # source (knot has no COUNT-as-projection today; tallies happen
+    # in pandas).
+    _stats = []
+    for _cls in spec.concrete_classes():
+        _rows = 0
+        _resolved = 0
+        for _src in spec.sources.values():
+            if _src.name == "_user_corrections":
+                continue
+            _df = pd.read_sql_query(_cls.from_source(_src).sql(), engine)
+            _rows += len(_df)
+            _resolved += int(_df["canonical_id"].notna().sum())
+        _stats.append({"class": _cls.name, "rows": _rows, "resolved": _resolved})
+    pd.DataFrame(_stats).sort_values("class").reset_index(drop=True)
     return
 
 

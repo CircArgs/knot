@@ -40,6 +40,8 @@ from knot.ast.expr import (
     Raw,
     Ref,
     This,
+    VectorDistance,
+    VectorRef,
 )
 from knot.ast.select import Layer
 
@@ -64,6 +66,35 @@ def _(node: Ref, *, schema: str, layer: Layer, outer_class: str | None = None) -
 @compile_sql.register
 def _(node: FkRef, *, schema: str, layer: Layer, outer_class: str | None = None) -> str:
     return f"{schema}.{node.class_name.lower()}{layer}.{node.slot_name}"
+
+
+@compile_sql.register
+def _(
+    node: VectorRef, *, schema: str, layer: Layer, outer_class: str | None = None
+) -> str:
+    return f"{schema}.{node.class_name.lower()}{layer}.{node.slot_name}"
+
+
+# pgvector distance operators, one per metric. Each matches the
+# operator class used by knot's HNSW index emission, so an ``ORDER BY
+# slot <op> target LIMIT k`` plan uses the index.
+_VECTOR_DISTANCE_OP = {
+    "cosine": "<=>",
+    "l2": "<->",
+    "ip": "<#>",
+}
+
+
+@compile_sql.register
+def _(
+    node: VectorDistance, *, schema: str, layer: Layer, outer_class: str | None = None
+) -> str:
+    op = _VECTOR_DISTANCE_OP[node.metric]
+    col = f"{schema}.{node.class_name.lower()}{layer}.{node.slot_name}"
+    # pgvector's text form: '[0.1, 0.2, ...]'. We inline literals
+    # (Query.sql() inlines all literals — there's no parameter list).
+    literal = "[" + ", ".join(repr(float(v)) for v in node.target) + "]"
+    return f"({col} {op} '{literal}'::vector({node.dim}))"
 
 
 @compile_sql.register

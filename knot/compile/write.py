@@ -1,20 +1,12 @@
-"""Write-data path — SCD2 binding write SQL templates.
+"""Write-data path — upsert + ER stamp SQL templates.
 
-``emit_binding_write_sql`` takes a ``SourceBinding`` and returns
-``(close_out_sql, insert_sql)`` — two SQL templates both referencing
-a single ``%(rows)s::jsonb`` parameter. The host binds the rows to
-its connector and runs both statements sequentially in one
-transaction. knot never touches the actual row data; rows are
-runtime input, not compile-time input.
-
-The emitter produces:
-
-  1. **close-out** — ``UPDATE … FROM jsonb_array_elements(%(rows)s::jsonb)``
-     sets ``valid_to = now()`` on every prior currently-open binding
-     for the ``(identifier, source_identifier)`` keys in the batch.
-  2. **insert** — ``INSERT … SELECT FROM jsonb_array_elements(%(rows)s::jsonb)``.
-     The binding's per-slot mappings (``source_slot``, optional
-     ``sql``) are applied server-side over the raw source fields.
+``emit_binding_write_sql`` takes a ``SourceBinding`` and returns ONE
+SQL template referencing a single ``%(rows)s::jsonb`` parameter:
+``INSERT ... ON CONFLICT (source_name, source_identifier) DO
+UPDATE SET ...``. Re-ingesting the same source's same source_id
+upserts in place; ``canonical_id`` and ``er_metadata`` (both
+ER-owned) are preserved across re-ingests, every other slot +
+``raw_payload`` gets overwritten.
 
 Postgres' ``jsonb_array_elements`` iterates each element as ``r`` so
 mapping expressions reference its keys as bare columns through the
@@ -159,7 +151,7 @@ def _passthrough_value(slot: Slot, raw_field: str) -> str:
     raise TypeError(f"unhandled slot type: {type(slot.type).__name__}")
 
 
-def _emit_class_insert(
+def _emit_class_upsert(
     binding: SourceBinding,
     *,
     schema: str,
@@ -171,8 +163,8 @@ def _emit_class_insert(
     table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
     source_literal = _sql_literal(binding.source.name)
     eff_slots = cls.effective_slots()
-    # raw_payload always trails the slot columns; preserves the full
-    # ingested row so unmapped fields are recoverable later.
+    ident_name = cls.identifier_slot().name
+
     insert_columns = (
         ["source_name", "source_identifier"]
         + [s.name for s in eff_slots]
@@ -195,37 +187,24 @@ def _emit_class_insert(
         else:
             select_lines.append(f"    {_passthrough_value(slot, m.source_slot[0])}")
     select_lines.append("    raw.__raw_payload")
+
+    # ON CONFLICT DO UPDATE — re-ingest is an in-place upsert keyed on
+    # (source_name, source_identifier). Update every slot the source
+    # provides + raw_payload, but PRESERVE canonical_id and er_metadata
+    # (both owned by ER — the source doesn't know either). FK slot
+    # columns get reset to source-ids; a re-translation pass is the
+    # host's concern if the source's FK references changed.
+    update_lines = [
+        f"  {s.name} = EXCLUDED.{s.name}" for s in eff_slots if s.name != ident_name
+    ]
+    update_lines.append("  raw_payload = EXCLUDED.raw_payload")
+    update_block = ",\n".join(update_lines)
+
     return (
         f"INSERT INTO {table} ({columns_csv})\n"
-        "SELECT\n" + ",\n".join(select_lines) + "\n" + raw_subquery + ";"
-    )
-
-
-def _emit_class_close_out(
-    binding: SourceBinding,
-    *,
-    schema: str,
-    bindings_suffix: str,
-    rows_param: str,
-) -> str:
-    cls = binding.class_
-    _check_concrete(cls)
-    ident = cls.identifier_slot()
-    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    source_literal = _sql_literal(binding.source.name)
-    return (
-        f"UPDATE {table} AS b\n"
-        f"SET valid_to = now()\n"
-        f"FROM (\n"
-        f"    SELECT\n"
-        f"        (r->>'{ident.name}') AS {ident.name},\n"
-        f"        (r->>'source_identifier') AS source_identifier\n"
-        f"    FROM jsonb_array_elements(%({rows_param})s::jsonb) AS r\n"
-        f") AS keys\n"
-        f"WHERE b.{ident.name} = keys.{ident.name}\n"
-        f"  AND b.source_name = {source_literal}\n"
-        f"  AND b.source_identifier = keys.source_identifier\n"
-        f"  AND b.valid_to IS NULL;"
+        "SELECT\n" + ",\n".join(select_lines) + "\n" + raw_subquery + "\n"
+        f"ON CONFLICT (source_name, source_identifier) DO UPDATE SET\n"
+        f"{update_block};"
     )
 
 
@@ -239,58 +218,56 @@ def emit_binding_write_sql(
     *,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
-) -> tuple[str, str]:
-    """Return ``(close_out_sql, insert_sql)`` for one binding's SCD2
-    write. Both reference a single ``%(rows)s::jsonb`` parameter — the
-    host's connector binds the rows.
+) -> str:
+    """Return one upsert SQL template for the binding. References a
+    single ``%(rows)s::jsonb`` parameter — the host's connector binds
+    the rows::
 
-    Run them in order in one transaction::
+        sql = binding.write_sql()
+        with pg.cursor() as cur:
+            cur.execute(sql, {"rows": rows})
 
-        close_out, insert = binding.write_sql()
-        with pg.transaction(), pg.cursor() as cur:
-            cur.execute(close_out, {"rows": rows})
-            cur.execute(insert,    {"rows": rows})
+    Semantics: ``INSERT ... ON CONFLICT (source_name, source_identifier)
+    DO UPDATE`` — re-ingesting the same source/source_id upserts in
+    place. ``canonical_id`` and ``er_metadata`` are preserved across
+    re-ingests (both ER-owned); every other slot + ``raw_payload``
+    gets overwritten from the new payload. FK slot columns reset to
+    source-ids; if a source's FK references changed, the host runs a
+    separate re-translation pass (no canonical-id-preserving auto-
+    retranslate today).
 
     Constraint enforcement is the host's concern — run
     ``spec.emit_validation()`` SELECTs after the write inside the
     same transaction and roll back if any return rows.
     """
     _check_concrete(binding.class_)
-    rows_param = "rows"
-    return (
-        _emit_class_close_out(
-            binding,
-            schema=schema,
-            bindings_suffix=bindings_suffix,
-            rows_param=rows_param,
-        ),
-        _emit_class_insert(
-            binding,
-            schema=schema,
-            bindings_suffix=bindings_suffix,
-            rows_param=rows_param,
-        ),
+    return _emit_class_upsert(
+        binding,
+        schema=schema,
+        bindings_suffix=bindings_suffix,
+        rows_param="rows",
     )
 
 
-def emit_close_out_sql(
+def emit_retract_sql(
     binding: SourceBinding,
     *,
     schema: str = "knot_data",
     bindings_suffix: str = "_bindings",
 ) -> str:
-    """Return the SQL template that closes out one currently-open
-    binding row without inserting a replacement.
+    """Return the SQL template that retracts (deletes) one binding row.
 
-    Use to retract a source's claim — most commonly to withdraw a
-    user correction so the resolver falls back to the next-best
-    source. The corresponding INSERT half of the SCD2 dance is
-    intentionally omitted; this is just a one-shot ``UPDATE``.
+    Use to withdraw a source's claim entirely — most commonly to
+    pull a user correction so the resolver falls back to the
+    next-best source. Without SCD2 there's no row to "close out";
+    retraction is a straight DELETE.
 
-    SQL has named placeholders ``%(canonical_id)s`` and
-    ``%(source_identifier)s``. Host binds them::
+    SQL has two named placeholders ``%(canonical_id)s`` and
+    ``%(source_identifier)s`` — both required so the host explicitly
+    asserts which canonical the binding pointed at (defense against
+    deleting the wrong claim after an ER reassignment)::
 
-        cur.execute(binding.close_out_sql(),
+        cur.execute(binding.retract_sql(),
                     {"canonical_id": "...", "source_identifier": "..."})
     """
     _check_concrete(binding.class_)
@@ -298,12 +275,10 @@ def emit_close_out_sql(
     table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
     source_literal = _sql_literal(binding.source.name)
     return (
-        f"UPDATE {table}\n"
-        f"SET valid_to = now()\n"
+        f"DELETE FROM {table}\n"
         f"WHERE {ident.name} = %(canonical_id)s\n"
         f"  AND source_name = {source_literal}\n"
-        f"  AND source_identifier = %(source_identifier)s\n"
-        f"  AND valid_to IS NULL;"
+        f"  AND source_identifier = %(source_identifier)s;"
     )
 
 
@@ -351,7 +326,6 @@ def emit_assign_canonical_sql(
     cls = binding.class_
     ident_name = cls.identifier_slot().name
     table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
-    canonical_table = f"{schema}.{cls.name.lower()}"
     source_literal = _sql_literal(binding.source.name)
 
     # Forward FK translation — for each ClassRef slot on this class,
@@ -376,8 +350,7 @@ def emit_assign_canonical_sql(
             f"(SELECT {target_ident} FROM {target_table} "
             f"WHERE source_name = {source_literal} "
             f"AND source_identifier = {table}.{slot.name} "
-            f"AND {target_ident} IS NOT NULL "
-            f"AND valid_to IS NULL LIMIT 1)"
+            f"AND {target_ident} IS NOT NULL LIMIT 1)"
         )
         set_clauses.append(f"{slot.name} = COALESCE({lookup}, {table}.{slot.name})")
 
@@ -403,32 +376,21 @@ def emit_assign_canonical_sql(
             f"  WHERE EXISTS (SELECT 1 FROM stamp)\n"
             f"    AND source_name = {source_literal}\n"
             f"    AND {ref_slot.name} = %(source_identifier)s\n"
-            f"    AND valid_to IS NULL\n"
             f")"
         )
 
-    # Registry insert — driven by the UPDATE's RETURNING so it fires
-    # only when the stamp actually matched a row (not a phantom
-    # registration on an already-stamped re-run).
-    register_cte = (
-        f"register AS (\n"
-        f"  INSERT INTO {canonical_table} ({ident_name})\n"
-        f"  SELECT {ident_name} FROM stamp\n"
-        f"  ON CONFLICT ({ident_name}) DO NOTHING\n"
-        f")"
-    )
-
     all_ctes = [
+        # ``RETURNING`` exposes the stamp's row count to downstream
+        # fanout CTEs via ``EXISTS (SELECT 1 FROM stamp)`` — gates
+        # strict idempotency.
         f"stamp AS (\n"
         f"  UPDATE {table}\n"
         f"  SET {set_block}\n"
         f"  WHERE source_name = {source_literal}\n"
         f"    AND source_identifier = %(source_identifier)s\n"
         f"    AND {ident_name} IS NULL\n"
-        f"    AND valid_to IS NULL\n"
         f"  RETURNING {ident_name}\n"
         f")",
-        register_cte,
         *fanout_ctes,
     ]
     # Chain of write-only CTEs needs an outer SELECT to be a valid
@@ -443,56 +405,40 @@ def emit_recanonicalize_sql(
     bindings_suffix: str = "_bindings",
 ) -> str:
     """Return the SQL template that reassigns a binding row's
-    ``canonical_id``, preserving history via SCD2.
+    ``canonical_id``. Three things happen atomically:
 
-    Closes the currently-open binding (``valid_to = now()``) and
-    inserts a new row with the corrected ``canonical_id`` and
-    otherwise-identical state (same source, same slot values, same
-    raw_payload). Old row stays addressable for history; the resolved
-    view sees only the new one. One atomic statement via a writable
-    CTE — ``now()`` is the same instant on both halves.
+    1. **Capture** — read the OLD canonical_id so the cascade knows
+       which referencing FK values to rewrite.
+    2. **Stamp** — UPDATE the binding's canonical_id (and optionally
+       er_metadata) to the new value.
+    3. **Cascade** — for every (referencer_class, fk_slot) pointing
+       at this class, UPDATE referencing bindings whose FK column
+       held the OLD canonical_id, setting it to the NEW one. Source-
+       agnostic — canonical-ids are global identifiers.
 
     SQL has three named placeholders — ``%(new_canonical_id)s``,
     ``%(source_identifier)s``, ``%(er_metadata)s``. ``er_metadata``
-    uses ``COALESCE`` so binding ``None`` inherits the closed row's
-    payload; binding a JSON string overrides::
+    uses ``COALESCE`` so binding ``None`` keeps the existing value;
+    binding a JSON string overrides::
 
         cur.execute(binding.recanonicalize_sql(), {
             "new_canonical_id":  "m_correct",
             "source_identifier": "tt001",
-            "er_metadata":       json.dumps({...}),  # or None to inherit
+            "er_metadata":       json.dumps({...}),  # or None to keep
         })
     """
     _check_concrete(binding.class_)
     ident_name = binding.class_.identifier_slot().name
     table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
     source_literal = _sql_literal(binding.source.name)
-    eff_slots = binding.class_.effective_slots()
-
-    insert_cols = (
-        ["source_name", "source_identifier"]
-        + [s.name for s in eff_slots]
-        + ["raw_payload", "er_metadata", "valid_from"]
-    )
-    select_cols: list[str] = ["source_name", "source_identifier"]
-    for slot in eff_slots:
-        if slot.name == ident_name:
-            select_cols.append(f"%(new_canonical_id)s AS {ident_name}")
-        else:
-            select_cols.append(slot.name)
-    select_cols.append("raw_payload")
-    select_cols.append("COALESCE(%(er_metadata)s::jsonb, er_metadata) AS er_metadata")
-    select_cols.append("now() AS valid_from")
-
-    canonical_table = f"{schema}.{binding.class_.name.lower()}"
 
     # Cascade: every referencing class's bindings hold this row's OLD
-    # canonical_id in their FK column (post-original-ER). They need
-    # rewriting to the NEW canonical_id. Canonical-id rewrites are
-    # source-agnostic (no source_name filter) because canonical-ids
-    # are global. ``(SELECT canonical_id FROM closed)`` is a scalar
-    # subquery — at most one row; NULL if the close-out didn't fire,
-    # in which case the cascade's WHERE doesn't match anything.
+    # canonical_id in their FK column. Rewrite them to the NEW value.
+    # The cascade is source-agnostic — post-ER FK columns hold
+    # canonical-ids, no source coupling. ``(SELECT old_id FROM
+    # old_state)`` is a scalar subquery — at most one row; NULL if
+    # the row didn't exist or wasn't yet ER-stamped, in which case
+    # the cascade WHERE doesn't match anything.
     cascade_ctes: list[str] = []
     for ref_cls, ref_slot in binding.class_.referrers:
         ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
@@ -501,30 +447,27 @@ def emit_recanonicalize_sql(
             f"{cte_name} AS (\n"
             f"  UPDATE {ref_table}\n"
             f"  SET {ref_slot.name} = %(new_canonical_id)s\n"
-            f"  WHERE {ref_slot.name} = (SELECT {ident_name} FROM closed)\n"
-            f"    AND valid_to IS NULL\n"
+            f"  WHERE {ref_slot.name} = (SELECT old_id FROM old_state)\n"
             f")"
         )
 
     all_ctes = [
-        f"closed AS (\n"
-        f"  UPDATE {table} SET valid_to = now()\n"
+        # Capture the OLD canonical_id BEFORE the stamp UPDATE rewrites it.
+        f"old_state AS (\n"
+        f"  SELECT {ident_name} AS old_id\n"
+        f"  FROM {table}\n"
         f"  WHERE source_name = {source_literal}\n"
         f"    AND source_identifier = %(source_identifier)s\n"
-        f"    AND valid_to IS NULL\n"
-        f"  RETURNING *\n"
+        f"    AND {ident_name} IS NOT NULL\n"
         f")",
-        f"inserted AS (\n"
-        f"  INSERT INTO {table} ({', '.join(insert_cols)})\n"
-        f"  SELECT {', '.join(select_cols)}\n"
-        f"  FROM closed\n"
-        f")",
-        # Register the new canonical_id in the identity table — driven
-        # by ``FROM closed`` so it only fires when the close-out matched.
-        f"register AS (\n"
-        f"  INSERT INTO {canonical_table} ({ident_name})\n"
-        f"  SELECT %(new_canonical_id)s FROM closed\n"
-        f"  ON CONFLICT ({ident_name}) DO NOTHING\n"
+        # Stamp the new canonical_id + optional er_metadata override.
+        f"stamp AS (\n"
+        f"  UPDATE {table}\n"
+        f"  SET {ident_name} = %(new_canonical_id)s,\n"
+        f"      er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)\n"
+        f"  WHERE source_name = {source_literal}\n"
+        f"    AND source_identifier = %(source_identifier)s\n"
+        f"    AND {ident_name} IS NOT NULL\n"
         f")",
         *cascade_ctes,
     ]

@@ -22,14 +22,13 @@ def _basic_spec():
 
 
 def test_assign_canonical_emits_safe_update():
-    """assign_canonical_sql UPDATEs only NULL-id, open bindings — re-running
+    """assign_canonical_sql UPDATEs only NULL-id bindings — re-running
     is a no-op once the id is set."""
     _, binding = _basic_spec()
     sql = emit_assign_canonical_sql(binding)
     assert "UPDATE knot_data.movie_bindings" in sql
     assert "SET canonical_id = %(canonical_id)s" in sql
     assert "AND canonical_id IS NULL" in sql  # safety: no clobber
-    assert "AND valid_to IS NULL" in sql  # scope: open binding only
 
 
 def test_assign_canonical_bakes_in_source_name():
@@ -75,21 +74,19 @@ def test_assign_canonical_parses_postgres():
 # ---------------------------------------------------------------------------
 
 
-def test_recanonicalize_emits_writable_cte():
-    """recanonicalize_sql closes the open binding and inserts a new
-    one with the corrected canonical_id, all in one statement."""
+def test_recanonicalize_emits_simple_update():
+    """recanonicalize_sql captures the old canonical_id, UPDATEs the
+    binding row's canonical_id to the new value, and cascades. No
+    SCD2 history preservation — recanonicalize is just an UPDATE."""
     _, binding = _basic_spec()
     sql = emit_recanonicalize_sql(binding)
-    # Writable CTE shape
-    assert "WITH closed AS (" in sql
-    assert "UPDATE knot_data.movie_bindings SET valid_to = now()" in sql
-    assert "AND valid_to IS NULL" in sql  # only the currently-open row
-    assert "RETURNING *" in sql
-    # Insert side reuses the closed row's fields, substituting canonical_id
-    assert "INSERT INTO knot_data.movie_bindings" in sql
-    assert "%(new_canonical_id)s AS canonical_id" in sql
-    assert "now() AS valid_from" in sql
-    assert "FROM closed" in sql
+    # CTE chain captures old then stamps new.
+    assert "WITH old_state AS (" in sql
+    assert "stamp AS (" in sql
+    assert "UPDATE knot_data.movie_bindings" in sql
+    assert "SET canonical_id = %(new_canonical_id)s" in sql
+    # Only retag rows that have already been ER-stamped.
+    assert "AND canonical_id IS NOT NULL" in sql
 
 
 def test_recanonicalize_runtime_placeholders():
@@ -104,11 +101,11 @@ def test_recanonicalize_runtime_placeholders():
 
 
 def test_recanonicalize_er_metadata_uses_coalesce():
-    """recanonicalize_sql uses COALESCE so binding ``None`` inherits
-    the closed row's er_metadata; a JSON string overrides."""
+    """recanonicalize_sql uses COALESCE in the stamp UPDATE so binding
+    ``None`` keeps the existing er_metadata; a JSON string overrides."""
     _, binding = _basic_spec()
     sql = emit_recanonicalize_sql(binding)
-    assert "COALESCE(%(er_metadata)s::jsonb, er_metadata) AS er_metadata" in sql
+    assert "er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)" in sql
 
 
 def test_recanonicalize_parses_postgres():
@@ -198,15 +195,13 @@ def test_assign_canonical_fanout_per_referrer_slot():
     assert "fanout_credit_person AS (" in sql
 
 
-def test_assign_canonical_registers_in_canonical_table():
-    """The new canonical_id is INSERTed into the class's identity
-    registry table (canonical), gated on the stamp actually firing
-    (driven by ``FROM stamp`` so a no-op stamp = no phantom register)."""
+def test_assign_canonical_does_not_register_in_canonical_table():
+    """No canonical table exists anymore; assign_canonical no longer
+    emits a register CTE. Bindings is the only table per class."""
     _, bindings = _movie_credit_spec()
     sql = emit_assign_canonical_sql(bindings["Movie"])
-    assert "INSERT INTO knot_data.movie (canonical_id)" in sql
-    assert "SELECT canonical_id FROM stamp" in sql
-    assert "ON CONFLICT (canonical_id) DO NOTHING" in sql
+    assert "register AS" not in sql
+    assert "INSERT INTO knot_data.movie " not in sql
 
 
 def test_assign_canonical_no_referrers_no_fanout():
@@ -234,7 +229,7 @@ def test_recanonicalize_cascades_to_referrers():
     assert "cascade_credit_movie AS (" in sql
     assert "UPDATE knot_data.credit_bindings" in sql
     assert "SET movie = %(new_canonical_id)s" in sql
-    assert "WHERE movie = (SELECT canonical_id FROM closed)" in sql
+    assert "WHERE movie = (SELECT old_id FROM old_state)" in sql
 
 
 def test_recanonicalize_cascade_source_agnostic():
@@ -247,15 +242,13 @@ def test_recanonicalize_cascade_source_agnostic():
     assert "source_name = 'imdb'" not in cascade
 
 
-def test_recanonicalize_registers_new_canonical():
-    """Recanonicalize INSERTs the new canonical_id into the identity
-    registry table — driven by ``FROM closed`` so it only fires when
-    the close-out matched a row."""
+def test_recanonicalize_does_not_register_in_canonical_table():
+    """No canonical table exists anymore; recanonicalize no longer
+    emits a register CTE — just the stamp UPDATE + cascade fanouts."""
     _, bindings = _movie_credit_spec()
     sql = emit_recanonicalize_sql(bindings["Movie"])
-    assert "register AS (" in sql
-    assert "INSERT INTO knot_data.movie (canonical_id)" in sql
-    assert "SELECT %(new_canonical_id)s FROM closed" in sql
+    assert "register AS" not in sql
+    assert "INSERT INTO knot_data.movie " not in sql
 
 
 def test_assign_and_recanonicalize_parse_with_fanout():

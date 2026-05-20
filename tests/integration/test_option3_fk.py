@@ -69,11 +69,10 @@ def _json(v) -> str:
 
 
 def _write(pg, binding, rows: list[dict]) -> None:
-    close_out, insert = binding.write_sql()
+    sql = binding.write_sql()
     payload = _json(rows)
     with pg.cursor() as cur:
-        cur.execute(close_out, {"rows": payload})
-        cur.execute(insert, {"rows": payload})
+        cur.execute(sql, {"rows": payload})
 
 
 def _assign(pg, binding, *, canonical_id: str, source_identifier: str) -> None:
@@ -309,38 +308,21 @@ def test_assign_is_strictly_idempotent(pg, schema):
 # ---------------------------------------------------------------------------
 
 
-def test_canonical_registry_populated_on_first_stamp(pg, schema):
-    """The class's canonical table (identity registry) gets a row
-    INSERTed on every fresh ER stamp — driven by ``FROM stamp`` so
-    re-runs (no-op stamp) don't add phantom rows."""
+def test_no_canonical_table_emitted(pg, schema):
+    """Bindings is the only table per class. Canonical id "registry"
+    is implicit — SELECT DISTINCT canonical_id FROM bindings."""
     spec = _build_spec(schema)
-    imdb_movie = spec.classes["Movie"].binding_for(spec.sources["imdb"])
     _deploy(pg, spec, schema)
 
-    _write(pg, imdb_movie, [{"source_identifier": "tt001", "title": "Pulp Fiction"}])
-    pre = _fetch_all(pg, f"SELECT canonical_id FROM {schema}.movie")
-    assert pre == []
-
-    _assign(pg, imdb_movie, canonical_id="m_pulp", source_identifier="tt001")
-    post = _fetch_all(pg, f"SELECT canonical_id FROM {schema}.movie")
-    assert post == [("m_pulp",)]
-
-
-def test_canonical_registry_no_phantom_on_idempotent_assign(pg, schema):
-    """Re-running assign on an already-stamped row must not register
-    a phantom canonical_id."""
-    spec = _build_spec(schema)
-    imdb_movie = spec.classes["Movie"].binding_for(spec.sources["imdb"])
-    _deploy(pg, spec, schema)
-
-    _write(pg, imdb_movie, [{"source_identifier": "tt001", "title": "Pulp Fiction"}])
-    _assign(pg, imdb_movie, canonical_id="m_pulp", source_identifier="tt001")
-    _assign(pg, imdb_movie, canonical_id="m_other", source_identifier="tt001")  # no-op
-
-    rows = _fetch_all(
-        pg, f"SELECT canonical_id FROM {schema}.movie ORDER BY canonical_id"
-    )
-    assert rows == [("m_pulp",)], "no phantom m_other registration"
+    with pg.cursor() as cur:
+        cur.execute(
+            "SELECT table_name FROM information_schema.tables WHERE table_schema = %s",
+            (schema,),
+        )
+        tables = {r[0] for r in cur.fetchall()}
+    for cls_name in ("movie", "person", "credit"):
+        assert cls_name not in tables, f"canonical table {cls_name!r} should not exist"
+        assert f"{cls_name}_bindings" in tables
 
 
 # ---------------------------------------------------------------------------
@@ -390,7 +372,7 @@ def test_recanonicalize_cascades_to_referrers(pg, schema):
     rows = _fetch_all(
         pg,
         f"SELECT source_identifier, movie FROM {schema}.credit_bindings "
-        f"WHERE valid_to IS NULL ORDER BY source_identifier",
+        f"ORDER BY source_identifier",
     )
     assert rows == [("cr1", "m_pulp_v2"), ("tmdb_cr1", "m_pulp_v2")]
 

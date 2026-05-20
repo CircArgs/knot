@@ -33,7 +33,7 @@ def _():
     import pandas as pd
     from _demo import SCHEMA, connect
 
-    return SCHEMA, connect, pd
+    return connect, pd
 
 
 @app.cell
@@ -54,7 +54,7 @@ def _(connect):
 
 
 @app.cell
-def _(pd):
+def _(mo, pd):
     # imdb's catalog as a DataFrame. Each row carries:
     #   * `source_identifier` — imdb's own key (e.g. "tt1838941").
     #     The only stable identity imdb knows about; knot's
@@ -65,39 +65,36 @@ def _(pd):
     #     aren't in the spec — they ride along in the row dict and
     #     land in `raw_payload jsonb` on the binding row, recoverable
     #     later without re-fetching from imdb.
-    raw_df = pd.read_json("../data/movies/imdb/movies.json")
+    raw_df = pd.read_json(mo.notebook_dir() / "../data/movies/imdb/movies.json")
     print(f"loaded {len(raw_df)} rows")
     raw_df.head()
     return (raw_df,)
 
 
 @app.cell
-def _(SCHEMA, imdb_movie_b):
-    # `binding.write_sql()` returns two SQL templates — both reference
-    # a single `%(rows)s::jsonb` parameter. knot never touches the
-    # rows; the host's connector binds them at execute time.
-    close_out, insert = imdb_movie_b.write_sql()
-    print("--- close_out ---")
-    print(close_out)
-    print("\n--- insert ---")
-    print(insert)
-    return close_out, insert
+def _(imdb_movie_b):
+    # `binding.write_sql()` returns one upsert SQL template — INSERT
+    # ... ON CONFLICT (source_name, source_identifier) DO UPDATE SET ...
+    # — referencing a single `%(rows)s::jsonb` parameter. knot never
+    # touches the rows; the host's connector binds them at execute time.
+    write_sql = imdb_movie_b.write_sql()
+    print(write_sql)
+    return (write_sql,)
 
 
 @app.cell
-def _(close_out, insert, pg, raw_df):
-    # Run both statements with the rows bound as one jsonb param.
-    # raw_df → JSON via DataFrame.to_json("records") gives the JSON
-    # array shape `jsonb_array_elements` expects.
+def _(pg, raw_df, write_sql):
+    # Run the upsert with the rows bound as one jsonb param. raw_df →
+    # JSON via DataFrame.to_json("records") gives the JSON array shape
+    # `jsonb_array_elements` expects.
     payload = raw_df.to_json(orient="records")
     with pg.cursor() as cur:
-        cur.execute(close_out, {"rows": payload})
-        cur.execute(insert, {"rows": payload})
+        cur.execute(write_sql, {"rows": payload})
     return
 
 
 @app.cell
-def _(SCHEMA, imdb, movie, engine, pd, pg):
+def _(engine, imdb, movie, pd):
     # Verify via ``movie.from_source(imdb)`` — one source's claims
     # about Movie. This is a Query over the raw bindings layer (one
     # row per source_identifier) scoped to ``source_name = 'imdb'``.

@@ -11,9 +11,10 @@ Emits one statement per artifact:
                                        (opt-in via ``emit_descriptions``)
 
 Abstract classes get no table; their slots flow into concrete subclasses
-via ``is_a`` walks. Bindings tables mirror the canonical class columns,
-with an extra ``(source_name, source_identifier)`` layer and SCD2
-``valid_from`` / ``valid_to``.
+via ``is_a`` walks. Bindings tables carry every slot the class declares
+plus a ``(source_name, source_identifier)`` PK pair, ``raw_payload`` for
+unmapped extras, and ``er_metadata`` stamped at ER time. Writes are
+upserts on the PK — one row per (source, source_id), not SCD2 history.
 """
 
 from __future__ import annotations
@@ -82,9 +83,11 @@ def emit_ddl(
         Set to False for deployments that only need the resolved
         layer.
     emit_indexes
-        When True, emit partial indexes on each ``<class>_bindings``
-        table that match the resolver's per-slot lookup and the SCD2
-        close-out hot paths (both filter on ``valid_to IS NULL``).
+        When True, emit a btree index on ``canonical_id`` for each
+        ``<class>_bindings`` table — covers the resolver's per-slot
+        argmax lookup and recanonicalize's cascade. The PK on
+        ``(source_name, source_identifier)`` already covers
+        ingest/ER lookups by source key.
     emit_weight_table
         When True, emit the invariant ``<schema>.<weight_table_name>``
         (default ``source_weight``) that carries the runtime
@@ -121,11 +124,9 @@ def emit_ddl(
     for cls in spec.classes.values():
         match cls:
             case OntologyClass(kind=ClassKind.CONCRETE):
-                stmts.append(
-                    _emit_table(cls, schema=schema, if_not_exists=if_not_exists)
-                )
-                if emit_descriptions:
-                    stmts.extend(_emit_class_comments(cls, schema=schema))
+                # No canonical table — bindings is the only relation
+                # per class. The resolved view sources canonical_ids
+                # via SELECT DISTINCT over bindings.
                 if emit_bindings:
                     stmts.append(
                         _emit_bindings_table(
@@ -280,29 +281,18 @@ def _create_view(*, if_not_exists: bool) -> str:
     return "CREATE OR REPLACE VIEW" if if_not_exists else "CREATE VIEW"
 
 
-def _emit_table(cls: OntologyClass, *, schema: str, if_not_exists: bool) -> str:
-    # Canonical table is an identity registry — just the identifier
-    # column(s). All slot values live in <class>_bindings; the resolved
-    # view computes argmax-over-bindings at read time. Slot columns on
-    # canonical would be dead schema (never written, never read).
-    columns: list[str] = []
-    pk_cols: list[str] = []
-    for slot in cls.effective_slots():
-        if not slot.identifier:
-            continue
-        columns.append(f"    {slot.name} {_pg_type(slot.type)} NOT NULL")
-        pk_cols.append(slot.name)
-    columns.append(f"    PRIMARY KEY ({', '.join(pk_cols)})")
-    body = ",\n".join(columns)
-    return f"{_create_table(if_not_exists=if_not_exists)} {schema}.{cls.name.lower()} (\n{body}\n);"
-
-
 def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
     parent = vc.is_a.name.lower()
     # Virtual classes filter their parent's *resolved* view — the
     # canonical table is identity-only and has no slot columns to
-    # filter on.
-    body_sql = compile_sql(vc.definition, schema=schema, layer=Layer.RESOLVED)
+    # filter on. The outer FROM is <parent>_resolved, so correlated
+    # ``this.<Parent>`` refs inside Aggregate predicates bind there.
+    body_sql = compile_sql(
+        vc.definition,
+        schema=schema,
+        layer=Layer.RESOLVED,
+        outer_class=vc.is_a.name,
+    )
     return (
         f"{_create_view(if_not_exists=if_not_exists)} "
         f"{schema}.{vc.name.lower()} AS\n"
@@ -341,13 +331,12 @@ def _emit_bindings_table(
     # emit_assign_canonical / emit_recanonicalize when callers pass
     # ``er_metadata={...}``. Same shape as raw_payload, different author.
     columns.append("    er_metadata jsonb NOT NULL DEFAULT '{}'::jsonb")
-    columns.append("    valid_from timestamptz NOT NULL DEFAULT now()")
-    columns.append("    valid_to timestamptz")
-    # PK is (source_name, source_identifier, valid_from) — one open row
-    # per source/source_identifier at any moment, and history tracked
-    # via SCD2 valid_from/valid_to. canonical_id is NOT part of the PK
-    # so it can start NULL and be assigned later by ER.
-    columns.append("    PRIMARY KEY (source_name, source_identifier, valid_from)")
+    # PK is (source_name, source_identifier) — one row per
+    # (source, source_id) ever; re-ingest is an UPSERT, not a new
+    # validity period. canonical_id is NOT part of the PK so it can
+    # start NULL and be assigned later by ER. Audit/history is a
+    # separate concern — sink via triggers / CDC if needed.
+    columns.append("    PRIMARY KEY (source_name, source_identifier)")
     body = ",\n".join(columns)
     return (
         f"{_create_table(if_not_exists=if_not_exists)} "
@@ -369,21 +358,8 @@ def _comment_on(kind: str, ident: str, text: str) -> str:
     return f"COMMENT ON {kind} {ident} IS '{_escape_comment(text)}';"
 
 
-def _emit_class_comments(cls: OntologyClass, *, schema: str) -> list[str]:
-    out: list[str] = []
-    table_id = f"{schema}.{cls.name.lower()}"
-    if cls.description:
-        out.append(_comment_on("TABLE", table_id, cls.description))
-    for slot in cls.effective_slots():
-        if slot.description:
-            out.append(
-                _comment_on("COLUMN", f"{table_id}.{slot.name}", slot.description)
-            )
-    return out
-
-
 # ---------------------------------------------------------------------------
-# Bindings table indexes — match the two hot paths against the SCD2 layout
+# Bindings table indexes — resolver's per-canonical lookup
 # ---------------------------------------------------------------------------
 
 
@@ -394,30 +370,19 @@ def _emit_bindings_indexes(
     bindings_suffix: str,
     if_not_exists: bool,
 ) -> list[str]:
-    """Partial indexes on the bindings table sized to the two hot paths:
-
-    1. Resolver per-slot lookup: ``WHERE canonical_id = X AND valid_to
-       IS NULL`` — covered by a partial index on the identifier column.
-    2. SCD2 close-out: ``WHERE (canonical_id, source_name,
-       source_identifier) = (X, Y, Z) AND valid_to IS NULL`` — covered
-       by a composite partial index on those three columns.
-
-    Both indexes are partial (``WHERE valid_to IS NULL``) because the
-    bindings table accumulates closed-out rows forever; the index only
-    needs to be O(open rows), not O(all rows).
-    """
+    """One btree index on canonical_id — covers the resolver's per-slot
+    argmax lookup (``WHERE canonical_id = X``) and the recanonicalize
+    cascade (``WHERE <fk_slot> = <old_canonical_id>``). Lookups by
+    ``(source_name, source_identifier)`` are already covered by the
+    PK, so no separate composite index is needed."""
     table_name = f"{cls.name.lower()}{bindings_suffix}"
     table = f"{schema}.{table_name}"
     ident = cls.identifier_slot()
     maybe_if_not_exists = "IF NOT EXISTS " if if_not_exists else ""
 
     return [
-        f"CREATE INDEX {maybe_if_not_exists}{table_name}_current_idx\n"
-        f"    ON {table} ({ident.name})\n"
-        f"    WHERE valid_to IS NULL;",
-        f"CREATE INDEX {maybe_if_not_exists}{table_name}_source_idx\n"
-        f"    ON {table} ({ident.name}, source_name, source_identifier)\n"
-        f"    WHERE valid_to IS NULL;",
+        f"CREATE INDEX {maybe_if_not_exists}{table_name}_canonical_idx\n"
+        f"    ON {table} ({ident.name});",
     ]
 
 

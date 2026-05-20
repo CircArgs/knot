@@ -37,15 +37,17 @@ builds around it. The earlier monorepo (API service + UI + ingest + ER
   constrain the range, calibrate them, or pretend they're
   probabilities. Whatever scoring algorithm produced the numbers owns
   that — knot just stores + reads.
-- **Canonical table is identity-only; slot values live in bindings.**
-  `<schema>.<class>` is a single-column identity registry
-  (`canonical_id PRIMARY KEY`). All slot values — including FK
-  columns — live in `<class>_bindings`. The resolved view computes
-  argmax over bindings + weights at read time. No FK constraints are
-  emitted anywhere (postgres can't FK to views, and bindings stay
-  loose pre-ER); referential integrity is enforced by ER orchestration
-  (see "Entity resolution + FK semantics" below) and surfaced by the
-  data-quality validators.
+- **Bindings is the only table per class.** 3 relations: 1 table
+  (`<class>_bindings`) + 2 views (`<class>_resolved`,
+  `<class>_all_sources`). Bindings holds every slot value + the
+  per-source ER-stamped `canonical_id`. The resolved view computes
+  argmax over bindings + weights at read time; the "set of known
+  canonical_ids" is implicit — `SELECT DISTINCT canonical_id FROM
+  bindings WHERE canonical_id IS NOT NULL` — no separate canonical
+  registry table. No FK constraints emitted (postgres can't FK to
+  views; bindings stay loose pre-ER); referential integrity is
+  enforced by ER orchestration (see "Entity resolution + FK
+  semantics" below) and surfaced by the data-quality validators.
 - **Single-team posture.** Trusted authors of the spec, no
   multi-tenant defenses, no sandboxing.
 - **Sync.** The compiler is sync (pure transforms). Adapters wrap it
@@ -61,8 +63,10 @@ host processes that own postgres connections. The reference shape is
   (`imdb`, `tmdb`, `rottentomatoes`, …) gets its own workflow
   definition with its own auth, rate limits, schedule, source-shaped
   normalization. Activities pull from the source, normalize, then
-  call `binding.write_sql()` to get `(close_out_sql, insert_sql)`
-  and execute each with `{"rows": rows}` bound by the driver.
+  call `binding.write_sql()` to get one upsert SQL template, and
+  execute it with `{"rows": rows}` bound by the driver. The upsert
+  preserves the ER-stamped `canonical_id` and `er_metadata` across
+  re-ingests; every other slot + `raw_payload` gets overwritten.
 - **ER workers** (Temporal workflows). Look at unresolved bindings
   (`cls.unresolved`), decide canonical_ids (whatever scoring /
   matching policy the team owns), call `binding.assign_canonical_sql()`
@@ -135,7 +139,7 @@ SQL, your host opens connections."
 | tool | when to pick it |
 |---|---|
 | **[Atlas](https://atlasgo.io/)** (`atlas schema diff` / `apply`) | **Tested with knot 2026-05-18; the default recommendation.** Single Go binary, first-class `pgvector` support (handles `vector(N)` columns and HNSW indexes with operator classes — `vector_cosine_ops` / `_l2_ops` / `_ip_ops`). Needs a clean throwaway "dev DB" to render the desired state; trivial to provision (one `CREATE DATABASE atlas_dev`). The community edition ignores views entirely — which is fine, knot's CREATE OR REPLACE views run as a second step after the schema diff. |
-| **[sqldef](https://github.com/sqldef/sqldef)** (`psqldef`) | Lightweight (one binary, no dev DB needed) but **its postgres parser is fragile against knot's bindings DDL today** (v3.11.1 segfaults on the SCD2 table shape; tracked upstream). Avoid until that's fixed; revisit once a fix lands. |
+| **[sqldef](https://github.com/sqldef/sqldef)** (`psqldef`) | Lightweight (one binary, no dev DB needed). Worth re-testing against current knot DDL; was previously fragile on a now-removed bindings shape. |
 | **[dbmate](https://github.com/amacneil/dbmate)** | imperative migrations + manual SQL. Pick if the team already runs imperative migrations and just wants knot's emitted DDL as the starting point for hand-authored steps. |
 | **Alembic / Flyway / Liquibase** | language-/JVM-specific. Use the "raw SQL" file mode and paste in `Spec.ddl()` output. |
 
@@ -197,12 +201,19 @@ toy spec; review there for the live shape.
 - `CREATE SCHEMA IF NOT EXISTS …`
 - `CREATE EXTENSION IF NOT EXISTS vector;` (gated on any VECTOR slot)
 - `source_weight` table (runtime weight-policy table)
-- Per concrete class: canonical table, bindings table (SCD2), partial
-  btree indexes (current / source-lookup), HNSW indexes (one per
-  vector slot per table), FK ALTER constraints
+- Per concrete class: bindings table (one row per
+  `(source, source_id)`, PK on the pair, holds slot values +
+  `raw_payload` + `er_metadata` + the ER-stamped `canonical_id`),
+  btree index on `canonical_id`, HNSW index per vector slot on
+  bindings. **No canonical table** — bindings is the only table per
+  class; the "set of known canonical_ids" is implicit via
+  `SELECT DISTINCT canonical_id FROM bindings WHERE canonical_id IS
+  NOT NULL`. **No FK constraints** — bindings stay loose by design;
+  ER orchestrates referential integrity via forward translation +
+  backward fan-out.
 - Per concrete class: `_resolved` view (argmax-over-weight) and
   `_all_sources` view (per-source jsonb provenance)
-- Per virtual class: filtered view over its parent's canonical table
+- Per virtual class: filtered view over its parent's `_resolved` view
 
 **Doesn't cover** (host / migration-tool concerns):
 - **`source_weight` seed rows** — separate emitter
@@ -265,8 +276,8 @@ The mechanism: every `binding.assign_canonical_sql()` call is one
 atomic statement (a chain of writable CTEs) that does **four things**:
 
 1. **Stamp** — `UPDATE <class>_bindings SET canonical_id = … WHERE
-   source_name = … AND source_identifier = … AND canonical_id IS NULL
-   AND valid_to IS NULL`. No-op re-runs by design.
+   source_name = … AND source_identifier = … AND canonical_id IS
+   NULL`. No-op re-runs by design.
 2. **Forward FK translation** — for each `ClassRef` slot on this
    class, look up the column's current value in the target's
    bindings table (same source's namespace) and rewrite from
@@ -316,8 +327,8 @@ design, and referential integrity is enforced by ER orchestration
 knot doesn't bundle constraint checks into the write SQL. There are
 three independent primitives:
 
-1. `binding.write_sql()` — close-out + insert SQL templates. No
-   constraint awareness.
+1. `binding.write_sql()` — one upsert SQL template. No constraint
+   awareness.
 2. `spec.emit_validation()` — one SELECT per constraint. No writes.
 3. `pg.transaction()` — host opens it, runs (1), runs (2), decides
    whether to commit or rollback.
@@ -327,13 +338,12 @@ shape is ~10 lines:
 
 ```python
 def ingest_with_enforcement(binding, rows, *, spec, pg, schema):
-    close_out, insert = binding.write_sql(schema=schema)
+    sql = binding.write_sql(schema=schema)
     payload = json.dumps(rows)
     severity = {c.name: c.severity for c in spec.constraints}
 
     with pg.transaction(), pg.cursor() as cur:
-        cur.execute(close_out, {"rows": payload})
-        cur.execute(insert,    {"rows": payload})
+        cur.execute(sql, {"rows": payload})
         for rule, vsql in spec.emit_validation(schema=schema):
             if severity[rule].value != "error":
                 continue
@@ -392,13 +402,15 @@ knot/
     select.py          # read substrate: Query, OrderBy
   compile/
     __init__.py
-    ddl.py             # canonical tables + bindings tables + indexes
-                       # + FK ALTERs + source_weight table + virtual
-                       # class views — Spec.ddl() emits the full
-                       # target schema in one script
+    ddl.py             # bindings tables + indexes + source_weight +
+                       # resolved/all_sources views + virtual class
+                       # views — Spec.ddl() emits the full target
+                       # schema in one script (no canonical table per
+                       # class; bindings is the only one)
     resolver.py        # per-(source, class, slot) argmax resolved views
     constraints.py     # constraint validation SELECTs
-    data_io.py         # batch SCD2 writes (close-out + insert)
+    write.py           # upsert + ER (assign_canonical, recanonicalize,
+                       # retract) — all in one statement each
     weight.py          # source_weight INSERT-only seed
     expr_sql.py        # @singledispatch compile_sql over Expr nodes
     query_sql.py       # @singledispatch compile_query over Query nodes
@@ -497,11 +509,10 @@ imdb_movie.set_weight("runtime", 0.7)
 — not on `Spec`:
 
 ```python
-# Single-binding write — SQL templates only; host binds rows via the connector.
-close_out, insert = imdb_movie.write_sql(schema="knot_data")
-with pg.transaction(), pg.cursor() as cur:
-    cur.execute(close_out, {"rows": json.dumps(rows)})
-    cur.execute(insert,    {"rows": json.dumps(rows)})
+# Single-binding write — one upsert SQL template; host binds rows via the connector.
+sql = imdb_movie.write_sql(schema="knot_data")
+with pg.cursor() as cur:
+    cur.execute(sql, {"rows": json.dumps(rows)})
 
 # ER decisions on a specific binding row — same shape: SQL + host binds.
 cur.execute(imdb_movie.assign_canonical_sql(), {
@@ -590,10 +601,10 @@ inside knot. The host binds via the connector.
 
 ```python
 sql               = q.sql(schema="knot_data")                  # literals inlined
-close_out, insert = binding.write_sql(schema="knot_data")      # both ref %(rows)s::jsonb
+sql_write         = binding.write_sql(schema="knot_data")      # %(rows)s::jsonb (upsert)
 sql_assign        = binding.assign_canonical_sql(schema=…)     # %(canonical_id)s, %(source_identifier)s, %(er_metadata)s
 sql_recan         = binding.recanonicalize_sql(schema=…)       # %(new_canonical_id)s, %(source_identifier)s, %(er_metadata)s
-sql_close         = binding.close_out_sql(schema=…)            # %(canonical_id)s, %(source_identifier)s
+sql_retract       = binding.retract_sql(schema=…)              # %(canonical_id)s, %(source_identifier)s — DELETE
 ```
 
 The read path lives on the query, not the spec. The write/ER path
@@ -609,7 +620,7 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
   ``Spec.ddl`` and ``Spec.emit_validation`` call ``Spec.validate()``
   first (deploy / governance moments — bad spec → caught early).
   ``Query.sql``, ``binding.write_sql``, ``binding.assign_canonical_sql``,
-  ``binding.recanonicalize_sql``, ``binding.close_out_sql`` *don't*
+  ``binding.recanonicalize_sql``, ``binding.retract_sql`` *don't*
   validate — they run per API request / per ingest batch / per ER
   decision, and walking 17 classes + N bindings every call is
   wasteful. Host is expected to ``spec.validate()`` once at startup
@@ -626,7 +637,7 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
   parameter list, the host calls ``cur.execute(sql)`` and is done.
 - The binding compile methods (``binding.write_sql``,
   ``binding.assign_canonical_sql``, ``binding.recanonicalize_sql``,
-  ``binding.close_out_sql``) return SQL templates with named
+  ``binding.retract_sql``) return SQL templates with named
   placeholders (``%(rows)s::jsonb``, ``%(canonical_id)s``, …). The
   host binds runtime data via its connector.
 - ``emit_validation`` and ``emit_weight_seed`` return parameterized
@@ -661,6 +672,23 @@ atomic write = multiple `binding.write_sql()` calls, all run in one
   the `Primitive`/`Array`/`ClassRef` public imports, and the
   `accuracy` field name were all removed when their replacements
   shipped. This is pre-release; refactor by deletion.
+- **Notebooks go through knot expressions only — no raw SQL,
+  anywhere.** Every cell in every file under `notebooks/` (demo
+  deck, deploy walkthroughs, ER notebooks, all of them) MUST read
+  and write via knot's compiled surface: `cls.resolved`,
+  `cls.all_sources`, `cls.from_source(s)`, `cls.unresolved`,
+  `.where(col.is_null())`, `.order_by(col.distance_to(vec))`,
+  `binding.write_sql()`, `binding.assign_canonical_sql()`,
+  `binding.recanonicalize_sql()`, `binding.retract_sql()`,
+  `spec.emit_validation()`, `spec.ddl()`. Forbidden in any notebook
+  cell: `pd.read_sql_query(f"SELECT ... FROM {cls.bindings_table_name}
+  ...")` or any other raw-SQL string that bypasses knot's
+  expressions. A notebook dropping to raw SQL anywhere tells the
+  viewer knot's surface is insufficient — defeats the entire pitch.
+  If a needed surface doesn't exist, that's a knot gap to file.
+  The only carve-out: **postgres catalog introspection**
+  (`information_schema`, `pg_views`, `pg_indexes`, etc.) — that's
+  inspecting postgres metadata, not knot's relational layer.
 
 ## Conventions (apply proactively)
 

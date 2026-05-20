@@ -10,19 +10,19 @@ Owns the full Person slot set up-front. Domain files import
 
 Module surface
 --------------
-``part``    a self-contained ``Spec`` holding just Person — the
+``person_subspec``    a self-contained ``Spec`` holding just Person — the
             APIRouter analogue. Base composes it in via
-            ``spec.include(part)``.
+            ``spec.include(person_subspec)``.
 ``person``  the OntologyClass handle for cross-domain FK references.
 """
 
 from knot import Spec, types
 
-# `part` is an APIRouter-style sub-spec — base.py composes it in.
-part = Spec(identifier_slot_name="canonical_id")
+# `person_subspec` is an APIRouter-style sub-spec — base.py composes it in.
+person_subspec = Spec(identifier_slot_name="canonical_id")
 
 # Person is shared across every domain — one class, many edges to it.
-person = part.add_class("Person")
+person = person_subspec.add_class("Person")
 person.slot("name", types.TEXT, required=True)
 person.slot("birth_country", types.TEXT)
 person.slot("birth_year", types.INTEGER)

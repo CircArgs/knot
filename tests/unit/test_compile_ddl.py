@@ -10,7 +10,10 @@ def _all_parse(stmts: list[str]) -> bool:
     return all(sqlglot.parse_one(s, dialect="postgres") for s in stmts)
 
 
-def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
+def test_default_emits_bindings_and_views_per_concrete(movie_spec):
+    """3 relations per concrete class: bindings table + resolved view
+    + all_sources view. No canonical table — bindings is the only
+    table (source_weight is global)."""
     stmts = emit_ddl(movie_spec)
     assert stmts[0].startswith("CREATE SCHEMA IF NOT EXISTS knot_data")
     canonical = [
@@ -31,7 +34,7 @@ def test_default_emits_canonical_bindings_resolved_per_concrete(movie_spec):
         and "_resolved AS" not in s
         and "_all_sources AS" not in s
     ]
-    assert len(canonical) == 3  # Movie, Person, Credit canonical tables
+    assert len(canonical) == 0  # no canonical table; bindings is the only one
     assert len(bindings) == 3  # Movie, Person, Credit bindings tables
     assert len(weight) == 1  # source_weight (invariant)
     assert len(resolved_views) == 3  # Movie, Person, Credit resolved views
@@ -45,20 +48,19 @@ def test_abstract_class_has_no_table(movie_spec):
     assert not any("knot_data.title (" in s for s in stmts)
 
 
-def test_canonical_is_identity_only(movie_spec):
-    # Under option-3 ER, the canonical table is an identity registry —
-    # just the identifier column(s). All slot values live in
-    # <class>_bindings; the resolved view computes argmax-over-bindings
-    # at read time. Slot columns on canonical would be dead schema.
+def test_no_canonical_table_emitted(movie_spec):
+    """Bindings is the only table per class. The "identity registry"
+    role is filled implicitly by the SELECT DISTINCT canonical_id
+    that the resolved view does over bindings."""
     stmts = emit_ddl(movie_spec)
-    movie_table = next(
-        s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
-    )
-    assert "canonical_id text NOT NULL" in movie_table
-    assert "PRIMARY KEY (canonical_id)" in movie_table
-    # No slot columns on canonical.
-    assert "year integer" not in movie_table
-    assert "name text" not in movie_table
+    # No standalone canonical table for any concrete class.
+    for name in ("movie", "person", "credit", "title"):
+        assert not any(
+            s.startswith("CREATE TABLE")
+            and f"knot_data.{name} (" in s
+            and "_bindings" not in s
+            for s in stmts
+        ), f"unexpected canonical table for {name}"
 
 
 def test_concrete_inherits_slots_into_bindings(movie_spec):
@@ -105,11 +107,14 @@ def test_schema_and_suffix_kwargs(movie_spec):
     assert not any("knot_data." in s for s in stmts)
 
 
-def test_emit_descriptions_opt_in(movie_spec):
+def test_emit_descriptions_currently_noop(movie_spec):
+    """COMMENT ON used to target the canonical table; with canonical
+    gone, the COMMENT emission is on hold pending a decision on
+    whether to point comments at bindings or skip entirely."""
     no_desc = emit_ddl(movie_spec, emit_descriptions=False)
     with_desc = emit_ddl(movie_spec, emit_descriptions=True)
     assert not any("COMMENT ON" in s for s in no_desc)
-    assert any("COMMENT ON TABLE knot_data.movie" in s for s in with_desc)
+    assert not any("COMMENT ON" in s for s in with_desc)
 
 
 def test_no_fk_alters_emitted(movie_spec):
@@ -131,37 +136,34 @@ def test_bindings_carry_raw_payload_jsonb_column(movie_spec):
     assert "raw_payload jsonb NOT NULL DEFAULT '{}'::jsonb" in bindings
 
 
-def test_indexes_emitted_per_concrete_bindings_table(movie_spec):
+def test_canonical_idx_emitted_per_concrete_bindings_table(movie_spec):
+    """One btree index on canonical_id per concrete class's bindings.
+    Source-key lookups (source_name + source_identifier) are covered
+    by the PK, so no separate composite index."""
     stmts = emit_ddl(movie_spec)
     idx_stmts = [s for s in stmts if s.startswith("CREATE INDEX")]
-    # 3 concrete classes (Movie, Person, Credit) × 2 indexes
-    assert len(idx_stmts) == 6
-    assert any("movie_bindings_current_idx" in s for s in idx_stmts)
-    assert any("movie_bindings_source_idx" in s for s in idx_stmts)
-    assert any("credit_bindings_current_idx" in s for s in idx_stmts)
-    assert any("person_bindings_current_idx" in s for s in idx_stmts)
+    # 3 concrete classes (Movie, Person, Credit) × 1 index each.
+    assert len(idx_stmts) == 3
+    assert any("movie_bindings_canonical_idx" in s for s in idx_stmts)
+    assert any("credit_bindings_canonical_idx" in s for s in idx_stmts)
+    assert any("person_bindings_canonical_idx" in s for s in idx_stmts)
 
 
-def test_indexes_are_partial_on_valid_to_null(movie_spec):
+def test_indexes_are_full_not_partial(movie_spec):
+    """No SCD2 → no valid_to filter, so indexes are full btrees not
+    partial. PK already covers (source_name, source_identifier);
+    canonical_idx covers the resolver's per-canonical lookups."""
     stmts = emit_ddl(movie_spec)
     for s in stmts:
         if s.startswith("CREATE INDEX"):
-            assert "WHERE valid_to IS NULL" in s
+            assert "WHERE" not in s
+            assert "valid_to" not in s
 
 
-def test_index_source_path_uses_composite(movie_spec):
+def test_canonical_idx_keyed_on_identifier_only(movie_spec):
     stmts = emit_ddl(movie_spec)
-    src_idx = next(s for s in stmts if "movie_bindings_source_idx" in s)
-    assert "(canonical_id, source_name, source_identifier)" in src_idx
-
-
-def test_index_current_path_uses_identifier_only(movie_spec):
-    stmts = emit_ddl(movie_spec)
-    cur_idx = next(s for s in stmts if "movie_bindings_current_idx" in s)
-    assert "(canonical_id)" in cur_idx
-    # The current-idx covers only the identifier; source columns appear
-    # only in the partial-where clause, not in the index expression.
-    assert "source_name" not in cur_idx.split("WHERE")[0]
+    idx = next(s for s in stmts if "movie_bindings_canonical_idx" in s)
+    assert "(canonical_id)" in idx
 
 
 def test_indexes_idempotent_with_if_not_exists(movie_spec):
@@ -193,20 +195,21 @@ def test_bindings_table_slots_nullable_pk_drops_canonical(movie_spec):
     """Bindings allow NULL on every slot, including the identifier —
     ingest writes source rows before ER assigns a canonical_id. The
     resolved view filters NULL identifier rows out. PK is
-    (source_name, source_identifier, valid_from)."""
+    (source_name, source_identifier) — one row per (source, source_id)."""
     stmts = emit_ddl(movie_spec)
     bindings = next(s for s in stmts if "movie_bindings" in s)
     # canonical_id is the identifier — NULLABLE in bindings (no NOT NULL)
     assert "canonical_id text NOT NULL" not in bindings
     assert "canonical_id text" in bindings
-    # source_name, source_identifier always NOT NULL — they're the
-    # ingest-layer identity (which source published which natural id).
+    # source_name, source_identifier always NOT NULL — they're the PK.
     assert "source_name text NOT NULL" in bindings
     assert "source_identifier text NOT NULL" in bindings
     # year is a regular slot — NULLABLE (partial claim allowed)
     assert "year integer," in bindings or "year integer\n" in bindings
-    # PK excludes canonical_id so it can start NULL
-    assert "PRIMARY KEY (source_name, source_identifier, valid_from)" in bindings
+    # PK = (source, source_id); no SCD2 valid_from in the key.
+    assert "PRIMARY KEY (source_name, source_identifier)" in bindings
+    assert "valid_from" not in bindings
+    assert "valid_to" not in bindings
 
 
 # ---------------------------------------------------------------------------
@@ -237,16 +240,16 @@ def test_vector_extension_emitted_once_when_used():
 
 
 def test_vector_column_on_bindings_only():
-    # Vectors are slot values, not identity — they live on bindings
-    # (where slot values live), not on the identity-only canonical
-    # table.
+    """Vectors are slot values, not identity — they live on the
+    bindings table. No canonical table exists to host them either."""
     stmts = emit_ddl(_spec_with_vector_slot())
-    canonical = next(
-        s for s in stmts if "knot_data.movie (" in s and "_bindings" not in s
-    )
     bindings = next(s for s in stmts if "movie_bindings" in s)
-    assert "title_embedding vector(384)" not in canonical
     assert "title_embedding vector(384)" in bindings
+    # Vector column appears nowhere outside the bindings table.
+    for s in stmts:
+        if "movie_bindings" in s:
+            continue
+        assert "title_embedding vector(384)" not in s
 
 
 def test_vector_hnsw_index_only_on_bindings():

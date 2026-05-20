@@ -4,7 +4,7 @@ Each test gets a fresh schema. We:
   1. Build a Spec
   2. Apply Spec.ddl() to the schema + upsert runtime weights
      via binding.upsert_weight_sql()
-  3. Exercise the write path (binding.write_sql / binding.close_out_sql)
+  3. Exercise the write path (binding.write_sql / binding.retract_sql)
   4. Query the resolved view + validation SELECTs and assert behavior
 
 The whole point is to verify the SQL we emit is not just well-formed
@@ -71,11 +71,10 @@ def _write_claim(
     *,
     schema: str,
 ) -> None:
-    close_out, insert = binding.write_sql()
+    sql = binding.write_sql()
     payload = _json(rows)
     with pg.cursor() as cur:
-        cur.execute(close_out, {"rows": payload})
-        cur.execute(insert, {"rows": payload})
+        cur.execute(sql, {"rows": payload})
 
 
 def _json(value) -> str:
@@ -132,6 +131,8 @@ def _recan(
 
 
 def test_emit_ddl_creates_real_tables(pg, schema):
+    """Per class: bindings table only (no canonical table).
+    Plus the global source_weight table."""
     spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
@@ -142,9 +143,10 @@ def test_emit_ddl_creates_real_tables(pg, schema):
             (schema,),
         )
         tables = [r[0] for r in cur.fetchall()]
-    assert "movie" in tables
     assert "movie_bindings" in tables
     assert "source_weight" in tables
+    # No canonical table — bindings is the only per-class table.
+    assert "movie" not in tables
 
 
 def test_emit_ddl_creates_resolved_view(pg, schema):
@@ -171,8 +173,8 @@ def test_emit_ddl_creates_indexes(pg, schema):
             (schema,),
         )
         idxs = {r[0] for r in cur.fetchall()}
-    assert "movie_bindings_current_idx" in idxs
-    assert "movie_bindings_source_idx" in idxs
+    # One btree on canonical_id; PK covers (source, source_id) lookups.
+    assert "movie_bindings_canonical_idx" in idxs
 
 
 def test_weight_seed_populates_source_weight(pg, schema):
@@ -393,9 +395,10 @@ def test_raw_payload_preserves_unmapped_fields(pg, schema):
     assert director == "Eisenstein"
 
 
-def test_scd2_close_out_on_repeated_write(pg, schema):
-    """Writing the same (canonical_id, source, source_identifier) again
-    closes out the prior row and inserts a new one."""
+def test_upsert_in_place_on_repeated_write(pg, schema):
+    """Writing the same (source, source_identifier) again upserts in
+    place — one row per (source, source_id), new values overwrite,
+    canonical_id is preserved across re-ingests (ER-owned)."""
     spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
@@ -415,13 +418,15 @@ def test_scd2_close_out_on_repeated_write(pg, schema):
         ],
         schema=schema,
     )
+    # Re-ingest with updated year — should overwrite, not stack.
+    # canonical_id in the payload is intentionally NULL (the source
+    # doesn't know it); the upsert preserves the ER-stamped m1.
     _write_claim(
         pg,
         spec,
         imdb_b,
         [
             {
-                "canonical_id": "m1",
                 "source_identifier": "tt1",
                 "name": "M1",
                 "year": 1926,
@@ -433,15 +438,15 @@ def test_scd2_close_out_on_repeated_write(pg, schema):
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT year, valid_to IS NULL AS is_current "
+            f"SELECT canonical_id, year, runtime_minutes "
             f"FROM {schema}.movie_bindings "
-            f"WHERE canonical_id = 'm1' AND source_name = 'imdb' "
-            f"ORDER BY valid_from"
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt1'"
         )
         rows = cur.fetchall()
-    assert len(rows) == 2
-    assert rows[0] == (1925, False)  # closed out
-    assert rows[1] == (1926, True)  # current
+    assert len(rows) == 1, "upsert: one row per (source, source_id), not stacked"
+    assert rows[0] == ("m1", 1926, 80), (
+        "year/runtime overwritten; canonical_id preserved"
+    )
 
     # Resolved view sees only the current row.
     with pg.cursor() as cur:
@@ -549,7 +554,7 @@ def test_correction_withdraw_falls_back_to_source(pg, schema):
     # Withdraw the correction.
     exec_with_params(
         pg,
-        corr_b.close_out_sql(),
+        corr_b.retract_sql(),
         {
             "canonical_id": "m1",
             "source_identifier": "curator-42",
@@ -689,9 +694,10 @@ def test_assign_canonical_does_not_clobber_existing_id(pg, schema):
         assert cur.fetchone()[0] == "m_first"  # untouched
 
 
-def test_recanonicalize_preserves_scd2_history(pg, schema):
-    """Reassigning canonical_id keeps the old binding row (closed) plus
-    a new open binding row with the corrected id."""
+def test_recanonicalize_replaces_canonical_in_place(pg, schema):
+    """Reassigning canonical_id overwrites in place — no SCD2 history.
+    One row per (source, source_id); old canonical is gone after the
+    recanonicalize completes."""
     spec = _movies_only_spec(schema)
     pg.execute(spec.ddl())
 
@@ -724,12 +730,11 @@ def test_recanonicalize_preserves_scd2_history(pg, schema):
 
     with pg.cursor() as cur:
         cur.execute(
-            f"SELECT canonical_id, valid_to IS NULL FROM {schema}.movie_bindings "
-            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001' "
-            f"ORDER BY valid_from"
+            f"SELECT canonical_id FROM {schema}.movie_bindings "
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001'"
         )
         rows = cur.fetchall()
-    assert rows == [("m_wrong", False), ("m_correct", True)]
+    assert rows == [("m_correct",)], "one row in place, replaced canonical_id"
 
     # Resolved view shows the corrected canonical_id only.
     with pg.cursor() as cur:
@@ -788,9 +793,10 @@ def test_assign_canonical_stamps_er_metadata(pg, schema):
     }
 
 
-def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
-    """When recanonicalize is called without er_metadata, the new row
-    inherits the closed row's er_metadata verbatim."""
+def test_recanonicalize_keeps_er_metadata_by_default(pg, schema):
+    """When recanonicalize is called without er_metadata, the binding
+    row keeps its existing er_metadata verbatim (COALESCE preserves
+    the existing column value when the param is NULL)."""
     spec = _movies_only_spec(schema)
     pg.execute(spec.ddl())
 
@@ -834,14 +840,10 @@ def test_recanonicalize_carries_er_metadata_forward_by_default(pg, schema):
     with pg.cursor() as cur:
         cur.execute(
             f"SELECT canonical_id, er_metadata FROM {schema}.movie_bindings "
-            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001' "
-            f"ORDER BY valid_from"
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001'"
         )
         rows = cur.fetchall()
-    assert rows == [
-        ("m_wrong", {"run_id": "r1", "method": "exact_title_year"}),
-        ("m_correct", {"run_id": "r1", "method": "exact_title_year"}),
-    ]
+    assert rows == [("m_correct", {"run_id": "r1", "method": "exact_title_year"})]
 
 
 def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
@@ -886,11 +888,7 @@ def test_recanonicalize_overrides_er_metadata_when_provided(pg, schema):
     with pg.cursor() as cur:
         cur.execute(
             f"SELECT canonical_id, er_metadata FROM {schema}.movie_bindings "
-            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001' "
-            f"ORDER BY valid_from"
+            f"WHERE source_name = 'imdb' AND source_identifier = 'tt001'"
         )
         rows = cur.fetchall()
-    assert rows == [
-        ("m_wrong", {"run_id": "r1", "method": "exact"}),
-        ("m_correct", {"run_id": "r2", "method": "human_review"}),
-    ]
+    assert rows == [("m_correct", {"run_id": "r2", "method": "human_review"})]

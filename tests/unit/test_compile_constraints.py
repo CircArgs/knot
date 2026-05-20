@@ -7,7 +7,6 @@ builder directly (e.g. ``movie.col.year`` → ``Ref("Movie", "year")``);
 import sqlglot
 
 from knot import Spec, types
-from knot.ast.select import Layer
 from knot.compile import emit_validation, emit_validation_union
 
 
@@ -58,6 +57,8 @@ def test_bare_column_unchanged(movie_spec):
 
 
 def test_class_ref_renders_qualified():
+    from knot import this
+
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
@@ -65,7 +66,7 @@ def test_class_ref_renders_qualified():
     credit.slot("movie", movie)
     movie.add_constraint(
         "has_director",
-        body=movie.has_any(credit, role="director"),
+        body=((credit.col.movie == this.Movie) & (credit.col.role == "director")).any(),
     )
 
     # Default layer=Layer.RESOLVED — refs go to the resolved views.
@@ -76,22 +77,17 @@ def test_class_ref_renders_qualified():
     assert "knot_data.credit_resolved.role" in sql
     assert "knot_data.movie_resolved.canonical_id" in sql
 
-    # layer=Layer.CANONICAL — canonical-table targeting.
-    rewrites_canonical = dict(emit_validation(spec, layer=Layer.CANONICAL))
-    sql_c = rewrites_canonical["has_director"]
-    assert "knot_data.credit.movie" in sql_c
-    assert "knot_data.movie.canonical_id" in sql_c
-    assert "_resolved" not in sql_c
 
+def test_count_in_predicate():
+    from knot import this
 
-def test_has_count_in_predicate():
     spec = Spec(identifier_slot_name="canonical_id")
     movie = spec.add_class("Movie")
     credit = spec.add_class("Credit")
     credit.slot("movie", movie)
     movie.add_constraint(
         "min_three_credits",
-        body=movie.has_count(credit) >= 3,
+        body=(credit.col.movie == this.Movie).count() >= 3,
     )
     rewrites = dict(emit_validation(spec))
     sql = rewrites["min_three_credits"]

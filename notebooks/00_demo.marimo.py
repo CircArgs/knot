@@ -29,7 +29,7 @@ def _(mo):
 
     a reflective ontology compiler
 
-    *typed Python spec → postgres DDL · resolved views · SCD2 writes · query SQL*
+    *typed Python spec → postgres DDL · resolved views · upserts + ER · query SQL*
     """)
     return
 
@@ -199,8 +199,9 @@ def _(mo):
     mo.md(r"""
     ## a bindings table
 
-    SCD2 + raw_payload. Every source's claim is preserved with
-    validity bounds; unmodeled extras land in `raw_payload`
+    One row per `(source, source_id)` — upserts on the PK, no SCD2
+    history. ER stamps `canonical_id` + `er_metadata`; everything
+    else comes from the source. Unmodeled extras land in `raw_payload`
     verbatim.
     """)
     return
@@ -248,24 +249,22 @@ def _(mo):
 def _(mo):
     from media_spec import imdb_movie_b
 
-    close_out, insert = imdb_movie_b.write_sql()
+    write_sql = imdb_movie_b.write_sql()
     mo.md(
-        f"`imdb_movie_b.write_sql()` returns two templates, both bound "
+        f"`imdb_movie_b.write_sql()` returns one upsert template bound "
         f"to `%(rows)s::jsonb` — knot never sees the rows.\n\n"
-        f"**close_out:**\n```sql\n{close_out}\n```\n\n"
-        f"**insert:**\n```sql\n{insert}\n```"
+        f"```sql\n{write_sql}\n```"
     )
-    return close_out, imdb_movie_b, insert
+    return (write_sql,)
 
 
 @app.cell
-def _(close_out, insert, pg, rows_df):
+def _(pg, rows_df, write_sql):
     import json
 
     payload = rows_df.to_json(orient="records")
     with pg.cursor() as _cur:
-        _cur.execute(close_out, {"rows": payload})
-        _cur.execute(insert, {"rows": payload})
+        _cur.execute(write_sql, {"rows": payload})
     return (json,)
 
 
@@ -288,7 +287,67 @@ def _(engine, pd):
         .select(movie.col.title, movie.col.year)
     )
     pd.read_sql_query(_q.sql(), engine)
-    return imdb, movie
+    return (movie,)
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## ingest the other sources + credits
+
+    Same shape, one binding at a time: each `(source, class)` pair has a
+    feed file; loop over `spec.source_bindings`, render
+    `binding.write_sql()`, run it. Same write path, no per-source code.
+    """)
+    return
+
+
+@app.cell
+def _(json, mo, pg, spec):
+    # Skip imdb→Movie (already ingested above). Skip any binding that
+    # has no data feed (we only ship imdb/tmdb/rt × movies/persons/credits
+    # in data/movies/).
+    _data_root = mo.notebook_dir() / "../data/movies"
+    _file_for = {"Movie": "movies.json", "Person": "persons.json",
+                 "MovieCredit": "credits.json"}
+    _summary = []
+    for _b in spec.source_bindings:
+        if _b.source.name == "imdb" and _b.class_.name == "Movie":
+            continue  # already done
+        if _b.class_.name not in _file_for:
+            continue  # class without a v1-domain feed
+        _path = _data_root / _b.source.name / _file_for[_b.class_.name]
+        if not _path.exists():
+            continue
+        _rows = json.loads(_path.read_text())
+        _payload = json.dumps(_rows)
+        with pg.cursor() as _cur:
+            _cur.execute(_b.write_sql(), {"rows": _payload})
+        _summary.append({"source": _b.source.name,
+                         "class": _b.class_.name, "rows": len(_rows)})
+    print(f"ingested {sum(s['rows'] for s in _summary)} rows across "
+          f"{len(_summary)} bindings")
+    return
+
+
+@app.cell(hide_code=True)
+def _(SCHEMA, engine, pd):
+    pd.read_sql_query(
+        f"""
+        SELECT source_name AS source,
+               'Movie' AS class, COUNT(*) AS rows
+        FROM {SCHEMA}.movie_bindings GROUP BY source_name
+        UNION ALL
+        SELECT source_name, 'Person', COUNT(*)
+        FROM {SCHEMA}.person_bindings GROUP BY source_name
+        UNION ALL
+        SELECT source_name, 'MovieCredit', COUNT(*)
+        FROM {SCHEMA}.moviecredit_bindings GROUP BY source_name
+        ORDER BY class, source
+        """,
+        engine,
+    )
+    return
 
 
 @app.cell(hide_code=True)
@@ -442,75 +501,180 @@ def _(mo):
 
 
 @app.cell
-def _(engine, movie, pd, pg):
+def _(engine, movie, pd, pg, spec):
+    from knot.ast.expr import Raw as _Raw
     from sentence_transformers import SentenceTransformer
 
     model = SentenceTransformer("all-MiniLM-L6-v2")
-    rows = pd.read_sql_query(
-        f"SELECT source_name, source_identifier, valid_from, title "
-        f"FROM {movie.bindings_table_name} "
-        f"WHERE source_name = 'imdb' AND title_embedding IS NULL",
-        engine,
-    )
+    # Embed every unembedded title across every source — needed for
+    # the cross-source k-NN ER step coming next. The read is pure
+    # knot: cls.from_source iterates one source at a time; .where(
+    # col.is_null()) is the "give me records where this column is
+    # NULL" pattern.
+    rows = pd.concat([
+        pd.read_sql_query(
+            movie.from_source(spec.sources[_src])
+                 .where(movie.col.title_embedding.is_null())
+                 .select(_Raw("source_name"), _Raw("source_identifier"),
+                         movie.col.title)
+                 .sql(),
+            engine,
+        )
+        for _src in ("imdb", "tmdb", "rottentomatoes")
+    ], ignore_index=True)
     vecs = model.encode(rows["title"].tolist(), normalize_embeddings=True)
     with pg.cursor() as _cur:
-        for (_sn, _si, _vf, __), _v in zip(
+        for (_sn, _si, __), _v in zip(
             rows.itertuples(index=False), vecs, strict=False
         ):
             _cur.execute(
                 f"UPDATE {movie.bindings_table_name} SET title_embedding = "
                 f"%(v)s::vector(384) WHERE source_name = %(sn)s "
-                f"AND source_identifier = %(si)s AND valid_from = %(vf)s",
-                {"v": str(_v.tolist()), "sn": _sn, "si": _si, "vf": _vf},
+                f"AND source_identifier = %(si)s",
+                {"v": str(_v.tolist()), "sn": _sn, "si": _si},
             )
-    print(f"embedded {len(rows)} imdb titles")
+    _per_source = rows.groupby("source_name").size().to_dict()
+    print(f"embedded {len(rows)} titles total: {_per_source}")
     return
 
 
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ## entity resolution
+    ## entity resolution — cross-source k-NN
 
-    For a real ER stage you'd ingest a second source and k-NN
-    cross-source via the HNSW index. For this slide deck we
-    just mint canonicals for the imdb rows so the resolved
-    view has something to show.
+    Three sources have ingested the same movies under different ids:
+    imdb's `tt001`, tmdb's `552`, rt's `pulp_fiction_1994`. The ER
+    worker mints canonicals for imdb (the "anchor"), then for every
+    tmdb / rt binding finds its nearest imdb neighbor via the HNSW
+    title-embedding index. Close enough → reuse imdb's canonical_id.
+    Far enough → mint a new one. Option-3's forward translation
+    rewrites every FK column (`director`, `movie`, `person`) in the
+    same atomic statement; the backward fan-out catches orphan
+    credits referencing not-yet-ER'd movies.
     """)
     return
 
 
 @app.cell
-def _(engine, imdb, imdb_movie_b, json, movie, pd, pg):
+def _(SCHEMA, engine, json, movie, pd, pg, spec):
     import uuid
 
-    from knot.ast.expr import Raw
+    # Phase 1 — mint canonicals for every imdb binding. Imdb is the
+    # anchor; every other source will be k-NN matched against it.
+    _imdb = spec.sources["imdb"]
+    for _cls_name in ("Person", "Movie", "MovieCredit"):
+        _cls = spec.classes[_cls_name]
+        _b = _cls.binding_for(_imdb)
+        from knot.ast.expr import Raw as _Raw
 
-    # cls.unresolved = the ER worker's work-to-do view —
-    # every binding with canonical_id IS NULL, across all sources.
-    # Chain a .where to scope to imdb specifically.
-    _q = movie.unresolved.where(Raw(f"source_name = '{imdb.name}'")).select(
-        Raw("source_identifier")
-    )
-    imdb_rows = pd.read_sql_query(_q.sql(), engine)
+        _q = _cls.unresolved.where(_Raw("source_name='imdb'")).select(
+            _Raw("source_identifier")
+        )
+        _unresolved = pd.read_sql_query(_q.sql(), engine)
+        _assign = _b.assign_canonical_sql()
+        _prefix = _cls_name.lower()[:3]
+        with pg.cursor() as _cur:
+            for _si in _unresolved["source_identifier"]:
+                _cur.execute(
+                    _assign,
+                    {
+                        "canonical_id": f"{_prefix}_{uuid.uuid4().hex[:10]}",
+                        "source_identifier": _si,
+                        "er_metadata": json.dumps({"method": "anchor"}),
+                    },
+                )
+        print(f"  imdb {_cls_name}: minted {len(_unresolved)} canonicals")
 
-    assign = imdb_movie_b.assign_canonical_sql()
-    with pg.cursor() as _cur:
-        for _si in imdb_rows["source_identifier"]:
-            _cur.execute(
-                assign,
-                {
-                    "canonical_id": f"m_{uuid.uuid4().hex[:10]}",
-                    "source_identifier": _si,
-                    "er_metadata": json.dumps({"method": "mint"}),
-                },
+    # Phase 2 — k-NN match tmdb + rt movies against imdb via the HNSW
+    # title_embedding index. CROSS JOIN LATERAL drives per-row k-NN;
+    # the resolver's per-(source, class, slot) weights pick winners
+    # at read time.
+    _knn_sql = f"""
+        SELECT other.source_name, other.source_identifier,
+               nn.canonical_id AS imdb_canonical,
+               nn.distance
+        FROM {SCHEMA}.movie_bindings AS other
+        CROSS JOIN LATERAL (
+            SELECT canonical_id, title_embedding <=> other.title_embedding AS distance
+            FROM {SCHEMA}.movie_bindings
+            WHERE source_name='imdb'
+              AND title_embedding IS NOT NULL
+              AND canonical_id IS NOT NULL
+            ORDER BY title_embedding <=> other.title_embedding
+            LIMIT 1
+        ) AS nn
+        WHERE other.source_name IN ('tmdb','rottentomatoes')
+          AND other.title_embedding IS NOT NULL
+          AND other.canonical_id IS NULL
+    """
+    _candidates = pd.read_sql_query(_knn_sql, engine)
+
+    _THRESHOLD = 0.20  # cosine distance; tuned by labeled data in real life
+    _matched = 0
+    for _src in ("tmdb", "rottentomatoes"):
+        _b = movie.binding_for(spec.sources[_src])
+        _assign = _b.assign_canonical_sql()
+        _src_cand = _candidates[_candidates["source_name"] == _src]
+        with pg.cursor() as _cur:
+            for _row in _src_cand.itertuples(index=False):
+                _is_match = _row.distance <= _THRESHOLD
+                _cid = _row.imdb_canonical if _is_match else f"mov_{uuid.uuid4().hex[:10]}"
+                _cur.execute(
+                    _assign,
+                    {
+                        "canonical_id": _cid,
+                        "source_identifier": _row.source_identifier,
+                        "er_metadata": json.dumps({
+                            "method": "knn_match" if _is_match else "knn_mint",
+                            "distance": float(_row.distance),
+                        }),
+                    },
+                )
+                _matched += int(_is_match)
+        print(f"  {_src} Movie: {len(_src_cand)} candidates, {_matched} matched ≤ {_THRESHOLD}")
+
+    # Phase 3 — mint canonicals for every other unresolved binding
+    # (tmdb/rt persons + credits, which don't have title embeddings).
+    # The ER worker would normally k-NN these too against name
+    # embeddings; we're keeping the slide deck honest, not exhaustive.
+    for _src in ("tmdb", "rottentomatoes"):
+        for _cls_name in ("Person", "MovieCredit"):
+            _cls = spec.classes[_cls_name]
+            _b = _cls.binding_for(spec.sources[_src])
+            from knot.ast.expr import Raw as _Raw
+
+            _q = _cls.unresolved.where(_Raw(f"source_name='{_src}'")).select(
+                _Raw("source_identifier")
             )
-    # Upsert a runtime weight so the resolver has something > 0 for imdb.
+            _unresolved = pd.read_sql_query(_q.sql(), engine)
+            _assign = _b.assign_canonical_sql()
+            _prefix = _cls_name.lower()[:3]
+            with pg.cursor() as _cur:
+                for _si in _unresolved["source_identifier"]:
+                    _cur.execute(
+                        _assign,
+                        {
+                            "canonical_id": f"{_prefix}_{uuid.uuid4().hex[:10]}",
+                            "source_identifier": _si,
+                            "er_metadata": json.dumps({"method": "knn_skip_mint"}),
+                        },
+                    )
+
+    # Set per-source runtime weights so the resolver has a defined
+    # argmax — imdb > tmdb > rt for simple cases.
+    _WEIGHTS = {"imdb": 0.85, "tmdb": 0.70, "rottentomatoes": 0.55}
     with pg.cursor() as _cur:
-        upsert = imdb_movie_b.upsert_weight_sql()
-        for slot in ("title", "year", "director", "runtime_minutes"):
-            _cur.execute(upsert, {"slot_name": slot, "weight": 0.85})
-    print(f"minted {len(imdb_rows)} canonical_ids + set imdb weights")
+        for _b in spec.source_bindings:
+            if _b.source.name not in _WEIGHTS:
+                continue
+            _upsert = _b.upsert_weight_sql()
+            for _slot in _b.class_.effective_slots():
+                if _slot.identifier:
+                    continue
+                _cur.execute(_upsert,
+                             {"slot_name": _slot.name, "weight": _WEIGHTS[_b.source.name]})
+    print(f"set runtime weights for {len(_WEIGHTS)} sources")
     return
 
 
@@ -537,14 +701,151 @@ def _(engine, movie, pd):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
+    ## per-source provenance — `cls.all_sources`
+
+    Same `canonical_id` per row, but each slot becomes a jsonb of
+    `{source_name: {value, weight}}` so the UI can show "imdb says
+    runtime=120, tmdb says 121, rt agrees with imdb". The resolved
+    view's argmax winner is one of these.
+    """)
+    return
+
+
+@app.cell
+def _(engine, movie, pd):
+    pd.read_sql_query(movie.all_sources.limit(5).sql(), engine)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## virtual class — `DirectedMovie`
+
+    `movie.add_virtual("DirectedMovie", where=((movie_credit.col.movie == this.Movie) & (movie_credit.col.role == "director")).any())`
+    compiles to a filtered view over `movie_resolved` — movies that
+    have a "director" credit. The FK chain (`movie_credit.movie =
+    movie.canonical_id`) only works because option-3 ER stamped both
+    sides with canonical-ids.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(SCHEMA, engine, mo, pd):
+    # Show DirectedMovie's view body (the SQL knot emits). pg_views is
+    # postgres metadata — catalog introspection is the one carve-out
+    # to the "demos use knot expressions only" rule.
+    _ddl = pd.read_sql_query(
+        f"SELECT definition FROM pg_views "
+        f"WHERE schemaname='{SCHEMA}' AND viewname='directedmovie'",
+        engine,
+    ).iloc[0]["definition"]
+    mo.md(f"**view body knot emitted:**\n```sql\n{_ddl}\n```")
+    return
+
+
+@app.cell
+def _(SCHEMA, engine, pd):
+    # First 5 movies that pass the DirectedMovie filter — rendered as
+    # a DataFrame so marimo formats it natively (no tabulate needed).
+    pd.read_sql_query(
+        f"SELECT canonical_id, title, year FROM {SCHEMA}.directedmovie "
+        f"ORDER BY year DESC LIMIT 5",
+        engine,
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## constraint validation — `year_sane`
+
+    `movie.add_constraint("year_sane", body=movie.col.year >= 1888)`
+    compiles to a SELECT that returns offending canonical_ids. Inject
+    a 1700 movie binding (bypassing ingest), run validation, watch the
+    SELECT find it. The host decides what to do — block, page, route
+    to a review queue.
+    """)
+    return
+
+
+@app.cell
+def _(engine, json, movie, pd, pg, spec):
+    import uuid as _uuid
+
+    # Inject a single bad row through knot's own write + ER path.
+    # In production this would never happen — the source's ingest
+    # would surface the violation on a scheduled validator sweep.
+    _imdb_movie_b = movie.binding_for(spec.sources["imdb"])
+    _src_id = f"tt_bad_{_uuid.uuid4().hex[:6]}"
+    _bad_id = f"mov_bad_{_uuid.uuid4().hex[:6]}"
+    with pg.cursor() as _cur:
+        _cur.execute(
+            _imdb_movie_b.write_sql(),
+            {"rows": json.dumps([{
+                "source_identifier": _src_id,
+                "title": "A Trip to Nowhere",
+                "year": 1700,
+            }])},
+        )
+        _cur.execute(
+            _imdb_movie_b.assign_canonical_sql(),
+            {
+                "canonical_id": _bad_id,
+                "source_identifier": _src_id,
+                "er_metadata": json.dumps({"method": "ringer"}),
+            },
+        )
+
+    # Run every constraint's validation SELECT — host policy decides
+    # what to do with returned rows. Here we just surface them.
+    _rules = dict(spec.emit_validation())
+    pd.read_sql_query(_rules["year_sane"], engine)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## what knot emits for ER
+
+    `assign_canonical_sql()` is one atomic statement — a chain of
+    writable CTEs that does four things at once: stamp the binding's
+    canonical_id, translate this row's own FK columns from source-id
+    to canonical-id (forward), fan out to every referencing class's
+    bindings to rewrite their FK columns where they held the just-
+    stamped source-id (backward), and register the canonical in the
+    identity table. Recanonicalize cascades canonical-id rewrites to
+    every referencing binding.
+    """)
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo, spec):
+    _movie = spec.classes["Movie"]
+    _b = _movie.binding_for(spec.sources["imdb"])
+    _sql = _b.assign_canonical_sql()
+    mo.md(
+        f"`imdb_movie_b.assign_canonical_sql()`:\n\n```sql\n{_sql}\n```"
+    )
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
     ## that's the loop
 
     - **typed Python spec** (`Spec`, `OntologyClass`, `Source`, `SourceBinding`)
     - → **canonical SQL** (`spec.ddl()`)
     - → **schema deployed** (host or Atlas)
-    - → **SCD2 ingest** (`binding.write_sql()`)
+    - → **upsert ingest** (`binding.write_sql()`)
     - → **ER + weights at runtime** (`binding.assign_canonical_sql()`, `binding.upsert_weight_sql()`)
-    - → **read substrate** (`cls.resolved`, `cls.from_source(s)`, `cls.all_sources`)
+    - → **read substrate** (`cls.resolved`, `cls.all_sources`, `cls.from_source(s)`, `cls.unresolved`)
+    - → **constraints + virtuals** (`spec.emit_validation()`, virtual class views)
 
     knot is a compiler. The host composes.
     """)

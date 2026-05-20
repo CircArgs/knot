@@ -7,8 +7,9 @@ Each emitter is a free function on the corresponding module:
   - ``knot.compile.resolver.emit_resolved_views`` all concrete classes' resolved views
   - ``knot.compile.constraints.emit_validation``  per-constraint validation SELECTs
   - ``knot.compile.constraints.emit_validation_union``  single-query UNION ALL form
-  - ``knot.compile.write.emit_binding_write_sql`` SCD2 write SQL templates
-                                                  for one binding (close-out + insert)
+  - ``knot.compile.write.emit_binding_write_sql`` upsert SQL template for
+                                                  one binding (INSERT ... ON
+                                                  CONFLICT DO UPDATE)
 
 knot is a *compiler*: ``Spec.ddl(schema=…)`` emits the canonical
 target schema. Schema migrations against a live DB are delegated to
@@ -37,6 +38,6 @@ from knot.compile.weight import (
 from knot.compile.write import (
     emit_assign_canonical_sql,
     emit_binding_write_sql,
-    emit_close_out_sql,
     emit_recanonicalize_sql,
+    emit_retract_sql,
 )

@@ -140,6 +140,51 @@ class Ref(Expr, _ValueExpr):
 
 
 @dataclass(frozen=True, eq=False, slots=True)
+class VectorRef(Expr, _ValueExpr):
+    """A reference to a Vector slot. Adds ``.distance_to(target)`` so
+    k-NN sort / filter / select composes with every other Query
+    builder. Carries the slot's ``metric`` + ``dim`` so the compiler
+    picks the right pgvector operator without a spec lookup."""
+
+    class_name: str
+    slot_name: str
+    metric: str  # "cosine" | "l2" | "ip"
+    dim: int
+
+    def distance_to(self, target: Any) -> VectorDistance:
+        """Return a float-valued ``VectorDistance`` expression between
+        this slot and ``target``. The operator is picked from the
+        slot's declared ``metric`` — ``<=>`` for cosine, ``<->`` for
+        l2, ``<#>`` for ip — matching the slot's HNSW index, so
+        ``order_by(slot.distance_to(v)).limit(k)`` uses the index.
+        Compose freely: chain ``.where(...)`` before for filtering,
+        ``.select(slot.distance_to(v))`` to surface the distance, etc."""
+        return VectorDistance(
+            class_name=self.class_name,
+            slot_name=self.slot_name,
+            target=tuple(target),
+            metric=self.metric,
+            dim=self.dim,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class VectorDistance(Expr, _ValueExpr):
+    """Float-valued distance between a vector slot and a literal
+    target vector, rendered with the operator picked by the slot's
+    ``metric``. Composes anywhere a float column-level expression
+    does — ``.order_by``, ``.select``, comparison (``> 0.3``), etc.
+    HNSW index gets used when this expression drives an ``ORDER BY``
+    with a ``LIMIT``."""
+
+    class_name: str
+    slot_name: str
+    target: tuple[float, ...]
+    metric: str
+    dim: int
+
+
+@dataclass(frozen=True, eq=False, slots=True)
 class FkRef(Expr, _ValueExpr):
     """A reference to a FK slot. Used as a value, it renders as the FK
     column on the source table (e.g., ``Movie.col.director == X``).
@@ -246,8 +291,9 @@ class Between(Expr):
 @dataclass(frozen=True, slots=True)
 class Exists(Expr):
     """``EXISTS (SELECT 1 FROM other WHERE other.fk = primary.identifier
-    [AND extra-where])``. Produced by ``OntologyClass.has_any`` /
-    ``has_none``; ``negated=True`` yields ``NOT EXISTS``."""
+    [AND extra-where])``. Produced by the correlated-aggregate form
+    ``(other.col.fk == this.Primary).any()`` / ``.none()`` —
+    ``negated=True`` yields ``NOT EXISTS``."""
 
     other_class_name: str
     fk_slot_name: str
@@ -260,8 +306,9 @@ class Exists(Expr):
 @dataclass(frozen=True, eq=False, slots=True)
 class CountRel(Expr, _ValueExpr):
     """``(SELECT COUNT(*) FROM other WHERE other.fk = primary.identifier
-    [AND extra-where])``. A value-expression — compose with comparison
-    operators: ``movie.has_count(credit) >= 1``."""
+    [AND extra-where])``. A value-expression — produced by
+    ``(other.col.fk == this.Primary).count()`` and composes with
+    comparison operators: ``... .count() >= 1``."""
 
     other_class_name: str
     fk_slot_name: str

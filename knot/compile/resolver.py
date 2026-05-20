@@ -1,9 +1,9 @@
 """Read-data path — resolved-view emission.
 
 For each concrete ``OntologyClass``, emit a SQL ``VIEW`` named
-``<schema>.<class>_resolved`` that joins all currently-open rows of
-``<class>_bindings`` (``valid_to IS NULL``) and picks each slot's
-winning value by argmax over the per-(source, class, slot) weight.
+``<schema>.<class>_resolved`` that picks each slot's winning value
+by argmax over the per-(source, class, slot) weight, across every
+binding row that's been ER-stamped (``canonical_id IS NOT NULL``).
 One row per ``canonical_id``.
 
 Resolution semantics:
@@ -51,7 +51,6 @@ def _winning_value_expr(
         f"AND w.class_name = '{class_name}' "
         f"AND w.slot_name = '{slot.name}' "
         f"WHERE b.{canonical_id_slot.name} = cb.{canonical_id_slot.name} "
-        f"AND b.valid_to IS NULL "
         f"AND b.{slot.name} IS NOT NULL "
         f"ORDER BY COALESCE(w.weight, 0) DESC, b.source_name "
         f"LIMIT 1)"
@@ -111,7 +110,7 @@ def emit_resolved_view(
         "FROM (\n"
         f"    SELECT DISTINCT {ident.name}\n"
         f"    FROM {bindings_table}\n"
-        f"    WHERE valid_to IS NULL AND {ident.name} IS NOT NULL\n"
+        f"    WHERE {ident.name} IS NOT NULL\n"
         ") AS cb;"
     )
 
@@ -218,7 +217,7 @@ def emit_all_sources_view(
         "SELECT\n" + ",\n".join(select_lines) + "\n"
         f"FROM {bindings_table} b\n"
         f"{joins}\n"
-        f"WHERE b.valid_to IS NULL AND b.{ident.name} IS NOT NULL\n"
+        f"WHERE b.{ident.name} IS NOT NULL\n"
         f"GROUP BY b.{ident.name};"
     )
 

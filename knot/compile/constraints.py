@@ -56,7 +56,12 @@ def emit_validation(
         identifier = primary.identifier_slot()
         table = f"{schema}.{primary.name.lower()}{layer}"
         message_literal = f"'{_escape_literal(c.message)}'" if c.message else "NULL"
-        body_sql = compile_sql(c.body, schema=schema, layer=layer)
+        # outer_class threads the constraint's primary class through so
+        # correlated ``this.<Primary>`` refs inside Aggregate predicates
+        # bind to the FROM <primary> row, not the subquery's row.
+        body_sql = compile_sql(
+            c.body, schema=schema, layer=layer, outer_class=primary.name
+        )
         sql = (
             f"SELECT\n"
             f"    '{_escape_literal(c.name)}' AS rule_id,\n"

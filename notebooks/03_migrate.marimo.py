@@ -156,7 +156,7 @@ def _(mo):
 
 
 @app.cell
-def _(Path, SCHEMA, spec):
+def _(Path, spec):
     target_sql = Path("/tmp/knot_target.sql")
     target_sql.write_text(spec.ddl(include_views=False))
     print(f"wrote {target_sql} ({target_sql.stat().st_size} bytes)")
@@ -252,7 +252,7 @@ def _(mo):
 
 
 @app.cell
-def _(SCHEMA, pg, spec):
+def _(pg, spec):
     pg.execute(spec.ddl())
     return
 
@@ -270,7 +270,7 @@ def _(mo):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(SCHEMA, engine, pd):
     pd.read_sql_query(
         """
         SELECT table_name AS name, table_type AS kind
@@ -286,7 +286,7 @@ def _(SCHEMA, engine, pd, pg):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(SCHEMA, engine, pd):
     pd.read_sql_query(
         """
         SELECT column_name, data_type
@@ -301,7 +301,7 @@ def _(SCHEMA, engine, pd, pg):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(SCHEMA, engine, pd):
     # HNSW index Atlas built from the spec's vector slot.
     pd.read_sql_query(
         """
@@ -317,21 +317,27 @@ def _(SCHEMA, engine, pd, pg):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(engine, pd, spec):
     # Imdb data survived the migration — `canonical_id` still NULL
     # (ER hasn't run), `title_embedding` NULL (embedding worker
-    # hasn't run; both happen in 05_er).
-    pd.read_sql_query(
-        f"""
-        SELECT source_name,
-               COUNT(*) AS rows,
-               COUNT(title_embedding) AS embedded,
-               COUNT(canonical_id) AS resolved
-        FROM {SCHEMA}.movie_bindings
-        GROUP BY source_name
-        """,
-        engine,
-    )
+    # hasn't run; both happen in 05_er). Counts are derived via
+    # cls.from_source per source — knot's read API doesn't yet
+    # express COUNT-as-projection, so the totals come from pandas.
+    _movie = spec.classes["Movie"]
+    _stats = []
+    for _src in spec.sources.values():
+        if _src.name == "_user_corrections":
+            continue
+        _df = pd.read_sql_query(_movie.from_source(_src).sql(), engine)
+        if _df.empty:
+            continue
+        _stats.append({
+            "source": _src.name,
+            "rows": len(_df),
+            "embedded": int(_df["title_embedding"].notna().sum()),
+            "resolved": int(_df["canonical_id"].notna().sum()),
+        })
+    pd.DataFrame(_stats)
     return
 
 

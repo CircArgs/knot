@@ -79,7 +79,7 @@ def _(SCHEMA, connect):
 
 
 @app.cell
-def _(SCHEMA, spec):
+def _(spec):
     # The canonical target schema for the base spec, as one SQL script.
     # Nothing executes yet — just the text. Notice the order: schema →
     # weight table → canonical tables → bindings tables → indexes →
@@ -91,7 +91,7 @@ def _(SCHEMA, spec):
 
 
 @app.cell
-def _(SCHEMA, pg, spec):
+def _(pg, spec):
     # First deploy against an empty schema: execute directly. Every
     # statement is idempotent (CREATE TABLE IF NOT EXISTS / CREATE OR
     # REPLACE VIEW), so re-running is a no-op.
@@ -100,7 +100,7 @@ def _(SCHEMA, pg, spec):
 
 
 @app.cell
-def _(SCHEMA, engine, pd, pg):
+def _(SCHEMA, engine, pd):
     # What landed?
     pd.read_sql_query(
         """

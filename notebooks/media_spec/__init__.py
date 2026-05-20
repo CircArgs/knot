@@ -14,8 +14,8 @@ from media_spec.base import spec
 from media_spec import person as _person
 from media_spec import movies as _movies
 
-spec.include(_person.part)
-spec.include(_movies.part)
+spec.include(_person.person_subspec)
+spec.include(_movies.movies_subspec)
 
 # Re-export the v1 handles every notebook actually grabs.
 from media_spec.person import person  # noqa: E402,F401

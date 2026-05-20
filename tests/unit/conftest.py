@@ -2,7 +2,7 @@
 
 import pytest
 
-from knot import Spec, types
+from knot import Spec, this, types
 
 
 @pytest.fixture
@@ -33,7 +33,9 @@ def movie_spec() -> Spec:
 
     movie.add_virtual(
         "DirectedMovie",
-        where=movie.has_any(credit, role="director"),
+        where=(
+            (credit.col.movie == this.Movie) & (credit.col.role == "director")
+        ).any(),
     )
 
     movie.add_constraint("year_sane", body=movie.col.year >= 1888)
