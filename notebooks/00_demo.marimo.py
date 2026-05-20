@@ -566,10 +566,10 @@ def _(SCHEMA, engine, json, movie, pd, pg, spec):
     for _cls_name in ("Person", "Movie", "MovieCredit"):
         _cls = spec.classes[_cls_name]
         _b = _cls.binding_for(_imdb)
-        from knot.ast.expr import Raw as _Raw
-
-        _q = _cls.unresolved.where(_Raw("source_name='imdb'")).select(
-            _Raw("source_identifier")
+        _q = (
+            _cls.unresolved
+            .where(_cls.bindings_col.source_name == "imdb")
+            .select(_cls.bindings_col.source_identifier)
         )
         _unresolved = pd.read_sql_query(_q.sql(), engine)
         _assign = _b.assign_canonical_sql()
@@ -642,10 +642,10 @@ def _(SCHEMA, engine, json, movie, pd, pg, spec):
         for _cls_name in ("Person", "MovieCredit"):
             _cls = spec.classes[_cls_name]
             _b = _cls.binding_for(spec.sources[_src])
-            from knot.ast.expr import Raw as _Raw
-
-            _q = _cls.unresolved.where(_Raw(f"source_name='{_src}'")).select(
-                _Raw("source_identifier")
+            _q = (
+                _cls.unresolved
+                .where(_cls.bindings_col.source_name == _src)
+                .select(_cls.bindings_col.source_identifier)
             )
             _unresolved = pd.read_sql_query(_q.sql(), engine)
             _assign = _b.assign_canonical_sql()

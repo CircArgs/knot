@@ -288,6 +288,62 @@ class Between(Expr):
     high: Any
 
 
+@dataclass(frozen=True, eq=False, slots=True)
+class AggExpr(Expr, _ValueExpr):
+    """SELECT-list aggregate — ``COUNT(*)`` / ``COUNT(col)`` / ``SUM(col)``
+    / ``AVG(col)`` / ``MIN(col)`` / ``MAX(col)``. A value-expression
+    so it composes with arithmetic + comparison and can land in
+    ``Query.select(...)`` or ``Query.order_by(...)``. Pair with
+    ``Query.group_by(...)`` for per-group aggregates; without
+    ``group_by`` the query reduces to one row (scalar aggregate over
+    the whole table).
+
+    Use the module-level factories ``count() / sum_() / avg() /
+    min_() / max_()`` to build these — trailing-underscore on
+    `sum_/min_/max_` avoids shadowing the Python builtins."""
+
+    kind: str  # "count" | "sum" | "avg" | "min" | "max"
+    expr: Expr | None = None  # None ⇒ ``COUNT(*)`` (only valid for count)
+
+    def __post_init__(self) -> None:
+        valid = {"count", "sum", "avg", "min", "max"}
+        if self.kind not in valid:
+            raise ValueError(
+                f"AggExpr.kind must be one of {sorted(valid)}, got {self.kind!r}"
+            )
+        if self.expr is None and self.kind != "count":
+            raise ValueError(
+                f"AggExpr({self.kind!r}) requires an inner Expr; "
+                f"only COUNT(*) is built without one"
+            )
+
+
+def count(expr: Expr | None = None) -> AggExpr:
+    """``COUNT(*)`` with no arg; ``COUNT(<expr>)`` with one (counts
+    non-NULL values)."""
+    return AggExpr(kind="count", expr=expr)
+
+
+def sum_(expr: Expr) -> AggExpr:
+    """``SUM(<expr>)`` over the (grouped or full) row set."""
+    return AggExpr(kind="sum", expr=expr)
+
+
+def avg(expr: Expr) -> AggExpr:
+    """``AVG(<expr>)`` — postgres returns numeric for integer input."""
+    return AggExpr(kind="avg", expr=expr)
+
+
+def min_(expr: Expr) -> AggExpr:
+    """``MIN(<expr>)``."""
+    return AggExpr(kind="min", expr=expr)
+
+
+def max_(expr: Expr) -> AggExpr:
+    """``MAX(<expr>)``."""
+    return AggExpr(kind="max", expr=expr)
+
+
 @dataclass(frozen=True, slots=True)
 class Exists(Expr):
     """``EXISTS (SELECT 1 FROM other WHERE other.fk = primary.identifier

@@ -77,11 +77,13 @@ class Query:
 
     class_name: str
     where_clause: Expr | None = None
+    grouping: tuple[Expr, ...] = ()
     ordering: tuple[OrderBy, ...] = ()
     limit_value: int | None = None
     offset_value: int | None = None
     projection: tuple[Expr, ...] | None = None
     layer: Layer = Layer.RESOLVED
+    lock_mode: str | None = None  # "for_update" | "for_update_skip_locked" | "for_share"
     _spec: Any = field(default=None, repr=False, compare=False)
 
     def where(self, predicate: Expr) -> Query:
@@ -90,6 +92,13 @@ class Query:
             predicate if self.where_clause is None else self.where_clause & predicate
         )
         return replace(self, where_clause=combined)
+
+    def group_by(self, *refs: Expr) -> Query:
+        """Append GROUP BY clauses. Pair with aggregate projections
+        (``count()`` / ``sum_()`` / ``avg()`` / etc. from
+        ``knot.ast.expr``). Without ``group_by``, an aggregate in
+        ``.select()`` reduces the result to one scalar row."""
+        return replace(self, grouping=self.grouping + tuple(refs))
 
     def order_by(self, ref: Expr, direction: str = "asc") -> Query:
         """Append an ORDER BY clause."""
@@ -104,6 +113,25 @@ class Query:
     def select(self, *refs: Expr) -> Query:
         """Set the projection. ``None`` (the default) means ``SELECT *``."""
         return replace(self, projection=tuple(refs))
+
+    def lock(self, mode: str) -> Query:
+        """Append a row-lock clause. Postgres modes:
+
+          - ``"for_update"`` — exclusive row lock
+          - ``"for_update_skip_locked"`` — exclusive lock, skip rows
+            already locked by another transaction. The canonical ER
+            worker shape: claim a batch of ``cls.unresolved`` rows
+            atomically without blocking on or re-processing rows
+            another worker has already claimed.
+          - ``"for_share"`` — shared row lock
+
+        Renders after LIMIT / OFFSET (postgres clause order)."""
+        valid = {"for_update", "for_update_skip_locked", "for_share"}
+        if mode not in valid:
+            raise ValueError(
+                f"Query.lock mode must be one of {sorted(valid)}, got {mode!r}"
+            )
+        return replace(self, lock_mode=mode)
 
     # ------------------------------------------------------------------
     # Compile entry point — methods on the entity they're about. The

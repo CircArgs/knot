@@ -147,6 +147,43 @@ class _ColAccess:
         return Ref(class_name=cls.name, slot_name=name)
 
 
+# Bindings-table columns that aren't spec-declared slots but exist on
+# every bindings table per the ddl.py emission. Exposed via
+# ``cls.bindings_col.<name>`` so readers can ``.where`` / ``.select`` /
+# ``.order_by`` against them without dropping to ``Raw(...)``. Only
+# valid in BINDINGS-layer queries (``cls.unresolved``,
+# ``cls.from_source(s)``); postgres errors at execute time if used
+# against the resolved or all_sources views.
+_BINDINGS_COLUMNS = ("source_name", "source_identifier", "er_metadata", "raw_payload")
+
+
+class _BindingsColAccess:
+    """``cls.bindings_col.source_identifier`` returns a ``Ref`` to a
+    bindings-table column that isn't a spec slot. Closes the last
+    user-facing ``Raw(...)`` escape hatch — the ER worker's pending
+    queue, per-source filters, and audit reads all author through
+    typed Refs now. Typos raise ``KeyError`` at attribute time."""
+
+    __slots__ = ("_cls",)
+
+    def __init__(self, cls: OntologyClass):
+        object.__setattr__(self, "_cls", cls)
+
+    def __getattr__(self, name: str) -> Ref:
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self[name]
+
+    def __getitem__(self, name: str) -> Ref:
+        if name not in _BINDINGS_COLUMNS:
+            raise KeyError(
+                f"{name!r} is not a bindings-table column; "
+                f"valid: {_BINDINGS_COLUMNS}. For spec-declared slots use cls.col"
+            )
+        cls = object.__getattribute__(self, "_cls")
+        return Ref(class_name=cls.name, slot_name=name)
+
+
 # ---------------------------------------------------------------------------
 # Classes
 # ---------------------------------------------------------------------------
@@ -255,6 +292,25 @@ class OntologyClass:
         Either form raises ``KeyError`` on construction if the slot
         doesn't exist (including through is_a / mixin inheritance)."""
         return _ColAccess(self)
+
+    @property
+    def bindings_col(self) -> _BindingsColAccess:
+        """``movie.bindings_col.source_identifier`` → ``Ref`` to a
+        bindings-table column that isn't a spec slot. Valid columns:
+        ``source_name``, ``source_identifier``, ``er_metadata``,
+        ``raw_payload``. Only meaningful in BINDINGS-layer queries
+        (``cls.unresolved``, ``cls.from_source(s)``); the resolved /
+        all_sources views don't have these columns, so postgres
+        errors at execute time if misused.
+
+        Example::
+
+            movie.unresolved.select(
+                movie.bindings_col.source_identifier,
+                movie.col.title,
+            )
+        """
+        return _BindingsColAccess(self)
 
     # ------------------------------------------------------------------
     # Read substrate — query entry points. Each returns a fresh ``Query``;

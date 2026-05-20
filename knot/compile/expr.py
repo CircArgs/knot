@@ -36,6 +36,7 @@ from knot.ast.expr import (
     InList,
     IsNull,
     Literal,
+    AggExpr,
     Not,
     Raw,
     Ref,
@@ -95,6 +96,27 @@ def _(
     # (Query.sql() inlines all literals — there's no parameter list).
     literal = "[" + ", ".join(repr(float(v)) for v in node.target) + "]"
     return f"({col} {op} '{literal}'::vector({node.dim}))"
+
+
+_AGG_FN = {
+    "count": "COUNT",
+    "sum": "SUM",
+    "avg": "AVG",
+    "min": "MIN",
+    "max": "MAX",
+}
+
+
+@compile_sql.register
+def _(
+    node: AggExpr, *, schema: str, layer: Layer, outer_class: str | None = None
+) -> str:
+    fn = _AGG_FN[node.kind]
+    if node.expr is None:
+        # Only valid for COUNT — AggExpr.__post_init__ already enforced.
+        return f"{fn}(*)"
+    inner = compile_sql(node.expr, schema=schema, layer=layer, outer_class=outer_class)
+    return f"{fn}({inner})"
 
 
 @compile_sql.register

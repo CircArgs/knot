@@ -368,6 +368,97 @@ def test_unresolved_chains_with_where():
     assert "AND" in sql
 
 
+def test_lock_for_update_skip_locked_renders_at_tail():
+    """The ER worker shape — claim a batch of unresolved bindings
+    atomically without re-processing rows another worker has."""
+    spec, movie = _make_movie_spec()
+    imdb = spec.add_source("imdb")
+    imdb.bind(movie)
+    q = movie.unresolved.limit(50).lock("for_update_skip_locked")
+    sql = q.sql()
+    # Lock clause must come after LIMIT (postgres clause order).
+    assert sql.rstrip(";\n ").endswith("FOR UPDATE SKIP LOCKED")
+    assert "LIMIT 50" in sql
+
+
+def test_lock_for_update_basic():
+    spec, movie = _make_movie_spec()
+    q = movie.resolved.lock("for_update")
+    assert "FOR UPDATE" in q.sql()
+    assert "SKIP LOCKED" not in q.sql()
+
+
+def test_lock_for_share():
+    spec, movie = _make_movie_spec()
+    q = movie.resolved.lock("for_share")
+    assert "FOR SHARE" in q.sql()
+
+
+def test_lock_rejects_invalid_mode():
+    spec, movie = _make_movie_spec()
+    with pytest.raises(ValueError, match="lock mode must be one of"):
+        movie.resolved.lock("for_obliterate")
+
+
+def test_lock_default_is_none_no_clause():
+    spec, movie = _make_movie_spec()
+    sql = movie.resolved.sql()
+    assert "FOR UPDATE" not in sql
+    assert "FOR SHARE" not in sql
+
+
+def test_col_canonical_id_works_across_all_layers():
+    """cls.col.<identifier> (the auto-added identifier slot) must
+    render correctly in every layer-targeted query — resolved,
+    all_sources, from_source, unresolved. Layer prefix changes;
+    the ref shape doesn't."""
+    spec, movie = _make_movie_spec()
+    imdb = spec.add_source("imdb")
+    imdb.bind(movie)
+    cases = [
+        (movie.resolved, "knot_data.movie_resolved.canonical_id"),
+        (movie.all_sources, "knot_data.movie_all_sources.canonical_id"),
+        (movie.from_source(imdb), "knot_data.movie_bindings.canonical_id"),
+        (movie.unresolved, "knot_data.movie_bindings.canonical_id"),
+    ]
+    for q, expected_ref in cases:
+        sql = q.where(movie.col.canonical_id.in_(["m_a"])).limit(1).sql()
+        assert expected_ref in sql, f"missing {expected_ref} in:\n{sql}"
+
+
+def test_bindings_col_accessor_emits_typed_refs():
+    """cls.bindings_col exposes source_name/source_identifier/
+    er_metadata/raw_payload as Refs so readers can compose without
+    Raw(...)."""
+    spec, movie = _make_movie_spec()
+    imdb = spec.add_source("imdb")
+    imdb.bind(movie)
+    q = (
+        movie.unresolved
+        .where(movie.bindings_col.source_name == "imdb")
+        .select(movie.bindings_col.source_identifier, movie.col.title)
+    )
+    sql = q.sql()
+    assert "source_name = 'imdb'" in sql
+    assert "knot_data.movie_bindings.source_identifier" in sql
+    assert "FROM knot_data.movie_bindings" in sql
+
+
+def test_bindings_col_rejects_typo():
+    spec, movie = _make_movie_spec()
+    with pytest.raises(KeyError, match="not a bindings-table column"):
+        movie.bindings_col.not_a_real_column
+
+
+def test_bindings_col_rejects_spec_slot_name():
+    """Spec-declared slots use cls.col, not cls.bindings_col — keep
+    the two surfaces non-overlapping."""
+    spec, movie = _make_movie_spec()
+    # 'year' is a spec slot on Movie, not a bindings-table column.
+    with pytest.raises(KeyError, match="not a bindings-table column"):
+        movie.bindings_col.year
+
+
 def test_abstract_class_blocks_query_entry_points():
     """Virtual/abstract classes can't be queried — they have no relation."""
     from knot.spec import ClassKind

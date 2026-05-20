@@ -32,12 +32,16 @@ compiler layer and hands runtime to the host.
    `recanonicalize` cascades canonical-id changes graph-wide.
    No ORM expresses this.
 
-4. **One typed predicate AST authors reads, virtuals, and
-   constraints.** `cls.col.year >= 1888` is the same Expr whether
-   it's a `.where(...)` clause, an `add_constraint(body=...)`, or
-   an `add_virtual(where=...)`. Notebooks must use this surface —
-   no raw SQL on the user side (only postgres catalog
-   introspection is exempt).
+4. **One typed predicate AST for reads, virtuals, and constraints;
+   one typed retrieval AST for relational, graph-walk, and k-NN.**
+   `cls.col.year >= 1888` is the same `Expr` in `.where(...)`,
+   `add_constraint(body=...)`, and `add_virtual(where=...)`. The
+   same `Query` composes relational filters, transparent FK chains
+   (`movie.col.director.name`), and vector k-NN
+   (`slot.distance_to(v)` as a sort/predicate/projection) — three
+   retrieval shapes, one builder. Authoring the same Expr in
+   constraints + virtuals + reads keeps the spec the single source
+   of truth.
 
 5. **knot is a substrate, not a runtime.** No connections, no
    scheduler, no migration engine, no ingest worker, no ER policy

@@ -103,6 +103,15 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
         )
         parts.append(f"WHERE {where_sql}")
 
+    if node.grouping:
+        group_parts = [
+            compile_sql(
+                g, schema=schema, layer=layer, outer_class=node.class_name
+            )
+            for g in node.grouping
+        ]
+        parts.append("GROUP BY " + ", ".join(group_parts))
+
     if node.ordering:
         order_parts = []
         for ob in node.ordering:
@@ -120,6 +129,17 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
 
     if node.offset_value is not None:
         parts.append(f"OFFSET {node.offset_value}")
+
+    if node.lock_mode is not None:
+        # Postgres row-lock clauses sit at the tail. SKIP LOCKED is
+        # the load-bearing one for ER worker scaling — claim a batch
+        # of unresolved bindings without serializing on other workers.
+        _LOCK_SQL = {
+            "for_update": "FOR UPDATE",
+            "for_update_skip_locked": "FOR UPDATE SKIP LOCKED",
+            "for_share": "FOR SHARE",
+        }
+        parts.append(_LOCK_SQL[node.lock_mode])
 
     return "\n".join(parts) + ";"
 
