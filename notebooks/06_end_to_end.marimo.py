@@ -156,6 +156,8 @@ def _(SCHEMA):
     # Movie.director, movie=this Movie). Catches denorm drift — a
     # real production failure mode where the convenience field falls
     # out of sync with the canonical Credit-based source.
+    # Forward consistency: when Movie.director is set, a matching
+    # Credit must exist.
     movie.add_constraint(
         "movie_director_matches_credit",
         body=movie.col.director.is_null()
@@ -164,6 +166,36 @@ def _(SCHEMA):
             & (credit.col.role == "director")
             & (credit.col.person == movie.col.director)
         ).any(),
+    )
+    # Reverse consistency: when a Credit(role='director') exists for
+    # a Movie, Movie.director must equal Credit.person. Without this,
+    # a movie can have a director credit but no Movie.director (or
+    # the wrong one) — the denorm rots silently. Same pattern for
+    # writer.
+    movie.add_constraint(
+        "credit_director_matches_movie",
+        body=(
+            (credit.col.movie == this.Movie)
+            & (credit.col.role == "director")
+            & (credit.col.person != movie.col.director)
+        ).none(),
+    )
+    movie.add_constraint(
+        "movie_writer_matches_credit",
+        body=movie.col.writer.is_null()
+        | (
+            (credit.col.movie == this.Movie)
+            & (credit.col.role == "writer")
+            & (credit.col.person == movie.col.writer)
+        ).any(),
+    )
+    movie.add_constraint(
+        "credit_writer_matches_movie",
+        body=(
+            (credit.col.movie == this.Movie)
+            & (credit.col.role == "writer")
+            & (credit.col.person != movie.col.writer)
+        ).none(),
     )
 
     # ---- virtual subclass ------------------------------------------------
@@ -194,9 +226,13 @@ def _(mo):
     mo.md(r"""
     ## 2. Deploy
 
-    `spec.ddl()` returns one idempotent CREATE script — schema,
-    extension, tables, indexes, **and views**. Run it once;
-    re-run any time without losing data.
+    `spec.ddl()` returns one canonical CREATE script — schema,
+    extension, tables, indexes, **and views**. This notebook runs
+    it directly against psycopg for a fresh-schema demo. In
+    production the recipe is two-phase: pipe
+    `spec.ddl(include_views=False)` through Atlas for the table
+    diff, then run `spec.views_ddl()` to rebuild views idempotently
+    (CLAUDE.md §"Schema deployment" walks the full Atlas loop).
     """)
     return
 
@@ -253,26 +289,22 @@ def _(deployed, json, pg, spec):
     # always starts from a fresh schema so a straight upsert is
     # correct here.
     _per_source_default = {"imdb": 0.85, "tmdb": 0.95}
-    with pg.cursor() as _cur:
-        # Wrap in a savepoint so partial failure rolls back the
-        # whole weight initialization atomically.
-        _cur.execute("BEGIN")
-        try:
-            for _b in spec.source_bindings:
-                _weight = _per_source_default[_b.source.name]
-                _payload = {
-                    _slot.name: _weight
-                    for _slot in _b.class_.effective_slots()
-                    if not _slot.identifier
-                }
-                _cur.execute(
-                    _b.upsert_weights_sql(),
-                    {"weights": json.dumps(_payload)},
-                )
-            _cur.execute("COMMIT")
-        except Exception:
-            _cur.execute("ROLLBACK")
-            raise
+    # Atomic: pg.transaction() opens a transaction block even on an
+    # autocommit=True connection. Raw BEGIN/COMMIT via cursor is a
+    # NO-OP on psycopg3 autocommit — use the context manager.
+    # CLAUDE.md §"Constraint enforcement" shows this canonical shape.
+    with pg.transaction(), pg.cursor() as _cur:
+        for _b in spec.source_bindings:
+            _weight = _per_source_default[_b.source.name]
+            _payload = {
+                _slot.name: _weight
+                for _slot in _b.class_.effective_slots()
+                if not _slot.identifier
+            }
+            _cur.execute(
+                _b.upsert_weights_sql(),
+                {"weights": json.dumps(_payload)},
+            )
     weights_set = True
     return (weights_set,)
 
@@ -515,32 +547,76 @@ def _(embeddings_done, engine, imdb_src, json, movie, pd, text, tmdb_src):
         )
 
     # ⚠️ N+1: one SQL round-trip per tmdb row. Substrate gap noted
-    # above. For 10k rows this would die; for a 5-row demo it's fine.
+    # above. ONE engine.begin() hoisted outside the loop — each
+    # iteration only pays the round-trip, not a fresh BEGIN/COMMIT.
+    _MOVIE_DISTANCE_MAX = 0.15  # cosine distance threshold; matches the
+                                # person 0.85 cosine-similarity cut.
     _matches = []
-    for _, _row in tmdb_df.iterrows():
-        _vec = _row["title_embedding"]
-        if isinstance(_vec, str):
-            _vec = json.loads(_vec)
-        _knn = (
-            movie.from_source(imdb_src)
-                .where(movie.col.canonical_id.is_null())
-                .order_by(_emb.distance_to(_vec))
-                .limit(1)
-                .select(_sid, movie.col.title, _emb.distance_to(_vec))
-        )
-        with engine.begin() as _conn:
+    with engine.begin() as _conn:
+        for _, _row in tmdb_df.iterrows():
+            _vec = _row["title_embedding"]
+            if isinstance(_vec, str):
+                _vec = json.loads(_vec)
+            _knn = (
+                movie.from_source(imdb_src)
+                    .where(movie.col.canonical_id.is_null())
+                    .order_by(_emb.distance_to(_vec))
+                    .limit(1)
+                    .select(_sid, movie.col.title, _emb.distance_to(_vec))
+            )
             _hit = pd.read_sql_query(text(_knn.sql()), _conn)
-        if not _hit.empty:
-            _matches.append({
-                "tmdb_id": _row["source_identifier"],
-                "tmdb_title": _row["title"],
-                "imdb_id": _hit.iloc[0, 0],
-                "imdb_title": _hit.iloc[0, 1],
-                "distance": float(_hit.iloc[0, 2]),
-            })
-    movie_candidates_df = pd.DataFrame(_matches).sort_values("distance").reset_index(drop=True)
+            if not _hit.empty:
+                _matches.append({
+                    "tmdb_id": _row["source_identifier"],
+                    "tmdb_title": _row["title"],
+                    "imdb_id": _hit.iloc[0, 0],
+                    "imdb_title": _hit.iloc[0, 1],
+                    "distance": float(_hit.iloc[0, 2]),
+                })
+    _raw = pd.DataFrame(_matches).sort_values("distance").reset_index(drop=True)
+
+    # Reject sub-threshold pairs (silent bad merges = Sam's round-1
+    # critique). Detect many-to-one collisions (two tmdb rows fighting
+    # for the same imdb neighbor) — needs Hungarian-style assignment
+    # in real production; for the demo we keep the closest pair and
+    # surface the rest as rejected.
+    if not _raw.empty:
+        _under_threshold = _raw[_raw["distance"] > _MOVIE_DISTANCE_MAX].assign(
+            reject_reason="distance > threshold"
+        )
+        _ok = _raw[_raw["distance"] <= _MOVIE_DISTANCE_MAX]
+        _ok = _ok.sort_values("distance").drop_duplicates("imdb_id", keep="first")
+        _collisions = _raw[
+            _raw["distance"] <= _MOVIE_DISTANCE_MAX
+        ].assign(_rank=lambda d: d.groupby("imdb_id").cumcount())
+        _collisions = _collisions[_collisions["_rank"] > 0].drop(
+            columns="_rank"
+        ).assign(reject_reason="m:1 collision (kept closer pair)")
+        movie_candidates_df = _ok.reset_index(drop=True)
+        movie_rejected_df = pd.concat(
+            [_under_threshold, _collisions], ignore_index=True
+        ).reset_index(drop=True)
+    else:
+        movie_candidates_df = _raw
+        movie_rejected_df = pd.DataFrame()
     movie_candidates_df
-    return (movie_candidates_df,)
+    return movie_candidates_df, movie_rejected_df
+
+
+@app.cell(hide_code=True)
+def _(mo, movie_rejected_df):
+    mo.md(
+        f"""
+        **Rejected movie pairs** (would route to ER-review queue): {len(movie_rejected_df)}
+        """
+    )
+    return
+
+
+@app.cell
+def _(movie_rejected_df):
+    movie_rejected_df
+    return
 
 
 @app.cell(hide_code=True)
@@ -605,21 +681,51 @@ def _(
     _sim = _tmdb_vecs @ _imdb_vecs.T  # both normalized
     _best = _sim.argmax(axis=1)
     _best_score = _sim.max(axis=1)
-    person_candidates_df = pd.DataFrame({
+    _raw = pd.DataFrame({
         "tmdb_id": _tmdb_p["source_identifier"].values,
         "tmdb_name": _tmdb_p["name"].values,
         "imdb_id": _imdb_p["source_identifier"].iloc[_best].values,
         "imdb_name": _imdb_p["name"].iloc[_best].values,
         "cosine": _best_score.astype(float),
     }).sort_values("cosine", ascending=False).reset_index(drop=True)
-    # Sanity guard: drop pairs below a confidence threshold.
-    person_candidates_df = person_candidates_df[
-        person_candidates_df["cosine"] >= 0.85
-    ].reset_index(drop=True)
+
+    _PERSON_COSINE_MIN = 0.85  # threshold for "same person."
+    _under = _raw[_raw["cosine"] < _PERSON_COSINE_MIN].assign(
+        reject_reason="cosine < threshold"
+    )
+    _ok = _raw[_raw["cosine"] >= _PERSON_COSINE_MIN]
+    # m:1 collision check (two tmdb names → same imdb neighbor). Keep
+    # the closer pair; surface the loser as rejected.
+    _ok_sorted = _ok.sort_values("cosine", ascending=False)
+    _ok_dedup = _ok_sorted.drop_duplicates("imdb_id", keep="first")
+    _collisions = _ok_sorted[
+        ~_ok_sorted.index.isin(_ok_dedup.index)
+    ].assign(reject_reason="m:1 collision (kept closer pair)")
+
+    person_candidates_df = _ok_dedup.reset_index(drop=True)
+    person_rejected_df = pd.concat(
+        [_under, _collisions], ignore_index=True
+    ).reset_index(drop=True)
 
     _ = imdb_person_b, tmdb_person_b  # downstream dep marker
     person_candidates_df
-    return (person_candidates_df,)
+    return person_candidates_df, person_rejected_df
+
+
+@app.cell(hide_code=True)
+def _(mo, person_rejected_df):
+    mo.md(
+        f"""
+        **Rejected person pairs** (would route to ER-review queue): {len(person_rejected_df)}
+        """
+    )
+    return
+
+
+@app.cell
+def _(person_rejected_df):
+    person_rejected_df
+    return
 
 
 @app.cell
@@ -691,27 +797,20 @@ def _(
         for _sid in _credit_df["source_identifier"]
     ]
 
-    # Wrap all 5 assign_canonicals_sql calls in ONE transaction —
-    # partial-failure mid-batch leaves the schema consistent. (The
-    # outer connection is autocommit by default for read paths;
-    # we open a fresh transaction here.)
-    with pg.cursor() as _cur:
-        _cur.execute("BEGIN")
-        try:
-            _cur.execute(imdb_movie_b.assign_canonicals_sql(),
-                         {"assignments": json.dumps(_movie_assigns_imdb)})
-            _cur.execute(tmdb_movie_b.assign_canonicals_sql(),
-                         {"assignments": json.dumps(_movie_assigns_tmdb)})
-            _cur.execute(imdb_person_b.assign_canonicals_sql(),
-                         {"assignments": json.dumps(_person_assigns_imdb)})
-            _cur.execute(tmdb_person_b.assign_canonicals_sql(),
-                         {"assignments": json.dumps(_person_assigns_tmdb)})
-            _cur.execute(imdb_credit_b.assign_canonicals_sql(),
-                         {"assignments": json.dumps(_credit_assigns)})
-            _cur.execute("COMMIT")
-        except Exception:
-            _cur.execute("ROLLBACK")
-            raise
+    # Atomic: pg.transaction() opens a real transaction block even on
+    # an autocommit=True connection. Raw cur.execute("BEGIN") is a
+    # NO-OP on psycopg3 autocommit — use the context manager.
+    with pg.transaction(), pg.cursor() as _cur:
+        _cur.execute(imdb_movie_b.assign_canonicals_sql(),
+                     {"assignments": json.dumps(_movie_assigns_imdb)})
+        _cur.execute(tmdb_movie_b.assign_canonicals_sql(),
+                     {"assignments": json.dumps(_movie_assigns_tmdb)})
+        _cur.execute(imdb_person_b.assign_canonicals_sql(),
+                     {"assignments": json.dumps(_person_assigns_imdb)})
+        _cur.execute(tmdb_person_b.assign_canonicals_sql(),
+                     {"assignments": json.dumps(_person_assigns_tmdb)})
+        _cur.execute(imdb_credit_b.assign_canonicals_sql(),
+                     {"assignments": json.dumps(_credit_assigns)})
     er_done = True
     return (er_done,)
 
@@ -798,13 +897,16 @@ def _(mo, same_target_sql):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 7c. Per-person credit counts — single-pass FILTER aggregate
+    ### 7c. Per-person credit counts (reverse-FK aggregate)
 
-    Naive shape is two correlated subqueries per person row
-    (total + director-only). knot's `AggExpr.filter(predicate)`
-    compiles to postgres' `COUNT(*) FILTER (WHERE ...)` so both
-    counts share one scan per person — same data, half the
-    work.
+    `back(other, fk).count()` materializes a correlated subquery per
+    row. The three counts below (total / directed / acted) emit
+    THREE separate correlated subqueries today — substrate gap:
+    `back()` doesn't yet support `.filter(predicate).count()`
+    through the reverse-FK, which would collapse them into one scan
+    via `COUNT(*) FILTER (WHERE ...)`. `AggExpr.filter()` is shipped
+    as a projection primitive; the reverse-FK plumbing is the next
+    mid-term add.
     """)
     return
 
@@ -911,12 +1013,14 @@ def _(engine, er_done, movie, pd, text):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 7f. Composite-key DataLoader — `tuple_in`
+    ### 7f. DataLoader — `tuple_in` on the resolved layer
 
-    The DataLoader pattern: collect (source, source_identifier)
-    pairs across many GraphQL parent fields, fetch them in one
-    round-trip. `tuple_in([col_a, col_b], [(va, vb), …])`
-    compiles to `(col_a, col_b) IN ((va, vb), …)`.
+    The hot path: a GraphQL resolver collects N canonical_ids from
+    parent fields then needs all those rows in ONE round-trip.
+    `cls.resolved` is the right layer (post-ER canonical view, not
+    raw bindings). `tuple_in([col], [(id1,), (id2,), …])` works for
+    single-key DataLoader; composite-key DataLoaders use the
+    multi-column form.
     """)
     return
 
@@ -926,22 +1030,24 @@ def _(engine, er_done, movie, pd, text):
     from knot.ast.expr import tuple_in
 
     _ = er_done
+    # Real resolver flow: collect canonical_ids from parent fields
+    # (here: a quick query for the top 3 most recent movies), then
+    # load them in ONE round-trip against the resolved layer.
+    with engine.begin() as _conn:
+        _ids = pd.read_sql_query(
+            text(
+                movie.resolved
+                    .order_by(movie.col.year, "desc")
+                    .limit(3)
+                    .select(movie.col.canonical_id)
+                    .sql()
+            ),
+            _conn,
+        )["canonical_id"].tolist()
     _q = (
-        movie.unresolved
-            .where(
-                tuple_in(
-                    [movie.bindings_col.source_name,
-                     movie.bindings_col.source_identifier],
-                    [("imdb", "tt0110912"),
-                     ("tmdb", "tm_kill"),
-                     ("imdb", "tt7131622")],
-                )
-            )
-            .select(
-                movie.bindings_col.source_name,
-                movie.bindings_col.source_identifier,
-                movie.col.title,
-            )
+        movie.resolved
+            .where(tuple_in([movie.col.canonical_id], [(_id,) for _id in _ids]))
+            .select(movie.col.canonical_id, movie.col.title, movie.col.year)
     )
     with engine.begin() as _conn:
         dataloader_batch = pd.read_sql_query(text(_q.sql()), _conn)
@@ -952,32 +1058,51 @@ def _(engine, er_done, movie, pd, text):
 @app.cell(hide_code=True)
 def _(mo):
     mo.md(r"""
-    ### 7g. Mutation `RETURNING` — atomic upsert + read
+    ### 7g. Mutation `RETURNING` — multi-row batch upsert
 
-    `binding.write_sql(returning=[...])` appends RETURNING so
-    a GraphQL mutation resolver gets the canonical row back
-    without a follow-up SELECT.
+    `binding.write_sql(returning=[...])` appends RETURNING so a
+    GraphQL `bulkUpsert` resolver gets every upserted row back in
+    ONE round-trip. The RETURNING list takes class slots only;
+    return `canonical_id` so the resolver can key results to the
+    requested entity. Returned-row order matches postgres scan
+    order, NOT input order. Same validate-then-write discipline as
+    §4.
     """)
     return
 
 
 @app.cell
-def _(er_done, imdb_movie_b, json, pg):
+def _(er_done, imdb_movie_b, json, pd, pg):
     _ = er_done
-    _new_movie = [{
-        "source_identifier": "tt_demo_returning",
-        "title": "Death Proof",
-        "year": 2007,
-        "director": "nm0000233",
-        "writer": "nm0000233",
-    }]
-    _sql = imdb_movie_b.write_sql(
-        returning=["canonical_id", "title", "year"]
-    )
-    with pg.cursor() as _cur:
-        _cur.execute(_sql, {"rows": json.dumps(_new_movie)})
-        returning_rows = _cur.fetchall()
-    returning_demo = f"RETURNING (one round-trip): `{returning_rows}`"
+    _new_movies = [
+        {"source_identifier": "tt_dp", "title": "Death Proof",
+         "year": 2007, "director": "nm0000233", "writer": "nm0000233"},
+        {"source_identifier": "tt_jb", "title": "Jackie Brown",
+         "year": 1997, "director": "nm0000233", "writer": "nm0000233"},
+        {"source_identifier": "tt_fdtd", "title": "From Dusk Till Dawn",
+         "year": 1996, "director": "nm0000233", "writer": "nm0000233"},
+    ]
+    # Same validate-then-write discipline as §4. Atomic via
+    # pg.transaction(); reject the whole batch on any violation.
+    with pg.transaction(), pg.cursor() as _cur:
+        _cur.execute(
+            imdb_movie_b.validate_rows_sql(),
+            {"rows": json.dumps(_new_movies)},
+        )
+        _violations = _cur.fetchall()
+        if _violations:
+            raise RuntimeError(
+                f"bulkUpsert rejected — {len(_violations)} violations"
+            )
+        _cur.execute(
+            imdb_movie_b.write_sql(
+                returning=["canonical_id", "title", "year"]
+            ),
+            {"rows": json.dumps(_new_movies)},
+        )
+        _returned = _cur.fetchall()
+        _cols = [d.name for d in _cur.description]
+    returning_demo = pd.DataFrame(_returned, columns=_cols)
     returning_demo
     return
 
