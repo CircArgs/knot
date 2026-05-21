@@ -350,27 +350,11 @@ def _spec_with_nested_virtual() -> tuple[Spec, object, object, object]:
     return spec, movie, directed_movie, recent_directed
 
 
-def test_virtual_of_virtual_from_clause_targets_parent_virtual():
-    """The nested virtual's FROM clause references the parent virtual's view,
-    not the concrete class's _resolved view."""
-    spec, _movie, _directed, _recent = _spec_with_nested_virtual()
-    stmts = emit_ddl(spec)
-    # Match on the header line so we don't confuse the body referencing _resolved.
-    recent_view = next(
-        s
-        for s in stmts
-        if s.split("\n", 1)[0].lower().startswith("create")
-        and "recentdirectedmovie" in s.split("\n", 1)[0].lower()
-    )
-    assert "FROM knot_data.directedmovie" in recent_view
-    # The FROM target should be the parent virtual, not _resolved.
-    from_target = recent_view.split("FROM", 1)[1].split("WHERE")[0].strip()
-    assert "_resolved" not in from_target
-
-
-def test_virtual_of_virtual_where_contains_only_own_definition():
-    """The nested virtual's WHERE only contains its own predicate.
-    The parent virtual's definition is NOT re-ANDed into the child."""
+def test_virtual_of_virtual_from_targets_concrete_root():
+    """The nested virtual's FROM clause references the concrete root's
+    _resolved view. Chaining FROM through the parent virtual's view
+    would put column refs out of scope, since refs compile against
+    the concrete root layer (movie_resolved.year, not directedmovie.year)."""
     spec, _movie, _directed, _recent = _spec_with_nested_virtual()
     stmts = emit_ddl(spec)
     recent_view = next(
@@ -379,12 +363,26 @@ def test_virtual_of_virtual_where_contains_only_own_definition():
         if s.split("\n", 1)[0].lower().startswith("create")
         and "recentdirectedmovie" in s.split("\n", 1)[0].lower()
     )
-    # The child's definition is year >= 2000; parent's is the EXISTS aggregate.
-    # Confirm year filter appears and EXISTS subquery is NOT in child WHERE.
+    assert "FROM knot_data.movie_resolved" in recent_view
+
+
+def test_virtual_of_virtual_where_combines_ancestor_predicates():
+    """The nested virtual's WHERE ANDs every ancestor's predicate
+    plus its own. Required for column refs to resolve against the
+    concrete root and for the row-set semantics to be correct."""
+    spec, _movie, _directed, _recent = _spec_with_nested_virtual()
+    stmts = emit_ddl(spec)
+    recent_view = next(
+        s
+        for s in stmts
+        if s.split("\n", 1)[0].lower().startswith("create")
+        and "recentdirectedmovie" in s.split("\n", 1)[0].lower()
+    )
     where_part = recent_view.split("WHERE", 1)[1]
+    # Child's own filter:
     assert "year" in where_part
-    # The parent virtual's correlated-EXISTS predicate should not be here.
-    assert "EXISTS" not in where_part
+    # Parent virtual's correlated-EXISTS predicate IS now ANDed in:
+    assert "EXISTS" in where_part
 
 
 def test_virtual_of_virtual_parent_emitted_before_child():
@@ -447,8 +445,11 @@ def test_three_level_virtual_chain():
     v3_idx = next(i for i, s in enumerate(virtual_views) if "knot_data.v3 AS" in s)
     assert v1_idx < v2_idx < v3_idx
 
-    # Verify FROM chain: V2 FROM v1, V3 FROM v2.
+    # FROM always targets the concrete root, not the parent virtual —
+    # ancestor predicates get ANDed into WHERE instead.
     v2_stmt = virtual_views[v2_idx]
-    assert "FROM knot_data.v1" in v2_stmt
+    assert "FROM knot_data.movie_resolved" in v2_stmt
     v3_stmt = virtual_views[v3_idx]
-    assert "FROM knot_data.v2" in v3_stmt
+    assert "FROM knot_data.movie_resolved" in v3_stmt
+    # V3's WHERE includes its own + v2's + v1's predicates.
+    assert v3_stmt.count("year") >= 3

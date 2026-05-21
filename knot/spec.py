@@ -629,7 +629,7 @@ class OntologyClass:
         self,
         *,
         slot: str | None = None,
-        schema: str = "knot_data",
+        schema: str | None = None,
         bindings_suffix: str = "_bindings",
         weight_table: str = "source_weight",
     ) -> str:
@@ -648,7 +648,7 @@ class OntologyClass:
             ``KeyError``.  When ``None``, emit for all non-identifier
             slots.
         schema
-            Postgres schema (default ``"knot_data"``).
+            Postgres schema. Defaults to the owning spec's schema.
         bindings_suffix
             Bindings table suffix (default ``"_bindings"``).
         weight_table
@@ -659,7 +659,7 @@ class OntologyClass:
         return emit_explain_winner_sql(
             self,
             slot=slot,
-            schema=schema,
+            schema=schema if schema is not None else self._require_spec().schema,
             bindings_suffix=bindings_suffix,
             weight_table=weight_table,
         )
@@ -727,6 +727,30 @@ class VirtualClass:
         )
         spec.classes[name] = vc
         return vc
+
+    def _combined_predicate(self) -> Expr:
+        """AND every ancestor virtual's predicate together — the same
+        WHERE body the DDL emits for this virtual's view."""
+        from knot.ast.expr import BoolOp
+
+        predicates: list[Expr] = []
+        cur: OntologyClass | VirtualClass = self
+        while isinstance(cur, VirtualClass):
+            predicates.append(cur.definition)
+            cur = cur.is_a
+        combined = predicates[0]
+        for p in predicates[1:]:
+            combined = BoolOp(op="AND", left=combined, right=p)
+        return combined
+
+    @property
+    def resolved(self) -> Query:
+        """Query the virtual class. Returns a Query against the
+        concrete root's resolved view filtered by this virtual's
+        combined predicate chain — same rows as the deployed virtual
+        view, expressed through the Query AST so it composes with
+        ``.where()`` / ``.order_by()`` / ``.select()`` / etc."""
+        return self.concrete_root().resolved.where(self._combined_predicate())
 
 
 # ---------------------------------------------------------------------------

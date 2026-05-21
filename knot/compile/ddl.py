@@ -299,24 +299,31 @@ def _virtual_depth(vc: VirtualClass) -> int:
 
 
 def _emit_view(vc: VirtualClass, *, schema: str, if_not_exists: bool) -> str:
-    # The concrete root class drives the ``this.<Name>`` binding for
-    # correlated aggregates — it flows unchanged through the nested
-    # SELECT * chain, so every level binds against the same outer row.
+    # FROM always targets the concrete root's resolved view; nested
+    # virtuals AND their full ancestor-predicate chain into the WHERE.
+    # Chaining FROM through nested virtual views would put column refs
+    # out of scope (``movie.col.year`` compiles to ``movie_resolved.year``
+    # — only valid when ``movie_resolved`` is the FROM relation).
     concrete_root = vc.concrete_root()
+    from_clause = f"{schema}.{concrete_root.name.lower()}_resolved"
 
-    # FROM targets the IMMEDIATE parent:
-    #   - OntologyClass parent → <parent>_resolved
-    #   - VirtualClass parent  → <parent_virtual_name> (the parent's own view)
-    if isinstance(vc.is_a, OntologyClass):
-        from_clause = f"{schema}.{vc.is_a.name.lower()}_resolved"
-    else:
-        from_clause = f"{schema}.{vc.is_a.name.lower()}"
+    # Walk the is_a chain up to (but not including) the concrete root,
+    # collecting each level's predicate. AND them together — order
+    # doesn't matter, AND is commutative.
+    _predicates = []
+    _cur: OntologyClass | VirtualClass = vc
+    while isinstance(_cur, VirtualClass):
+        _predicates.append(_cur.definition)
+        _cur = _cur.is_a
 
-    # WHERE contains ONLY this virtual's own definition.  The parent
-    # virtual's view already filters by its own definition, so we don't
-    # re-AND it here.
+    from knot.ast.expr import BoolOp
+
+    _combined = _predicates[0]
+    for _p in _predicates[1:]:
+        _combined = BoolOp(op="AND", left=_combined, right=_p)
+
     body_sql = compile_sql(
-        vc.definition,
+        _combined,
         schema=schema,
         layer=Layer.RESOLVED,
         outer_class=concrete_root.name,

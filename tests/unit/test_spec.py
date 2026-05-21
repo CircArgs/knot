@@ -493,3 +493,53 @@ def test_validate_rejects_virtual_is_a_cycle():
     object.__setattr__(v1, "is_a", v2)
     errs = spec._validation_errors()
     assert any("cycle" in e for e in errs)
+
+
+# ---------------------------------------------------------------------------
+# Virtual class .resolved + explain_winner facade schema default
+# ---------------------------------------------------------------------------
+
+
+def test_virtual_class_resolved_filters_by_combined_predicate():
+    """VirtualClass.resolved returns a Query equivalent to the concrete
+    root's resolved view filtered by the virtual's predicate chain."""
+    from knot import Spec, types
+
+    spec = Spec(identifier_slot_name="canonical_id", schema="vc_test")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    recent = movie.add_virtual("Recent", where=movie.col.year >= 2000)
+    sql = recent.resolved.sql()
+    assert "FROM vc_test.movie_resolved" in sql
+    assert "year >= 2000" in sql
+
+
+def test_virtual_of_virtual_resolved_ands_ancestor_predicates():
+    """A nested virtual's .resolved ANDs every ancestor predicate."""
+    from knot import Spec, types
+
+    spec = Spec(identifier_slot_name="canonical_id", schema="vc_test")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    movie.slot("runtime", types.INTEGER)
+    recent = movie.add_virtual("Recent", where=movie.col.year >= 2000)
+    short = recent.add_virtual("Short", where=movie.col.runtime < 90)
+    sql = short.resolved.sql()
+    assert "FROM vc_test.movie_resolved" in sql
+    # Both ancestor predicates ANDed in
+    assert "year >= 2000" in sql
+    assert "runtime < 90" in sql
+
+
+def test_explain_winner_facade_defaults_schema_from_spec():
+    """OntologyClass.explain_winner_sql() inherits schema from the
+    owning spec without an explicit kwarg."""
+    from knot import Spec, types
+
+    spec = Spec(identifier_slot_name="canonical_id", schema="my_schema")
+    movie = spec.add_class("Movie")
+    movie.slot("year", types.INTEGER)
+    spec.add_source("imdb").bind(movie)
+    sql = movie.explain_winner_sql(slot="year")
+    assert "my_schema.movie_bindings" in sql
+    assert "my_schema.source_weight" in sql
