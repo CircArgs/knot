@@ -29,6 +29,8 @@ import knot.spec.SourceBinding;
  */
 class WriteTest {
 
+    private static final WriteOptions DEFAULTS = WriteOptions.defaults();
+
     // -------------------------------------------------------------------------
     // Fixtures
     // -------------------------------------------------------------------------
@@ -137,7 +139,7 @@ class WriteTest {
     void writeSqlReturnsInsertWithOnConflict() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         assertThat(sql).contains("INSERT INTO");
         assertThat(sql).contains("ON CONFLICT");
     }
@@ -146,7 +148,7 @@ class WriteTest {
     void writeSqlTargetsBindingsTableAndBakesSource() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         assertThat(sql).contains("INSERT INTO knot_data.movie_bindings");
         assertThat(sql).contains("'imdb'");
         assertThat(sql).contains("jsonb_array_elements(%(rows)s::jsonb)");
@@ -156,7 +158,7 @@ class WriteTest {
     void writeSqlUsesPkConflictTarget() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         assertThat(sql).contains("ON CONFLICT (source_name, source_identifier) DO UPDATE SET");
     }
 
@@ -164,7 +166,7 @@ class WriteTest {
     void writeSqlPreservesCanonicalIdAndErMetadata() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         String setBlock = sql.split("ON CONFLICT", 2)[1];
         assertThat(setBlock).doesNotContain("canonical_id = EXCLUDED");
         assertThat(setBlock).doesNotContain("er_metadata = EXCLUDED");
@@ -174,7 +176,7 @@ class WriteTest {
     void writeSqlOverwritesNonIdentitySlots() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         String setBlock = sql.split("ON CONFLICT", 2)[1];
         assertThat(setBlock).contains("year = EXCLUDED.year");
         assertThat(setBlock).contains("name = EXCLUDED.name");
@@ -185,7 +187,7 @@ class WriteTest {
     void writeSqlIncludesRawPayloadColumn() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         assertThat(sql).contains("raw_payload)");
         assertThat(sql).contains("r AS __raw_payload");
         assertThat(sql).contains("raw.__raw_payload");
@@ -195,7 +197,7 @@ class WriteTest {
     void writeSqlUsesJsonbExtractionForPassthroughText() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         // name is a passthrough TEXT slot.
         assertThat(sql).contains("raw.name::text");
     }
@@ -204,7 +206,7 @@ class WriteTest {
     void writeSqlArrayGoesthroughUnnestRoundTrip() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         assertThat(sql).contains("jsonb_array_elements(raw.__raw_payload->'genres')");
     }
 
@@ -212,35 +214,26 @@ class WriteTest {
     void writeSqlDeterministicAcrossCalls() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        assertThat(Write.emitBindingWriteSql(b, null))
-                .isEqualTo(Write.emitBindingWriteSql(b, null));
+        assertThat(Write.emitBindingWriteSql(b, null, DEFAULTS))
+                .isEqualTo(Write.emitBindingWriteSql(b, null, DEFAULTS));
     }
 
     @Test
     void writeSqlSchemaAndSuffixKwargs() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null,
-                new WriteOptions("alt", "__s"));
+        var sql = Write.emitBindingWriteSql(b, null, new WriteOptions("alt", "__s"));
         assertThat(sql).contains("alt.movie__s");
         assertThat(sql).doesNotContain("knot_data.movie_bindings");
     }
 
     @Test
     void writeSqlApostropheInSourceNameEscaped() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
-        var movie = spec.addClass("Movie");
-        var src = spec.addSource("o_brien");
-        // Override the name to contain an apostrophe via the binding directly.
-        // In the Java port we construct the source with the apostrophe name directly.
-        // Use a fresh spec with a name that already has the apostrophe.
         var spec2 = Spec.builder().identifierSlotName("canonical_id").build();
-        var movie2 = spec2.addClass("Movie");
-        // Source names with apostrophes are accepted; binding bakes the literal.
-        // Simulate by grabbing the raw name from the emitted SQL.
+        spec2.addClass("Movie");
         var src2 = spec2.addSource("o'brien");
-        var b2 = src2.bind(movie2);
-        var sql = Write.emitBindingWriteSql(b2, null);
+        var b2 = src2.bind((OntologyClass) spec2.classes().get("Movie"));
+        var sql = Write.emitBindingWriteSql(b2, null, DEFAULTS);
         assertThat(sql).contains("'o''brien'");
     }
 
@@ -249,9 +242,8 @@ class WriteTest {
         var spec = Spec.builder().identifierSlotName("canonical_id").build();
         var abs = spec.addAbstractClass("A");
         var src = spec.addSource("s");
-        // Create binding manually since Source.bind() only handles concrete classes.
         var b = new SourceBinding(src, abs);
-        assertThatThrownBy(() -> Write.emitBindingWriteSql(b, null))
+        assertThatThrownBy(() -> Write.emitBindingWriteSql(b, null, DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("abstract");
     }
@@ -260,7 +252,7 @@ class WriteTest {
     void writeSqlEmitsNoDoBlock() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        assertThat(Write.emitBindingWriteSql(b, null)).doesNotContain("DO $$");
+        assertThat(Write.emitBindingWriteSql(b, null, DEFAULTS)).doesNotContain("DO $$");
     }
 
     // -------------------------------------------------------------------------
@@ -271,7 +263,7 @@ class WriteTest {
     void returningNullNoReturningClause() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, null);
+        var sql = Write.emitBindingWriteSql(b, null, DEFAULTS);
         assertThat(sql).doesNotContain("RETURNING");
     }
 
@@ -279,7 +271,7 @@ class WriteTest {
     void returningStarAppendsReturningStarAndSemicolon() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, "*", WriteOptions.defaults());
+        var sql = Write.emitBindingWriteSql(b, "*", DEFAULTS);
         assertThat(sql).contains("RETURNING *");
         assertThat(sql.strip()).endsWith(";");
     }
@@ -288,7 +280,7 @@ class WriteTest {
     void returningListAppendsNamedColumns() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitBindingWriteSql(b, List.of("year", "name"), WriteOptions.defaults());
+        var sql = Write.emitBindingWriteSql(b, List.of("year", "name"), DEFAULTS);
         assertThat(sql).contains("RETURNING year, name");
         assertThat(sql.strip()).endsWith(";");
     }
@@ -297,8 +289,7 @@ class WriteTest {
     void returningBadSlotThrowsIllegalArgument() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        assertThatThrownBy(() -> Write.emitBindingWriteSql(b, List.of("bogus_slot"),
-                WriteOptions.defaults()))
+        assertThatThrownBy(() -> Write.emitBindingWriteSql(b, List.of("bogus_slot"), DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("bogus_slot");
     }
@@ -311,7 +302,7 @@ class WriteTest {
     void validateRowsContainsRowsParameter() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("%(rows)s::jsonb");
     }
 
@@ -319,7 +310,7 @@ class WriteTest {
     void validateRowsOutputColumnsPresent() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         for (var col : List.of("row_index", "source_identifier", "violation_kind",
                 "slot_name", "detail", "payload")) {
             assertThat(sql).as("column '%s' missing", col).contains(col);
@@ -330,7 +321,7 @@ class WriteTest {
     void validateRowsMissingSourceIdentifierCheck() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("missing_source_identifier");
         assertThat(sql).contains("payload->>'source_identifier' IS NULL");
     }
@@ -339,7 +330,7 @@ class WriteTest {
     void validateRowsRequiredSlotMissingChecks() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("missing_required_slot");
         assertThat(sql).contains("'title'");
         assertThat(sql).contains("'year'");
@@ -349,7 +340,7 @@ class WriteTest {
     void validateRowsIntegerRegexCheck() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("'^-?[0-9]+$'");
         assertThat(sql).contains("'year'");
     }
@@ -358,7 +349,7 @@ class WriteTest {
     void validateRowsFloatRegexCheck() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("[0-9]+)");
     }
 
@@ -366,7 +357,7 @@ class WriteTest {
     void validateRowsVectorJsonbArrayLengthCheck() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("jsonb_array_length");
         assertThat(sql).contains("128");
         assertThat(sql).contains("jsonb_typeof");
@@ -379,7 +370,7 @@ class WriteTest {
         cls.slot("optional_year", Primitive.INTEGER, false, false, null);
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("missing_required_slot");
         // Still gets the integer type-coercion check.
         assertThat(sql).contains("'^-?[0-9]+$'");
@@ -392,7 +383,7 @@ class WriteTest {
         var cls = spec.addClass("Thing");
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("missing_source_identifier");
         assertThat(sql).doesNotContain("'canonical_id'");
     }
@@ -405,7 +396,7 @@ class WriteTest {
         var src = spec.addSource("imdb");
         var b = src.bind(cls);
         b.slot("runtime_minutes", "runtime", "(regexp_match(runtime, '[0-9]+'))[1]::int");
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("type_coercion_failed");
     }
 
@@ -417,7 +408,7 @@ class WriteTest {
         cls.slot("tags", new Array(Primitive.TEXT), false, false, null);
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("type_coercion_failed");
     }
 
@@ -430,7 +421,7 @@ class WriteTest {
         movie.slot("director", person);
         var src = spec.addSource("s");
         var b = src.bind(movie);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("type_coercion_failed");
     }
 
@@ -441,7 +432,7 @@ class WriteTest {
         cls.slot("active", Primitive.BOOLEAN, false, false, null);
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("type_coercion_failed");
         assertThat(sql).contains("'active'");
         assertThat(sql).containsIgnoringCase("true");
@@ -455,7 +446,7 @@ class WriteTest {
         cls.slot("release_date", Primitive.DATE, false, false, null);
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("type_coercion_failed");
         assertThat(sql).contains("'release_date'");
         assertThat(sql).contains("[0-9]{4}");
@@ -477,7 +468,7 @@ class WriteTest {
         var src = spec.addSource("imdb");
         var b = src.bind(cls);
         b.slot("year", "release_year");
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("release_year");
     }
 
@@ -485,7 +476,7 @@ class WriteTest {
     void validateRowsPayloadColumnInEveryBranch() {
         var spec = allTypesSpec();
         var b = allTypesBinding(spec);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         for (var branch : sql.split("UNION ALL")) {
             assertThat(branch).contains("payload");
         }
@@ -498,7 +489,7 @@ class WriteTest {
         cls.slot("status", new Enum(List.of("active", "archived")), false, false, null);
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("type_coercion_failed");
         assertThat(sql).contains("'status'");
         assertThat(sql).contains("'active'");
@@ -513,7 +504,7 @@ class WriteTest {
         cls.slot("label", Primitive.TEXT, false, false, null);
         var src = spec.addSource("s");
         var b = src.bind(cls);
-        var sql = Write.emitValidateRowsSql(b);
+        var sql = Write.emitValidateRowsSql(b, DEFAULTS);
         assertThat(sql).contains("missing_source_identifier");
         assertThat(sql).doesNotContain("missing_required_slot");
         assertThat(sql).doesNotContain("type_coercion_failed");
@@ -527,7 +518,7 @@ class WriteTest {
     void updateSlotBasicShape() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        var sql = Write.emitUpdateSlotSql(b, "title");
+        var sql = Write.emitUpdateSlotSql(b, "title", DEFAULTS);
         assertThat(sql).contains("UPDATE knot_data.movie_bindings AS b");
         assertThat(sql).contains("SET title = (r->>'title')::text");
         assertThat(sql).contains("FROM jsonb_array_elements(%(rows)s::jsonb) AS r");
@@ -539,7 +530,7 @@ class WriteTest {
     void updateSlotBakesSourceLiteral() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        var sql = Write.emitUpdateSlotSql(b, "title");
+        var sql = Write.emitUpdateSlotSql(b, "title", DEFAULTS);
         assertThat(sql).contains("'imdb'");
         assertThat(sql).doesNotContain("%(source_name)s");
     }
@@ -548,7 +539,7 @@ class WriteTest {
     void updateSlotVectorCast() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        var sql = Write.emitUpdateSlotSql(b, "title_embedding");
+        var sql = Write.emitUpdateSlotSql(b, "title_embedding", DEFAULTS);
         assertThat(sql).contains("SET title_embedding = (r->>'title_embedding')::vector(384)");
     }
 
@@ -556,7 +547,7 @@ class WriteTest {
     void updateSlotIntegerCast() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        var sql = Write.emitUpdateSlotSql(b, "year");
+        var sql = Write.emitUpdateSlotSql(b, "year", DEFAULTS);
         assertThat(sql).contains("SET year = (r->>'year')::integer");
     }
 
@@ -564,7 +555,7 @@ class WriteTest {
     void updateSlotArrayRoundTrip() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        var sql = Write.emitUpdateSlotSql(b, "genres");
+        var sql = Write.emitUpdateSlotSql(b, "genres", DEFAULTS);
         assertThat(sql).contains("ARRAY(SELECT (value #>> '{}')::text");
         assertThat(sql).contains("jsonb_array_elements(r->'genres')");
     }
@@ -573,7 +564,7 @@ class WriteTest {
     void updateSlotClassRefCastsToText() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        var sql = Write.emitUpdateSlotSql(b, "director");
+        var sql = Write.emitUpdateSlotSql(b, "director", DEFAULTS);
         assertThat(sql).contains("SET director = (r->>'director')::text");
     }
 
@@ -593,7 +584,7 @@ class WriteTest {
         movie.slot("title", Primitive.TEXT, true, false, null);
         var src = spec.addSource("o'brien");
         var b = src.bind(movie);
-        var sql = Write.emitUpdateSlotSql(b, "title");
+        var sql = Write.emitUpdateSlotSql(b, "title", DEFAULTS);
         assertThat(sql).contains("'o''brien'");
     }
 
@@ -601,7 +592,7 @@ class WriteTest {
     void updateSlotRejectsIdentifierSlot() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "canonical_id"))
+        assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "canonical_id", DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("identifier slot");
     }
@@ -610,7 +601,7 @@ class WriteTest {
     void updateSlotRejectsUnknownSlot() {
         var spec = kitchenSinkSpec();
         var b = kitchenSinkBinding(spec);
-        assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "not_a_slot"))
+        assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "not_a_slot", DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
@@ -620,7 +611,7 @@ class WriteTest {
         var abs = spec.addAbstractClass("A");
         var src = spec.addSource("s");
         var b = new SourceBinding(src, abs);
-        assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "any_slot"))
+        assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "any_slot", DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("abstract");
     }
@@ -633,7 +624,7 @@ class WriteTest {
     void retractSqlBasicShape() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitRetractSql(b);
+        var sql = Write.emitRetractSql(b, DEFAULTS);
         assertThat(sql).contains("DELETE FROM knot_data.movie_bindings");
         assertThat(sql).contains("WHERE canonical_id = %(canonical_id)s");
         assertThat(sql).contains("AND source_name = 'imdb'");
@@ -656,7 +647,7 @@ class WriteTest {
     void assignCanonicalSafeUpdateNullGuard() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("UPDATE knot_data.movie_bindings");
         assertThat(sql).contains("SET canonical_id = %(canonical_id)s");
         assertThat(sql).contains("AND canonical_id IS NULL");
@@ -666,7 +657,7 @@ class WriteTest {
     void assignCanonicalBakesSourceLiteral() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("source_name = 'imdb'");
         assertThat(sql).doesNotContain("%(source_name)s");
     }
@@ -675,7 +666,7 @@ class WriteTest {
     void assignCanonicalRuntimePlaceholders() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("%(canonical_id)s");
         assertThat(sql).contains("%(source_identifier)s");
         assertThat(sql).contains("%(er_metadata)s");
@@ -685,7 +676,7 @@ class WriteTest {
     void assignCanonicalErMetadataCoalesce() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)");
     }
 
@@ -701,7 +692,7 @@ class WriteTest {
     void assignCanonicalForwardTranslatesFkSlots() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("director = COALESCE(");
         assertThat(sql).contains("SELECT canonical_id FROM knot_data.person_bindings");
         assertThat(sql).contains("AND source_identifier = knot_data.movie_bindings.director");
@@ -712,7 +703,7 @@ class WriteTest {
     void assignCanonicalBackwardFanoutToReferrers() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("fanout_credit AS (");
         assertThat(sql).contains("UPDATE knot_data.credit_bindings");
         assertThat(sql).contains(
@@ -723,7 +714,7 @@ class WriteTest {
     void assignCanonicalFanoutGatedOnStamp() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).contains("WHERE EXISTS (SELECT 1 FROM stamp)");
     }
 
@@ -731,7 +722,7 @@ class WriteTest {
     void assignCanonicalFanoutScopedToSource() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         String fanout = sql.substring(sql.indexOf("fanout_credit AS ("));
         assertThat(fanout).contains("source_name = 'imdb'");
     }
@@ -740,7 +731,7 @@ class WriteTest {
     void assignCanonicalFanoutGroupedPerReferringClass() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Person");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         // Person is referenced by both Movie.director and Credit.person.
         assertThat(sql).contains("fanout_movie AS (");
         assertThat(sql).contains("fanout_credit AS (");
@@ -752,7 +743,7 @@ class WriteTest {
     void assignCanonicalNoRegisterCte() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("register AS");
         assertThat(sql).doesNotContain("INSERT INTO knot_data.movie ");
     }
@@ -761,7 +752,7 @@ class WriteTest {
     void assignCanonicalLeafClassNoFanout() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Credit");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("fanout_");
     }
 
@@ -769,7 +760,8 @@ class WriteTest {
     void assignCanonicalNoFkSlotsNoForwardTranslation() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Person");
-        var sql = Write.emitAssignCanonicalSql(b);
+        var sql = Write.emitAssignCanonicalSql(b, DEFAULTS);
+        // Person has no ClassRef slots — no subquery lookup into person_bindings for FK.
         assertThat(sql).doesNotContain("SELECT canonical_id FROM knot_data.person_bindings");
     }
 
@@ -781,7 +773,7 @@ class WriteTest {
     void assignCanonicalsSqlContainsAssignmentsPlaceholder() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).contains("%(assignments)s::jsonb");
     }
 
@@ -789,7 +781,7 @@ class WriteTest {
     void assignCanonicalsSqlContainsJsonbToRecordset() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).contains("jsonb_to_recordset");
         assertThat(sql).contains("AS a(canonical_id text, source_identifier text, er_metadata jsonb)");
     }
@@ -798,7 +790,7 @@ class WriteTest {
     void assignCanonicalsSqlStampFiltersCanonicalIdIsNull() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).contains("canonical_id IS NULL");
     }
 
@@ -806,7 +798,7 @@ class WriteTest {
     void assignCanonicalsSqlForwardFkTranslation() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Credit");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).contains("movie_bindings");
         assertThat(sql).contains("COALESCE");
     }
@@ -815,7 +807,7 @@ class WriteTest {
     void assignCanonicalsSqlNoForwardFkWhenNoClassRefSlots() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         // Movie has no ClassRef slots — stamp SET block should not contain LIMIT 1 lookups.
         assertThat(sql).doesNotContain("LIMIT 1");
     }
@@ -824,7 +816,7 @@ class WriteTest {
     void assignCanonicalsSqlBackwardFanoutPresent() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).contains("fanout_credit AS (");
         assertThat(sql).contains("credit_bindings");
     }
@@ -833,18 +825,16 @@ class WriteTest {
     void assignCanonicalsSqlNoFanoutWhenNoReferrers() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Credit");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("fanout_");
     }
 
     @Test
-    void assignCanonicalsSqlSourceNameLiteralInStampAndFanout() {
+    void assignCanonicalsSqlSourceNameLiteralAppearsAtLeastTwice() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitAssignCanonicalsSql(b);
+        var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
         assertThat(sql).contains("'imdb'");
-        long count = sql.chars().filter(c -> c == '\'').count();
-        // 'imdb' appears at least twice (stamp WHERE + fanout WHERE).
         assertThat(sql.split("source_name = 'imdb'").length - 1).isGreaterThanOrEqualTo(2);
     }
 
@@ -865,7 +855,7 @@ class WriteTest {
     void recanonicalizeBasicShape() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitRecanonicalizeSql(b);
+        var sql = Write.emitRecanonicalizeSql(b, DEFAULTS);
         assertThat(sql).contains("WITH old_state AS (");
         assertThat(sql).contains("stamp AS (");
         assertThat(sql).contains("UPDATE knot_data.movie_bindings");
@@ -877,7 +867,7 @@ class WriteTest {
     void recanonicalizeRuntimePlaceholders() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitRecanonicalizeSql(b);
+        var sql = Write.emitRecanonicalizeSql(b, DEFAULTS);
         assertThat(sql).contains("%(new_canonical_id)s");
         assertThat(sql).contains("%(source_identifier)s");
         assertThat(sql).contains("%(er_metadata)s");
@@ -889,7 +879,7 @@ class WriteTest {
     void recanonicalizeErMetadataCoalesce() {
         var spec = movieSpec();
         var b = movieBinding(spec);
-        var sql = Write.emitRecanonicalizeSql(b);
+        var sql = Write.emitRecanonicalizeSql(b, DEFAULTS);
         assertThat(sql).contains("er_metadata = COALESCE(%(er_metadata)s::jsonb, er_metadata)");
     }
 
@@ -897,7 +887,7 @@ class WriteTest {
     void recanonicalizeCascadesToReferrers() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitRecanonicalizeSql(b);
+        var sql = Write.emitRecanonicalizeSql(b, DEFAULTS);
         assertThat(sql).contains("cascade_credit_movie AS (");
         assertThat(sql).contains("UPDATE knot_data.credit_bindings");
         assertThat(sql).contains("SET movie = %(new_canonical_id)s");
@@ -908,7 +898,7 @@ class WriteTest {
     void recanonicalizeCascadeSourceAgnostic() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitRecanonicalizeSql(b);
+        var sql = Write.emitRecanonicalizeSql(b, DEFAULTS);
         String cascade = sql.substring(sql.indexOf("cascade_credit_movie"));
         assertThat(cascade).doesNotContain("source_name = 'imdb'");
     }
@@ -917,7 +907,7 @@ class WriteTest {
     void recanonicalizeNoRegisterCte() {
         var spec = movieCreditSpec();
         var b = bindingFor(spec, "Movie");
-        var sql = Write.emitRecanonicalizeSql(b);
+        var sql = Write.emitRecanonicalizeSql(b, DEFAULTS);
         assertThat(sql).doesNotContain("register AS");
         assertThat(sql).doesNotContain("INSERT INTO knot_data.movie ");
     }

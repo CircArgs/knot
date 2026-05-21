@@ -41,28 +41,9 @@ public final class Write {
      * preserved across re-ingests; every other slot + {@code raw_payload} gets
      * overwritten.
      *
-     * <p>Uses schema + suffix from the binding's owning spec (via
-     * {@code _requireSpec().schema()}).
-     *
-     * @param returning {@code null} — no RETURNING clause; {@code "*"} — {@code RETURNING *};
-     *                  any other non-null string — treated as a slot name list
-     *                  (comma-separated or single). Pass {@code null} for the common case.
-     */
-    public static String emitBindingWriteSql(SourceBinding b, String returning) {
-        var spec = b._requireSpec();
-        return emitBindingWriteSql(b, returning,
-                new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /**
-     * Full-form overload with explicit {@link WriteOptions}. The facade on
-     * {@link SourceBinding} delegates to the no-options overload; this overload
-     * is for tests that pass {@code schema} / {@code bindingsSuffix} explicitly.
-     *
      * @param returning  {@code null} — no RETURNING clause; {@code "*"} — RETURNING *;
      *                   {@code List<String>} of slot names — validated then emitted.
-     *                   Accepts either a plain {@code String} or a {@code List<String>}
-     *                   via the {@code Object returning} overload.
+     * @param opts       schema + bindings suffix options
      */
     public static String emitBindingWriteSql(SourceBinding b, Object returning, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
@@ -119,12 +100,6 @@ public final class Write {
      * <p>Output columns: {@code row_index}, {@code source_identifier},
      * {@code violation_kind}, {@code slot_name}, {@code detail}, {@code payload}.
      */
-    public static String emitValidateRowsSql(SourceBinding b) {
-        var spec = b._requireSpec();
-        return emitValidateRowsSql(b, new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /** Full-form overload accepting explicit {@link WriteOptions}. */
     public static String emitValidateRowsSql(SourceBinding b, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
         var cls = b.ontologyClass();
@@ -211,12 +186,6 @@ public final class Write {
      * @param slotName class slot name to update
      * @throws IllegalArgumentException if {@code slotName} is the identifier slot or unknown
      */
-    public static String emitUpdateSlotSql(SourceBinding b, String slotName) {
-        var spec = b._requireSpec();
-        return emitUpdateSlotSql(b, slotName, new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /** Full-form overload accepting explicit {@link WriteOptions}. */
     public static String emitUpdateSlotSql(SourceBinding b, String slotName, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
         var cls = b.ontologyClass();
@@ -242,12 +211,6 @@ public final class Write {
      * DELETE SQL template that retracts (deletes) one binding row. Two named placeholders —
      * {@code %(canonical_id)s} and {@code %(source_identifier)s}.
      */
-    public static String emitRetractSql(SourceBinding b) {
-        var spec = b._requireSpec();
-        return emitRetractSql(b, new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /** Full-form overload accepting explicit {@link WriteOptions}. */
     public static String emitRetractSql(SourceBinding b, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
         var ident = b.ontologyClass().identifierSlot();
@@ -269,12 +232,6 @@ public final class Write {
      * referencing class (grouped per class — one CTE per referencing CLASS, CASE WHEN
      * per FK slot, to avoid multiple-modifying-CTE undefined behavior in postgres).
      */
-    public static String emitAssignCanonicalSql(SourceBinding b) {
-        var spec = b._requireSpec();
-        return emitAssignCanonicalSql(b, new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /** Full-form overload accepting explicit {@link WriteOptions}. */
     public static String emitAssignCanonicalSql(SourceBinding b, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
         var cls = b.ontologyClass();
@@ -350,12 +307,6 @@ public final class Write {
      * source_identifier text, er_metadata jsonb)}. Fan-out CTEs use scalar subqueries
      * against the stamp CTE. Idempotency semantics identical to the singular form.
      */
-    public static String emitAssignCanonicalsSql(SourceBinding b) {
-        var spec = b._requireSpec();
-        return emitAssignCanonicalsSql(b, new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /** Full-form overload accepting explicit {@link WriteOptions}. */
     public static String emitAssignCanonicalsSql(SourceBinding b, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
         var cls = b.ontologyClass();
@@ -432,12 +383,6 @@ public final class Write {
      * {@code %(er_metadata)s}. Cascade rewrites every referencing class's FK column
      * (source-agnostic — canonical-ids are global).
      */
-    public static String emitRecanonicalizeSql(SourceBinding b) {
-        var spec = b._requireSpec();
-        return emitRecanonicalizeSql(b, new WriteOptions(spec.schema(), "_bindings"));
-    }
-
-    /** Full-form overload accepting explicit {@link WriteOptions}. */
     public static String emitRecanonicalizeSql(SourceBinding b, WriteOptions opts) {
         checkConcrete(b.ontologyClass());
         String identName = b.ontologyClass().identifierSlot().name();

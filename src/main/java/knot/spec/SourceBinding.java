@@ -140,8 +140,8 @@ public final class SourceBinding {
      * {@code "*"} returns all columns; a comma-separated list returns named columns.
      */
     public String writeSql(String returning) {
-        _requireSpec();
-        return Write.emitBindingWriteSql(this, returning);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitBindingWriteSql(this, returning, opts);
     }
 
     /**
@@ -149,8 +149,8 @@ public final class SourceBinding {
      * parameter as {@link #writeSql()} and returns a result set of violations.
      */
     public String validateRowsSql() {
-        _requireSpec();
-        return Write.emitValidateRowsSql(this);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitValidateRowsSql(this, opts);
     }
 
     /**
@@ -158,8 +158,8 @@ public final class SourceBinding {
      * placeholder — {@code %(rows)s::jsonb}.
      */
     public String updateSlotSql(String slotName) {
-        _requireSpec();
-        return Write.emitUpdateSlotSql(this, slotName);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitUpdateSlotSql(this, slotName, opts);
     }
 
     /**
@@ -167,8 +167,8 @@ public final class SourceBinding {
      * {@code %(canonical_id)s}, {@code %(source_identifier)s}.
      */
     public String retractSql() {
-        _requireSpec();
-        return Write.emitRetractSql(this);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitRetractSql(this, opts);
     }
 
     /**
@@ -177,8 +177,8 @@ public final class SourceBinding {
      * {@code %(er_metadata)s}.
      */
     public String assignCanonicalSql() {
-        _requireSpec();
-        return Write.emitAssignCanonicalSql(this);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitAssignCanonicalSql(this, opts);
     }
 
     /**
@@ -186,8 +186,8 @@ public final class SourceBinding {
      * round-trip. Single {@code %(assignments)s::jsonb} placeholder.
      */
     public String assignCanonicalsSql() {
-        _requireSpec();
-        return Write.emitAssignCanonicalsSql(this);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitAssignCanonicalsSql(this, opts);
     }
 
     /**
@@ -195,8 +195,8 @@ public final class SourceBinding {
      * {@code %(new_canonical_id)s}, {@code %(source_identifier)s}, {@code %(er_metadata)s}.
      */
     public String recanonicalizeSql() {
-        _requireSpec();
-        return Write.emitRecanonicalizeSql(this);
+        var opts = new knot.compile.WriteOptions(_requireSpec().schema(), "_bindings");
+        return Write.emitRecanonicalizeSql(this, opts);
     }
 
     // -------------------------------------------------------------------------
@@ -205,20 +205,17 @@ public final class SourceBinding {
 
     /** INSERT … ON CONFLICT UPDATE for one slot weight. Binds {@code %(slot_name)s}, {@code %(weight)s}. */
     public String upsertWeightSql() {
-        _requireSpec();
-        return Weight.emitUpsertWeightSql(this);
+        return Weight.emitUpsertWeightSql(this, _requireSpec().schema());
     }
 
     /** Bulk-set N weights in one statement. Binds {@code %(weights)s::jsonb} ({@code {slot_name: weight, …}}). */
     public String upsertWeightsSql() {
-        _requireSpec();
-        return Weight.emitUpsertWeightsSql(this);
+        return Weight.emitUpsertWeightsSql(this, _requireSpec().schema());
     }
 
     /** SELECT this binding's currently-stored weights — rows of {@code (slot_name, weight)}. */
     public String readWeightsSql() {
-        _requireSpec();
-        return Weight.emitReadWeightsSql(this);
+        return Weight.emitReadWeightsSql(this, _requireSpec().schema());
     }
 
     /**
@@ -227,8 +224,7 @@ public final class SourceBinding {
      * {@code slotName}.
      */
     public String deleteWeightSql(String slotName) {
-        _requireSpec();
-        return Weight.emitDeleteWeightSql(this, slotName);
+        return Weight.emitDeleteWeightSql(this, slotName, _requireSpec().schema());
     }
 
     // -------------------------------------------------------------------------
