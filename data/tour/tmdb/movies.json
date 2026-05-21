@@ -1,0 +1,7 @@
+[
+  {"source_identifier": "tm_pulp",  "title": "Pulp Fiction", "year": 1995, "director": "tp_tarantino", "writer": "tp_avary"},
+  {"source_identifier": "tm_res",   "title": "Reservoir Dogs", "year": 1992, "director": "tp_tarantino", "writer": "tp_tarantino"},
+  {"source_identifier": "tm_kill",  "title": "Kill Bill: Vol. 1", "year": 2003, "director": "tp_tarantino", "writer": "tp_tarantino"},
+  {"source_identifier": "tm_once",  "title": "Once Upon a Time in Hollywood", "year": 2019, "director": "tp_tarantino", "writer": "tp_tarantino"},
+  {"source_identifier": "tm_ingl",  "title": "Inglourious Basterds", "year": 2009, "director": "tp_tarantino", "writer": "tp_tarantino"}
+]

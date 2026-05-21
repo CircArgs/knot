@@ -1,0 +1,13 @@
+[
+  {"source_identifier": "cr_d_pulp",    "role": "director", "movie": "tt0110912", "person": "nm0000233"},
+  {"source_identifier": "cr_d_res",     "role": "director", "movie": "tt0105236", "person": "nm0000233"},
+  {"source_identifier": "cr_d_kill",    "role": "director", "movie": "tt0266697", "person": "nm0000233"},
+  {"source_identifier": "cr_d_once",    "role": "director", "movie": "tt7131622", "person": "nm0000233"},
+  {"source_identifier": "cr_d_ingl",    "role": "director", "movie": "tt0361748", "person": "nm0000233"},
+  {"source_identifier": "cr_a_pulp_t",  "role": "actor",    "movie": "tt0110912", "person": "nm0000237"},
+  {"source_identifier": "cr_a_pulp_th", "role": "actor",    "movie": "tt0110912", "person": "nm0000235"},
+  {"source_identifier": "cr_a_kill_th", "role": "actor",    "movie": "tt0266697", "person": "nm0000235"},
+  {"source_identifier": "cr_a_once_p",  "role": "actor",    "movie": "tt7131622", "person": "nm0000093"},
+  {"source_identifier": "cr_a_ingl_p",  "role": "actor",    "movie": "tt0361748", "person": "nm0000093"},
+  {"source_identifier": "cr_w_pulp",    "role": "writer",   "movie": "tt0110912", "person": "nm0000812"}
+]

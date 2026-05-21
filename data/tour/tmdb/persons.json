@@ -1,0 +1,7 @@
+[
+  {"source_identifier": "tp_tarantino", "name": "Quentin Tarantino", "birth_country": "USA"},
+  {"source_identifier": "tp_travolta",  "name": "John Travolta", "birth_country": "USA"},
+  {"source_identifier": "tp_thurman",   "name": "Uma Thurman", "birth_country": "USA"},
+  {"source_identifier": "tp_pitt",      "name": "Brad Pitt", "birth_country": "USA"},
+  {"source_identifier": "tp_avary",     "name": "Roger Avary", "birth_country": "Canada"}
+]
