@@ -122,8 +122,13 @@ def _(SCHEMA):
         types.ENUM("director", "actor", "writer", "producer"),
         required=True,
     )
-    credit.slot("movie", movie)
-    credit.slot("person", person)
+    # Both FK slots are required — a Credit with no movie or no
+    # person is meaningless, and required=True closes a NULL edge
+    # case in the bidirectional consistency constraints below
+    # (`credit.person != NULL` is UNKNOWN in three-valued logic,
+    # which would let drift slip past `.none()`).
+    credit.slot("movie", movie, required=True)
+    credit.slot("person", person, required=True)
 
     # ---- sources + bindings (implicit passthrough mappings) --------------
     imdb_src = spec.add_source("imdb")
@@ -168,16 +173,21 @@ def _(SCHEMA):
         ).any(),
     )
     # Reverse consistency: when a Credit(role='director') exists for
-    # a Movie, Movie.director must equal Credit.person. Without this,
-    # a movie can have a director credit but no Movie.director (or
-    # the wrong one) — the denorm rots silently. Same pattern for
-    # writer.
+    # a Movie, Movie.director must equal Credit.person. NULL-safe:
+    # the inner disjunct `movie.col.director.is_null() | (... != ...)`
+    # short-circuits when director IS NULL (which IS a drift case —
+    # a director credit exists but Movie.director is unset). Without
+    # the disjunct, `person != NULL` would be UNKNOWN and `.none()`
+    # would silently let that exact drift case pass.
     movie.add_constraint(
         "credit_director_matches_movie",
         body=(
             (credit.col.movie == this.Movie)
             & (credit.col.role == "director")
-            & (credit.col.person != movie.col.director)
+            & (
+                movie.col.director.is_null()
+                | (credit.col.person != movie.col.director)
+            )
         ).none(),
     )
     movie.add_constraint(
@@ -194,7 +204,10 @@ def _(SCHEMA):
         body=(
             (credit.col.movie == this.Movie)
             & (credit.col.role == "writer")
-            & (credit.col.person != movie.col.writer)
+            & (
+                movie.col.writer.is_null()
+                | (credit.col.person != movie.col.writer)
+            )
         ).none(),
     )
 
@@ -284,10 +297,10 @@ def _(deployed, json, pg, spec):
     # Bulk weight upsert — ONE statement per binding using
     # `binding.upsert_weights_sql()` (plural) + a `{slot: weight}`
     # jsonb. At 50 sources × 20 slots that's 50 round-trips instead
-    # of 1000. Read-before-write would gate against clobbering
-    # operator tuning (CLAUDE.md "INSERT-only" posture); this demo
-    # always starts from a fresh schema so a straight upsert is
-    # correct here.
+    # of 1000. Production deploys use `spec.emit_weight_seed()` (an
+    # INSERT-only ON CONFLICT DO NOTHING form) so a re-deploy never
+    # clobbers operator tuning; this demo always starts from a
+    # fresh schema so a straight upsert is correct here.
     _per_source_default = {"imdb": 0.85, "tmdb": 0.95}
     # Atomic: pg.transaction() opens a transaction block even on an
     # autocommit=True connection. Raw BEGIN/COMMIT via cursor is a
@@ -584,14 +597,16 @@ def _(embeddings_done, engine, imdb_src, json, movie, pd, text, tmdb_src):
         _under_threshold = _raw[_raw["distance"] > _MOVIE_DISTANCE_MAX].assign(
             reject_reason="distance > threshold"
         )
-        _ok = _raw[_raw["distance"] <= _MOVIE_DISTANCE_MAX]
-        _ok = _ok.sort_values("distance").drop_duplicates("imdb_id", keep="first")
-        _collisions = _raw[
-            _raw["distance"] <= _MOVIE_DISTANCE_MAX
-        ].assign(_rank=lambda d: d.groupby("imdb_id").cumcount())
-        _collisions = _collisions[_collisions["_rank"] > 0].drop(
-            columns="_rank"
-        ).assign(reject_reason="m:1 collision (kept closer pair)")
+        # Sort BEFORE drop_duplicates so "kept first" actually means
+        # "closer pair" (don't rely on _raw being pre-sorted).
+        _ok_sorted = (
+            _raw[_raw["distance"] <= _MOVIE_DISTANCE_MAX]
+            .sort_values("distance", ascending=True)
+        )
+        _ok = _ok_sorted.drop_duplicates("imdb_id", keep="first")
+        _collisions = _ok_sorted[
+            ~_ok_sorted.index.isin(_ok.index)
+        ].assign(reject_reason="m:1 collision (kept closer pair)")
         movie_candidates_df = _ok.reset_index(drop=True)
         movie_rejected_df = pd.concat(
             [_under_threshold, _collisions], ignore_index=True
@@ -1102,7 +1117,13 @@ def _(er_done, imdb_movie_b, json, pd, pg):
         )
         _returned = _cur.fetchall()
         _cols = [d.name for d in _cur.description]
-    returning_demo = pd.DataFrame(_returned, columns=_cols)
+    # Sort by canonical_id to visually anchor the "key by
+    # canonical_id, returned-order ≠ input-order" point above.
+    returning_demo = (
+        pd.DataFrame(_returned, columns=_cols)
+        .sort_values("canonical_id")
+        .reset_index(drop=True)
+    )
     returning_demo
     return
 
