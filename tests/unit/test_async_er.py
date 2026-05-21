@@ -157,13 +157,16 @@ def test_assign_canonical_forward_translates_fk_slots():
 def test_assign_canonical_backward_fanout_to_referrers():
     """Stamping a canonical on Movie fans out to every class that
     holds an FK to Movie (Credit.movie here), rewriting the FK column
-    in-place from source-id to the new canonical-id."""
+    in-place from source-id to the new canonical-id. Fan-out CTEs
+    are grouped per referencing CLASS to avoid multiple modifying
+    CTEs touching the same row (postgres undefined behavior)."""
     _, bindings = _movie_credit_spec()
     sql = emit_assign_canonical_sql(bindings["Movie"])
-    assert "fanout_credit_movie AS (" in sql
+    assert "fanout_credit AS (" in sql
     assert "UPDATE knot_data.credit_bindings" in sql
-    assert "SET movie = %(canonical_id)s" in sql
-    assert "AND movie = %(source_identifier)s" in sql
+    # Per-column CASE rewrites only the matching column.
+    assert "movie = CASE WHEN movie = %(source_identifier)s THEN %(canonical_id)s" in sql
+    assert "movie = %(source_identifier)s" in sql
 
 
 def test_assign_canonical_fanout_gated_on_stamp():
@@ -181,18 +184,21 @@ def test_assign_canonical_fanout_scopes_to_source():
     so we only rewrite imdb-scoped referencing rows."""
     _, bindings = _movie_credit_spec()
     sql = emit_assign_canonical_sql(bindings["Movie"])
-    fanout = sql[sql.index("fanout_credit_movie") :]
+    fanout = sql[sql.index("fanout_credit AS (") :]
     assert "source_name = 'imdb'" in fanout
 
 
-def test_assign_canonical_fanout_per_referrer_slot():
-    """One fanout CTE per (referencing_class, fk_slot) pair. Person
-    has two referrers — Movie.director and Credit.person — so
-    stamping a Person produces two fanout CTEs."""
+def test_assign_canonical_fanout_per_referrer_class():
+    """One fanout CTE per referencing CLASS — same-class FK slots get
+    combined into one UPDATE with multiple SET columns. Person's
+    referrers are Movie.director + Credit.person → two CTEs (one
+    per class)."""
     _, bindings = _movie_credit_spec()
     sql = emit_assign_canonical_sql(bindings["Person"])
-    assert "fanout_movie_director AS (" in sql
-    assert "fanout_credit_person AS (" in sql
+    assert "fanout_movie AS (" in sql
+    assert "fanout_credit AS (" in sql
+    movie_fanout = sql[sql.index("fanout_movie AS (") :]
+    assert "director = CASE WHEN director = %(source_identifier)s" in movie_fanout
 
 
 def test_assign_canonical_does_not_register_in_canonical_table():

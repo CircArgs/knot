@@ -639,17 +639,41 @@ def emit_assign_canonical_sql(
     # stamp UPDATE actually firing — re-running assign_canonical when
     # the row was already stamped is a strict no-op, never a force-
     # fanout that could corrupt existing canonical-id values.
-    fanout_ctes: list[str] = []
+    # Backward fan-out — group referrers by class so multiple FK
+    # columns on the same referencing class (e.g., Movie.director +
+    # Movie.writer both → Person) update in ONE CTE. Two modifying
+    # CTEs that touch the same row produce undefined behavior in
+    # postgres ("each WHERE clause sees a stable snapshot").
+    # OntologyClass is an unhashable mutable dataclass; key by name +
+    # remember the first instance so we can resolve the table name.
+    by_ref_cls: dict = {}
     for ref_cls, ref_slot in cls.referrers:
+        entry = by_ref_cls.setdefault(ref_cls.name, (ref_cls, []))
+        entry[1].append(ref_slot)
+
+    fanout_ctes: list[str] = []
+    for ref_cls, ref_slots in by_ref_cls.values():
         ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
-        cte_name = f"fanout_{ref_cls.name.lower()}_{ref_slot.name}"
+        cte_name = f"fanout_{ref_cls.name.lower()}"
+        _sets = []
+        _wheres = []
+        for ref_slot in ref_slots:
+            # Per-column CASE: rewrite only when this column held the
+            # just-stamped source_identifier; otherwise preserve.
+            _sets.append(
+                f"{ref_slot.name} = CASE WHEN {ref_slot.name} = %(source_identifier)s "
+                f"THEN %(canonical_id)s ELSE {ref_slot.name} END"
+            )
+            _wheres.append(f"{ref_slot.name} = %(source_identifier)s")
+        set_clause = ",\n      ".join(_sets)
+        where_clause = " OR ".join(_wheres)
         fanout_ctes.append(
             f"{cte_name} AS (\n"
             f"  UPDATE {ref_table}\n"
-            f"  SET {ref_slot.name} = %(canonical_id)s\n"
+            f"  SET {set_clause}\n"
             f"  WHERE EXISTS (SELECT 1 FROM stamp)\n"
             f"    AND source_name = {source_literal}\n"
-            f"    AND {ref_slot.name} = %(source_identifier)s\n"
+            f"    AND ({where_clause})\n"
             f")"
         )
 
@@ -731,20 +755,44 @@ def emit_assign_canonicals_sql(
 
     set_block = ",\n    ".join(set_clauses)
 
-    # Backward fan-out — one CTE per (referencing_class, fk_slot).
-    # Gated on EXISTS (SELECT 1 FROM stamp WHERE source_identifier = r.source_identifier)
-    # per-row so a re-run on already-stamped rows never force-rewrites.
-    fanout_ctes: list[str] = []
+    # Backward fan-out — group by referring class so multiple FK
+    # columns on the SAME referencing class (e.g. Movie.director +
+    # Movie.writer both → Person) update in ONE CTE. Multiple
+    # modifying CTEs touching the same row produces undefined
+    # behavior in postgres.
+    # OntologyClass is an unhashable mutable dataclass; key by name +
+    # remember the first instance so we can resolve the table name.
+    by_ref_cls: dict = {}
     for ref_cls, ref_slot in cls.referrers:
+        entry = by_ref_cls.setdefault(ref_cls.name, (ref_cls, []))
+        entry[1].append(ref_slot)
+
+    fanout_ctes: list[str] = []
+    for ref_cls, ref_slots in by_ref_cls.values():
         ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
-        cte_name = f"fanout_{ref_cls.name.lower()}_{ref_slot.name}"
+        cte_name = f"fanout_{ref_cls.name.lower()}"
+        _sets = []
+        _wheres = []
+        for ref_slot in ref_slots:
+            # Scalar subquery against the stamp CTE: rewrite each FK
+            # column iff its current value appears in stamp; otherwise
+            # preserve via COALESCE.
+            _sets.append(
+                f"{ref_slot.name} = COALESCE("
+                f"(SELECT canonical_id FROM stamp WHERE source_identifier = r.{ref_slot.name}), "
+                f"r.{ref_slot.name})"
+            )
+            _wheres.append(
+                f"EXISTS (SELECT 1 FROM stamp WHERE source_identifier = r.{ref_slot.name})"
+            )
+        set_clause = ",\n      ".join(_sets)
+        where_clause = " OR ".join(_wheres)
         fanout_ctes.append(
             f"{cte_name} AS (\n"
             f"  UPDATE {ref_table} AS r\n"
-            f"  SET {ref_slot.name} = s.canonical_id\n"
-            f"  FROM stamp AS s\n"
+            f"  SET {set_clause}\n"
             f"  WHERE r.source_name = {source_literal}\n"
-            f"    AND r.{ref_slot.name} = s.source_identifier\n"
+            f"    AND ({where_clause})\n"
             f")"
         )
 

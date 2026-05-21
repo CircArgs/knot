@@ -276,11 +276,21 @@ def _():
     # Sample imdb batch — 5 movies, but one row is deliberately broken
     # (no source_identifier) to trigger Marcus's bucketing path.
     imdb_movie_rows = [
-        {"source_identifier": "tt0110912", "title": "Pulp Fiction", "year": 1994},
-        {"source_identifier": "tt0105236", "title": "Reservoir Dogs", "year": 1992},
-        {"source_identifier": "tt0266697", "title": "Kill Bill: Vol. 1", "year": 2003},
-        {"source_identifier": "tt7131622", "title": "Once Upon a Time in Hollywood", "year": 2019},
-        {"source_identifier": "tt0361748", "title": "Inglourious Basterds", "year": 2009},
+        # director + writer FKs hold imdb_ids pre-ER; ER translates
+        # them to canonical_ids during assign_canonicals_sql. Pulp
+        # Fiction has co-writer Avary — the same-target JOIN demo
+        # (Movie.director + Movie.writer both → Person) needs both
+        # FKs populated to return a non-trivial row.
+        {"source_identifier": "tt0110912", "title": "Pulp Fiction", "year": 1994,
+         "director": "nm0000233", "writer": "nm0000812"},
+        {"source_identifier": "tt0105236", "title": "Reservoir Dogs", "year": 1992,
+         "director": "nm0000233", "writer": "nm0000233"},
+        {"source_identifier": "tt0266697", "title": "Kill Bill: Vol. 1", "year": 2003,
+         "director": "nm0000233", "writer": "nm0000233"},
+        {"source_identifier": "tt7131622", "title": "Once Upon a Time in Hollywood",
+         "year": 2019, "director": "nm0000233", "writer": "nm0000233"},
+        {"source_identifier": "tt0361748", "title": "Inglourious Basterds", "year": 2009,
+         "director": "nm0000233", "writer": "nm0000233"},
         # The bad row — no source_identifier
         {"title": "Mystery Movie", "year": 9999},
     ]
@@ -434,11 +444,16 @@ def _(imdb_person_b, json, pg, tmdb_movie_b, tmdb_person_b):
     # tmdb publishes the same entities with its own ids. Note the
     # deliberately wrong year for Pulp Fiction — tmdb says 1995.
     tmdb_movies = [
-        {"source_identifier": "tm_pulp",  "title": "Pulp Fiction", "year": 1995},  # wrong!
-        {"source_identifier": "tm_res",   "title": "Reservoir Dogs", "year": 1992},
-        {"source_identifier": "tm_kill",  "title": "Kill Bill: Vol. 1", "year": 2003},
-        {"source_identifier": "tm_once",  "title": "Once Upon a Time in Hollywood", "year": 2019},
-        {"source_identifier": "tm_ingl",  "title": "Inglourious Basterds", "year": 2009},
+        {"source_identifier": "tm_pulp",  "title": "Pulp Fiction", "year": 1995,  # wrong year!
+         "director": "tp_tarantino", "writer": "tp_avary"},
+        {"source_identifier": "tm_res",   "title": "Reservoir Dogs", "year": 1992,
+         "director": "tp_tarantino", "writer": "tp_tarantino"},
+        {"source_identifier": "tm_kill",  "title": "Kill Bill: Vol. 1", "year": 2003,
+         "director": "tp_tarantino", "writer": "tp_tarantino"},
+        {"source_identifier": "tm_once",  "title": "Once Upon a Time in Hollywood",
+         "year": 2019, "director": "tp_tarantino", "writer": "tp_tarantino"},
+        {"source_identifier": "tm_ingl",  "title": "Inglourious Basterds", "year": 2009,
+         "director": "tp_tarantino", "writer": "tp_tarantino"},
     ]
     tmdb_persons = [
         {"source_identifier": "tp_tarantino", "name": "Quentin Tarantino", "birth_country": "USA"},
@@ -673,11 +688,10 @@ def _(er_done, imdb_credit_b, json, pg):
             {"assignments": json.dumps(_credit_assigns)},
         )
 
-    # Also need movie/writer FK on Movie itself populated. assign_canonicals
-    # already did forward FK translation; we need to set Movie.writer
-    # for Pulp Fiction = Avary's canonical_id. This goes through a
-    # follow-up write_sql with the existing imdb_id, but with director
-    # + writer populated correctly. Easier: a direct slot update.
+    # Movie.director + Movie.writer FK columns were populated at
+    # ingest time with imdb_ids; the prior assign_canonicals_sql
+    # calls forward-translated them to canonical_ids. No follow-up
+    # needed — Alex's JOIN aliasing demo reads them directly.
     full_er = True
     return (full_er,)
 
@@ -873,27 +887,27 @@ def _(engine, movie, pd, redeploy_done, text):
             )
     )
     _sql = _q.sql()
-    print("emitted SQL:")
+    print("emitted SQL — note the two distinct aliases (movie_director, movie_writer):")
     print(_sql)
     print()
     with engine.begin() as _conn:
         same_target_join = pd.read_sql_query(text(_sql), _conn)
+    # Both director.name and writer.name come back as 'name' — rename
+    # by position so marimo can render the DataFrame.
+    same_target_join.columns = ["title", "director_name", "writer_name"]
     same_target_join
     return
 
 
 @app.cell
 def _(engine, movie, pd, redeploy_done, text):
-    # 3. Composite-key DataLoader — tuple_in for batched (a, b)
-    # lookups. Useful when the host has a list of (source, source_id)
-    # pairs from multiple GraphQL parent fields.
+    # 3. Composite-key DataLoader — tuple_in for batched (source, id)
+    # lookups across multiple GraphQL parent fields in one query.
     from knot.ast.expr import tuple_in
 
     _ = redeploy_done
     _q = (
-        movie.from_source.__self__  # placeholder — see below
-        if False else
-        movie.unresolved
+        movie.unresolved  # bindings layer, lets us project both source_name + source_identifier
             .where(tuple_in(
                 [movie.bindings_col.source_name, movie.bindings_col.source_identifier],
                 [("imdb", "tt0110912"), ("tmdb", "tm_kill"), ("imdb", "tt7131622")],

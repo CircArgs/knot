@@ -106,7 +106,8 @@ def test_backward_fanout_cte_present_for_referrer():
     _, b_movie, _ = _make_spec()
     sql = emit_assign_canonicals_sql(b_movie)
     # Credit.movie → Movie, so stamping Movie must fan-out into credit_bindings.
-    assert "fanout_credit_movie" in sql
+    # Fan-out CTEs are grouped per referencing class.
+    assert "fanout_credit AS (" in sql
     assert "credit_bindings" in sql
 
 
