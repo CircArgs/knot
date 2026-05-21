@@ -193,7 +193,7 @@ class SpecTest {
                 new knot.ast.expr.Literal(1888)));
         // Second: bypass builder, inject directly.
         spec.registerConstraint(new Constraint("year_sane", movie,
-                knot.ast.expr.Raw.of("1=1"), Severity.ERROR, null));
+                new knot.ast.expr.Raw("1=1"), Severity.ERROR, null));
         var errs = spec._validationErrors();
         assertThat(errs).anyMatch(e -> e.contains("duplicate constraint"));
     }
@@ -249,8 +249,8 @@ class SpecTest {
     void validateVirtualIsACycleFlagged() {
         var spec = new Spec("canonical_id");
         var movie = spec.addClass("Movie");
-        var v1 = movie.addVirtual("V1", knot.ast.expr.Raw.of("1=1"));
-        var v2 = v1.addVirtual("V2", knot.ast.expr.Raw.of("1=1"));
+        var v1 = movie.addVirtual("V1", new knot.ast.expr.Raw("1=1"));
+        var v2 = v1.addVirtual("V2", new knot.ast.expr.Raw("1=1"));
         // Force cycle: V1.is_a = V2 (V1 → V2 → V1)
         // VirtualClass is final with no setter; use the static helper directly.
         // We test _virtualInCycle in isolation instead.
@@ -267,7 +267,7 @@ class SpecTest {
         var spec = new Spec("canonical_id");
         var title = spec.addClass("Title", ClassKind.ABSTRACT, null, null, null);
         var movie = spec.addClass("Movie", ClassKind.CONCRETE, title, null, null);
-        movie.addVirtual("DirectedMovie", knot.ast.expr.Raw.of("1=1"));
+        movie.addVirtual("DirectedMovie", new knot.ast.expr.Raw("1=1"));
         var concrete = spec.concreteClasses();
         assertThat(concrete).containsExactly(movie);
     }
@@ -276,7 +276,7 @@ class SpecTest {
     void virtualClassesReturnVirtuals() {
         var spec = new Spec("canonical_id");
         var movie = spec.addClass("Movie");
-        var vc = movie.addVirtual("DirectedMovie", knot.ast.expr.Raw.of("1=1"));
+        var vc = movie.addVirtual("DirectedMovie", new knot.ast.expr.Raw("1=1"));
         assertThat(spec.virtualClasses()).containsExactly(vc);
     }
 

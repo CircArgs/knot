@@ -59,9 +59,10 @@ class ExplainTest {
         movie.addVirtual("DirectedMovie",
                 new Raw("EXISTS (SELECT 1 FROM credit WHERE role = 'director')"));
 
-        spec.addSource("imdb").bind(movie);
-        spec.addSource("imdb").bind(person);
-        spec.addSource("imdb").bind(credit);
+        var imdb = spec.addSource("imdb");
+        imdb.bind(movie);
+        imdb.bind(person);
+        imdb.bind(credit);
 
         return spec;
     }

@@ -49,10 +49,12 @@ class ResolverTest {
         movie.addVirtual("DirectedMovie",
                 new Raw("EXISTS (SELECT 1 FROM credit WHERE role = 'director')"));
 
-        spec.addSource("imdb").bind(movie);
-        spec.addSource("tmdb").bind(movie);
-        spec.addSource("imdb").bind(person);
-        spec.addSource("imdb").bind(credit);
+        var imdb = spec.addSource("imdb");
+        var tmdb = spec.addSource("tmdb");
+        imdb.bind(movie);
+        tmdb.bind(movie);
+        imdb.bind(person);
+        imdb.bind(credit);
 
         return spec;
     }

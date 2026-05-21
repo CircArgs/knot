@@ -11,6 +11,7 @@ import knot.ast.types.Array;
 import knot.ast.types.Enum;
 import knot.ast.types.Primitive;
 import knot.ast.types.Vector;
+import knot.spec.ClassKind;
 import knot.spec.OntologyClass;
 import knot.spec.Spec;
 import knot.spec.SourceBinding;
@@ -37,7 +38,7 @@ class WriteTest {
 
     /** Basic movie spec: Movie + Person + one imdb binding. Mirrors Python movie_spec fixture. */
     private static Spec movieSpec() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var person = spec.addClass("Person");
         person.slot("name", Primitive.TEXT, true, false, null);
 
@@ -56,13 +57,13 @@ class WriteTest {
     /** imdb_movie binding from movieSpec. */
     private static SourceBinding movieBinding(Spec spec) {
         var movie = (OntologyClass) spec.classes().get("Movie");
-        var imdb = spec.sources().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
+        var imdb = spec.sources().values().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
         return movie.bindingFor(imdb);
     }
 
     /** Kitchen-sink spec with every interesting slot type for update_slot tests. */
     private static Spec kitchenSinkSpec() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var person = spec.addClass("Person");
         person.slot("name", Primitive.TEXT, true, false, null);
         var movie = spec.addClass("Movie");
@@ -79,13 +80,13 @@ class WriteTest {
 
     private static SourceBinding kitchenSinkBinding(Spec spec) {
         var movie = (OntologyClass) spec.classes().get("Movie");
-        var imdb = spec.sources().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
+        var imdb = spec.sources().values().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
         return movie.bindingFor(imdb);
     }
 
     /** Spec with all primitive types + vector for validate_rows tests. */
     private static Spec allTypesSpec() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var movie = spec.addClass("Movie");
         movie.slot("title", Primitive.TEXT, true, false, null);
         movie.slot("year", Primitive.INTEGER, true, false, null);
@@ -102,13 +103,13 @@ class WriteTest {
 
     private static SourceBinding allTypesBinding(Spec spec) {
         var movie = (OntologyClass) spec.classes().get("Movie");
-        var imdb = spec.sources().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
+        var imdb = spec.sources().values().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
         return movie.bindingFor(imdb);
     }
 
     /** 3-class spec: Person, Movie (FK director → Person), Credit (FK movie + person). */
     private static Spec movieCreditSpec() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var person = spec.addClass("Person");
         person.slot("name", Primitive.TEXT, true, false, null);
         var movie = spec.addClass("Movie");
@@ -127,7 +128,7 @@ class WriteTest {
 
     private static SourceBinding bindingFor(Spec spec, String className) {
         var cls = (OntologyClass) spec.classes().get(className);
-        var imdb = spec.sources().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
+        var imdb = spec.sources().values().stream().filter(s -> s.name().equals("imdb")).findFirst().orElseThrow();
         return cls.bindingFor(imdb);
     }
 
@@ -227,22 +228,17 @@ class WriteTest {
         assertThat(sql).doesNotContain("knot_data.movie_bindings");
     }
 
-    @Test
-    void writeSqlApostropheInSourceNameEscaped() {
-        var spec2 = Spec.builder().identifierSlotName("canonical_id").build();
-        spec2.addClass("Movie");
-        var src2 = spec2.addSource("o'brien");
-        var b2 = src2.bind((OntologyClass) spec2.classes().get("Movie"));
-        var sql = Write.emitBindingWriteSql(b2, null, DEFAULTS);
-        assertThat(sql).contains("'o''brien'");
-    }
+    // writeSqlApostropheInSourceNameEscaped deleted: the Java port validates source names
+    // against ^[A-Za-z_][A-Za-z0-9_]*$ — apostrophes in source names are disallowed,
+    // so this behavior cannot be exercised in the Java port.
+
 
     @Test
     void writeSqlAbstractClassRejected() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
-        var abs = spec.addAbstractClass("A");
+        var spec = new Spec("canonical_id");
+        var abs = spec.addClass("A", ClassKind.ABSTRACT, null, null, null);
         var src = spec.addSource("s");
-        var b = new SourceBinding(src, abs);
+        var b = src.bind(abs);
         assertThatThrownBy(() -> Write.emitBindingWriteSql(b, null, DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("abstract");
@@ -365,7 +361,7 @@ class WriteTest {
 
     @Test
     void validateRowsOptionalSlotNoMissingCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Thing");
         cls.slot("optional_year", Primitive.INTEGER, false, false, null);
         var src = spec.addSource("s");
@@ -379,7 +375,7 @@ class WriteTest {
 
     @Test
     void validateRowsIdentifierSlotSkipped() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Thing");
         var src = spec.addSource("s");
         var b = src.bind(cls);
@@ -390,7 +386,7 @@ class WriteTest {
 
     @Test
     void validateRowsExplicitSqlMappingSkipsTypeCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Movie");
         cls.slot("runtime_minutes", Primitive.INTEGER, false, false, null);
         var src = spec.addSource("imdb");
@@ -402,7 +398,7 @@ class WriteTest {
 
     @Test
     void validateRowsTextAndArrayNoTypeCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Thing");
         cls.slot("name", Primitive.TEXT, false, false, null);
         cls.slot("tags", new Array(Primitive.TEXT), false, false, null);
@@ -414,7 +410,7 @@ class WriteTest {
 
     @Test
     void validateRowsClassRefNoTypeCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var person = spec.addClass("Person");
         person.slot("name", Primitive.TEXT, false, false, null);
         var movie = spec.addClass("Movie");
@@ -427,7 +423,7 @@ class WriteTest {
 
     @Test
     void validateRowsBooleanCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Thing");
         cls.slot("active", Primitive.BOOLEAN, false, false, null);
         var src = spec.addSource("s");
@@ -441,7 +437,7 @@ class WriteTest {
 
     @Test
     void validateRowsDateCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Thing");
         cls.slot("release_date", Primitive.DATE, false, false, null);
         var src = spec.addSource("s");
@@ -462,7 +458,7 @@ class WriteTest {
 
     @Test
     void validateRowsSourceSlotRemappingUsesSourceField() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Movie");
         cls.slot("year", Primitive.INTEGER, true, false, null);
         var src = spec.addSource("imdb");
@@ -484,7 +480,7 @@ class WriteTest {
 
     @Test
     void validateRowsEnumCheck() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Movie");
         cls.slot("status", new Enum(List.of("active", "archived")), false, false, null);
         var src = spec.addSource("s");
@@ -499,7 +495,7 @@ class WriteTest {
 
     @Test
     void validateRowsOnlyTextProducesMinimalSql() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
+        var spec = new Spec("canonical_id");
         var cls = spec.addClass("Thing");
         cls.slot("label", Primitive.TEXT, false, false, null);
         var src = spec.addSource("s");
@@ -577,16 +573,8 @@ class WriteTest {
         assertThat(sql).doesNotContain("knot_data.movie_bindings");
     }
 
-    @Test
-    void updateSlotApostropheEscaping() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
-        var movie = spec.addClass("Movie");
-        movie.slot("title", Primitive.TEXT, true, false, null);
-        var src = spec.addSource("o'brien");
-        var b = src.bind(movie);
-        var sql = Write.emitUpdateSlotSql(b, "title", DEFAULTS);
-        assertThat(sql).contains("'o''brien'");
-    }
+    // updateSlotApostropheEscaping deleted: the Java port validates source names
+    // against ^[A-Za-z_][A-Za-z0-9_]*$ — apostrophes in source names are disallowed.
 
     @Test
     void updateSlotRejectsIdentifierSlot() {
@@ -607,10 +595,10 @@ class WriteTest {
 
     @Test
     void updateSlotRejectsAbstractClass() {
-        var spec = Spec.builder().identifierSlotName("canonical_id").build();
-        var abs = spec.addAbstractClass("A");
+        var spec = new Spec("canonical_id");
+        var abs = spec.addClass("A", ClassKind.ABSTRACT, null, null, null);
         var src = spec.addSource("s");
-        var b = new SourceBinding(src, abs);
+        var b = src.bind(abs);
         assertThatThrownBy(() -> Write.emitUpdateSlotSql(b, "any_slot", DEFAULTS))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("abstract");
@@ -806,9 +794,9 @@ class WriteTest {
     @Test
     void assignCanonicalsSqlNoForwardFkWhenNoClassRefSlots() {
         var spec = movieCreditSpec();
-        var b = bindingFor(spec, "Movie");
+        var b = bindingFor(spec, "Person");
         var sql = Write.emitAssignCanonicalsSql(b, DEFAULTS);
-        // Movie has no ClassRef slots — stamp SET block should not contain LIMIT 1 lookups.
+        // Person has no ClassRef slots — stamp SET block should not contain LIMIT 1 lookups.
         assertThat(sql).doesNotContain("LIMIT 1");
     }
 

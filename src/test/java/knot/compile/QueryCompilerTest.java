@@ -33,7 +33,7 @@ class QueryCompilerTest {
 
     /** Simple Movie spec — title + year. */
     private static Spec movieSpec() {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
         OntologyClass movie = spec.addClass("Movie");
         movie.slot("title", Primitive.TEXT);
         movie.slot("year", Primitive.INTEGER);
@@ -42,7 +42,7 @@ class QueryCompilerTest {
 
     /** Movie with a director FK → Person. */
     private static Spec movieDirectorSpec() {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
         OntologyClass person = spec.addClass("Person");
         person.slot("name", Primitive.TEXT);
         person.slot("birth_country", Primitive.TEXT);
@@ -55,7 +55,7 @@ class QueryCompilerTest {
 
     /** Movie with TWO FK slots pointing at the same target (Person): director + writer. */
     private static Spec twoFkSpec() {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
         OntologyClass person = spec.addClass("Person");
         person.slot("name", Primitive.TEXT);
         person.slot("birth_country", Primitive.TEXT);
@@ -69,7 +69,7 @@ class QueryCompilerTest {
 
     /** Movie → director (Person) → employer (Company): two-hop chain. */
     private static Spec multiHopSpec() {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
         OntologyClass company = spec.addClass("Company");
         company.slot("name", Primitive.TEXT);
         OntologyClass person = spec.addClass("Person");

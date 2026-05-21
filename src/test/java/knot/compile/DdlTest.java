@@ -11,6 +11,7 @@ import knot.ast.expr.Raw;
 import knot.ast.types.Array;
 import knot.ast.types.Primitive;
 import knot.ast.types.Vector;
+import knot.spec.ClassKind;
 import knot.spec.OntologyClass;
 import knot.spec.Spec;
 import knot.spec.VirtualClass;
@@ -36,13 +37,12 @@ class DdlTest {
      * (DirectedMovie). Mirrors the Python {@code movie_spec} fixture.
      */
     private static Spec movieSpec() {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
 
-        OntologyClass title = spec.addAbstractClass("Title");
+        OntologyClass title = spec.addClass("Title", ClassKind.ABSTRACT, null, null, null);
         title.slot("year", Primitive.INTEGER);
 
-        OntologyClass movie = spec.addClass("Movie");
-        movie.isA(title);
+        OntologyClass movie = spec.addClass("Movie", ClassKind.CONCRETE, title, null, null);
         movie.slot("name", Primitive.TEXT);
         movie.slot("genres", new Array(Primitive.TEXT));
 
@@ -50,7 +50,7 @@ class DdlTest {
         person.slot("name", Primitive.TEXT);
 
         OntologyClass credit = spec.addClass("Credit");
-        credit.slot("role", Primitive.TEXT, /* required= */ true);
+        credit.slot("role", Primitive.TEXT, /* required= */ true, false, null);
         credit.slot("movie", movie);
         credit.slot("person", person);
 
@@ -59,9 +59,10 @@ class DdlTest {
         movie.addVirtual("DirectedMovie",
                 new Raw("EXISTS (SELECT 1 FROM credit WHERE role = 'director')"));
 
-        spec.addSource("imdb").bind(movie);
-        spec.addSource("imdb").bind(person);
-        spec.addSource("imdb").bind(credit);
+        var imdb = spec.addSource("imdb");
+        imdb.bind(movie);
+        imdb.bind(person);
+        imdb.bind(credit);
 
         return spec;
     }
@@ -71,7 +72,7 @@ class DdlTest {
     }
 
     private static Spec specWithVectorSlot(String metric) {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
         OntologyClass movie = spec.addClass("Movie");
         movie.slot("title", Primitive.TEXT);
         movie.slot("title_embedding", new Vector(384, metric));
@@ -80,7 +81,7 @@ class DdlTest {
     }
 
     private static Spec specWithNestedVirtual() {
-        Spec spec = Spec.builder().identifierSlotName("canonical_id").build();
+        Spec spec = new Spec("canonical_id");
         OntologyClass movie = spec.addClass("Movie");
         movie.slot("year", Primitive.INTEGER);
 

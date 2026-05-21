@@ -21,9 +21,9 @@ package knot.ast.expr;
  * no operator overloading so the API surface is explicit methods.
  */
 public sealed interface Expr
-        permits Ref, FkRef, FkChainRef, VectorRef, VectorDistance, TargetExists,
-                Literal, Compare, BoolOp, Not, IsNull, InList, Between, Exists,
-                CountRel, Aggregate, AggExpr, Raw, This, TupleCompare, TupleIn {
+        permits ValueExpr,
+                Compare, BoolOp, Not, IsNull, InList, Between, Exists,
+                TargetExists, Raw, TupleCompare, TupleIn {
 
     /** {@code self AND other} — boolean conjunction. */
     default BoolOp and_(Expr other) {
