@@ -210,30 +210,20 @@ def _(mo):
 
 
 @app.cell
-def _(
-    deployed,
-    imdb_credit_b,
-    imdb_movie_b,
-    imdb_person_b,
-    pg,
-    tmdb_movie_b,
-    tmdb_person_b,
-):
+def _(deployed, pg, spec):
     _ = deployed
-    _bindings_weights = [
-        (imdb_movie_b, 0.85),
-        (imdb_person_b, 0.85),
-        (imdb_credit_b, 0.85),
-        (tmdb_movie_b, 0.95),
-        (tmdb_person_b, 0.95),
-    ]
+    # Default weight per source — knot doesn't bake these in, the
+    # host owns the tuning. Iterate every binding the spec knows
+    # about; assign each non-identifier slot the source's default.
+    _per_source_default = {"imdb": 0.85, "tmdb": 0.95}
     with pg.cursor() as _cur:
-        for _b, _w in _bindings_weights:
+        for _b in spec.source_bindings:
+            _weight = _per_source_default[_b.source.name]
             _sql = _b.upsert_weight_sql()
             for _slot in _b.class_.effective_slots():
                 if _slot.identifier:
                     continue
-                _cur.execute(_sql, {"slot_name": _slot.name, "weight": _w})
+                _cur.execute(_sql, {"slot_name": _slot.name, "weight": _weight})
     weights_set = True
     return (weights_set,)
 
@@ -431,64 +421,91 @@ def _(embeddings_done, engine, imdb_src, json, movie, pd, text, tmdb_src):
 @app.cell
 def _(
     candidates_df,
+    credit,
+    engine,
     imdb_credit_b,
     imdb_movie_b,
     imdb_person_b,
+    imdb_src,
     json,
+    pd,
+    person,
     pg,
+    text,
     tmdb_movie_b,
     tmdb_person_b,
+    tmdb_src,
     uuid,
 ):
-    # Mint a canonical_id per matched movie pair; batch into one
-    # round-trip per source.
-    _movie_canonicals = {
-        r["imdb_id"]: f"m_{uuid.uuid4().hex[:8]}"
-        for r in candidates_df.to_dict(orient="records")
-    }
+    # Movies — one canonical_id per matched pair, batched per source.
+    _matches = candidates_df.to_dict(orient="records")
+    _movie_canonicals = {r["imdb_id"]: f"m_{uuid.uuid4().hex[:8]}" for r in _matches}
     _imdb_movie_assigns = [
         {"canonical_id": _movie_canonicals[r["imdb_id"]],
          "source_identifier": r["imdb_id"],
          "er_metadata": {"method": "knn_cosine", "distance": r["distance"]}}
-        for r in candidates_df.to_dict(orient="records")
+        for r in _matches
     ]
     _tmdb_movie_assigns = [
         {"canonical_id": _movie_canonicals[r["imdb_id"]],
          "source_identifier": r["tmdb_id"],
          "er_metadata": {"method": "knn_cosine", "distance": r["distance"]}}
-        for r in candidates_df.to_dict(orient="records")
+        for r in _matches
     ]
 
-    # Persons — deterministic name-match for the demo.
-    _person_pairs = [
-        ("nm0000233", "tp_tarantino"),
-        ("nm0000237", "tp_travolta"),
-        ("nm0000235", "tp_thurman"),
-        ("nm0000093", "tp_pitt"),
-        ("nm0000812", "tp_avary"),
-    ]
-    _person_canonicals = {i: f"p_{uuid.uuid4().hex[:8]}" for i, _ in _person_pairs}
+    # Persons — deterministic name-match. Pull every unresolved
+    # person from each source, inner-join on lowered name. Real ER
+    # would embed + cluster; this demo data has clean exact matches.
+    def _pull_persons(_src, _conn):
+        return pd.read_sql_query(
+            text(
+                person.from_source(_src)
+                    .where(person.col.canonical_id.is_null())
+                    .select(person.bindings_col.source_identifier, person.col.name)
+                    .sql()
+            ),
+            _conn,
+        )
+
+    with engine.begin() as _conn:
+        _imdb_p = _pull_persons(imdb_src, _conn)
+        _tmdb_p = _pull_persons(tmdb_src, _conn)
+    _joined = _imdb_p.assign(_key=_imdb_p["name"].str.lower()).merge(
+        _tmdb_p.assign(_key=_tmdb_p["name"].str.lower()),
+        on="_key", suffixes=("_imdb", "_tmdb"),
+    )
+    _person_canonicals = {
+        row["source_identifier_imdb"]: f"p_{uuid.uuid4().hex[:8]}"
+        for _, row in _joined.iterrows()
+    }
     _imdb_person_assigns = [
-        {"canonical_id": _person_canonicals[i], "source_identifier": i,
+        {"canonical_id": _person_canonicals[row["source_identifier_imdb"]],
+         "source_identifier": row["source_identifier_imdb"],
          "er_metadata": None}
-        for i, _ in _person_pairs
+        for _, row in _joined.iterrows()
     ]
     _tmdb_person_assigns = [
-        {"canonical_id": _person_canonicals[i], "source_identifier": t,
+        {"canonical_id": _person_canonicals[row["source_identifier_imdb"]],
+         "source_identifier": row["source_identifier_tmdb"],
          "er_metadata": None}
-        for i, t in _person_pairs
+        for _, row in _joined.iterrows()
     ]
 
-    # Credits — single-source (imdb), straight mint.
-    _credit_ids = [
-        "cr_d_pulp", "cr_d_res", "cr_d_kill", "cr_d_once", "cr_d_ingl",
-        "cr_a_pulp_t", "cr_a_pulp_th", "cr_a_kill_th", "cr_a_once_p",
-        "cr_a_ingl_p", "cr_w_pulp",
-    ]
+    # Credits — pull every unresolved imdb credit; straight mint.
+    with engine.begin() as _conn:
+        _credit_df = pd.read_sql_query(
+            text(
+                credit.from_source(imdb_src)
+                    .where(credit.col.canonical_id.is_null())
+                    .select(credit.bindings_col.source_identifier)
+                    .sql()
+            ),
+            _conn,
+        )
     _credit_assigns = [
         {"canonical_id": f"c_{uuid.uuid4().hex[:8]}",
-         "source_identifier": cid, "er_metadata": None}
-        for cid in _credit_ids
+         "source_identifier": _sid, "er_metadata": None}
+        for _sid in _credit_df["source_identifier"]
     ]
 
     with pg.cursor() as _cur:
