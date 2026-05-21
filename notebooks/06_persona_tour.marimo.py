@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.23.5"
-app = marimo.App()
+app = marimo.App(layout_file="layouts/06_persona_tour.marimo.slides.json")
 
 
 @app.cell
@@ -237,13 +237,21 @@ def _(mo):
 
 
 @app.cell
-def _(spec):
+def _(mo, spec):
     views_only = spec.views_ddl()
     # Confirm it's strictly the view-creation statements.
-    n_views = views_only.count("CREATE OR REPLACE VIEW")
-    n_tables = views_only.count("CREATE TABLE")
-    n_indexes = views_only.count("CREATE INDEX")
-    f"views_ddl: {n_views} views, {n_tables} tables, {n_indexes} indexes"
+    _n_views = views_only.count("CREATE OR REPLACE VIEW")
+    _n_tables = views_only.count("CREATE TABLE")
+    _n_indexes = views_only.count("CREATE INDEX")
+    mo.md(
+        f"""
+        **`spec.views_ddl()`** — {_n_views} views, {_n_tables} tables, {_n_indexes} indexes.
+
+        ```sql
+        {views_only}
+        ```
+        """
+    )
     return
 
 
@@ -315,7 +323,7 @@ def _(imdb_movie_b, imdb_movie_rows, json, pd, pg):
 
 
 @app.cell
-def _(imdb_movie_b, imdb_movie_rows, json, pg, violations):
+def _(imdb_movie_b, imdb_movie_rows, json, mo, pg, violations):
     # Bucket: clean rows (indices not in violations) go through
     # write_sql; dirty rows would be routed to the host's review queue.
     _bad_indices = set(violations["row_index"].astype(int)) if not violations.empty else set()
@@ -325,12 +333,12 @@ def _(imdb_movie_b, imdb_movie_rows, json, pg, violations):
     with pg.cursor() as _cur:
         _cur.execute(imdb_movie_b.write_sql(), {"rows": json.dumps(clean_rows)})
 
-    f"upserted {len(clean_rows)} clean rows; routed {len(bad_rows)} to review queue"
+    mo.md(f"**upserted {len(clean_rows)} clean rows; routed {len(bad_rows)} to review queue**")
     return
 
 
 @app.cell
-def _(imdb_person_b, json, pg):
+def _(imdb_person_b, json, mo, pg):
     # Marcus also seeds Persons + Credits from imdb in the same batch.
     # (Validation skipped here for brevity — same shape.)
     imdb_persons = [
@@ -342,12 +350,12 @@ def _(imdb_person_b, json, pg):
     ]
     with pg.cursor() as _cur:
         _cur.execute(imdb_person_b.write_sql(), {"rows": json.dumps(imdb_persons)})
-    f"upserted {len(imdb_persons)} persons"
+    mo.md(f"**upserted {len(imdb_persons)} persons**")
     return
 
 
 @app.cell
-def _(imdb_credit_b, json, pg):
+def _(imdb_credit_b, json, mo, pg):
     # Director credits for all 5 movies + writer credit + acting credits.
     # Movie + Person columns hold imdb_ids pre-ER; assign_canonical
     # will translate them later.
@@ -367,7 +375,7 @@ def _(imdb_credit_b, json, pg):
     ]
     with pg.cursor() as _cur:
         _cur.execute(imdb_credit_b.write_sql(), {"rows": json.dumps(imdb_credits)})
-    f"upserted {len(imdb_credits)} credits"
+    mo.md(f"**upserted {len(imdb_credits)} credits**")
     return
 
 
@@ -396,7 +404,7 @@ def _(credit):
 
 
 @app.cell
-def _(engine, pd, role_constraint, spec, text):
+def _(engine, mo, pd, role_constraint, spec, text):
     # Scoped to only the credits Marcus's batch touched — pre-existing
     # violations elsewhere wouldn't block.
     _ = role_constraint  # ordering dep
@@ -408,7 +416,7 @@ def _(engine, pd, role_constraint, spec, text):
     _name, _sql = scoped_validations[0]
     with engine.begin() as _conn:
         scoped_violations = pd.read_sql_query(text(_sql), _conn)
-    f"scoped validation '{_name}': {len(scoped_violations)} violations"
+    mo.md(f"**scoped validation `{_name}`: {len(scoped_violations)} violations**")
     return
 
 
@@ -440,7 +448,7 @@ def _(mo):
 
 
 @app.cell
-def _(imdb_person_b, json, pg, tmdb_movie_b, tmdb_person_b):
+def _(imdb_person_b, json, mo, pg, tmdb_movie_b, tmdb_person_b):
     # tmdb publishes the same entities with its own ids. Note the
     # deliberately wrong year for Pulp Fiction — tmdb says 1995.
     tmdb_movies = [
@@ -466,7 +474,7 @@ def _(imdb_person_b, json, pg, tmdb_movie_b, tmdb_person_b):
         _cur.execute(tmdb_movie_b.write_sql(), {"rows": json.dumps(tmdb_movies)})
         _cur.execute(tmdb_person_b.write_sql(), {"rows": json.dumps(tmdb_persons)})
     _ = imdb_person_b  # ordering dep to keep persons ingest before tmdb
-    f"tmdb: {len(tmdb_movies)} movies + {len(tmdb_persons)} persons"
+    mo.md(f"**tmdb upserted: {len(tmdb_movies)} movies + {len(tmdb_persons)} persons**")
     return
 
 
@@ -490,7 +498,18 @@ def _(np):
 
 
 @app.cell
-def _(embed, engine, imdb_movie_b, json, movie, pd, pg, text, tmdb_movie_b):
+def _(
+    embed,
+    engine,
+    imdb_movie_b,
+    json,
+    mo,
+    movie,
+    pd,
+    pg,
+    text,
+    tmdb_movie_b,
+):
     # Sam's embedding-backfill activity: pull bindings whose embedding
     # is null, encode their titles, push back via update_slot_sql.
     # Per-source so HNSW indexes get used downstream.
@@ -521,7 +540,7 @@ def _(embed, engine, imdb_movie_b, json, movie, pd, pg, text, tmdb_movie_b):
                 {"rows": json.dumps(_payload)},
             )
         _total += len(_payload)
-    f"embedded {_total} title vectors total"
+    mo.md(f"**embedded {_total} title vectors via `binding.update_slot_sql('title_embedding')`**")
     return
 
 
@@ -588,6 +607,7 @@ def _(
     imdb_movie_b,
     imdb_person_b,
     json,
+    mo,
     pg,
     tmdb_movie_b,
     tmdb_person_b,
@@ -655,7 +675,11 @@ def _(
         )
 
     er_done = True
-    f"minted {len(_canonicals)} movies + {len(_person_canonicals)} persons across both sources"
+    mo.md(
+        f"**minted {len(_canonicals)} movie canonical_ids "
+        f"+ {len(_person_canonicals)} person canonical_ids — "
+        f"shared across imdb + tmdb in 4 round-trips via `assign_canonicals_sql`**"
+    )
     return (er_done,)
 
 
@@ -886,16 +910,27 @@ def _(engine, movie, pd, redeploy_done, text):
                 movie.col.writer.name,
             )
     )
-    _sql = _q.sql()
-    print("emitted SQL — note the two distinct aliases (movie_director, movie_writer):")
-    print(_sql)
-    print()
+    same_target_sql = _q.sql()
     with engine.begin() as _conn:
-        same_target_join = pd.read_sql_query(text(_sql), _conn)
+        same_target_join = pd.read_sql_query(text(same_target_sql), _conn)
     # Both director.name and writer.name come back as 'name' — rename
     # by position so marimo can render the DataFrame.
     same_target_join.columns = ["title", "director_name", "writer_name"]
     same_target_join
+    return (same_target_sql,)
+
+
+@app.cell(hide_code=True)
+def _(mo, same_target_sql):
+    mo.md(
+        f"""
+        **emitted SQL** — note the two distinct aliases (`movie_director`, `movie_writer`):
+
+        ```sql
+        {same_target_sql}
+        ```
+        """
+    )
     return
 
 
@@ -925,7 +960,7 @@ def _(engine, movie, pd, redeploy_done, text):
 
 
 @app.cell
-def _(imdb_movie_b, json, pg, redeploy_done):
+def _(imdb_movie_b, json, mo, pg, redeploy_done):
     # 4. RETURNING — mutation resolver gets the upserted row back
     # atomically in one round-trip.
     _ = redeploy_done
@@ -934,7 +969,7 @@ def _(imdb_movie_b, json, pg, redeploy_done):
     with pg.cursor() as _cur:
         _cur.execute(_sql, {"rows": json.dumps(_new_movie)})
         returned_rows = _cur.fetchall()
-    f"RETURNING fetched: {returned_rows}"
+    mo.md(f"**RETURNING fetched (one round-trip):** `{returned_rows}`")
     return
 
 
@@ -997,14 +1032,22 @@ def _(before_fix, engine, movie, pd, text):
 
 
 @app.cell
-def _(pg, tmdb_movie_b):
+def _(mo, pg, tmdb_movie_b):
     # The fix: drop tmdb's weight row for (Movie, year). With no
     # weight row, the resolver's LEFT JOIN returns NULL weight, and
     # NULLS LAST in the argmax makes imdb win.
     _delete_sql = tmdb_movie_b.delete_weight_sql("year")
     with pg.cursor() as _cur:
         _cur.execute(_delete_sql)
-    f"deleted weight row, fix applied"
+    mo.md(
+        f"""
+        **Fix applied — emitted DELETE:**
+
+        ```sql
+        {_delete_sql}
+        ```
+        """
+    )
     return
 
 
