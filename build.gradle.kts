@@ -15,31 +15,18 @@ repositories {
     mavenCentral()
 }
 
+// knot ships zero runtime deps — same posture as the Python source.
+// The Java port is a SQL string compiler: spec → SQL string. No JDBC,
+// no ORM, no migration tool. Hosts wire those in.
 dependencies {
-    // SQL parsing + AST rewriting. Apache Calcite is the closest Java
-    // analogue to sqlglot — used by knot.compile.constraints to walk
-    // and rewrite spec-relative class/slot references in constraint
-    // bodies and source-binding mappings.
-    implementation("org.apache.calcite:calcite-core:1.37.0")
-
-    // JSON serialization for the spec's meta-table jsonb roundtrip
-    // and for the spec_io save / load path.
-    implementation("com.fasterxml.jackson.core:jackson-databind:2.17.2")
-
-    // jOOQ is the host substrate knot consumes for entity-table DDL,
-    // FK constraints, batch INSERTs, and migrations (via Flyway). The
-    // dependency is declared so knot.compile can consume jOOQ's
-    // generated metadata; knot does not embed jOOQ runtime behavior.
-    implementation("org.jooq:jooq:3.19.11")
-
     testImplementation(platform("org.junit:junit-bom:5.10.2"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+    testImplementation("org.assertj:assertj-core:3.26.3")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 
-    // Postgres JDBC driver for integration tests that run against the
-    // compose-managed instance (KNOT_PG_URL, default jdbc:postgresql://
-    // localhost:5433/knot). Compile-time code never touches a driver —
-    // the compiler emits SQL strings — so this is testRuntimeOnly.
+    // Postgres JDBC driver — testRuntimeOnly so integration tests
+    // can run against the compose-managed postgres on :5433. Main
+    // compile path never sees a driver.
     testRuntimeOnly("org.postgresql:postgresql:42.7.4")
 }
 
