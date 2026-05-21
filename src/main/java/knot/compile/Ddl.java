@@ -83,10 +83,11 @@ public final class Ddl {
             stmts.add(emitWeightTable(options.schema(), options.weightTableName(), options.ifNotExists()));
         }
 
-        for (OntologyClass cls : spec.classes().values().stream()
-                .filter(c -> c instanceof OntologyClass o && o.kind() == ClassKind.CONCRETE)
-                .map(c -> (OntologyClass) c)
-                .toList()) {
+        for (Object raw : spec.classes().values()) {
+            if (!(raw instanceof OntologyClass cls) || cls.kind() != ClassKind.CONCRETE) {
+                // Abstract OntologyClass and VirtualClass are handled below.
+                continue;
+            }
             // No canonical table — bindings is the only relation per class.
             // The resolved view sources canonical_ids via SELECT DISTINCT over bindings.
             if (options.emitBindings()) {

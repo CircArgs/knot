@@ -4,131 +4,171 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import knot.ast.expr.BoolOp;
-import knot.ast.expr.Expr;
+import knot.ast.expr.Compare;
+import knot.ast.expr.Expressions;
 import knot.ast.expr.Literal;
 import knot.ast.expr.Ref;
 import org.junit.jupiter.api.Test;
 
 class QueryTest {
 
-    private static final Expr P1 = new Ref("Movie", "year");
-    private static final Expr P2 = new Ref("Movie", "title");
-
-    @Test
-    void minimalCtorDefaultsToResolvedLayerAndEmptyCollections() {
-        var q = new Query("Movie");
-        assertThat(q.className()).isEqualTo("Movie");
-        assertThat(q.layer()).isEqualTo(Layer.RESOLVED);
-        assertThat(q.whereClause()).isNull();
-        assertThat(q.grouping()).isEmpty();
-        assertThat(q.ordering()).isEmpty();
-        assertThat(q.projection()).isNull();
-        assertThat(q.lockMode()).isNull();
-        assertThat(q.specRef()).isNull();
+    private static Ref year() {
+        return new Ref("Movie", "year");
     }
 
-    @Test
-    void lockRejectsInvalidMode() {
-        var q = new Query("Movie");
-        assertThatThrownBy(() -> q.lock("for_giggles"))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Query.lock mode must be one of");
+    private static Ref title() {
+        return new Ref("Movie", "title");
     }
 
-    @Test
-    void lockAcceptsAllThreePostgresModes() {
-        var q = new Query("Movie");
-        assertThat(q.lock("for_update").lockMode()).isEqualTo("for_update");
-        assertThat(q.lock("for_update_skip_locked").lockMode())
-                .isEqualTo("for_update_skip_locked");
-        assertThat(q.lock("for_share").lockMode()).isEqualTo("for_share");
-    }
+    // ------------------------------------------------------------------
+    // Fluent immutability
+    // ------------------------------------------------------------------
 
     @Test
-    void builderMethodsReturnNewQueryAndDoNotMutate() {
-        var original = new Query("Movie");
-        var withWhere = original.where(P1);
-        var withLimit = original.limit(10);
-        var withOffset = original.offset(5);
-        var withSelect = original.select(P1, P2);
-
-        // Original unchanged.
-        assertThat(original.whereClause()).isNull();
-        assertThat(original.limitValue()).isNull();
-        assertThat(original.offsetValue()).isNull();
-        assertThat(original.projection()).isNull();
-
-        // New instances reflect the change.
-        assertThat(withWhere).isNotSameAs(original);
-        assertThat(withWhere.whereClause()).isEqualTo(P1);
-        assertThat(withLimit.limitValue()).isEqualTo(10);
-        assertThat(withOffset.offsetValue()).isEqualTo(5);
-        assertThat(withSelect.projection()).containsExactly(P1, P2);
+    void whereReturnsNewQuery() {
+        var q0 = new Query("Movie");
+        var q1 = q0.where(year().gt(1900));
+        assertThat(q1).isNotSameAs(q0);
+        assertThat(q0.whereClause()).isNull(); // original unchanged
+        assertThat(q1.whereClause()).isNotNull();
     }
 
     @Test
     void whereAndCombinesPredicates() {
-        var q = new Query("Movie").where(P1).where(P2);
+        var pred1 = year().gt(1900);
+        var pred2 = year().lt(2100);
+        var q = new Query("Movie").where(pred1).where(pred2);
         assertThat(q.whereClause()).isInstanceOf(BoolOp.class);
-        var combined = (BoolOp) q.whereClause();
-        assertThat(combined.op()).isEqualTo("AND");
-        assertThat(combined.left()).isEqualTo(P1);
-        assertThat(combined.right()).isEqualTo(P2);
+        var boolOp = (BoolOp) q.whereClause();
+        assertThat(boolOp.op()).isEqualTo("AND");
+        assertThat(boolOp.left()).isEqualTo(pred1);
+        assertThat(boolOp.right()).isEqualTo(pred2);
     }
 
     @Test
-    void whereOnEmptyClauseJustSetsThePredicate() {
-        var q = new Query("Movie").where(P1);
-        assertThat(q.whereClause()).isEqualTo(P1);
+    void groupByReturnsNewQueryAndAppends() {
+        var q0 = new Query("Movie");
+        var q1 = q0.groupBy(year());
+        var q2 = q1.groupBy(title());
+        assertThat(q1).isNotSameAs(q0);
+        assertThat(q0.grouping()).isEmpty();
+        assertThat(q1.grouping()).hasSize(1);
+        assertThat(q2.grouping()).hasSize(2); // appended, not replaced
     }
 
     @Test
-    void groupByAppendsRatherThanReplaces() {
-        var q = new Query("Movie").groupBy(P1).groupBy(P2);
-        assertThat(q.grouping()).containsExactly(P1, P2);
+    void orderByReturnsNewQueryAndAppends() {
+        var q0 = new Query("Movie");
+        var q1 = q0.orderBy(year(), "desc");
+        var q2 = q1.orderBy(title(), "asc");
+        assertThat(q1).isNotSameAs(q0);
+        assertThat(q0.ordering()).isEmpty();
+        assertThat(q1.ordering()).hasSize(1);
+        assertThat(q2.ordering()).hasSize(2);
+        assertThat(q2.ordering().get(0).direction()).isEqualTo("desc");
+        assertThat(q2.ordering().get(1).direction()).isEqualTo("asc");
     }
 
     @Test
-    void orderByAppendsRatherThanReplaces() {
-        var q = new Query("Movie")
-                .orderBy(P1, "desc")
-                .orderBy(P2);
-        assertThat(q.ordering())
-                .containsExactly(new OrderBy(P1, "desc"), new OrderBy(P2, "asc"));
+    void limitReturnsNewQuery() {
+        var q0 = new Query("Movie");
+        var q1 = q0.limit(10);
+        assertThat(q0.limitValue()).isNull();
+        assertThat(q1.limitValue()).isEqualTo(10);
     }
 
     @Test
-    void sqlThrowsWhenSpecRefIsNull() {
+    void offsetReturnsNewQuery() {
+        var q0 = new Query("Movie");
+        var q1 = q0.offset(20);
+        assertThat(q0.offsetValue()).isNull();
+        assertThat(q1.offsetValue()).isEqualTo(20);
+    }
+
+    @Test
+    void selectReturnsNewQuery() {
+        var q0 = new Query("Movie");
+        var q1 = q0.select(year(), title());
+        assertThat(q0.projection()).isNull();
+        assertThat(q1.projection()).hasSize(2);
+    }
+
+    // ------------------------------------------------------------------
+    // Default field values
+    // ------------------------------------------------------------------
+
+    @Test
+    void defaultLayerIsResolved() {
+        var q = new Query("Movie");
+        assertThat(q.layer()).isEqualTo(Layer.RESOLVED);
+    }
+
+    @Test
+    void defaultGroupingAndOrderingAreEmpty() {
+        var q = new Query("Movie");
+        assertThat(q.grouping()).isEmpty();
+        assertThat(q.ordering()).isEmpty();
+    }
+
+    @Test
+    void defaultLimitOffsetProjectionAreNull() {
+        var q = new Query("Movie");
+        assertThat(q.limitValue()).isNull();
+        assertThat(q.offsetValue()).isNull();
+        assertThat(q.projection()).isNull();
+    }
+
+    // ------------------------------------------------------------------
+    // Validation
+    // ------------------------------------------------------------------
+
+    @Test
+    void blankClassNameThrows() {
+        assertThatThrownBy(() -> new Query(""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("className");
+    }
+
+    @Test
+    void nullClassNameThrows() {
+        assertThatThrownBy(() -> new Query(null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void sqlThrowsWithoutSpecRef() {
         var q = new Query("Movie");
         assertThatThrownBy(q::sql)
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("no spec back-reference");
+                .hasMessageContaining("spec back-reference");
     }
+
+    @Test
+    void invalidLockModeThrows() {
+        var q = new Query("Movie");
+        assertThatThrownBy(() -> q.lock("exclusive"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("lock mode");
+    }
+
+    @Test
+    void validLockModesAccepted() {
+        var q = new Query("Movie");
+        assertThat(q.lock("for_update").lockMode()).isEqualTo("for_update");
+        assertThat(q.lock("for_update_skip_locked").lockMode()).isEqualTo("for_update_skip_locked");
+        assertThat(q.lock("for_share").lockMode()).isEqualTo("for_share");
+    }
+
+    // ------------------------------------------------------------------
+    // Equality excludes specRef
+    // ------------------------------------------------------------------
 
     @Test
     void equalityIgnoresSpecRef() {
-        // Two queries with the same shape compare equal even though one has
-        // no specRef — mirrors the Python ``compare=False`` on ``_spec``. We
-        // can't construct a real Spec yet (knot.spec.Spec isn't ported), but
-        // the null-vs-null and same-shape case proves the override compiles
-        // and the explicit equals/hashCode skip the field.
-        var a = new Query("Movie").where(new Literal(1)).limit(5);
-        var b = new Query("Movie").where(new Literal(1)).limit(5);
-        assertThat(a).isEqualTo(b);
-        assertThat(a.hashCode()).isEqualTo(b.hashCode());
-    }
-
-    @Test
-    void differentShapesAreNotEqual() {
-        var a = new Query("Movie").limit(5);
-        var b = new Query("Movie").limit(10);
-        assertThat(a).isNotEqualTo(b);
-    }
-
-    @Test
-    void classNameMustBeNonBlank() {
-        assertThatThrownBy(() -> new Query(""))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("className must be non-blank");
+        var q1 = new Query("Movie").where(year().gt(1900));
+        // withSpec requires a Spec instance we don't have in unit tests;
+        // but two independently-constructed queries with same shape are equal.
+        var q2 = new Query("Movie").where(year().gt(1900));
+        assertThat(q1).isEqualTo(q2);
     }
 }

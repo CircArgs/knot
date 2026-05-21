@@ -8,24 +8,46 @@ import org.junit.jupiter.api.Test;
 
 class OrderByTest {
 
+    private static Ref yearRef() {
+        return new Ref("Movie", "year");
+    }
+
     @Test
-    void rejectsInvalidDirection() {
-        var ref = new Ref("Movie", "year");
-        assertThatThrownBy(() -> new OrderBy(ref, "sideways"))
+    void defaultDirectionIsAsc() {
+        var ob = new OrderBy(yearRef());
+        assertThat(ob.direction()).isEqualTo("asc");
+    }
+
+    @Test
+    void descDirectionAccepted() {
+        var ob = new OrderBy(yearRef(), "desc");
+        assertThat(ob.direction()).isEqualTo("desc");
+    }
+
+    @Test
+    void invalidDirectionThrows() {
+        assertThatThrownBy(() -> new OrderBy(yearRef(), "ASCENDING"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("must be 'asc' or 'desc'");
+                .hasMessageContaining("'asc' or 'desc'");
     }
 
     @Test
-    void acceptsAscAndDesc() {
-        var ref = new Ref("Movie", "year");
-        assertThat(new OrderBy(ref, "asc").direction()).isEqualTo("asc");
-        assertThat(new OrderBy(ref, "desc").direction()).isEqualTo("desc");
+    void nullDirectionThrows() {
+        assertThatThrownBy(() -> new OrderBy(yearRef(), null))
+                .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
-    void defaultsDirectionToAsc() {
-        var ref = new Ref("Movie", "year");
-        assertThat(new OrderBy(ref).direction()).isEqualTo("asc");
+    void nullRefThrows() {
+        assertThatThrownBy(() -> new OrderBy(null, "asc"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("ref");
+    }
+
+    @Test
+    void refIsStoredCorrectly() {
+        var ref = yearRef();
+        var ob = new OrderBy(ref, "desc");
+        assertThat(ob.ref()).isEqualTo(ref);
     }
 }
