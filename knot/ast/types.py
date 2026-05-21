@@ -104,7 +104,36 @@ class Vector:
         return f"vector<{self.dim},{self.metric}>"
 
 
-TypeExpression = Primitive | Array | ClassRef | Vector
+@dataclass(slots=True)
+class Enum:
+    """Closed set of allowed text values for a slot.
+
+    Stored as ``TEXT`` in postgres with an inline ``CHECK`` constraint.
+    No ``CREATE TYPE`` ceremony — the constraint is self-contained in
+    the ``CREATE TABLE``, so adding/removing values is a simple
+    ``ALTER TABLE … ALTER COLUMN … TYPE … USING …`` (or migrate-tool
+    diff) with no separate type object to manage."""
+
+    values: tuple[str, ...]
+
+    def __post_init__(self) -> None:
+        if not self.values:
+            raise ValueError("ENUM requires at least one value")
+        for v in self.values:
+            if not isinstance(v, str):
+                raise TypeError(
+                    f"ENUM values must all be strings; got {type(v).__name__}: {v!r}"
+                )
+        if len(set(self.values)) != len(self.values):
+            seen: set[str] = set()
+            dupes = [v for v in self.values if v in seen or seen.add(v)]  # type: ignore[func-returns-value]
+            raise ValueError(f"ENUM values must be unique; duplicates: {dupes!r}")
+
+    def __str__(self) -> str:
+        return "enum(" + ", ".join(repr(v) for v in self.values) + ")"
+
+
+TypeExpression = Primitive | Array | ClassRef | Vector | Enum
 
 
 def _coerce_type(t):
@@ -118,14 +147,14 @@ def _coerce_type(t):
     at type-check time (ast → spec would otherwise be a cycle)."""
     from knot.spec import OntologyClass
 
-    if isinstance(t, (Primitive, Array, ClassRef, Vector)):
+    if isinstance(t, (Primitive, Array, ClassRef, Vector, Enum)):
         return t
     if isinstance(t, OntologyClass):
         return ClassRef(target=t)
     raise TypeError(
         f"Slot type must be a value from knot.ast.types (TEXT/INTEGER/FLOAT/"
-        f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)/VECTOR(...)) or an OntologyClass "
-        f"instance; got {type(t).__name__}"
+        f"BOOLEAN/DATE/TIMESTAMP/ARRAY(...)/VECTOR(...)/ENUM(...)) or an "
+        f"OntologyClass instance; got {type(t).__name__}"
     )
 
 
@@ -149,3 +178,9 @@ def VECTOR(dim: int, metric: str = "cosine") -> Vector:
     ``"ip"`` and picks both the HNSW index operator class and the
     query-time distance operator."""
     return Vector(dim=dim, metric=metric)
+
+
+def ENUM(*values: str) -> Enum:
+    """Closed set of allowed text values. Stored as ``TEXT`` with an
+    inline ``CHECK`` constraint — no ``CREATE TYPE`` ceremony."""
+    return Enum(values=tuple(values))

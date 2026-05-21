@@ -165,7 +165,9 @@ def test_assign_canonical_backward_fanout_to_referrers():
     assert "fanout_credit AS (" in sql
     assert "UPDATE knot_data.credit_bindings" in sql
     # Per-column CASE rewrites only the matching column.
-    assert "movie = CASE WHEN movie = %(source_identifier)s THEN %(canonical_id)s" in sql
+    assert (
+        "movie = CASE WHEN movie = %(source_identifier)s THEN %(canonical_id)s" in sql
+    )
     assert "movie = %(source_identifier)s" in sql
 
 

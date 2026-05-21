@@ -124,9 +124,18 @@ def _(
     fn = _AGG_FN[node.kind]
     if node.expr is None:
         # Only valid for COUNT — AggExpr.__post_init__ already enforced.
-        return f"{fn}(*)"
-    inner = compile_sql(node.expr, schema=schema, layer=layer, outer_class=outer_class)
-    return f"{fn}({inner})"
+        agg = f"{fn}(*)"
+    else:
+        inner = compile_sql(
+            node.expr, schema=schema, layer=layer, outer_class=outer_class
+        )
+        agg = f"{fn}({inner})"
+    if node.filter_predicate is not None:
+        pred = compile_sql(
+            node.filter_predicate, schema=schema, layer=layer, outer_class=outer_class
+        )
+        return f"{agg} FILTER (WHERE {pred})"
+    return agg
 
 
 @compile_sql.register

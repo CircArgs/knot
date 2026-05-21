@@ -24,7 +24,7 @@ statements in a single ``pg.transaction()``.
 
 from __future__ import annotations
 
-from knot.ast.types import Array, ClassRef, Primitive, TypeExpression, Vector
+from knot.ast.types import Array, ClassRef, Enum, Primitive, TypeExpression, Vector
 from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding
 
 # ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@ def _jsonb_cast(t: TypeExpression) -> str:
         case Array(of=inner):
             # ARRAY-coerce a jsonb array of scalars into a postgres array.
             return f"::{_jsonb_cast(inner).removeprefix('::')}[]"
-        case ClassRef():
+        case ClassRef() | Enum():
             return "::text"
         case Vector(dim=dim):
             # pgvector accepts its text form (``"[0.1, 0.2, ...]"``)
@@ -135,7 +135,7 @@ def _passthrough_value(slot: Slot, raw_field: str) -> str:
     transform), using the raw subquery's text alias for ``raw_field``."""
     if isinstance(slot.type, Primitive):
         return f"raw.{raw_field}{_PRIMITIVE_TO_JSONB_CAST[slot.type]}"
-    if isinstance(slot.type, ClassRef):
+    if isinstance(slot.type, (ClassRef, Enum)):
         return f"raw.{raw_field}::text"
     if isinstance(slot.type, Vector):
         # Same shape as Primitive — pgvector parses the text form.
@@ -383,6 +383,9 @@ def _type_precheck(t: TypeExpression, src_field: str, src_literal: str) -> str |
                 f"NOT (jsonb_typeof(payload->'{src_field}') = 'array'\n"
                 f"     AND jsonb_array_length(payload->'{src_field}') = {dim})"
             )
+        case Enum(values=vs):
+            values_sql = ", ".join("'" + v.replace("'", "''") + "'" for v in vs)
+            return f"payload->>{src_literal} NOT IN ({values_sql})"
         case Primitive.TEXT | ClassRef() | Array():
             # TEXT: any string is valid; ClassRef: FK is a text id (any string valid);
             # Array: heterogeneous jsonb — no cheap structural check.
@@ -406,6 +409,8 @@ def _type_precheck_detail(t: TypeExpression) -> str:
             return "value is not a valid timestamp (expected ISO 8601)"
         case Vector(dim=dim):
             return f"value is not a jsonb array of length {dim}"
+        case Enum(values=vs):
+            return f"value not in enum: {list(vs)}"
         case _:
             return "type coercion failed"
 

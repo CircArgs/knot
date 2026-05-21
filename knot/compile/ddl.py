@@ -20,7 +20,7 @@ upserts on the PK — one row per (source, source_id), not SCD2 history.
 from __future__ import annotations
 
 from knot.ast.select import Layer
-from knot.ast.types import Array, ClassRef, Primitive, TypeExpression, Vector
+from knot.ast.types import Array, ClassRef, Enum, Primitive, TypeExpression, Vector
 from knot.compile.expr import compile_sql
 from knot.spec import (
     ClassKind,
@@ -236,7 +236,19 @@ def _pg_type(t: TypeExpression) -> str:
             # vector`` once at the top of Spec.ddl() when any vector slot
             # exists).
             return f"vector({dim})"
+        case Enum():
+            return "text"
     raise TypeError(f"unhandled type expression: {type(t).__name__}")
+
+
+def _pg_col_def(col_name: str, t: TypeExpression) -> str:
+    """Full column definition fragment: ``<type>`` for most types;
+    ``text CHECK (<col> IS NULL OR <col> IN (...))`` for Enum.
+    The NULL branch in the CHECK allows optional enum slots."""
+    if isinstance(t, Enum):
+        values_sql = ", ".join("'" + v.replace("'", "''") + "'" for v in t.values)
+        return f"text CHECK ({col_name} IS NULL OR {col_name} IN ({values_sql}))"
+    return _pg_type(t)
 
 
 def _spec_has_vector_slot(spec: Spec) -> bool:
@@ -354,7 +366,7 @@ def _emit_bindings_table(
         # IS NOT NULL`` until ER claims them. A source may also only
         # project some non-identifier slots; those are nullable for the
         # same reason.
-        col = f"    {slot.name} {_pg_type(slot.type)}"
+        col = f"    {slot.name} {_pg_col_def(slot.name, slot.type)}"
         columns.append(col)
     # raw_payload — the full row as ingested, preserved for backfilling
     # new slots later without re-ingesting from the source. Always

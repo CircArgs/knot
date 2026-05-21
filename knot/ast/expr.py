@@ -387,10 +387,14 @@ class AggExpr(Expr, _ValueExpr):
 
     Use the module-level factories ``count() / sum_() / avg() /
     min_() / max_()`` to build these — trailing-underscore on
-    `sum_/min_/max_` avoids shadowing the Python builtins."""
+    `sum_/min_/max_` avoids shadowing the Python builtins.
+
+    Chain ``.filter(predicate)`` to emit ``AGG(...) FILTER (WHERE ...)``
+    — single-pass conditional aggregation without a correlated subquery."""
 
     kind: str  # "count" | "sum" | "avg" | "min" | "max"
     expr: Expr | None = None  # None ⇒ ``COUNT(*)`` (only valid for count)
+    filter_predicate: Expr | None = None  # renders FILTER (WHERE ...) when set
 
     def __post_init__(self) -> None:
         valid = {"count", "sum", "avg", "min", "max"}
@@ -403,6 +407,17 @@ class AggExpr(Expr, _ValueExpr):
                 f"AggExpr({self.kind!r}) requires an inner Expr; "
                 f"only COUNT(*) is built without one"
             )
+
+    def filter(self, predicate: Expr) -> AggExpr:
+        """Return a new ``AggExpr`` with ``FILTER (WHERE predicate)``
+        appended. Single-pass conditional aggregate — avoids a correlated
+        subquery when counting subsets of the same row set::
+
+            count(credit.col.canonical_id).filter(credit.col.role == "director")
+            # → COUNT(knot_data.credit_resolved.canonical_id)
+            #   FILTER (WHERE knot_data.credit_resolved.role = 'director')
+        """
+        return AggExpr(kind=self.kind, expr=self.expr, filter_predicate=predicate)
 
 
 def count(expr: Expr | None = None) -> AggExpr:
