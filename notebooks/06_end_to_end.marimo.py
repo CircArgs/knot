@@ -106,18 +106,23 @@ def _(SCHEMA):
     tmdb_person_b = tmdb_src.bind(person)
 
     # ---- constraints -----------------------------------------------------
+    # Domain-shape rules — what no honest source could emit.
     movie.add_constraint("year_sane", body=movie.col.year >= 1888)
+    movie.add_constraint("year_not_future", body=movie.col.year <= 2030)
     credit.add_constraint(
         "credit_role_allowed",
         body=credit.col.role.in_(["director", "actor", "writer", "producer"]),
     )
-    credit.add_constraint(
-        "credit_movie_exists",
-        body=credit.col.movie.target_exists(),
-    )
-    credit.add_constraint(
-        "credit_person_exists",
-        body=credit.col.person.target_exists(),
+    # Cross-class invariant via correlated aggregate — SAME Expr
+    # language that defines the virtual subclass below. One predicate
+    # substrate used for reads + virtuals + constraints. (FK-existence
+    # checks like `credit.col.movie.target_exists()` would be
+    # redundant — ER's forward FK translation maintains that.)
+    movie.add_constraint(
+        "movie_has_director",
+        body=(
+            (credit.col.movie == this.Movie) & (credit.col.role == "director")
+        ).any(),
     )
 
     # ---- virtual subclass ------------------------------------------------
@@ -562,15 +567,13 @@ def _(engine, er_done, movie, pd, text):
 
 @app.cell(hide_code=True)
 def _(mo, same_target_sql):
-    mo.md(
-        f"""
+    mo.md(f"""
     **emitted SQL**:
 
     ```sql
     {same_target_sql}
     ```
-        """
-    )
+    """)
     return
 
 
