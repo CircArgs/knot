@@ -222,12 +222,14 @@ atlas schema apply \
   --dev-url "postgres://knot:knot@localhost:5433/atlas_dev?sslmode=disable" \
   -s knot_data
 
-# 4. Rebuild views (idempotent CREATE OR REPLACE; depends on no live
-#    data, always safe).
+# 4. Rebuild views only — `Spec.views_ddl()` returns just the
+#    CREATE OR REPLACE VIEW statements (no tables, indexes, or
+#    weight table). Idempotent, no data dependence, always safe
+#    after Atlas applies the table diff.
 python -c "
 from your_spec import spec
 import psycopg
-pg = psycopg.connect(...).execute(spec.ddl(schema='knot_data'))
+psycopg.connect(...).execute(spec.views_ddl())
 "
 
 # 5. Seed weight rows for any new (source, class, slot) triples —
@@ -378,8 +380,13 @@ three independent primitives:
 1. `binding.write_sql()` — one upsert SQL template. No constraint
    awareness.
 2. `spec.emit_validation()` — one SELECT per constraint. No writes.
+   Returns both user-declared constraints AND built-in invariants
+   knot derives from the spec shape (see "Built-in constraints"
+   below). Opt out with `include_builtins=False`.
 3. `pg.transaction()` — host opens it, runs (1), runs (2), decides
-   whether to commit or rollback.
+   whether to commit or rollback. Use `with pg.transaction():`
+   even on autocommit psycopg3 connections; `cur.execute("BEGIN")`
+   is a NO-OP under autocommit.
 
 The host composes them. The canonical "ingest with enforcement"
 shape is ~10 lines:
@@ -419,16 +426,43 @@ violation → rollback" policy, only the first option would be
 possible without escape hatches.
 
 **Gotcha:** `emit_validation()` SELECTs run against the whole
-`*_resolved` view, so pre-existing violations in unrelated rows
-would also block your write under the simple "block on any
-violation" policy. Production deployments usually pick one of:
-scope to just-touched canonical_ids (knot doesn't emit that variant
-today — would need a `scope_to=` kwarg), delta-only blocking
-(baseline vs post-write counts), or fully decoupled validation
-(separate scheduled workflow, never blocks ingest). In a Temporal
-deployment, the "decoupled scheduled sweep" pattern is usually the
-right default with delta-only blocking layered in for the rules
-where blocking is genuinely required.
+`*_resolved` view by default, so pre-existing violations in
+unrelated rows would also block your write under the simple "block
+on any violation" policy. Three knobs to scope:
+
+1. `emit_validation(scope_to_source_identifiers={"imdb": [...]})`
+   — restricts each SELECT to canonical_ids touched by that
+   source's batch (delta-only enforcement). Inlines the
+   `(source, identifier)` tuples as SQL literals.
+2. Baseline-vs-post-write count diffing — host snapshots before
+   the write and only blocks when the delta is positive.
+3. Fully decoupled validation — separate Temporal workflow runs
+   `emit_validation()` on a schedule; never blocks ingest.
+
+In a Temporal deployment, the "decoupled scheduled sweep" pattern
+is usually the right default with `scope_to_source_identifiers=`
+layered in for the rules where blocking is genuinely required.
+
+### Built-in constraints
+
+knot ships two families of invariants automatically from the spec
+shape — no user declaration needed. Both are prefixed `_builtin_`
+in the constraint name so hosts can filter them by name if needed:
+
+- `_builtin_fk_orphan_<Class>_<slot>` — per `ClassRef` slot. Body
+  is `slot.is_null() | slot.target_exists()`. Catches a post-ER
+  FK column that doesn't match any canonical_id in the target's
+  resolved view. Severity: ERROR. (ER's forward FK translation
+  *should* maintain this, but the check surfaces the case where
+  it didn't — e.g. the referenced binding was never ER-stamped.)
+- `_builtin_required_null_<Class>_<slot>` — per required
+  non-identifier slot. Body is `slot.is_not_null()`. Catches the
+  case where every source's claim for a required slot is null,
+  leaving the resolved row NULL. Severity: WARNING.
+
+The host doesn't declare these — adding `required=True` or a
+`ClassRef` slot to the spec is enough. Opt out via
+`spec.emit_validation(include_builtins=False)` for user-only.
 
 ## Layout
 
@@ -522,6 +556,18 @@ movie.slot("year", types.INTEGER)
 movie.slot("director", person)             # FK — pass the class directly
 movie.slot("genres", types.ARRAY(types.TEXT))
 movie.slot("title_embedding", types.VECTOR(384))   # pgvector + HNSW
+
+credit = spec.add_class("Credit")
+# Typed enum — DDL emits TEXT CHECK (col IN (...)) inline; no
+# CREATE TYPE ceremony, no migration headache when values change.
+# validate_rows_sql adds a membership pre-check at ingest time.
+credit.slot(
+    "role",
+    types.ENUM("director", "actor", "writer", "producer"),
+    required=True,
+)
+credit.slot("movie", movie, required=True)
+credit.slot("person", person, required=True)
 ```
 
 **Vector slots** lower to `vector(N)` columns plus a per-column HNSW

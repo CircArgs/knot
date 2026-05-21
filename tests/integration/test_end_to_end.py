@@ -603,7 +603,12 @@ def test_constraint_validation_finds_violations(pg, schema):
         schema=schema,
     )
 
-    ((name, validation_sql),) = emit_validation(spec, schema=schema)
+    # include_builtins=False so we only see the user-declared constraint
+    # under test (otherwise built-in fk-orphan / required-null SELECTs
+    # would also appear in the list).
+    ((name, validation_sql),) = emit_validation(
+        spec, schema=schema, include_builtins=False
+    )
     assert name == "year_sane"
 
     with pg.cursor() as cur:
