@@ -302,7 +302,6 @@ def _():
         # The bad row — no source_identifier
         {"title": "Mystery Movie", "year": 9999},
     ]
-    sample_payload_count = len(imdb_movie_rows)
     return (imdb_movie_rows,)
 
 
@@ -779,11 +778,11 @@ def _(credit, movie, person):
     # FK must point at a canonical row that actually exists.
     _ = person
     _ = movie
-    fk_exist_constraint_movie = credit.add_constraint(
+    _fk_exist_movie = credit.add_constraint(
         "credit_movie_exists",
         body=credit.col.movie.target_exists(),
     )
-    fk_exist_constraint_person = credit.add_constraint(
+    _fk_exist_person = credit.add_constraint(
         "credit_person_exists",
         body=credit.col.person.target_exists(),
     )
@@ -823,7 +822,6 @@ def _(credit, engine, pd, person, redeploy_done, text):
     # navigator; .count() / .where(...).count() materialize to
     # correlated subqueries.
     _ = redeploy_done
-    from knot.ast.expr import count as _count
 
     _credits_total = person.back(credit, "person").count()
     _credits_directed = (
