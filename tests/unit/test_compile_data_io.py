@@ -30,7 +30,8 @@ def test_binding_write_sql_method_returns_same(movie_spec):
 
 
 def test_upsert_targets_bindings_table_and_bakes_source(movie_spec):
-    b = movie_spec.source_bindings[0]
+    movie = movie_spec.classes["Movie"]
+    b = movie.binding_for(movie_spec.sources["imdb"])
     sql = emit_binding_write_sql(b)
     assert "INSERT INTO knot_data.movie_bindings" in sql
     assert "'imdb'" in sql  # baked-in source literal in the SELECT

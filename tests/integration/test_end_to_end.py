@@ -178,7 +178,9 @@ def test_emit_ddl_creates_indexes(pg, schema):
 
 
 def test_weight_seed_populates_source_weight(pg, schema):
-    """One row per (source, class, non-identifier slot)."""
+    """One row per (source, class, non-identifier slot). Movie has 3
+    non-identifier slots (name, year, runtime_minutes); three sources
+    are weighted in _deploy (imdb, tmdb, _user_corrections) → 9 rows."""
     spec = _movies_only_spec(schema)
     _deploy(pg, spec, schema)
 
@@ -188,13 +190,13 @@ def test_weight_seed_populates_source_weight(pg, schema):
             f"FROM {schema}.source_weight ORDER BY source_name, slot_name"
         )
         rows = cur.fetchall()
-    # Movie has 3 non-identifier slots: name, year, runtime_minutes.
-    # Two sources (imdb, tmdb) × 3 slots = 6 rows.
-    assert len(rows) == 6
+    assert len(rows) == 9
     imdb_rows = [r for r in rows if r[0] == "imdb"]
     tmdb_rows = [r for r in rows if r[0] == "tmdb"]
+    corr_rows = [r for r in rows if r[0] == "_user_corrections"]
     assert all(r[3] == 0.85 for r in imdb_rows)
     assert all(r[3] == 0.7 for r in tmdb_rows)
+    assert all(r[3] == 1e6 for r in corr_rows)
 
 
 # ---------------------------------------------------------------------------
@@ -463,7 +465,6 @@ def test_upsert_in_place_on_repeated_write(pg, schema):
 
 def test_user_correction_wins_over_declared_sources(pg, schema):
     spec = _movies_only_spec(schema)
-    spec.enable_corrections()
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")
@@ -513,7 +514,6 @@ def test_user_correction_wins_over_declared_sources(pg, schema):
 
 def test_correction_withdraw_falls_back_to_source(pg, schema):
     spec = _movies_only_spec(schema)
-    spec.enable_corrections()
     _deploy(pg, spec, schema)
 
     imdb_b = next(b for b in spec.source_bindings if b.source.name == "imdb")

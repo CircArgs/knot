@@ -142,11 +142,15 @@ def test_class_names_track_spec_schema():
 
 
 def test_class_bindings_property(movie_spec):
+    from knot import CORRECTIONS_SOURCE_NAME
+
     movie = movie_spec.classes["Movie"]
     bindings = movie.bindings
-    # movie_spec has one source (imdb) bound to Movie.
-    assert len(bindings) == 1
-    assert bindings[0].class_ is movie
+    # movie_spec has one source (imdb) bound to Movie + the auto-added
+    # _user_corrections binding every concrete class gets.
+    sources = {b.source.name for b in bindings}
+    assert sources == {"imdb", CORRECTIONS_SOURCE_NAME}
+    assert all(b.class_ is movie for b in bindings)
 
 
 def test_class_binding_for_source(movie_spec):

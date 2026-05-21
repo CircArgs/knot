@@ -613,8 +613,9 @@ class OntologyClass:
         return vc
 
     def corrections_binding(self) -> SourceBinding:
-        """Return the ``_user_corrections`` binding for this class.
-        Raises ``KeyError`` if corrections aren't enabled."""
+        """Return the ``_user_corrections`` binding for this class —
+        always exists for concrete classes (the corrections source is
+        bound at ``add_class`` time)."""
         if self._spec is None:
             raise RuntimeError(f"OntologyClass {self.name!r} not attached to a Spec")
         for b in self._spec.source_bindings:
@@ -622,7 +623,8 @@ class OntologyClass:
                 return b
         raise KeyError(
             f"no _user_corrections binding for class {self.name!r} — "
-            f"call spec.enable_corrections() first"
+            f"only concrete classes get a corrections binding "
+            f"(this one is {self.kind.value!r})"
         )
 
     def explain_winner_sql(
@@ -1234,6 +1236,15 @@ class Spec:
             from knot.ast.types import Primitive
 
             self.identifier_type = Primitive.TEXT
+        # Corrections source ships by default — every spec has a
+        # human-override surface. Bindings to concrete classes get
+        # added in add_class. The operator sets the corrections weight
+        # at runtime via cls.corrections_binding().upsert_weight_sql.
+        self.sources[CORRECTIONS_SOURCE_NAME] = Source(
+            name=CORRECTIONS_SOURCE_NAME,
+            description="human overrides",
+            _spec=self,
+        )
 
     # -- builder methods --
 
@@ -1248,9 +1259,10 @@ class Spec:
     ) -> OntologyClass:
         if name in self.classes:
             raise ValueError(f"Spec already has a class named {name!r}")
+        resolved_kind = kind if isinstance(kind, ClassKind) else ClassKind(kind)
         cls = OntologyClass(
             name=name,
-            kind=kind if isinstance(kind, ClassKind) else ClassKind(kind),
+            kind=resolved_kind,
             is_a=is_a,
             mixins=list(mixins) if mixins else [],
             description=description,
@@ -1263,6 +1275,10 @@ class Spec:
         # error from validate().
         if not any(s.identifier for s in cls.effective_slots()):
             cls.slot(self.identifier_slot_name, self.identifier_type, identifier=True)
+        # Auto-bind concrete classes to the corrections source — every
+        # class gets a human-override surface by default.
+        if resolved_kind == ClassKind.CONCRETE:
+            self.sources[CORRECTIONS_SOURCE_NAME].bind(cls)
         return cls
 
     def add_source(
@@ -1271,48 +1287,11 @@ class Spec:
         *,
         description: str | None = None,
     ) -> Source:
-        if name == CORRECTIONS_SOURCE_NAME:
-            raise ValueError(
-                f"{name!r} is a reserved source name — use "
-                f"spec.enable_corrections() instead of add_source()"
-            )
         if name in self.sources:
             raise ValueError(f"Spec already has a source named {name!r}")
         s = Source(name=name, description=description, _spec=self)
         self.sources[name] = s
         return s
-
-    def enable_corrections(
-        self,
-        *,
-        description: str | None = "human overrides",
-    ) -> Source:
-        """Register the ``_user_corrections`` synthetic source and bind
-        it to every concrete ``OntologyClass`` in the spec.
-
-        Weights are runtime-only: corrections start at weight 0 (the
-        resolver's COALESCE fallback). The operator decides how
-        dominant corrections should be by upserting weights via the
-        usual runtime API:
-
-            cur.execute(
-                cls.corrections_binding().upsert_weight_sql(),
-                {"slot_name": "title", "weight": 1e6},
-            )
-
-        Idempotent: calling again is a no-op if the source already
-        exists. Returns the (possibly pre-existing) ``Source`` object.
-        """
-        existing = self.sources.get(CORRECTIONS_SOURCE_NAME)
-        if existing is not None:
-            return existing
-        source = Source(
-            name=CORRECTIONS_SOURCE_NAME, description=description, _spec=self
-        )
-        self.sources[CORRECTIONS_SOURCE_NAME] = source
-        for cls in self.concrete_classes():
-            source.bind(cls)
-        return source
 
     def include(self, other: Spec) -> None:
         """Merge another spec's classes, sources, source bindings, and

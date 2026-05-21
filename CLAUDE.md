@@ -625,8 +625,9 @@ movie.add_constraint("year_sane", body=movie.col.year >= 1888)
 movie.add_virtual("DirectedMovie",
                   where=movie.has_any(credit, role="director"))
 
-# Corrections binding lookup
-spec.enable_corrections(default_weight=1e6)
+# Corrections binding — every spec ships with a `_user_corrections`
+# source auto-bound to every concrete class. No opt-in. Set the
+# dominant weight at runtime via the binding's upsert_weight_sql.
 corr_b = movie.corrections_binding()
 ```
 
