@@ -183,3 +183,85 @@ def test_scope_multi_source_inlines_all_pairs():
     assert "('imdb', 'tt001')" in sql
     assert "('tmdb', 'm999')" in sql
     sqlglot.parse_one(sql, dialect="postgres")
+
+
+# ---------------------------------------------------------------------------
+# built-in constraints — auto-shipped from spec shape
+# ---------------------------------------------------------------------------
+
+
+def _fk_spec():
+    """Person, Movie (director FK), Movie.title required."""
+    spec = Spec(identifier_slot_name="canonical_id")
+    person = spec.add_class("Person")
+    person.slot("name", types.TEXT, required=True)
+    movie = spec.add_class("Movie")
+    movie.slot("title", types.TEXT, required=True)
+    movie.slot("year", types.INTEGER)
+    movie.slot("director", person)
+    return spec, person, movie
+
+
+def test_builtin_fk_orphan_constraint_emitted():
+    """Every ClassRef slot gets a `_builtin_fk_orphan_<Class>_<slot>`
+    validation that catches non-null FKs pointing at no canonical_id."""
+    spec, _person, _movie = _fk_spec()
+    names = dict(emit_validation(spec)).keys()
+    assert "_builtin_fk_orphan_Movie_director" in names
+
+
+def test_builtin_required_null_constraint_emitted():
+    """Every required non-identifier slot gets a
+    `_builtin_required_null_<Class>_<slot>` validation."""
+    spec, _person, _movie = _fk_spec()
+    names = dict(emit_validation(spec)).keys()
+    assert "_builtin_required_null_Movie_title" in names
+    assert "_builtin_required_null_Person_name" in names
+
+
+def test_builtin_skipped_for_non_required_non_fk():
+    """Non-required, non-FK slots get no built-in. ``Movie.year``
+    is INTEGER non-required → no built-in."""
+    spec, _person, _movie = _fk_spec()
+    names = dict(emit_validation(spec)).keys()
+    assert "_builtin_required_null_Movie_year" not in names
+    assert "_builtin_fk_orphan_Movie_year" not in names
+
+
+def test_builtin_skipped_for_identifier_slot():
+    """The identifier slot is required by convention but has its own
+    NULL handling (resolved view filters); no built-in for it."""
+    spec, _person, _movie = _fk_spec()
+    names = dict(emit_validation(spec)).keys()
+    assert "_builtin_required_null_Movie_canonical_id" not in names
+
+
+def test_include_builtins_false_drops_them():
+    """The opt-out kwarg returns only user-declared constraints."""
+    spec, _person, movie = _fk_spec()
+    movie.add_constraint("year_sane", body=movie.col.year >= 1888)
+    names = dict(emit_validation(spec, include_builtins=False)).keys()
+    assert names == {"year_sane"}
+
+
+def test_fk_orphan_body_allows_null_fk():
+    """A null FK is valid (pre-ER state or genuinely unset).
+    The SQL should compile such that null FKs aren't flagged."""
+    spec, _person, _movie = _fk_spec()
+    rewrites = dict(emit_validation(spec))
+    sql = rewrites["_builtin_fk_orphan_Movie_director"]
+    sqlglot.parse_one(sql, dialect="postgres")
+    # Body is `is_null() | target_exists()`; WHERE NOT (...) inverts.
+    assert "IS NULL" in sql
+    assert "EXISTS" in sql
+
+
+def test_builtin_constraints_have_error_or_warning_severity():
+    """FK orphans are ERROR (structural); required-null are WARNING
+    (host may tolerate during early ingest)."""
+    spec, _person, _movie = _fk_spec()
+    rewrites = dict(emit_validation(spec))
+    fk_sql = rewrites["_builtin_fk_orphan_Movie_director"]
+    req_sql = rewrites["_builtin_required_null_Movie_title"]
+    assert "'error'" in fk_sql
+    assert "'warning'" in req_sql

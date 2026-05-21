@@ -1621,10 +1621,17 @@ class Spec:
         self,
         *,
         scope_to_source_identifiers: dict[str, list[str]] | None = None,
+        include_builtins: bool = True,
     ) -> list[tuple[str, str]]:
         """List of ``(constraint_name, validation_sql)`` pairs. Validates
         the spec first; schema comes from ``self.schema``. See
         ``knot.compile.constraints.emit_validation``.
+
+        ``include_builtins`` (default ``True``): also emit structural
+        invariants knot derives from the spec — FK-orphan checks per
+        ClassRef slot, required-slot-null checks per required slot,
+        prefixed ``_builtin_``. Pass ``False`` to get only user-declared
+        constraints.
 
         ``scope_to_source_identifiers`` — when provided, each validation
         SELECT is restricted to the canonical_ids touched by that batch
@@ -1638,6 +1645,7 @@ class Spec:
             self,
             schema=self.schema,
             scope_to_source_identifiers=scope_to_source_identifiers,
+            include_builtins=include_builtins,
         )
 
 

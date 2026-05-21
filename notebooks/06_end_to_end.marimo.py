@@ -107,8 +107,16 @@ def _(SCHEMA):
 
     # ---- constraints -----------------------------------------------------
     # Domain-shape rules — what no honest source could emit.
+    # year_sane: cinema starts 1888. year_not_future: dynamic
+    # against today's year + 5 (release announcements run ~5 yrs
+    # ahead); the spec captures the rule, not a baked-in date.
+    from datetime import datetime as _dt
+
+    _next_year_cap = _dt.now().year + 5
     movie.add_constraint("year_sane", body=movie.col.year >= 1888)
-    movie.add_constraint("year_not_future", body=movie.col.year <= 2030)
+    movie.add_constraint(
+        "year_not_future", body=movie.col.year <= _next_year_cap
+    )
     credit.add_constraint(
         "credit_role_allowed",
         body=credit.col.role.in_(["director", "actor", "writer", "producer"]),
@@ -263,13 +271,13 @@ def _(mo, spec):
 @app.cell
 def _(json, paths, pd, pg, spec, weights_set):
     _ = weights_set
-    rows = []
+    _rows = []
     for _b in spec.source_bindings:
         _path = paths[(_b.source.name, _b.class_.name)]
         if not _path.exists():
-            rows.append({"source": _b.source.name, "class": _b.class_.name,
-                         "raw": 0, "violations": 0, "upserted": 0,
-                         "note": "no data file"})
+            _rows.append({"source": _b.source.name, "class": _b.class_.name,
+                          "raw": 0, "violations": 0, "upserted": 0,
+                          "note": "no data file"})
             continue
         _records = json.loads(_path.read_text())
 
@@ -284,10 +292,10 @@ def _(json, paths, pd, pg, spec, weights_set):
         with pg.cursor() as _cur:
             _cur.execute(_b.write_sql(), {"rows": json.dumps(_clean)})
 
-        rows.append({"source": _b.source.name, "class": _b.class_.name,
-                     "raw": len(_records), "violations": len(_bad),
-                     "upserted": len(_clean), "note": ""})
-    ingest_summary = pd.DataFrame(rows)
+        _rows.append({"source": _b.source.name, "class": _b.class_.name,
+                      "raw": len(_records), "violations": len(_bad),
+                      "upserted": len(_clean), "note": ""})
+    ingest_summary = pd.DataFrame(_rows)
     ingest_done = True
     ingest_summary
     return (ingest_done,)
@@ -670,6 +678,60 @@ def _(engine, er_done, movie, pd, text):
     pulp_cid = pulp.iloc[0]["canonical_id"]
     pulp_winners = winners[winners["canonical_id"] == pulp_cid].reset_index(drop=True)
     pulp_winners
+    return
+
+
+@app.cell(hide_code=True)
+def _(mo):
+    mo.md(r"""
+    ## 8. Validation suite
+
+    `spec.emit_validation()` returns one SELECT per constraint.
+    Two families:
+
+    - **User constraints** declared in the spec (`year_sane`,
+      `year_not_future`, `credit_role_allowed`,
+      `movie_has_director`).
+    - **Built-ins** knot auto-derives from the spec shape
+      (prefixed `_builtin_`): an FK-orphan check per `ClassRef`
+      slot, a required-slot-null check per required slot. The
+      host doesn't need to write these — knot ships them.
+
+    Each SELECT returns zero rows when its constraint holds and
+    one row per violator otherwise. Below: rule name, severity,
+    and violation count after the clean ingest + ER above.
+    """)
+    return
+
+
+@app.cell
+def _(er_done, pd, pg, spec):
+    import re as _re
+
+    def _severity_from_sql(sql: str) -> str:
+        # Severity is inlined as a literal in the SELECT's third
+        # column — recover it for the zero-violation case (when no
+        # row carries severity back to us).
+        m = _re.search(r"'(error|warning|info)'\s+AS severity", sql)
+        return m.group(1) if m else "?"
+
+    _ = er_done
+    _rules = []
+    for _name, _sql in spec.emit_validation():
+        with pg.cursor() as _cur:
+            _cur.execute(_sql)
+            _violations = _cur.fetchall()
+        _severity = _violations[0][2] if _violations else _severity_from_sql(_sql)
+        _rules.append({
+            "rule": _name,
+            "kind": "builtin" if _name.startswith("_builtin_") else "user",
+            "severity": _severity,
+            "violations": len(_violations),
+        })
+    validation_report = pd.DataFrame(_rules).sort_values(
+        ["kind", "rule"]
+    ).reset_index(drop=True)
+    validation_report
     return
 
 
