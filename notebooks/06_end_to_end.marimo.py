@@ -1,7 +1,7 @@
 import marimo
 
 __generated_with = "0.23.5"
-app = marimo.App()
+app = marimo.App(layout_file="layouts/06_end_to_end.marimo.slides.json")
 
 
 @app.cell
