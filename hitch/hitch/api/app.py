@@ -27,7 +27,8 @@ from knot.ast.types import ClassRef
 from knot_graphql import build_schema as build_knot_schema
 
 from hitch import config
-from hitch.db import execute
+from hitch.api.mutations import build_mutation_resolvers, emit_mutation_sdl
+from hitch.db import connect, execute
 from hitch.spec import build_spec
 
 log = logging.getLogger("hitch.api")
@@ -49,6 +50,21 @@ def make_app() -> FastAPI:
         return execute(cfg.pg_dsn, sql)
 
     sdl, knot_resolvers = build_knot_schema(spec, executor)
+
+    # Mutation layer — write-path. Append a Mutation type to the SDL
+    # and register one resolver per concrete class.
+    def write_executor(sql: str, params: dict[str, Any]) -> None:
+        # The caller already JSON-serialized the rows payload —
+        # double-encoding would yield a quoted-string jsonb literal
+        # ("cannot extract elements from a scalar" at execute time).
+        with connect(cfg.pg_dsn) as conn, conn.cursor() as cur:
+            cur.execute(sql, params)
+
+    def by_id(class_name: str, canonical_id: str):
+        return knot_resolvers.resolve_by_id(class_name, canonical_id)
+
+    sdl = sdl + "\n\n" + emit_mutation_sdl(spec)
+    mutation_type = build_mutation_resolvers(spec, write_executor, by_id)
 
     # ----- Query root --------------------------------------------------
     query = QueryType()
@@ -165,7 +181,7 @@ def make_app() -> FastAPI:
 
         type_objs.append(ot)
 
-    schema_obj = make_executable_schema(sdl, query, *type_objs)
+    schema_obj = make_executable_schema(sdl, query, mutation_type, *type_objs)
 
     # debug=False — stops Ariadne from shipping a Python stacktrace +
     # resolver-local context dict to the client when a resolver raises.

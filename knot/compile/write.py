@@ -149,10 +149,17 @@ def _passthrough_value(slot: Slot, raw_field: str) -> str:
     if isinstance(slot.type, Array):
         # Array passthrough needs the original jsonb element (text →
         # text[] doesn't cast directly). Use the preserved ``__raw_payload``.
+        # CASE-guard NULL: if the source's row doesn't carry the field
+        # at all, ``raw.__raw_payload->'genres'`` returns jsonb null;
+        # ``jsonb_array_elements(null)`` yields 0 rows and ARRAY(SELECT)
+        # produces an empty array ``{}`` — which is NOT NULL, so the
+        # resolver argmax stops skipping it. We want NULL passthrough.
         inner = _jsonb_cast(slot.type.of).removeprefix("::").removesuffix("[]")
         return (
-            f"(SELECT ARRAY(SELECT (value #>> '{{}}')::{inner} "
-            f"FROM jsonb_array_elements(raw.__raw_payload->'{raw_field}') AS value))"
+            f"CASE WHEN raw.__raw_payload->'{raw_field}' IS NULL THEN NULL "
+            f"ELSE (SELECT ARRAY(SELECT (value #>> '{{}}')::{inner} "
+            f"FROM jsonb_array_elements(raw.__raw_payload->'{raw_field}') AS value)) "
+            f"END"
         )
     raise TypeError(f"unhandled slot type: {type(slot.type).__name__}")
 
