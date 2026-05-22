@@ -72,9 +72,16 @@ def _inner(t: TypeExpression, *, class_name: str, slot_name: str) -> str:
 def enum_type_name(class_name: str, slot_name: str) -> str:
     """Canonical GraphQL enum type name for a given (class, slot) pair.
 
-    Example: class ``Movie``, slot ``status`` → ``MovieStatusEnum``.
-    """
-    return f"{class_name}{slot_name.capitalize()}Enum"
+    Examples:
+        ``Movie``, ``status``      → ``MovieStatusEnum``
+        ``Movie``, ``mpaa_rating`` → ``MovieMpaaRatingEnum``
+
+    Snake-case slot names PascalCase-fold on underscores (not
+    ``str.capitalize()``, which would leave ``mpaa_rating`` →
+    ``Mpaa_rating`` — snake inside Pascal is ugly and read as two
+    separate words by GraphQL codegen tools)."""
+    pascal = "".join(part.capitalize() for part in slot_name.split("_") if part)
+    return f"{class_name}{pascal}Enum"
 
 
 def enum_sdl(class_name: str, slot_name: str, values: tuple[str, ...]) -> str:

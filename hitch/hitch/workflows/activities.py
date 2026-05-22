@@ -180,35 +180,88 @@ def _mint(*parts: str) -> str:
     return hashlib.sha1(raw.encode()).hexdigest()[:20]
 
 
+def _identity(r: dict[str, Any], *fields: str) -> list[str] | None:
+    """Pull identity fields from a row. Returns None if any required
+    field is missing, None, or empty/whitespace — those rows cannot
+    be deterministically minted (every blank-name person would
+    collide on the empty-string sha1). Caller skips them.
+
+    Empty/whitespace optional fields (e.g. Studio.country) coerce to
+    ``""`` for the mint — distinct from missing-required."""
+    parts: list[str] = []
+    for f in fields:
+        v = r.get(f)
+        if v is None or (isinstance(v, str) and not v.strip()):
+            return None
+        parts.append(str(v))
+    return parts
+
+
 @activity.defn
 def decide_canonicals(
     source_name: str, class_name: str, rows: list[dict[str, Any]]
 ) -> list[dict[str, Any]]:
     """Return assignments shaped for assign_canonicals_sql:
-    [{canonical_id, source_identifier, er_metadata}, ...]."""
+    [{canonical_id, source_identifier, er_metadata}, ...].
+
+    Rows whose identity fields are missing / null / blank are SKIPPED
+    with a warning — silently minting them would collide every such
+    row into one canonical_id (sha1("") = same hash for everyone)."""
     out: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
     for r in rows:
+        sid = r.get("source_identifier")
+        if not sid:
+            skipped.append({"reason": "no_source_identifier", "row": r})
+            continue
         if class_name == "Person":
-            cid = "p_" + _mint(r["name"])
+            ident = _identity(r, "name")
+            if ident is None:
+                skipped.append({"reason": "blank_name", "source_identifier": sid})
+                continue
+            cid = "p_" + _mint(*ident)
         elif class_name == "Studio":
             # Mint on (name, country) — same name in different countries
-            # should NOT collapse (e.g. "Pathé" UK vs France).
-            cid = "s_" + _mint(r["name"], r.get("country") or "")
+            # should NOT collapse (e.g. "Pathé" UK vs France). Country
+            # falls back to "" if missing — only `name` is required.
+            ident = _identity(r, "name")
+            if ident is None:
+                skipped.append({"reason": "blank_name", "source_identifier": sid})
+                continue
+            cid = "s_" + _mint(ident[0], r.get("country") or "")
         elif class_name == "Movie":
-            cid = "m_" + _mint(r["title"], str(r.get("year") or ""))
+            ident = _identity(r, "title")
+            if ident is None:
+                skipped.append({"reason": "blank_title", "source_identifier": sid})
+                continue
+            cid = "m_" + _mint(ident[0], str(r.get("year") or ""))
         elif class_name == "Credit":
-            cid = "c_" + _mint(str(r["movie"]), str(r["person"]), r["role"])
+            ident = _identity(r, "movie", "person", "role")
+            if ident is None:
+                skipped.append(
+                    {"reason": "missing_credit_fk_or_role", "source_identifier": sid}
+                )
+                continue
+            cid = "c_" + _mint(*ident)
         else:
-            cid = _mint(r["source_identifier"])
+            cid = _mint(sid)
         out.append(
             {
                 "canonical_id": cid,
-                "source_identifier": r["source_identifier"],
+                "source_identifier": sid,
                 "er_metadata": {
                     "policy": "deterministic_sha1",
                     "source": source_name,
                 },
             }
+        )
+    if skipped:
+        log.warning(
+            "decide_canonicals(%s/%s): skipped %d row(s): %s",
+            source_name,
+            class_name,
+            len(skipped),
+            skipped[:5],
         )
     return out
 

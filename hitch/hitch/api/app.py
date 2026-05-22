@@ -138,8 +138,20 @@ def make_app() -> FastAPI:
 
     schema_obj = make_executable_schema(sdl, query, *type_objs)
 
-    app = FastAPI(title="hitch — knot + temporal + graphql demo")
-    app.mount("/graphql", GraphQL(schema_obj, debug=True))
+    # debug=False — stops Ariadne from shipping a Python stacktrace +
+    # resolver-local context dict to the client when a resolver raises.
+    # That payload is an information disclosure (paths, library versions,
+    # internal vars). Errors still surface in the GraphQL `errors` array
+    # via `message`; the stacktrace stays in the server logs.
+    # redirect_slashes=False so POST /graphql doesn't get redirected to
+    # POST /graphql/ — some HTTP clients drop the body on a 307.
+    graphql_app = GraphQL(schema_obj, debug=False)
+    app = FastAPI(
+        title="hitch — knot + temporal + graphql demo",
+        redirect_slashes=False,
+    )
+    app.add_route("/graphql", graphql_app, methods=["GET", "POST", "OPTIONS"])
+    app.add_route("/graphql/", graphql_app, methods=["GET", "POST", "OPTIONS"])
 
     @app.get("/health")
     async def health() -> dict[str, str]:

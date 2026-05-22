@@ -105,6 +105,18 @@ retries converge to the same canonical_ids.
   rewrites FK columns from source-ids → canonical-ids using a join
   against the target binding. The cleaner fix is the primitive;
   this isn't built yet.
+- **N+1 perf on the GraphQL FK walks.** `knot_graphql.Resolvers`
+  fires one SQL roundtrip per parent row per FK field — a deep
+  query like `creditList { person { name } movie { director { name }
+  studio { name } } }` runs O(N×fields) roundtrips. Acceptable for
+  this demo's row counts; production needs DataLoader-style
+  batching on top of the resolver layer.
+- **ER mint policy is sha1-of-name** — fast, deterministic, and
+  collides on common variants. "Miramax" vs "Miramax Films" stay
+  split. The demo seeds use varied spellings on purpose to expose
+  this. A real ER policy would block + score (string similarity,
+  embedding distance, year-window matching); the workflow surface
+  is unchanged — just swap `decide_canonicals`.
 - **Re-ingest also nulls `title_embedding`** for the same reason —
   the seed payload has no embedding field, so the upsert writes
   NULL. Downstream `EmbedWorkflow` will pick it up on the next
