@@ -1,0 +1,92 @@
+name: hitch
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: hitch
+      POSTGRES_PASSWORD: hitch
+      POSTGRES_DB: hitch
+    ports:
+      - "5434:5432"
+    volumes:
+      - hitch_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hitch -d hitch"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  temporal:
+    image: temporalio/auto-setup:1.24
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: hitch
+      POSTGRES_PWD: hitch
+      POSTGRES_SEEDS: postgres
+      POSTGRES_DB: temporal
+      DBNAME: temporal
+      VISIBILITY_DBNAME: temporal_visibility
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "7233:7233"
+    healthcheck:
+      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  temporal-ui:
+    image: temporalio/ui:2.27.2
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8088:8080"
+    depends_on:
+      - temporal
+
+  hitch-api:
+    build:
+      context: ..
+      dockerfile: hitch/docker/Dockerfile
+    command: ["uvicorn", "hitch.api.app:app", "--host", "0.0.0.0", "--port", "8000"]
+    environment:
+      HITCH_PG_DSN: postgresql://hitch:hitch@postgres:5432/hitch
+      HITCH_PG_SCHEMA: hitch
+      HITCH_TEMPORAL_ADDRESS: temporal:7233
+      HITCH_API_PORT: "8000"
+    volumes:
+      - ../knot:/app/knot
+      - ../knot_graphql:/app/knot_graphql
+      - ./:/app/hitch
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  hitch-worker:
+    build:
+      context: ..
+      dockerfile: hitch/docker/Dockerfile
+    command: ["python", "-m", "hitch.worker"]
+    environment:
+      HITCH_PG_DSN: postgresql://hitch:hitch@postgres:5432/hitch
+      HITCH_PG_SCHEMA: hitch
+      HITCH_TEMPORAL_ADDRESS: temporal:7233
+    volumes:
+      - ../knot:/app/knot
+      - ../knot_graphql:/app/knot_graphql
+      - ./:/app/hitch
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+
+volumes:
+  hitch_pg:

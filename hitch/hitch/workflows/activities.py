@@ -1,0 +1,263 @@
+"""Temporal activities — every knot SQL emitter is invoked from here.
+
+Workflow code (in ingest.py / embed.py / er.py) is deterministic and
+never touches the DB or the disk; activities are where I/O lives.
+
+Each activity:
+ - takes JSON-serializable inputs + outputs
+ - loads the Spec via build_spec() (cheap; pure construction)
+ - resolves the binding by name lookup
+ - calls the corresponding ``binding.*_sql()`` template
+ - executes via psycopg with the right `%(named)s` param dict
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import logging
+from pathlib import Path
+from typing import Any
+
+from temporalio import activity
+
+from hitch import config
+from hitch import embeddings as emb
+from hitch.db import connect, jsonb_param
+from hitch.spec import build_spec
+
+log = logging.getLogger("hitch.activities")
+
+# Seed JSON lives next to the package; in the docker image this is
+# /app/hitch/seeds because the package is copied there.
+_SEEDS_DIR = Path(__file__).parent.parent / "seeds"
+
+
+def _binding(source_name: str, class_name: str, *, schema: str, embedding_dim: int):
+    spec = build_spec(schema=schema, embedding_dim=embedding_dim)
+    return spec, spec.sources[source_name].binding_for(spec.classes[class_name])
+
+
+# ---------------------------------------------------------------------------
+# Ingest
+# ---------------------------------------------------------------------------
+
+
+@activity.defn
+def fetch_seed_batch(source_name: str, class_name: str) -> list[dict[str, Any]]:
+    path = _SEEDS_DIR / f"{source_name}.json"
+    if not path.exists():
+        log.warning("no seed file at %s", path)
+        return []
+    data = json.loads(path.read_text())
+    return data.get(class_name, [])
+
+
+@activity.defn
+def validate_and_bucket(
+    source_name: str, class_name: str, rows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Run validate_rows_sql; split into clean + violations."""
+    cfg = config.load()
+    _, binding = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    sql = binding.validate_rows_sql()
+    with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute(sql, {"rows": jsonb_param(rows)})
+        bad_records = list(cur.fetchall())
+    bad_indexes = {int(r["row_index"]) for r in bad_records}
+    clean = [r for i, r in enumerate(rows) if i not in bad_indexes]
+    return {"clean": clean, "violations": bad_records}
+
+
+@activity.defn
+def upsert_rows(source_name: str, class_name: str, rows: list[dict[str, Any]]) -> int:
+    if not rows:
+        return 0
+    cfg = config.load()
+    _, binding = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    sql = binding.write_sql()
+    with connect(cfg.pg_dsn) as conn, conn.cursor() as cur:
+        cur.execute(sql, {"rows": jsonb_param(rows)})
+    return len(rows)
+
+
+# ---------------------------------------------------------------------------
+# Embedding
+# ---------------------------------------------------------------------------
+
+
+@activity.defn
+def fetch_titles_to_embed(
+    source_name: str, class_name: str, slot_name: str, limit: int
+) -> list[dict[str, Any]]:
+    """Per-source query: which binding rows still have a NULL embedding?"""
+    cfg = config.load()
+    spec, _ = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    cls = spec.classes[class_name]
+    src = spec.sources[source_name]
+    q = (
+        cls.from_source(src)
+        .where(cls.col[slot_name].is_null())
+        .select(cls.bindings_col.source_identifier, cls.col.title)
+        .limit(limit)
+    )
+    with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute(q.sql())
+        return list(cur.fetchall())
+
+
+@activity.defn
+def compute_embeddings(texts: list[str]) -> list[list[float]]:
+    cfg = config.load()
+    return emb.embed(texts, model_name=cfg.embedding_model)
+
+
+@activity.defn
+def write_embeddings(
+    source_name: str,
+    class_name: str,
+    slot_name: str,
+    rows: list[dict[str, Any]],
+) -> int:
+    """`rows` is [{source_identifier, <slot_name>: [...]}, ...]."""
+    if not rows:
+        return 0
+    cfg = config.load()
+    _, binding = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    sql = binding.update_slot_sql(slot_name)
+    with connect(cfg.pg_dsn) as conn, conn.cursor() as cur:
+        cur.execute(sql, {"rows": jsonb_param(rows)})
+    return len(rows)
+
+
+# ---------------------------------------------------------------------------
+# ER
+# ---------------------------------------------------------------------------
+
+
+@activity.defn
+def fetch_unresolved(source_name: str, class_name: str) -> list[dict[str, Any]]:
+    """All bindings rows from a source where canonical_id IS NULL,
+    plus the identity field we ER-match on."""
+    cfg = config.load()
+    spec, _ = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    cls = spec.classes[class_name]
+    src = spec.sources[source_name]
+    id_col = (
+        "name"
+        if class_name == "Person"
+        else ("title" if class_name == "Movie" else "role")
+    )
+    refs = [cls.bindings_col.source_identifier, cls.col[id_col]]
+    if class_name == "Movie":
+        refs.append(cls.col.year)
+    if class_name == "Credit":
+        refs += [cls.col.movie, cls.col.person]
+    q = cls.from_source(src).where(cls.col.canonical_id.is_null()).select(*refs)
+    with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute(q.sql())
+        return list(cur.fetchall())
+
+
+def _mint(*parts: str) -> str:
+    """Deterministic canonical_id from ER identity parts. Sha1 keeps
+    workflow re-runs convergent (per the docs/temporal-adapter.md
+    replay-safety contract)."""
+    raw = "::".join(p.strip().lower() for p in parts)
+    return hashlib.sha1(raw.encode()).hexdigest()[:20]
+
+
+@activity.defn
+def decide_canonicals(
+    source_name: str, class_name: str, rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    """Return assignments shaped for assign_canonicals_sql:
+    [{canonical_id, source_identifier, er_metadata}, ...]."""
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if class_name == "Person":
+            cid = "p_" + _mint(r["name"])
+        elif class_name == "Movie":
+            cid = "m_" + _mint(r["title"], str(r.get("year") or ""))
+        elif class_name == "Credit":
+            cid = "c_" + _mint(str(r["movie"]), str(r["person"]), r["role"])
+        else:
+            cid = _mint(r["source_identifier"])
+        out.append(
+            {
+                "canonical_id": cid,
+                "source_identifier": r["source_identifier"],
+                "er_metadata": {
+                    "policy": "deterministic_sha1",
+                    "source": source_name,
+                },
+            }
+        )
+    return out
+
+
+@activity.defn
+def assign_canonicals(
+    source_name: str, class_name: str, assignments: list[dict[str, Any]]
+) -> int:
+    if not assignments:
+        return 0
+    cfg = config.load()
+    _, binding = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    sql = binding.assign_canonicals_sql()
+    with connect(cfg.pg_dsn) as conn, conn.cursor() as cur:
+        cur.execute(sql, {"assignments": jsonb_param(assignments)})
+    return len(assignments)
+
+
+# ---------------------------------------------------------------------------
+# Validation sweep
+# ---------------------------------------------------------------------------
+
+
+@activity.defn
+def run_validation_sweep() -> dict[str, Any]:
+    """Run every emit_validation SELECT. Returns rule → violations."""
+    cfg = config.load()
+    spec = build_spec(schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim)
+    report: dict[str, Any] = {}
+    with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        for rule, sql in spec.emit_validation():
+            cur.execute(sql)
+            violations = list(cur.fetchall())
+            report[rule.name] = {
+                "severity": rule.severity.value,
+                "count": len(violations),
+                "sample": violations[:3],
+            }
+    return report
+
+
+# ---------------------------------------------------------------------------
+# All activities — registered with the worker
+# ---------------------------------------------------------------------------
+
+ALL = [
+    fetch_seed_batch,
+    validate_and_bucket,
+    upsert_rows,
+    fetch_titles_to_embed,
+    compute_embeddings,
+    write_embeddings,
+    fetch_unresolved,
+    decide_canonicals,
+    assign_canonicals,
+    run_validation_sweep,
+]

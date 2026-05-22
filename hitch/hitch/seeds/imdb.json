@@ -1,0 +1,21 @@
+{
+  "Person": [
+    {"source_identifier": "nm_qt", "name": "Quentin Tarantino", "birth_country": "USA", "birth_year": 1963},
+    {"source_identifier": "nm_pta", "name": "Paul Thomas Anderson", "birth_country": "USA", "birth_year": 1970},
+    {"source_identifier": "nm_kub", "name": "Stanley Kubrick", "birth_country": "USA", "birth_year": 1928},
+    {"source_identifier": "nm_kit", "name": "Harvey Keitel", "birth_country": "USA", "birth_year": 1939}
+  ],
+  "Movie": [
+    {"source_identifier": "tt_resdogs", "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 99, "director": "nm_qt"},
+    {"source_identifier": "tt_pulp", "title": "Pulp Fiction", "year": 1994, "runtime_minutes": 154, "director": "nm_qt"},
+    {"source_identifier": "tt_boogie", "title": "Boogie Nights", "year": 1997, "runtime_minutes": 155, "director": "nm_pta"},
+    {"source_identifier": "tt_shining", "title": "The Shining", "year": 1980, "runtime_minutes": 146, "director": "nm_kub"}
+  ],
+  "Credit": [
+    {"source_identifier": "tt_resdogs::nm_qt::director", "role": "director", "movie": "tt_resdogs", "person": "nm_qt"},
+    {"source_identifier": "tt_resdogs::nm_kit::actor", "role": "actor", "movie": "tt_resdogs", "person": "nm_kit"},
+    {"source_identifier": "tt_pulp::nm_qt::director", "role": "director", "movie": "tt_pulp", "person": "nm_qt"},
+    {"source_identifier": "tt_boogie::nm_pta::director", "role": "director", "movie": "tt_boogie", "person": "nm_pta"},
+    {"source_identifier": "tt_shining::nm_kub::director", "role": "director", "movie": "tt_shining", "person": "nm_kub"}
+  ]
+}
