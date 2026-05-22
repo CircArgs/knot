@@ -42,12 +42,17 @@ def build_spec(*, schema: str = "hitch", embedding_dim: int = 384) -> Spec:
     person.slot("death_year", types.INTEGER)
     person.slot("height_cm", types.INTEGER)
     person.slot("primary_profession", types.ARRAY(types.TEXT))
+    # name_embedding drives ER — k-NN against other sources' stamped
+    # bindings fuses "P. T. Anderson" with "Paul Thomas Anderson".
+    person.slot("name_embedding", types.VECTOR(embedding_dim, metric="cosine"))
 
     # ----- Studio --------------------------------------------------------
     studio = spec.add_class("Studio")
     studio.slot("name", types.TEXT, required=True)
     studio.slot("country", types.TEXT)
     studio.slot("founded_year", types.INTEGER)
+    # Fuses "Miramax" with "Miramax Films" — sha1-by-name policy split.
+    studio.slot("name_embedding", types.VECTOR(embedding_dim, metric="cosine"))
 
     # ----- Movie ---------------------------------------------------------
     movie = spec.add_class("Movie")

@@ -57,17 +57,25 @@ async def amain() -> None:
             )
             log.info("  %s/%s → %s", source_name, cls_name, result)
 
-    # 2. Embeddings
-    log.info("=== embeddings (Movie.title_embedding) ===")
+    # 2. Embeddings — one per (source, class, embedding-slot). The
+    # ER step needs identity embeddings (Person.name, Studio.name,
+    # Movie.title) computed BEFORE it runs.
+    log.info("=== embeddings ===")
+    embed_targets = [
+        ("Person", "name_embedding"),
+        ("Studio", "name_embedding"),
+        ("Movie", "title_embedding"),
+    ]
     for source_name in sources:
-        wid = f"embed-{source_name}-{uuid.uuid4().hex[:8]}"
-        result = await client.execute_workflow(
-            EmbedWorkflow.run,
-            args=[source_name, "Movie", "title_embedding", 32],
-            id=wid,
-            task_queue=cfg.task_queue,
-        )
-        log.info("  %s → %s", source_name, result)
+        for cls_name, slot_name in embed_targets:
+            wid = f"embed-{source_name}-{cls_name}-{uuid.uuid4().hex[:8]}"
+            result = await client.execute_workflow(
+                EmbedWorkflow.run,
+                args=[source_name, cls_name, slot_name, 32],
+                id=wid,
+                task_queue=cfg.task_queue,
+            )
+            log.info("  %s/%s.%s → %s", source_name, cls_name, slot_name, result)
 
     # 3. ER — order matters because of FK fan-out
     log.info("=== ER ===")

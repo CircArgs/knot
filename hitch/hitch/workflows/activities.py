@@ -127,22 +127,38 @@ def translate_fks(source_name: str, class_name: str) -> int:
 def fetch_titles_to_embed(
     source_name: str, class_name: str, slot_name: str, limit: int
 ) -> list[dict[str, Any]]:
-    """Per-source query: which binding rows still have a NULL embedding?"""
+    """Per-source query: which binding rows still have a NULL embedding?
+
+    The source-text field for the embedding is derived from the slot
+    suffix: ``title_embedding`` → ``title``, ``name_embedding`` → ``name``.
+    Returns ``[{source_identifier, text}]`` so the embedder doesn't have
+    to know the per-class field name."""
     cfg = config.load()
     spec, _ = _binding(
         source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
     )
     cls = spec.classes[class_name]
     src = spec.sources[source_name]
+    if not slot_name.endswith("_embedding"):
+        raise ValueError(
+            f"slot {slot_name!r} doesn't follow the <field>_embedding convention"
+        )
+    text_field = slot_name.removesuffix("_embedding")
     q = (
         cls.from_source(src)
         .where(cls.col[slot_name].is_null())
-        .select(cls.bindings_col.source_identifier, cls.col.title)
+        .select(cls.bindings_col.source_identifier, cls.col[text_field])
         .limit(limit)
     )
     with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
         cur.execute(q.sql())
-        return list(cur.fetchall())
+        rows = list(cur.fetchall())
+    # Normalize the text field name to ``text`` so the embed workflow
+    # doesn't need to know which slot it's working with.
+    return [
+        {"source_identifier": r["source_identifier"], "text": r[text_field]}
+        for r in rows
+    ]
 
 
 @activity.defn
@@ -299,6 +315,114 @@ def decide_canonicals(
     return out
 
 
+# ER identity → embedding column mapping. Classes not listed here
+# fall through to the sha1-of-FK-canonicals path (currently just
+# Credit — its identity is composite once Movie + Person are ER'd).
+_ER_EMBEDDING_FIELDS: dict[str, tuple[str, str, str]] = {
+    "Person": ("name", "name_embedding", "p"),
+    "Studio": ("name", "name_embedding", "s"),
+    "Movie": ("title", "title_embedding", "m"),
+}
+
+
+@activity.defn
+def er_via_embeddings(
+    source_name: str, class_name: str, threshold: float = 0.35
+) -> dict[str, Any]:
+    """Embedding-driven ER for one (source, class).
+
+    Each unresolved binding's identity-embedding is k-NN-matched
+    against the same class's already-stamped bindings in OTHER
+    sources. If the nearest neighbor's cosine distance is below
+    ``threshold``, reuse its canonical_id — same human, same studio,
+    same movie across sources fuses into one canonical even when
+    the identity strings differ ("Miramax" vs "Miramax Films").
+
+    Above-threshold rows get a fresh canonical_id via sha1 of the
+    identity field (deterministic — re-runs converge per the
+    replay-safety contract). Rows missing the embedding or identity
+    are skipped with a warning, not silently collided.
+
+    Composite-identity classes (Credit) aren't embedding-eligible —
+    they fall through to ``decide_canonicals``'s sha1-of-FKs path,
+    which is fine because Movie + Person ER stamps the FK columns
+    canonical before Credit runs.
+    """
+    cfg = config.load()
+    spec, binding = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    if class_name not in _ER_EMBEDDING_FIELDS:
+        return {"matched": 0, "minted": 0, "skipped": 0, "fell_through": True}
+    id_field, emb_field, prefix = _ER_EMBEDDING_FIELDS[class_name]
+    table = f"{cfg.pg_schema}.{class_name.lower()}_bindings"
+
+    # One SQL: per unresolved row in this source, pick the nearest
+    # already-stamped binding in any OTHER source whose embedding is
+    # within `threshold` cosine distance.
+    knn_sql = f"""
+        SELECT
+            u.source_identifier,
+            u.{id_field} AS identity_val,
+            (
+                SELECT b.canonical_id
+                FROM {table} b
+                WHERE b.canonical_id IS NOT NULL
+                  AND b.source_name <> %(src)s
+                  AND b.{emb_field} IS NOT NULL
+                  AND (b.{emb_field} <=> u.{emb_field}) < %(threshold)s
+                ORDER BY b.{emb_field} <=> u.{emb_field}
+                LIMIT 1
+            ) AS match_canonical_id
+        FROM {table} u
+        WHERE u.source_name = %(src)s
+          AND u.canonical_id IS NULL
+          AND u.{emb_field} IS NOT NULL
+          AND u.{id_field} IS NOT NULL
+          AND length(trim(u.{id_field})) > 0
+    """
+    with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        cur.execute(knn_sql, {"src": source_name, "threshold": threshold})
+        candidates = list(cur.fetchall())
+
+    assignments: list[dict[str, Any]] = []
+    matched = minted = 0
+    for c in candidates:
+        if c["match_canonical_id"]:
+            cid = c["match_canonical_id"]
+            method = "embedding_match"
+            matched += 1
+        else:
+            cid = f"{prefix}_" + _mint(c["identity_val"])
+            method = "deterministic_mint"
+            minted += 1
+        assignments.append(
+            {
+                "canonical_id": cid,
+                "source_identifier": c["source_identifier"],
+                "er_metadata": {
+                    "policy": "embedding_knn",
+                    "method": method,
+                    "source": source_name,
+                    "threshold": threshold,
+                },
+            }
+        )
+
+    if assignments:
+        with connect(cfg.pg_dsn) as conn, conn.cursor() as cur:
+            cur.execute(
+                binding.assign_canonicals_sql(),
+                {"assignments": jsonb_param(assignments)},
+            )
+
+    return {
+        "matched": matched,
+        "minted": minted,
+        "candidates": len(candidates),
+    }
+
+
 @activity.defn
 def assign_canonicals(
     source_name: str, class_name: str, assignments: list[dict[str, Any]]
@@ -366,6 +490,7 @@ ALL = [
     write_embeddings,
     fetch_unresolved,
     decide_canonicals,
+    er_via_embeddings,
     assign_canonicals,
     run_validation_sweep,
 ]

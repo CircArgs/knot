@@ -41,10 +41,10 @@ class EmbedWorkflow:
             )
             if not rows:
                 break
-            titles = [r["title"] for r in rows]
+            texts = [r["text"] for r in rows]
             vectors = await workflow.execute_activity(
                 activities.compute_embeddings,
-                args=[titles],
+                args=[texts],
                 start_to_close_timeout=timedelta(minutes=5),
                 retry_policy=_RETRY,
             )

@@ -111,12 +111,19 @@ retries converge to the same canonical_ids.
   studio { name } } }` runs O(N×fields) roundtrips. Acceptable for
   this demo's row counts; production needs DataLoader-style
   batching on top of the resolver layer.
-- **ER mint policy is sha1-of-name** — fast, deterministic, and
-  collides on common variants. "Miramax" vs "Miramax Films" stay
-  split. The demo seeds use varied spellings on purpose to expose
-  this. A real ER policy would block + score (string similarity,
-  embedding distance, year-window matching); the workflow surface
-  is unchanged — just swap `decide_canonicals`.
+- **ER policy is embedding k-NN with sha1-mint fallback** —
+  every Person/Studio/Movie identity field is embedded
+  (`name_embedding`, `title_embedding`) by the EmbedWorkflow.
+  ERWorkflow then per-source: k-NN-matches each unresolved binding
+  against the same class's already-stamped bindings in OTHER
+  sources via pgvector cosine distance; if the nearest is below
+  `threshold=0.35`, reuse its canonical_id; else mint a fresh
+  sha1-of-identity (deterministic for replay safety). Fuses
+  cross-source variants — "Miramax" / "Miramax Films",
+  "P. T. Anderson" / "Paul Thomas Anderson", "USA" / "United
+  States" — that the prior sha1-of-name policy split. Credit ER
+  stays composite (sha1 of post-FK-translation
+  movie_canonical + person_canonical + role).
 - **Re-ingest also nulls `title_embedding`** for the same reason —
   the seed payload has no embedding field, so the upsert writes
   NULL. Downstream `EmbedWorkflow` will pick it up on the next
