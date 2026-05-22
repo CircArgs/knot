@@ -664,13 +664,17 @@ def emit_assign_canonical_sql(
     # postgres ("each WHERE clause sees a stable snapshot").
     # OntologyClass is an unhashable mutable dataclass; key by name +
     # remember the first instance so we can resolve the table name.
+    # Deterministic sort by class name keeps lock-acquisition order
+    # identical across spec construction orders — required to dodge
+    # the cross-worker deadlock where two ER workers stamp different
+    # sources whose fan-outs share referencers.
     by_ref_cls: dict = {}
     for ref_cls, ref_slot in cls.referrers:
         entry = by_ref_cls.setdefault(ref_cls.name, (ref_cls, []))
         entry[1].append(ref_slot)
 
     fanout_ctes: list[str] = []
-    for ref_cls, ref_slots in by_ref_cls.values():
+    for ref_cls, ref_slots in sorted(by_ref_cls.values(), key=lambda v: v[0].name):
         ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
         cte_name = f"fanout_{ref_cls.name.lower()}"
         _sets = []
@@ -780,13 +784,18 @@ def emit_assign_canonicals_sql(
     # behavior in postgres.
     # OntologyClass is an unhashable mutable dataclass; key by name +
     # remember the first instance so we can resolve the table name.
+    # Sort by class name (deterministic across spec construction
+    # orders) so two ER workers stamping different sources always
+    # acquire fan-out locks in the same order — eliminates the
+    # textbook deadlock setup where worker A locks Movie-then-Credit
+    # while worker B locks Credit-then-Movie.
     by_ref_cls: dict = {}
     for ref_cls, ref_slot in cls.referrers:
         entry = by_ref_cls.setdefault(ref_cls.name, (ref_cls, []))
         entry[1].append(ref_slot)
 
     fanout_ctes: list[str] = []
-    for ref_cls, ref_slots in by_ref_cls.values():
+    for ref_cls, ref_slots in sorted(by_ref_cls.values(), key=lambda v: v[0].name):
         ref_table = _bindings_id(ref_cls, schema=schema, suffix=bindings_suffix)
         cte_name = f"fanout_{ref_cls.name.lower()}"
         _sets = []

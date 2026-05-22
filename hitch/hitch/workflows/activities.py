@@ -405,6 +405,13 @@ def er_via_embeddings(
                     "method": method,
                     "source": source_name,
                     "threshold": threshold,
+                    # Pin the model identity so a future model upgrade
+                    # producing different distances doesn't silently
+                    # drift previously-stamped canonicals. A backfill
+                    # script can scan for stamps with a stale
+                    # `model_name`/`embedding_dim` and re-decide.
+                    "model_name": cfg.embedding_model,
+                    "embedding_dim": cfg.embedding_dim,
                 },
             }
         )

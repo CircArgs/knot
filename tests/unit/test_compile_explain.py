@@ -172,18 +172,28 @@ def test_output_columns_present():
     assert "margin" in sql
 
 
-def test_is_winner_uses_rank_eq_1():
+def test_is_winner_uses_row_number_eq_1():
+    """ROW_NUMBER (not RANK) with (weight DESC, source_name) tie-break
+    matches the resolver view's choice exactly — RANK would have
+    falsely labeled tied-weight rows both is_winner=true while the
+    resolver picked the alphabetically-first source."""
     spec, movie = _simple_spec()
     sql = emit_explain_winner_sql(movie)
-    assert "(rk = 1) AS is_winner" in sql
+    assert "(rn = 1) AS is_winner" in sql
+    assert "ROW_NUMBER() OVER" in sql
+    assert "ORDER BY weight DESC NULLS LAST, source_name" in sql
 
 
-def test_margin_uses_max_minus_second():
+def test_margin_uses_max_minus_runner_up():
+    """Margin = winner.weight - runner_up.weight. The runner-up is
+    looked up via a correlated subquery against the ``ranked`` CTE
+    where rn=2. NULL when the winner has no runner-up — more honest
+    than 0.0 which reads as 'tied with second'."""
     spec, movie = _simple_spec()
     sql = emit_explain_winner_sql(movie)
-    # Margin is winner weight minus second-place weight, NULL for non-winners.
     assert "CASE" in sql
-    assert "max_w - COALESCE(second_w, max_w)" in sql
+    assert "AND r2.rn = 2" in sql
+    assert "max_w - (" in sql
 
 
 # ---------------------------------------------------------------------------
@@ -253,7 +263,10 @@ def test_bindings_suffix_kwarg_threads_through():
 def test_order_by_clause_present():
     spec, movie = _simple_spec()
     sql = emit_explain_winner_sql(movie)
-    assert "ORDER BY canonical_id, slot_name, weight DESC NULLS LAST" in sql
+    # Outer ORDER BY uses the ROW_NUMBER (rn) so winners come first
+    # per (canonical, slot); within-row ordering already matched the
+    # resolver via the ranked CTE's (weight DESC, source_name) tuple.
+    assert "ORDER BY canonical_id, slot_name, rn" in sql
 
 
 # ---------------------------------------------------------------------------

@@ -8,6 +8,8 @@ from __future__ import annotations
 
 import logging
 
+from knot.compile import emit_weight_seed
+
 from hitch import config
 from hitch.db import connect
 from hitch.spec import build_spec
@@ -15,13 +17,16 @@ from hitch.spec import build_spec
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("hitch.deploy")
 
-# (source, class, slot) → weight policy. _user_corrections dominates
-# the resolver argmax; the declared sources rank imdb > tmdb > rt.
+# Source-rank defaults — operators tune these per (class, slot) at
+# runtime via the GraphQL mutation surface or direct
+# `binding.upsert_weight_sql()`. _user_corrections is intentionally
+# absent here: `emit_weight_seed` auto-seeds it at
+# CORRECTIONS_DEFAULT_WEIGHT (1e6) so a host that forgets to set it
+# can't silently weight corrections at 0.
 _DEFAULT_WEIGHTS = {
     "imdb": 0.85,
     "tmdb": 0.70,
     "rottentomatoes": 0.50,
-    "_user_corrections": 1e6,
 }
 
 
@@ -37,16 +42,15 @@ def main() -> None:
         cur.execute(spec.ddl())
         log.info("schema applied")
 
-        # Weight rows — INSERT-only via binding.upsert_weight_sql.
-        for binding in spec.source_bindings:
-            weight = _DEFAULT_WEIGHTS.get(binding.source.name, 0.0)
-            upsert = binding.upsert_weight_sql()
-            ident = binding.identifier_slot.name
-            for slot in binding.class_.effective_slots():
-                if slot.name == ident:
-                    continue
-                cur.execute(upsert, {"slot_name": slot.name, "weight": weight})
-        log.info("weights seeded")
+        # Weight seed — INSERT-only (ON CONFLICT DO NOTHING). Preserves
+        # operator tuning across re-deploys. Auto-includes the
+        # _user_corrections row at the safe default so the corrections
+        # mutation surface never produces silently-lost writes.
+        seeded = 0
+        for sql, params in emit_weight_seed(spec, defaults=_DEFAULT_WEIGHTS):
+            cur.execute(sql, params)
+            seeded += 1
+        log.info("weights seeded (%d rows; ON CONFLICT DO NOTHING)", seeded)
 
 
 if __name__ == "__main__":

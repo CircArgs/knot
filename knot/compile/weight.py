@@ -25,7 +25,7 @@ subsequent re-tuning.
 
 from __future__ import annotations
 
-from knot.spec import Source, SourceBinding
+from knot.spec import CORRECTIONS_SOURCE_NAME, Source, SourceBinding, Spec
 
 
 def emit_read_weights_sql(
@@ -128,6 +128,66 @@ def emit_delete_weight_sql(
         f"  AND class_name = {cls}\n"
         f"  AND slot_name = {slot};"
     )
+
+
+# Default high-rank weight for the auto-bound `_user_corrections`
+# source. Operators can override per-(class, slot) at runtime via
+# `binding.upsert_weight_sql()` — this just guarantees the row exists
+# so an un-seeded deploy can't silently weight corrections at 0.
+CORRECTIONS_DEFAULT_WEIGHT: float = 1e6
+
+
+def emit_weight_seed(
+    spec: Spec,
+    *,
+    defaults: dict[str, float] | None = None,
+    weight_table_name: str = "source_weight",
+) -> list[tuple[str, dict[str, object]]]:
+    """Return ``[(sql, params), …]`` — INSERT-only seed rows for the
+    ``source_weight`` table.
+
+    One row per ``(source, class, non-identifier-slot)`` triple. Existing
+    rows are not touched (`ON CONFLICT DO NOTHING`) — runtime tuning by
+    the operator is preserved across re-deploys.
+
+    ``defaults`` maps ``source_name`` → weight float; sources not in the
+    dict default to 0.0 (i.e. they will lose every argmax until the
+    operator tunes them). The auto-bound ``_user_corrections`` source
+    is **always** seeded at ``CORRECTIONS_DEFAULT_WEIGHT`` (1e6) if the
+    caller didn't override — this closes the silent-failure window
+    where an operator forgets to seed corrections and every mutation
+    appears to succeed but later reads return the pre-correction value.
+    Operators can still tune corrections weight per (class, slot)
+    afterward; we just guarantee the row exists.
+    """
+    defaults = dict(defaults or {})
+    defaults.setdefault(CORRECTIONS_SOURCE_NAME, CORRECTIONS_DEFAULT_WEIGHT)
+
+    out: list[tuple[str, dict[str, object]]] = []
+    for binding in spec.source_bindings:
+        weight = defaults.get(binding.source.name, 0.0)
+        ident_name = binding.class_.identifier_slot().name
+        sql = (
+            f"INSERT INTO {spec.schema}.{weight_table_name}\n"
+            f"    (source_name, class_name, slot_name, weight)\n"
+            f"VALUES (%(source_name)s, %(class_name)s, %(slot_name)s, %(weight)s)\n"
+            f"ON CONFLICT (source_name, class_name, slot_name) DO NOTHING;"
+        )
+        for slot in binding.class_.effective_slots():
+            if slot.name == ident_name:
+                continue
+            out.append(
+                (
+                    sql,
+                    {
+                        "source_name": binding.source.name,
+                        "class_name": binding.class_.name,
+                        "slot_name": slot.name,
+                        "weight": weight,
+                    },
+                )
+            )
+    return out
 
 
 def emit_source_read_weights_sql(

@@ -35,6 +35,7 @@ from knot.compile.weight import (
     emit_source_read_weights_sql,
     emit_upsert_weight_sql,
     emit_upsert_weights_sql,
+    emit_weight_seed,
 )
 from knot.compile.write import (
     emit_assign_canonical_sql,
