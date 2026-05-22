@@ -1,17 +1,22 @@
 {
   "Person": [
-    {"source_identifier": "rt_qt", "name": "Quentin Tarantino", "birth_country": "USA"},
-    {"source_identifier": "rt_pta", "name": "P. T. Anderson", "birth_country": "USA"},
-    {"source_identifier": "rt_kub", "name": "Stanley Kubrick", "birth_country": "USA"}
+    {"source_identifier": "rt_qt",   "name": "Quentin Tarantino",  "birth_country": "USA"},
+    {"source_identifier": "rt_pta",  "name": "P. T. Anderson",     "birth_country": "USA"},
+    {"source_identifier": "rt_kub",  "name": "Stanley Kubrick",    "birth_country": "USA", "death_year": 1999},
+    {"source_identifier": "rt_jack", "name": "Jack Nicholson",     "birth_country": "USA"}
+  ],
+  "Studio": [
+    {"source_identifier": "rt_co_miramax", "name": "Miramax",     "country": "USA"},
+    {"source_identifier": "rt_co_wb",      "name": "Warner Bros.", "country": "USA"}
   ],
   "Movie": [
-    {"source_identifier": "rt_resdogs", "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 100, "director": "rt_qt"},
-    {"source_identifier": "rt_pulp", "title": "Pulp Fiction", "year": 1994, "runtime_minutes": 154, "director": "rt_qt"},
-    {"source_identifier": "rt_shining", "title": "The Shining", "year": 1980, "runtime_minutes": 146, "director": "rt_kub"}
+    {"source_identifier": "rt_resdogs", "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 100, "director": "rt_qt",  "studio": "rt_co_miramax", "genres": ["Crime"],       "mpaa_rating": "R"},
+    {"source_identifier": "rt_pulp",    "title": "Pulp Fiction",   "year": 1994, "runtime_minutes": 154, "director": "rt_qt",  "studio": "rt_co_miramax", "genres": ["Crime"],       "mpaa_rating": "R"},
+    {"source_identifier": "rt_shining", "title": "The Shining",    "year": 1980, "runtime_minutes": 146, "director": "rt_kub", "studio": "rt_co_wb",      "genres": ["Horror"],      "mpaa_rating": "R"}
   ],
   "Credit": [
-    {"source_identifier": "rt_resdogs::rt_qt::director", "role": "director", "movie": "rt_resdogs", "person": "rt_qt"},
-    {"source_identifier": "rt_pulp::rt_qt::director", "role": "director", "movie": "rt_pulp", "person": "rt_qt"},
-    {"source_identifier": "rt_shining::rt_kub::director", "role": "director", "movie": "rt_shining", "person": "rt_kub"}
+    {"source_identifier": "rt_resdogs::rt_qt::director", "role": "director", "movie": "rt_resdogs", "person": "rt_qt",  "ordering": 1},
+    {"source_identifier": "rt_pulp::rt_qt::director",    "role": "director", "movie": "rt_pulp",    "person": "rt_qt",  "ordering": 1},
+    {"source_identifier": "rt_shining::rt_kub::director","role": "director", "movie": "rt_shining", "person": "rt_kub", "ordering": 1}
   ]
 }

@@ -31,9 +31,11 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
+from knot.ast.expr import FkChainRef
 from knot.ast.select import Layer
 from knot.ast.types import ClassRef
 from knot.compile.expr import compile_sql
+from knot.compile.query import collect_fk_chains, emit_fk_joins
 from knot.spec import ClassKind, Constraint, OntologyClass, Severity, Spec
 
 
@@ -154,6 +156,18 @@ def emit_validation(
         body_sql = compile_sql(
             c.body, schema=schema, layer=layer, outer_class=primary.name
         )
+        # FK chain refs in the body (e.g. ``movie.col.director.birth_year``)
+        # emit alias references that need matching LEFT JOINs in the
+        # FROM clause. LEFT (not INNER) so a row with a NULL FK still
+        # surfaces — its NULL-safe predicate (``fk_chain.is_null() |``)
+        # handles the missing target cleanly. Without these JOINs the
+        # SELECT errors with "missing FROM-clause entry."
+        chains: list[FkChainRef] = []
+        collect_fk_chains(c.body, chains)
+        join_clauses = emit_fk_joins(
+            spec, chains, schema=schema, layer=layer, join_kind="LEFT JOIN"
+        )
+        join_sql = ("\n" + "\n".join(join_clauses)) if join_clauses else ""
         scope_clause = ""
         if scope_sql is not None:
             scope_clause = (
@@ -169,8 +183,8 @@ def emit_validation(
             f"    '{_escape_literal(primary.name)}' AS class_name,\n"
             f"    '{_escape_literal(c.severity)}' AS severity,\n"
             f"    {message_literal} AS message,\n"
-            f"    {identifier.name} AS offending_pk\n"
-            f"FROM {table}\n"
+            f"    {table}.{identifier.name} AS offending_pk\n"
+            f"FROM {table}{join_sql}\n"
             f"WHERE NOT ({body_sql}){scope_clause};"
         )
         out.append((c.name, sql))

@@ -37,7 +37,11 @@ async def amain() -> None:
         cfg.temporal_address, namespace=cfg.temporal_namespace
     )
 
-    classes = ["Person", "Movie", "Credit"]
+    # Order matters: ER Persons + Studios before Movies + Credits so
+    # the backward-fanout from those Person / Studio stamps translates
+    # Movie.director / Movie.studio / Credit.person FK columns from
+    # source-ids → canonical-ids before ER even reaches Movie/Credit.
+    classes = ["Person", "Studio", "Movie", "Credit"]
     sources = ["imdb", "tmdb", "rottentomatoes"]
 
     # 1. Ingest

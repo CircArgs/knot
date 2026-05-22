@@ -1,21 +1,30 @@
 {
   "Person": [
-    {"source_identifier": "tmdb_138", "name": "Quentin Tarantino", "birth_country": "United States of America", "birth_year": 1963},
-    {"source_identifier": "tmdb_4762", "name": "Paul Thomas Anderson", "birth_country": "United States", "birth_year": 1970},
-    {"source_identifier": "tmdb_240", "name": "Stanley Kubrick", "birth_country": "United States", "birth_year": 1928},
-    {"source_identifier": "tmdb_3895", "name": "Harvey Keitel", "birth_country": "United States", "birth_year": 1939}
+    {"source_identifier": "tmdb_138",  "name": "Quentin Tarantino",   "birth_country": "United States of America", "birth_year": 1963, "height_cm": 185},
+    {"source_identifier": "tmdb_4762", "name": "Paul Thomas Anderson","birth_country": "United States",            "birth_year": 1970, "height_cm": 180},
+    {"source_identifier": "tmdb_240",  "name": "Stanley Kubrick",     "birth_country": "United States",            "birth_year": 1928, "death_year": 1999, "height_cm": 169},
+    {"source_identifier": "tmdb_3895", "name": "Harvey Keitel",       "birth_country": "United States",            "birth_year": 1939},
+    {"source_identifier": "tmdb_8891", "name": "John Travolta",       "birth_country": "United States",            "birth_year": 1954, "height_cm": 188},
+    {"source_identifier": "tmdb_514",  "name": "Jack Nicholson",      "birth_country": "United States",            "birth_year": 1937, "height_cm": 175}
+  ],
+  "Studio": [
+    {"source_identifier": "tmdb_co_14",  "name": "Miramax Films",    "country": "United States", "founded_year": 1979},
+    {"source_identifier": "tmdb_co_174", "name": "Warner Bros.",     "country": "United States", "founded_year": 1923},
+    {"source_identifier": "tmdb_co_12",  "name": "New Line Cinema",  "country": "United States", "founded_year": 1967}
   ],
   "Movie": [
-    {"source_identifier": "tmdb_500", "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 99, "director": "tmdb_138"},
-    {"source_identifier": "tmdb_680", "title": "Pulp Fiction", "year": 1994, "runtime_minutes": 154, "director": "tmdb_138"},
-    {"source_identifier": "tmdb_4995", "title": "Boogie Nights", "year": 1997, "runtime_minutes": 155, "director": "tmdb_4762"},
-    {"source_identifier": "tmdb_694", "title": "The Shining", "year": 1980, "runtime_minutes": 144, "director": "tmdb_240"}
+    {"source_identifier": "tmdb_500",  "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 99,  "director": "tmdb_138",  "studio": "tmdb_co_14",  "genres": ["Crime","Thriller"],         "countries": ["United States"], "mpaa_rating": "R",         "box_office_usd": 2832029},
+    {"source_identifier": "tmdb_680",  "title": "Pulp Fiction",   "year": 1994, "runtime_minutes": 154, "director": "tmdb_138",  "studio": "tmdb_co_14",  "genres": ["Thriller","Crime"],         "countries": ["United States"], "mpaa_rating": "R",         "box_office_usd": 213928762},
+    {"source_identifier": "tmdb_4995", "title": "Boogie Nights",  "year": 1997, "runtime_minutes": 155, "director": "tmdb_4762", "studio": "tmdb_co_12",  "genres": ["Drama"],                    "countries": ["United States"], "mpaa_rating": "R",         "box_office_usd": 43101594},
+    {"source_identifier": "tmdb_694",  "title": "The Shining",    "year": 1980, "runtime_minutes": 144, "director": "tmdb_240",  "studio": "tmdb_co_174", "genres": ["Horror"],                   "countries": ["United States"], "mpaa_rating": "R",         "box_office_usd": 47000000}
   ],
   "Credit": [
-    {"source_identifier": "tmdb_500::tmdb_138::director", "role": "director", "movie": "tmdb_500", "person": "tmdb_138"},
-    {"source_identifier": "tmdb_500::tmdb_3895::actor", "role": "actor", "movie": "tmdb_500", "person": "tmdb_3895"},
-    {"source_identifier": "tmdb_680::tmdb_138::director", "role": "director", "movie": "tmdb_680", "person": "tmdb_138"},
-    {"source_identifier": "tmdb_4995::tmdb_4762::director", "role": "director", "movie": "tmdb_4995", "person": "tmdb_4762"},
-    {"source_identifier": "tmdb_694::tmdb_240::director", "role": "director", "movie": "tmdb_694", "person": "tmdb_240"}
+    {"source_identifier": "tmdb_500::tmdb_138::director",  "role": "director", "movie": "tmdb_500",  "person": "tmdb_138",  "ordering": 1},
+    {"source_identifier": "tmdb_500::tmdb_3895::actor",    "role": "actor",    "movie": "tmdb_500",  "person": "tmdb_3895", "ordering": 2},
+    {"source_identifier": "tmdb_680::tmdb_138::director",  "role": "director", "movie": "tmdb_680",  "person": "tmdb_138",  "ordering": 1},
+    {"source_identifier": "tmdb_680::tmdb_8891::actor",    "role": "actor",    "movie": "tmdb_680",  "person": "tmdb_8891", "ordering": 2},
+    {"source_identifier": "tmdb_4995::tmdb_4762::director","role": "director", "movie": "tmdb_4995", "person": "tmdb_4762", "ordering": 1},
+    {"source_identifier": "tmdb_694::tmdb_240::director",  "role": "director", "movie": "tmdb_694",  "person": "tmdb_240",  "ordering": 1},
+    {"source_identifier": "tmdb_694::tmdb_514::actor",     "role": "actor",    "movie": "tmdb_694",  "person": "tmdb_514",  "ordering": 2}
   ]
 }

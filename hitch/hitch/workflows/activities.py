@@ -153,14 +153,17 @@ def fetch_unresolved(source_name: str, class_name: str) -> list[dict[str, Any]]:
     )
     cls = spec.classes[class_name]
     src = spec.sources[source_name]
-    id_col = (
-        "name"
-        if class_name == "Person"
-        else ("title" if class_name == "Movie" else "role")
-    )
+    id_col = {
+        "Person": "name",
+        "Studio": "name",
+        "Movie": "title",
+        "Credit": "role",
+    }[class_name]
     refs = [cls.bindings_col.source_identifier, cls.col[id_col]]
     if class_name == "Movie":
         refs.append(cls.col.year)
+    if class_name == "Studio":
+        refs.append(cls.col.country)
     if class_name == "Credit":
         refs += [cls.col.movie, cls.col.person]
     q = cls.from_source(src).where(cls.col.canonical_id.is_null()).select(*refs)
@@ -187,6 +190,10 @@ def decide_canonicals(
     for r in rows:
         if class_name == "Person":
             cid = "p_" + _mint(r["name"])
+        elif class_name == "Studio":
+            # Mint on (name, country) — same name in different countries
+            # should NOT collapse (e.g. "Pathé" UK vs France).
+            cid = "s_" + _mint(r["name"], r.get("country") or "")
         elif class_name == "Movie":
             cid = "m_" + _mint(r["title"], str(r.get("year") or ""))
         elif class_name == "Credit":

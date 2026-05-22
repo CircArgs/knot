@@ -1,21 +1,32 @@
 {
   "Person": [
-    {"source_identifier": "nm_qt", "name": "Quentin Tarantino", "birth_country": "USA", "birth_year": 1963},
-    {"source_identifier": "nm_pta", "name": "Paul Thomas Anderson", "birth_country": "USA", "birth_year": 1970},
-    {"source_identifier": "nm_kub", "name": "Stanley Kubrick", "birth_country": "USA", "birth_year": 1928},
-    {"source_identifier": "nm_kit", "name": "Harvey Keitel", "birth_country": "USA", "birth_year": 1939}
+    {"source_identifier": "nm_qt",  "name": "Quentin Tarantino",   "birth_country": "USA", "birth_year": 1963, "height_cm": 185, "primary_profession": ["writer","director","producer"]},
+    {"source_identifier": "nm_pta", "name": "Paul Thomas Anderson","birth_country": "USA", "birth_year": 1970, "height_cm": 180, "primary_profession": ["writer","director","producer"]},
+    {"source_identifier": "nm_kub", "name": "Stanley Kubrick",     "birth_country": "USA", "birth_year": 1928, "death_year": 1999, "height_cm": 170, "primary_profession": ["director","cinematographer"]},
+    {"source_identifier": "nm_kit", "name": "Harvey Keitel",       "birth_country": "USA", "birth_year": 1939, "height_cm": 173, "primary_profession": ["actor"]},
+    {"source_identifier": "nm_njohn","name": "John Travolta",       "birth_country": "USA", "birth_year": 1954, "height_cm": 188, "primary_profession": ["actor"]},
+    {"source_identifier": "nm_jack","name": "Jack Nicholson",      "birth_country": "USA", "birth_year": 1937, "height_cm": 175, "primary_profession": ["actor"]}
+  ],
+  "Studio": [
+    {"source_identifier": "co_miramax",  "name": "Miramax",          "country": "USA", "founded_year": 1979},
+    {"source_identifier": "co_aba",      "name": "A Band Apart",     "country": "USA", "founded_year": 1991},
+    {"source_identifier": "co_wb",       "name": "Warner Bros.",     "country": "USA", "founded_year": 1923},
+    {"source_identifier": "co_newline",  "name": "New Line Cinema",  "country": "USA", "founded_year": 1967}
   ],
   "Movie": [
-    {"source_identifier": "tt_resdogs", "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 99, "director": "nm_qt"},
-    {"source_identifier": "tt_pulp", "title": "Pulp Fiction", "year": 1994, "runtime_minutes": 154, "director": "nm_qt"},
-    {"source_identifier": "tt_boogie", "title": "Boogie Nights", "year": 1997, "runtime_minutes": 155, "director": "nm_pta"},
-    {"source_identifier": "tt_shining", "title": "The Shining", "year": 1980, "runtime_minutes": 146, "director": "nm_kub"}
+    {"source_identifier": "tt_resdogs", "title": "Reservoir Dogs", "year": 1992, "runtime_minutes": 99,  "director": "nm_qt",  "studio": "co_miramax", "genres": ["Crime","Thriller"],         "countries": ["USA"], "mpaa_rating": "R",         "box_office_usd": 2900000},
+    {"source_identifier": "tt_pulp",    "title": "Pulp Fiction",   "year": 1994, "runtime_minutes": 154, "director": "nm_qt",  "studio": "co_miramax", "genres": ["Crime","Drama"],            "countries": ["USA"], "mpaa_rating": "R",         "box_office_usd": 213900000},
+    {"source_identifier": "tt_boogie",  "title": "Boogie Nights",  "year": 1997, "runtime_minutes": 155, "director": "nm_pta", "studio": "co_newline", "genres": ["Drama"],                    "countries": ["USA"], "mpaa_rating": "R",         "box_office_usd": 43100000},
+    {"source_identifier": "tt_shining", "title": "The Shining",    "year": 1980, "runtime_minutes": 146, "director": "nm_kub", "studio": "co_wb",      "genres": ["Horror","Drama"],           "countries": ["USA","UK"], "mpaa_rating": "R",    "box_office_usd": 47000000},
+    {"source_identifier": "tt_eyeswide","title": "Eyes Wide Shut", "year": 1999, "runtime_minutes": 159, "director": "nm_kub", "studio": "co_wb",      "genres": ["Drama","Mystery","Thriller"],"countries": ["USA","UK"], "mpaa_rating": "R",   "box_office_usd": 162000000}
   ],
   "Credit": [
-    {"source_identifier": "tt_resdogs::nm_qt::director", "role": "director", "movie": "tt_resdogs", "person": "nm_qt"},
-    {"source_identifier": "tt_resdogs::nm_kit::actor", "role": "actor", "movie": "tt_resdogs", "person": "nm_kit"},
-    {"source_identifier": "tt_pulp::nm_qt::director", "role": "director", "movie": "tt_pulp", "person": "nm_qt"},
-    {"source_identifier": "tt_boogie::nm_pta::director", "role": "director", "movie": "tt_boogie", "person": "nm_pta"},
-    {"source_identifier": "tt_shining::nm_kub::director", "role": "director", "movie": "tt_shining", "person": "nm_kub"}
+    {"source_identifier": "tt_resdogs::nm_qt::director", "role": "director", "movie": "tt_resdogs", "person": "nm_qt",   "ordering": 1},
+    {"source_identifier": "tt_resdogs::nm_kit::actor",   "role": "actor",    "movie": "tt_resdogs", "person": "nm_kit",  "ordering": 2},
+    {"source_identifier": "tt_pulp::nm_qt::director",    "role": "director", "movie": "tt_pulp",    "person": "nm_qt",   "ordering": 1},
+    {"source_identifier": "tt_pulp::nm_njohn::actor",    "role": "actor",    "movie": "tt_pulp",    "person": "nm_njohn","ordering": 2},
+    {"source_identifier": "tt_boogie::nm_pta::director", "role": "director", "movie": "tt_boogie",  "person": "nm_pta",  "ordering": 1},
+    {"source_identifier": "tt_shining::nm_kub::director","role": "director", "movie": "tt_shining", "person": "nm_kub",  "ordering": 1},
+    {"source_identifier": "tt_shining::nm_jack::actor",  "role": "actor",    "movie": "tt_shining", "person": "nm_jack", "ordering": 2}
   ]
 }

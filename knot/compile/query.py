@@ -67,35 +67,14 @@ def _(node: Query, *, spec: Spec, schema: str) -> str:
     # Collect FK chains from everywhere a Ref could appear.
     chains: list[FkChainRef] = []
     if node.where_clause is not None:
-        _collect_chains(node.where_clause, chains)
+        collect_fk_chains(node.where_clause, chains)
     for ob in node.ordering:
-        _collect_chains(ob.ref, chains)
+        collect_fk_chains(ob.ref, chains)
     if node.projection is not None:
         for r in node.projection:
-            _collect_chains(r, chains)
+            collect_fk_chains(r, chains)
 
-    # Build JOIN clauses. Each chain prefix gets one aliased JOIN,
-    # deduplicated by alias (= source_class + fk slot path). Two FK
-    # slots pointing at the same target class get distinct aliases so
-    # postgres never sees a duplicate table reference.
-    seen: set[str] = set()
-    joins: list[str] = []
-    for chain_ref in chains:
-        # ``lhs`` tracks the left-hand side of the ON clause: the
-        # schema-qualified primary table for the first hop, then the
-        # alias of the previous hop for every subsequent hop.
-        lhs = f"{schema}.{chain_ref.source_class.lower()}{layer}"
-        for i, (fk_slot, target_class) in enumerate(chain_ref.chain):
-            alias = chain_alias(chain_ref.source_class, chain_ref.chain[: i + 1])
-            if alias not in seen:
-                seen.add(alias)
-                target_cls = _lookup_class(spec, target_class)
-                target_ident = target_cls.identifier_slot().name
-                joins.append(
-                    f"JOIN {schema}.{target_class.lower()}{layer} AS {alias} "
-                    f"ON {alias}.{target_ident} = {lhs}.{fk_slot}"
-                )
-            lhs = alias
+    joins = emit_fk_joins(spec, chains, schema=schema, layer=layer)
 
     parts = [f"SELECT {select_sql}", f"FROM {table}"]
     parts.extend(joins)
@@ -158,37 +137,41 @@ def _lookup_class(spec: Spec, name: str) -> Any:
         raise KeyError(f"class {name!r} not found in spec") from None
 
 
-def _collect_chains(node: Expr, out: list[FkChainRef]) -> None:
+def collect_fk_chains(node: Expr, out: list[FkChainRef]) -> None:
     """Walk an Expr tree collecting every ``FkChainRef`` reached.
     Deduplication happens at JOIN-emit time on the (source, fk, target)
     triple — not on the FkChainRef itself, so multiple chains that
-    share a prefix still produce one JOIN per shared step."""
+    share a prefix still produce one JOIN per shared step.
+
+    Public because the constraint emitter
+    (``knot.compile.constraints.emit_validation``) needs to walk
+    constraint bodies for the same JOINs the query compiler builds."""
     if isinstance(node, FkChainRef):
         out.append(node)
         return
     if isinstance(node, (Compare, BoolOp)):
-        _collect_chains(node.left, out)
-        _collect_chains(node.right, out)
+        collect_fk_chains(node.left, out)
+        collect_fk_chains(node.right, out)
         return
     if isinstance(node, Not):
-        _collect_chains(node.expr, out)
+        collect_fk_chains(node.expr, out)
         return
     if isinstance(node, IsNull):
-        _collect_chains(node.expr, out)
+        collect_fk_chains(node.expr, out)
         return
     if isinstance(node, InList):
-        _collect_chains(node.left, out)
+        collect_fk_chains(node.left, out)
         return
     if isinstance(node, Between):
-        _collect_chains(node.left, out)
+        collect_fk_chains(node.left, out)
         return
     if isinstance(node, Exists):
         if node.where is not None:
-            _collect_chains(node.where, out)
+            collect_fk_chains(node.where, out)
         return
     if isinstance(node, CountRel):
         if node.where is not None:
-            _collect_chains(node.where, out)
+            collect_fk_chains(node.where, out)
         return
     if isinstance(node, Aggregate):
         # FK chains inside an Aggregate predicate are scoped to the
@@ -196,3 +179,41 @@ def _collect_chains(node: Expr, out: list[FkChainRef]) -> None:
         # nested-JOIN-in-subquery support is a later iteration.
         return
     # Ref / Literal / Raw / FkRef / This have no nested chain children.
+
+
+def emit_fk_joins(
+    spec: Spec,
+    chains: list[FkChainRef],
+    *,
+    schema: str,
+    layer: str,
+    join_kind: str = "JOIN",
+) -> list[str]:
+    """Compile a list of FkChainRef nodes to JOIN clauses.
+
+    Each chain prefix (source_class + FK slot path) gets one aliased
+    JOIN, deduplicated by alias. Two FK slots that point at the same
+    target class get distinct aliases so postgres never sees a
+    duplicate table reference. ``join_kind`` controls inner vs outer:
+    query reads want INNER (matched rows only); the constraint
+    emitter wants ``LEFT JOIN`` so a row with a NULL FK still
+    surfaces in WHERE-NOT evaluation."""
+    seen: set[str] = set()
+    joins: list[str] = []
+    for chain_ref in chains:
+        # ``lhs`` tracks the left-hand side of the ON clause: the
+        # schema-qualified primary table for the first hop, then the
+        # alias of the previous hop for every subsequent hop.
+        lhs = f"{schema}.{chain_ref.source_class.lower()}{layer}"
+        for i, (fk_slot, target_class) in enumerate(chain_ref.chain):
+            alias = chain_alias(chain_ref.source_class, chain_ref.chain[: i + 1])
+            if alias not in seen:
+                seen.add(alias)
+                target_cls = _lookup_class(spec, target_class)
+                target_ident = target_cls.identifier_slot().name
+                joins.append(
+                    f"{join_kind} {schema}.{target_class.lower()}{layer} AS {alias} "
+                    f"ON {alias}.{target_ident} = {lhs}.{fk_slot}"
+                )
+            lhs = alias
+    return joins

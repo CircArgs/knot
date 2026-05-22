@@ -24,7 +24,15 @@ def connect(dsn: str, *, autocommit: bool = False) -> Iterator[psycopg.Connectio
     pgvector adapter registered so VECTOR columns come back as numpy
     arrays (iterable → GraphQL [Float!]!) instead of bare strings."""
     conn = psycopg.connect(dsn, autocommit=autocommit, row_factory=dict_row)
-    register_vector(conn)
+    # Best-effort: deploy-time connections fire before CREATE EXTENSION
+    # vector lands; subsequent connections find the type and register
+    # cleanly. The fallback path (raw-string vectors) only matters
+    # before the first deploy, which is exactly when no one is selecting
+    # vectors anyway.
+    try:
+        register_vector(conn)
+    except psycopg.ProgrammingError:
+        pass
     try:
         yield conn
         if not autocommit:
