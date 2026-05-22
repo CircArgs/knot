@@ -34,10 +34,14 @@ services:
     ports:
       - "7233:7233"
     healthcheck:
-      test: ["CMD", "tctl", "--address", "127.0.0.1:7233", "cluster", "health"]
-      interval: 10s
-      timeout: 5s
+      # Temporal binds to the container hostname; the gRPC server won't
+      # send bytes without a request, so just opening + closing the TCP
+      # connection is enough to prove the listener is up.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/$$(hostname)/7233 && exec 3<&-'"]
+      interval: 5s
+      timeout: 3s
       retries: 30
+      start_period: 30s
 
   temporal-ui:
     image: temporalio/ui:2.27.2
@@ -60,9 +64,7 @@ services:
       HITCH_TEMPORAL_ADDRESS: temporal:7233
       HITCH_API_PORT: "8000"
     volumes:
-      - ../knot:/app/knot
-      - ../knot_graphql:/app/knot_graphql
-      - ./:/app/hitch
+      - ..:/app/repo
     ports:
       - "8000:8000"
     depends_on:
@@ -79,9 +81,7 @@ services:
       HITCH_PG_SCHEMA: hitch
       HITCH_TEMPORAL_ADDRESS: temporal:7233
     volumes:
-      - ../knot:/app/knot
-      - ../knot_graphql:/app/knot_graphql
-      - ./:/app/hitch
+      - ..:/app/repo
     depends_on:
       postgres:
         condition: service_healthy

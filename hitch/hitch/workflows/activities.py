@@ -35,7 +35,7 @@ _SEEDS_DIR = Path(__file__).parent.parent / "seeds"
 
 def _binding(source_name: str, class_name: str, *, schema: str, embedding_dim: int):
     spec = build_spec(schema=schema, embedding_dim=embedding_dim)
-    return spec, spec.sources[source_name].binding_for(spec.classes[class_name])
+    return spec, spec.classes[class_name].binding_for(spec.sources[source_name])
 
 
 # ---------------------------------------------------------------------------
@@ -233,12 +233,26 @@ def run_validation_sweep() -> dict[str, Any]:
     cfg = config.load()
     spec = build_spec(schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim)
     report: dict[str, Any] = {}
+    # spec.emit_validation returns (constraint_name, sql) tuples.
+    # Look up severity from spec.constraints when the rule isn't a
+    # built-in (built-ins aren't in spec.constraints; their name encodes
+    # severity convention — _builtin_fk_orphan_* is ERROR,
+    # _builtin_required_null_* is WARNING).
+    by_name = {c.name: c.severity.value for c in spec.constraints}
     with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
-        for rule, sql in spec.emit_validation():
+        for rule_name, sql in spec.emit_validation():
             cur.execute(sql)
             violations = list(cur.fetchall())
-            report[rule.name] = {
-                "severity": rule.severity.value,
+            if rule_name in by_name:
+                severity = by_name[rule_name]
+            elif rule_name.startswith("_builtin_fk_orphan_"):
+                severity = "error"
+            elif rule_name.startswith("_builtin_required_null_"):
+                severity = "warning"
+            else:
+                severity = "unknown"
+            report[rule_name] = {
+                "severity": severity,
                 "count": len(violations),
                 "sample": violations[:3],
             }

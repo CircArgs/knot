@@ -32,8 +32,10 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 COPY <<'EOF' /app/entrypoint.sh
 #!/bin/sh
 set -e
-cd /app
-pip install --no-deps --quiet -e ./knot -e ./knot_graphql -e ./hitch
+# Project root (knot package + knot_graphql package, both via the same pyproject)
+# is mounted at /app/repo. hitch lives inside it at /app/repo/hitch.
+pip install --no-deps --quiet -e /app/repo -e /app/repo/hitch
+cd /app/repo/hitch
 exec "$@"
 EOF
 RUN chmod +x /app/entrypoint.sh

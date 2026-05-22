@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 
 from temporalio.client import Client
 from temporalio.worker import Worker
@@ -39,6 +40,9 @@ async def amain() -> None:
         cfg.temporal_address, namespace=cfg.temporal_namespace
     )
 
+    # Sync activities run on a thread pool — psycopg + sentence-
+    # transformers are both sync libraries; making activities sync
+    # keeps them composable with knot's sync SQL emitters.
     worker = Worker(
         client,
         task_queue=cfg.task_queue,
@@ -49,6 +53,7 @@ async def amain() -> None:
             ValidationSweepWorkflow,
         ],
         activities=ALL_ACTIVITIES,
+        activity_executor=ThreadPoolExecutor(max_workers=8),
     )
     log.info("worker listening on task queue %s", cfg.task_queue)
     await worker.run()
