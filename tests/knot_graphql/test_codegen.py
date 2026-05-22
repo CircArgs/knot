@@ -160,9 +160,9 @@ def test_query_root_has_list_field_per_class(simple_spec):
 
 def test_query_root_has_by_id_field_per_class(simple_spec):
     sdl = emit_sdl(simple_spec)
-    assert "movie(canonicalId: ID!)" in sdl
-    assert "person(canonicalId: ID!)" in sdl
-    assert "credit(canonicalId: ID!)" in sdl
+    assert "movie(canonical_id: ID!)" in sdl
+    assert "person(canonical_id: ID!)" in sdl
+    assert "credit(canonical_id: ID!)" in sdl
 
 
 def test_query_root_virtual_list(simple_spec):

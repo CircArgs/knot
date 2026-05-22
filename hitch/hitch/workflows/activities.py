@@ -85,6 +85,39 @@ def upsert_rows(source_name: str, class_name: str, rows: list[dict[str, Any]]) -
     return len(rows)
 
 
+@activity.defn
+def translate_fks(source_name: str, class_name: str) -> int:
+    """Re-translate this (source, class) binding's FK columns from
+    source-ids → canonical-ids. Run after every upsert so re-ingest
+    doesn't strand the resolved view on stale source-ids in FK
+    positions (the write_sql ON CONFLICT DO UPDATE wipes FK columns
+    back to source-ids; ER's stamp guard then refuses to re-fanout).
+
+    autocommit=True — one DDL-shaped statement, no surrounding
+    transaction needed. The connection context manager's commit was
+    being shadowed by psycopg3's own connection-CM auto-commit when
+    the activity ran inside Temporal's ThreadPoolExecutor (the
+    transaction would close cleanly but the writes never reached
+    disk for the next-up activity to see)."""
+    cfg = config.load()
+    _, binding = _binding(
+        source_name, class_name, schema=cfg.pg_schema, embedding_dim=cfg.embedding_dim
+    )
+    sql = binding.translate_fks_sql()
+    # Multiple statements per FK slot — execute each separately. The
+    # original WITH-CTE chain got pruned by the postgres planner in
+    # some session contexts (data-modifying CTEs whose results don't
+    # feed the outer SELECT silently dropped), so the emitter ships
+    # statement-per-slot now. Split on the trailing ``;`` of each
+    # statement and run independently. autocommit=True so each
+    # UPDATE commits as it lands.
+    with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
+        for stmt in (s.strip() for s in sql.split(";")):
+            if stmt:
+                cur.execute(stmt)
+    return 0
+
+
 # ---------------------------------------------------------------------------
 # Embedding
 # ---------------------------------------------------------------------------
@@ -327,6 +360,7 @@ ALL = [
     fetch_seed_batch,
     validate_and_bucket,
     upsert_rows,
+    translate_fks,
     fetch_titles_to_embed,
     compute_embeddings,
     write_embeddings,

@@ -106,13 +106,13 @@ def _query_root(spec: Spec) -> str:
     lines: list[str] = []
 
     for cls in spec.concrete_classes():
-        lines.append(f"  {_camel(cls.name)}(canonicalId: ID!): {cls.name}")
+        lines.append(f"  {_camel(cls.name)}(canonical_id: ID!): {cls.name}")
         lines.append(
             f"  {_camel(cls.name)}List(first: Int = 20, after: String): [{cls.name}!]!"
         )
 
     for vc in spec.virtual_classes():
-        lines.append(f"  {_camel(vc.name)}(canonicalId: ID!): {vc.name}")
+        lines.append(f"  {_camel(vc.name)}(canonical_id: ID!): {vc.name}")
         lines.append(
             f"  {_camel(vc.name)}List(first: Int = 20, after: String): [{vc.name}!]!"
         )

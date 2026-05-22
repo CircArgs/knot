@@ -45,6 +45,16 @@ class IngestWorkflow:
             start_to_close_timeout=timedelta(seconds=60),
             retry_policy=_RETRY,
         )
+        # Recover from the write_sql FK-clobber: the upsert wiped any
+        # ER-translated canonical-ids out of FK columns back to source-ids.
+        # translate_fks_sql is idempotent — no-op if FK columns already
+        # hold canonical-ids OR if the row hasn't been ER'd yet.
+        await workflow.execute_activity(
+            activities.translate_fks,
+            args=[source_name, class_name],
+            start_to_close_timeout=timedelta(seconds=30),
+            retry_policy=_RETRY,
+        )
         return {
             "fetched": len(rows),
             "written": written,

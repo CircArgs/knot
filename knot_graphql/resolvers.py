@@ -43,7 +43,7 @@ def projection_from_selection(
     Ref objects.  FK slots return an ``FkRef``; vector slots a
     ``VectorRef`` — ``cls.col[name]`` handles the dispatch.
 
-    Field names that are not spec-declared slots (e.g. ``canonicalId``
+    Field names that are not spec-declared slots (e.g. ``canonical_id``
     as a GraphQL alias for the identifier, or reverse-FK count fields
     like ``creditCount``) are silently skipped — the resolver returns
     the full row and the framework picks what it needs.

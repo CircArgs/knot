@@ -25,7 +25,13 @@ statements in a single ``pg.transaction()``.
 from __future__ import annotations
 
 from knot.ast.types import Array, ClassRef, Enum, Primitive, TypeExpression, Vector
-from knot.spec import ClassKind, OntologyClass, Slot, SourceBinding
+from knot.spec import (
+    CORRECTIONS_SOURCE_NAME,
+    ClassKind,
+    OntologyClass,
+    Slot,
+    SourceBinding,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -891,3 +897,92 @@ def emit_recanonicalize_sql(
         *cascade_ctes,
     ]
     return "WITH " + ",\n".join(all_ctes) + "\nSELECT 1;"
+
+
+def emit_translate_fks_sql(
+    binding: SourceBinding,
+    *,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> str:
+    """Return the SQL template that re-translates this (source, class)
+    binding's FK columns from source-ids → canonical-ids.
+
+    The canonical write flow is:
+
+      1. ``binding.write_sql()`` ingests rows; FK columns hold the
+         **source's own** ids (e.g. imdb's ``movie.director = "nm_qt"``).
+      2. ``binding.assign_canonicals_sql()`` stamps Person canonical_ids
+         and, as part of the same atomic CTE chain, performs **backward
+         FK fan-out** — rewriting referencing classes' FK columns
+         (``movie.director``, ``credit.person``) from the stamped
+         source-id to the new canonical-id.
+      3. Reads happen against ``cls.resolved``, which joins on FK
+         columns that now hold canonical-ids.
+
+    The bug this primitive fixes: any subsequent **re-ingest** of the
+    same source's rows runs ``binding.write_sql()``'s
+    ``ON CONFLICT DO UPDATE`` which preserves ``canonical_id`` +
+    ``er_metadata`` but **overwrites every other slot**, including the
+    FK columns — wiping the canonical-ids back to source-ids. ER's
+    fan-out doesn't recover because its stamp guard
+    (``canonical_id IS NULL``) excludes already-stamped rows. The
+    resolved view then reads stale source-ids in FK positions and
+    downstream joins silently break.
+
+    This emitter does the **forward-only FK translation** (no stamping,
+    no cascade) — for each ``ClassRef`` slot on this class, build a
+    map of the target binding's ``(source_identifier → canonical_id)``
+    in this same source's namespace, then UPDATE the FK column where
+    its current value still matches a known source_identifier. The
+    WHERE clause is naturally idempotent: a value that already holds
+    a canonical-id won't match any ``source_identifier`` in the same
+    source's bindings, so re-runs are no-ops.
+
+    No parameters — schema, source, slot names all bake in at compile
+    time. Host calls::
+
+        cur.execute(binding.translate_fks_sql())
+
+    Skipped for the ``_user_corrections`` source — corrections rows
+    write canonical-ids directly per CLAUDE.md's cross-source semantic,
+    so they're never source-id-shaped. Emits ``SELECT 1`` no-op for
+    that source so the caller can call it uniformly.
+    """
+    _check_concrete(binding.class_)
+    # Corrections bypass the same-source-namespace assumption — they
+    # write canonical-ids directly. Translation would never match.
+    if binding.source.name == CORRECTIONS_SOURCE_NAME:
+        return "SELECT 1;  -- translate_fks: no-op for _user_corrections"
+
+    fk_slots = [
+        s for s in binding.class_.effective_slots() if isinstance(s.type, ClassRef)
+    ]
+    if not fk_slots:
+        return f"SELECT 1;  -- translate_fks: {binding.class_.name} has no FK slots"
+
+    table = _bindings_id(binding.class_, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
+
+    # One standalone UPDATE per FK slot — postgres' planner has a
+    # reproducible (and surprising) habit of pruning data-modifying
+    # CTEs when they share a chain with other CTEs that don't feed
+    # the outer SELECT; one-statement-per-slot sidesteps that entirely.
+    # Each UPDATE pulls (source_id → canonical_id) from the target's
+    # bindings in this source's namespace and rewrites the FK column.
+    statements: list[str] = []
+    for slot in fk_slots:
+        target_table = _bindings_id(
+            slot.type.target, schema=schema, suffix=bindings_suffix
+        )
+        ident_name = slot.type.target.identifier_slot().name
+        statements.append(
+            f"UPDATE {table} AS b\n"
+            f"SET {slot.name} = m.{ident_name}\n"
+            f"FROM {target_table} AS m\n"
+            f"WHERE b.source_name = {source_literal}\n"
+            f"  AND m.source_name = {source_literal}\n"
+            f"  AND m.{ident_name} IS NOT NULL\n"
+            f"  AND b.{slot.name} = m.source_identifier;"
+        )
+    return "\n".join(statements)

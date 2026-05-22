@@ -1075,6 +1075,31 @@ class SourceBinding:
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
+    def translate_fks_sql(self, *, bindings_suffix: str = "_bindings") -> str:
+        """Return SQL that re-translates this (source, class) binding's
+        FK columns from source-ids → canonical-ids. No parameters.
+
+        Run after every ``write_sql`` upsert to recover from the
+        re-ingest FK-clobber: the upsert preserves ``canonical_id`` +
+        ``er_metadata`` but rewrites every other slot, so FK columns
+        that previously held ER-translated canonical-ids revert to
+        the source's own ids. ``assign_canonicals_sql``'s stamp guard
+        (``canonical_id IS NULL``) excludes already-stamped rows, so
+        ER cannot recover. This emitter does the forward-only FK
+        translation that the cascade needed.
+
+        Idempotent: the WHERE clause matches only rows whose FK column
+        still holds a source-id (i.e. still matches a known
+        ``source_identifier`` in the target's bindings of THIS source).
+        Already-translated values are no-ops. See
+        ``knot.compile.write.emit_translate_fks_sql``."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_translate_fks_sql
+
+        return emit_translate_fks_sql(
+            self, schema=spec.schema, bindings_suffix=bindings_suffix
+        )
+
     def validate_rows_sql(self, *, bindings_suffix: str = "_bindings") -> str:
         """Return a SELECT SQL template that validates rows BEFORE upsert.
 
