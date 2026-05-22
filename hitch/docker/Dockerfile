@@ -15,6 +15,7 @@ COPY hitch/pyproject.toml /tmp/hitch-pyproject.toml
 # Pre-install heavy deps (sentence-transformers, torch) for cache reuse.
 RUN pip install --no-cache-dir \
         "psycopg[binary]>=3.1" \
+        "pgvector>=0.3" \
         "ariadne>=0.23" \
         "fastapi>=0.115" \
         "uvicorn[standard]>=0.32" \

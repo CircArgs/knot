@@ -90,6 +90,37 @@ template is built inside an `@activity.defn`, per the
 The ER policy is deterministic-mint (sha1 of identity fields), so
 retries converge to the same canonical_ids.
 
+## Known issues / knot gaps surfaced by this demo
+
+- **Re-ingest clobbers ER FK translations.** `binding.write_sql()`'s
+  `ON CONFLICT DO UPDATE` preserves `canonical_id` + `er_metadata`,
+  but overwrites every other slot — including FK columns. ER's
+  fan-out translated `movie.director` source-ids → canonical-ids,
+  but a fresh ingest of the same source's rows wipes that back to
+  source-ids. ER's stamp-CTE then skips them (`canonical_id IS NULL`
+  is false), so re-running ER does NOT recover the FK translation.
+  Workarounds: chain ER right after every ingest in the same
+  workflow (and accept the over-work), OR add a knot primitive
+  `binding.translate_fks_sql()` that walks the bindings table and
+  rewrites FK columns from source-ids → canonical-ids using a join
+  against the target binding. The cleaner fix is the primitive;
+  this isn't built yet.
+- **Re-ingest also nulls `title_embedding`** for the same reason —
+  the seed payload has no embedding field, so the upsert writes
+  NULL. Downstream `EmbedWorkflow` will pick it up on the next
+  loop, but in production the embedding-bearing slot should live
+  on a sibling table the upsert doesn't touch.
+- **GraphQL surface is read-only and minimal.** Filter / orderBy /
+  aggregate arguments aren't exposed — knot_graphql's `Resolvers`
+  only ships `resolve_by_id`, `resolve_list(first, after)`,
+  `resolve_fk_walk`, `resolve_reverse_count`. Anything richer is
+  a host-side extension.
+- **ER policy is sha1-of-name** — deterministic but brittle. "P. T.
+  Anderson" (rt) and "Paul Thomas Anderson" (imdb/tmdb) hash
+  differently, so they remain split canonicals. Real ER needs
+  blocking + similarity scoring; the `_user_corrections` source can
+  fix the split manually via `recanonicalize_sql`.
+
 ## Limits / what's out of scope
 
 - No auth, no multi-tenant.

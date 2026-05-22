@@ -13,14 +13,18 @@ from contextlib import contextmanager
 from typing import Any
 
 import psycopg
+from pgvector.psycopg import register_vector
 from psycopg.rows import dict_row
 
 
 @contextmanager
 def connect(dsn: str, *, autocommit: bool = False) -> Iterator[psycopg.Connection]:
     """Yield a psycopg3 connection. dict_row by default so resolver outputs
-    are already {col: value} dicts (matches knot_graphql's contract)."""
+    are already {col: value} dicts (matches knot_graphql's contract).
+    pgvector adapter registered so VECTOR columns come back as numpy
+    arrays (iterable → GraphQL [Float!]!) instead of bare strings."""
     conn = psycopg.connect(dsn, autocommit=autocommit, row_factory=dict_row)
+    register_vector(conn)
     try:
         yield conn
         if not autocommit:

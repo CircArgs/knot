@@ -64,6 +64,19 @@ def make_app() -> FastAPI:
 
     def _make_list(cls_name: str):
         async def resolver(_, info, first=20, after=None):
+            # Clamp first to a sane range — a negative LIMIT crashes
+            # psycopg with a leaky stacktrace, and an unbounded `first`
+            # could DOS the resolver. 1000 is generous for an MDM read.
+            if not isinstance(first, int) or first < 0:
+                raise ValueError(
+                    f"`first` must be a non-negative integer; got {first!r}"
+                )
+            first = min(first, 1000)
+            # `after` is a canonical_id cursor; an empty string is a
+            # client mistake (it would skip every row whose id sorts
+            # after the empty string, which is everything).
+            if after is not None and not after:
+                after = None
             rows = knot_resolvers.resolve_list(cls_name, first=first, after=after)
             for r in rows:
                 r["__class_name"] = cls_name
