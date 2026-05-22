@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en" class="bg-zinc-950 text-zinc-100">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>knot — a typed compiler for multi-source MDM</title>
+  <meta name="description" content="knot compiles a typed Python spec into postgres SQL — DDL, reads, ER writes, validation. hitch is the reference Temporal + GraphQL + pgvector deployment.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'Consolas', 'monospace'],
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            accent: { DEFAULT: '#60a5fa', dim: '#1e3a8a' },
+            soft: '#a1a1aa',
+          }
+        }
+      }
+    }
+  </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', system-ui, sans-serif; }
+    code, pre { font-family: 'JetBrains Mono', ui-monospace, monospace; }
+    .grad-text { background: linear-gradient(90deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    pre code.hljs { background: transparent !important; padding: 0 !important; font-size: 0.85rem; line-height: 1.55; }
+    .pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.2rem 0.7rem; border-radius: 9999px; border: 1px solid; font-size: 0.7rem; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+    .arrow::after { content: '→'; margin-left: 0.5rem; transition: transform 200ms; display: inline-block; }
+    .arrow:hover::after { transform: translateX(4px); }
+    .codeblock { position: relative; }
+    .codeblock .copy { position: absolute; top: 0.5rem; right: 0.5rem; opacity: 0; transition: opacity 200ms; padding: 0.2rem 0.5rem; border-radius: 0.25rem; background: #27272a; color: #a1a1aa; font-size: 0.7rem; cursor: pointer; }
+    .codeblock:hover .copy { opacity: 1; }
+    .copy:hover { background: #3f3f46; color: #fafafa; }
+    .copy:active { transform: scale(0.97); }
+  </style>
+</head>
+<body class="min-h-screen antialiased">
+
+  <!-- nav -->
+  <nav class="border-b border-zinc-800 sticky top-0 bg-zinc-950/80 backdrop-blur z-50">
+    <div class="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
+      <a href="#" class="font-mono font-bold text-lg">
+        <span class="grad-text">knot</span><span class="text-zinc-500"> + hitch</span>
+      </a>
+      <div class="hidden md:flex gap-6 text-sm text-zinc-400">
+        <a href="#problem" class="hover:text-zinc-100 transition">Problem</a>
+        <a href="#substrate" class="hover:text-zinc-100 transition">Substrate</a>
+        <a href="#hitch" class="hover:text-zinc-100 transition">hitch</a>
+        <a href="#try" class="hover:text-zinc-100 transition">Try it</a>
+        <a href="#honest" class="hover:text-zinc-100 transition">Honest</a>
+        <a href="https://github.com/CircArgs/knot" class="hover:text-zinc-100 transition">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- hero -->
+  <section class="max-w-6xl mx-auto px-6 pt-20 pb-16">
+    <div class="flex gap-2 mb-6">
+      <span class="pill border-blue-500/30 text-blue-300 bg-blue-500/5">substrate</span>
+      <span class="pill border-purple-500/30 text-purple-300 bg-purple-500/5">postgres-only</span>
+      <span class="pill border-pink-500/30 text-pink-300 bg-pink-500/5">446 tests green</span>
+    </div>
+    <h1 class="text-5xl md:text-7xl font-bold tracking-tight mb-6">
+      A typed compiler<br/>
+      for <span class="grad-text">multi-source MDM</span>.
+    </h1>
+    <p class="text-xl text-zinc-400 max-w-3xl leading-relaxed">
+      <span class="text-zinc-100 font-medium">knot</span> compiles a typed Python spec into
+      postgres SQL — DDL, reads, ER writes, validation. Pure library, zero connections,
+      zero scheduler. <span class="text-zinc-100 font-medium">hitch</span> is the reference
+      Temporal + FastAPI + pgvector deployment that proves the substrate is real.
+    </p>
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a href="#try" class="arrow inline-flex items-center px-5 py-2.5 bg-blue-500 hover:bg-blue-400 text-zinc-900 font-semibold rounded transition">Run the demo</a>
+      <a href="#substrate" class="arrow inline-flex items-center px-5 py-2.5 border border-zinc-700 hover:border-zinc-500 text-zinc-100 rounded transition">Read the substrate</a>
+    </div>
+  </section>
+
+  <!-- problem -->
+  <section id="problem" class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-4">The problem</h2>
+    <p class="text-lg text-zinc-300 max-w-3xl leading-relaxed mb-6">
+      Three data providers each have an opinion about the same movie. They disagree
+      on <code class="text-pink-400">runtime</code>, on title case, on whether
+      <em>Paul Thomas Anderson</em> should also be <em>P. T. Anderson</em>. A typical
+      MDM stack solves this with a heavyweight commercial product that bundles the
+      spec, the deploy engine, the write pipeline, the matching policy, and the
+      runtime into one opinionated box.
+    </p>
+    <p class="text-lg text-zinc-300 max-w-3xl leading-relaxed">
+      knot ships <strong>only the compiler layer</strong>. You keep your migration tool, your workflow
+      engine, your ER policy, your API style, your auth. The substrate replaces the
+      one thing that's actually a compiler problem.
+    </p>
+    <div class="mt-10 grid md:grid-cols-3 gap-4">
+      <div class="p-5 rounded-lg border border-zinc-800 bg-zinc-900/40">
+        <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Closest peer (compiler)</div>
+        <div class="text-lg font-mono">jOOQ</div>
+        <div class="text-sm text-zinc-400 mt-1">Typed SQL compiler, no connection ownership</div>
+      </div>
+      <div class="p-5 rounded-lg border border-zinc-800 bg-zinc-900/40">
+        <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Closest peer (spec)</div>
+        <div class="text-lg font-mono">LinkML</div>
+        <div class="text-sm text-zinc-400 mt-1">Declarative spec → DDL emission</div>
+      </div>
+      <div class="p-5 rounded-lg border border-zinc-800 bg-zinc-900/40">
+        <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Problem peer</div>
+        <div class="text-lg font-mono">Reltio / Tamr / Senzing</div>
+        <div class="text-sm text-zinc-400 mt-1">MDM platforms — knot ships just the compiler</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- north-star -->
+  <section id="substrate" class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-3">The five-bullet north-star</h2>
+    <p class="text-zinc-400 mb-10">Every change to knot has to justify against these. They're locked.</p>
+    <div class="grid md:grid-cols-2 gap-4">
+      <div class="p-6 rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900/60 to-zinc-900/20">
+        <div class="text-xs font-mono font-bold text-blue-400 mb-2">01</div>
+        <div class="text-lg font-semibold mb-1">Compile a typed spec to postgres SQL</div>
+        <div class="text-zinc-400 text-sm leading-relaxed"><code class="text-zinc-300">Spec.ddl()</code> emits the target schema. <code class="text-zinc-300">Query.sql()</code> emits read SQL. <code class="text-zinc-300">binding.write_sql / assign_canonical_sql / retract_sql / translate_fks_sql</code> emit write SQL. The host runs the strings.</div>
+      </div>
+      <div class="p-6 rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900/60 to-zinc-900/20">
+        <div class="text-xs font-mono font-bold text-purple-400 mb-2">02</div>
+        <div class="text-lg font-semibold mb-1">Fuse multi-source claims into one view</div>
+        <div class="text-zinc-400 text-sm leading-relaxed">N sources publish bindings about the same entity. The <code class="text-zinc-300">_resolved</code> view picks per-slot winners via argmax over per-(source, class, slot) weights. <code class="text-zinc-300">_all_sources</code> exposes per-source jsonb provenance.</div>
+      </div>
+      <div class="p-6 rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900/60 to-zinc-900/20">
+        <div class="text-xs font-mono font-bold text-pink-400 mb-2">03</div>
+        <div class="text-lg font-semibold mb-1">ER as a first-class write primitive</div>
+        <div class="text-zinc-400 text-sm leading-relaxed"><code class="text-zinc-300">assign_canonicals_sql</code> is one atomic CTE chain: stamp + forward FK translation + backward fan-out + register. <code class="text-zinc-300">recanonicalize</code> cascades graph-wide. No ORM expresses this.</div>
+      </div>
+      <div class="p-6 rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900/60 to-zinc-900/20">
+        <div class="text-xs font-mono font-bold text-amber-400 mb-2">04</div>
+        <div class="text-lg font-semibold mb-1">One typed AST for reads + virtuals + constraints</div>
+        <div class="text-zinc-400 text-sm leading-relaxed"><code class="text-zinc-300">cls.col.year &gt;= 1888</code> is the same Expr in <code class="text-zinc-300">.where(...)</code>, <code class="text-zinc-300">add_constraint(...)</code>, and <code class="text-zinc-300">add_virtual(...)</code>. Three retrieval shapes (relational / graph-walk / k-NN), one builder.</div>
+      </div>
+      <div class="p-6 rounded-lg border border-zinc-800 bg-gradient-to-br from-zinc-900/60 to-zinc-900/20 md:col-span-2">
+        <div class="text-xs font-mono font-bold text-emerald-400 mb-2">05</div>
+        <div class="text-lg font-semibold mb-1">knot is a substrate, not a runtime</div>
+        <div class="text-zinc-400 text-sm leading-relaxed">No connections, no scheduler, no migration engine, no ingest worker, no ER policy decisions. The host owns all of that; knot just compiles. <span class="text-zinc-500">→ that split is what makes the substrate trustable.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- code sample: spec -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-3">The spec is the single source of truth</h2>
+    <p class="text-zinc-400 mb-8 max-w-3xl">
+      Authored once in typed Python. The same <code class="text-zinc-300">Expr</code> nodes
+      compose in <code class="text-zinc-300">.where()</code> filters, constraint bodies,
+      and virtual-class predicates. There's no DDL file to drift from the spec.
+    </p>
+    <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto">
+      <button class="copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">copy</button>
+<pre><code class="language-python">from knot import Spec, types, this
+
+spec = Spec(identifier_slot_name="canonical_id", schema="hitch")
+
+person = spec.add_class("Person")
+person.slot("name", types.TEXT, required=True)
+person.slot("birth_year", types.INTEGER)
+person.slot("name_embedding", types.VECTOR(384, metric="cosine"))
+
+movie = spec.add_class("Movie")
+movie.slot("title", types.TEXT, required=True)
+movie.slot("year", types.INTEGER)
+movie.slot("director", person)              # FK
+movie.slot("title_embedding", types.VECTOR(384, metric="cosine"))
+movie.slot("mpaa_rating", types.ENUM("G", "PG", "PG_13", "R", "NC_17", "NOT_RATED"))
+
+# NULL-safe FK chain in a constraint body
+movie.add_constraint(
+    "director_alive_at_release",
+    body=movie.col.director.birth_year.is_null()
+       | movie.col.year.is_null()
+       | (movie.col.director.birth_year &lt; movie.col.year),
+)
+
+# Correlated aggregate — Movie has at least one director credit
+credit = spec.add_class("Credit")
+credit.slot("role", types.ENUM("director", "actor", "writer", "producer"), required=True)
+credit.slot("movie", movie); credit.slot("person", person)
+
+movie.add_constraint(
+    "movie_has_director_credit",
+    body=movie.col.director.is_null()
+       | ((credit.col.movie == this.Movie) &amp; (credit.col.role == "director")).any(),
+)
+
+# Virtual subclass — predicate composes from any Expr
+movie.add_virtual("DirectedMovie", where=movie.col.year &gt;= 1888)
+
+# Three sources, one binding per source per class
+for src in ("imdb", "tmdb", "rottentomatoes"):
+    s = spec.add_source(src)
+    for cls in (person, movie, credit):
+        s.bind(cls)
+
+print(spec.ddl())                # one canonical CREATE script
+print(spec.emit_validation())    # one SELECT per constraint
+</code></pre>
+    </div>
+    <div class="mt-6 grid md:grid-cols-3 gap-4 text-sm">
+      <div class="flex gap-3 items-start"><span class="text-blue-400 font-mono">→</span><div><strong class="text-zinc-100">26 constraints</strong> evaluated per validation sweep in the hitch demo<br><span class="text-zinc-500">16 user-declared + 10 built-in (FK orphan + required-null per slot)</span></div></div>
+      <div class="flex gap-3 items-start"><span class="text-purple-400 font-mono">→</span><div><strong class="text-zinc-100">NULL-safe by design</strong> across three-valued logic<br><span class="text-zinc-500">FK chain LEFT JOINs the target so missing values pass cleanly</span></div></div>
+      <div class="flex gap-3 items-start"><span class="text-pink-400 font-mono">→</span><div><strong class="text-zinc-100">Six virtual classes</strong> in the demo: DirectedMovie, RecentMovie, ClassicMovie, LongMovie, Blockbuster, LivingPerson</div></div>
+    </div>
+  </section>
+
+  <!-- ER section -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-3">Entity resolution in one atomic statement</h2>
+    <p class="text-zinc-400 mb-8 max-w-3xl">
+      Every <code class="text-zinc-300">binding.assign_canonicals_sql()</code> call does
+      <strong>four things at once</strong> in a single writable-CTE chain. Re-runs on
+      already-stamped rows are strict no-ops.
+    </p>
+    <div class="grid md:grid-cols-2 gap-6">
+      <div>
+        <div class="space-y-3 text-sm">
+          <div class="flex gap-4 p-4 rounded border border-zinc-800 bg-zinc-900/30">
+            <div class="text-2xl font-mono font-bold text-blue-400 leading-none">1</div>
+            <div>
+              <div class="font-semibold mb-1">Stamp</div>
+              <code class="text-xs text-zinc-400">UPDATE bindings SET canonical_id = … WHERE canonical_id IS NULL</code>
+              <div class="text-xs text-zinc-500 mt-1">No-op if already stamped — idempotency guard</div>
+            </div>
+          </div>
+          <div class="flex gap-4 p-4 rounded border border-zinc-800 bg-zinc-900/30">
+            <div class="text-2xl font-mono font-bold text-purple-400 leading-none">2</div>
+            <div>
+              <div class="font-semibold mb-1">Forward FK translation</div>
+              <code class="text-xs text-zinc-400">Look up each ClassRef slot's value in target.bindings (same source). Rewrite source-id → canonical-id.</code>
+            </div>
+          </div>
+          <div class="flex gap-4 p-4 rounded border border-zinc-800 bg-zinc-900/30">
+            <div class="text-2xl font-mono font-bold text-pink-400 leading-none">3</div>
+            <div>
+              <div class="font-semibold mb-1">Backward fan-out</div>
+              <code class="text-xs text-zinc-400">For each referencing class, UPDATE its FK column where it held this row's source-id. EXISTS-guard ensures strict idempotency.</code>
+            </div>
+          </div>
+          <div class="flex gap-4 p-4 rounded border border-zinc-800 bg-zinc-900/30">
+            <div class="text-2xl font-mono font-bold text-emerald-400 leading-none">4</div>
+            <div>
+              <div class="font-semibold mb-1">Register</div>
+              <code class="text-xs text-zinc-400">Implicit — no separate canonical table. The set of known canonicals is SELECT DISTINCT canonical_id FROM bindings.</code>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="text-sm text-zinc-400 mb-3 font-medium">Embedding-driven ER in hitch (real, not mocked):</div>
+        <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto">
+<pre><code class="language-sql">-- For each unresolved binding in source X:
+SELECT
+  u.source_identifier,
+  (SELECT b.canonical_id
+   FROM &lt;class&gt;_bindings b
+   WHERE b.canonical_id IS NOT NULL
+     AND b.source_name &lt;&gt; X
+     AND b.name_embedding &lt;=&gt; u.name_embedding &lt; 0.35
+   ORDER BY b.name_embedding &lt;=&gt; u.name_embedding
+   LIMIT 1) AS match_canonical_id
+FROM &lt;class&gt;_bindings u
+WHERE u.source_name = X AND u.canonical_id IS NULL;</code></pre>
+        </div>
+        <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
+          <div class="p-3 rounded bg-emerald-500/5 border border-emerald-500/20">
+            <div class="text-emerald-400 font-semibold mb-1">✓ FUSED</div>
+            <div class="text-zinc-300">Miramax ≡ Miramax Films</div>
+          </div>
+          <div class="p-3 rounded bg-emerald-500/5 border border-emerald-500/20">
+            <div class="text-emerald-400 font-semibold mb-1">✓ FUSED</div>
+            <div class="text-zinc-300">PTA ≡ P. T. Anderson</div>
+          </div>
+          <div class="p-3 rounded bg-emerald-500/5 border border-emerald-500/20">
+            <div class="text-emerald-400 font-semibold mb-1">✓ FUSED</div>
+            <div class="text-zinc-300">USA ≡ United States</div>
+          </div>
+          <div class="p-3 rounded bg-blue-500/5 border border-blue-500/20">
+            <div class="text-blue-400 font-semibold mb-1">↻ FALLBACK</div>
+            <div class="text-zinc-300">Above threshold → sha1-mint (deterministic)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- hitch architecture -->
+  <section id="hitch" class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-3">hitch — the reference deployment</h2>
+    <p class="text-zinc-400 mb-10 max-w-3xl">
+      What a real team would build around knot. Read it as <em>"here's the substrate
+      in action"</em>, not part of knot. The split is deliberate — your team can
+      replace any of these pieces without touching knot.
+    </p>
+
+    <!-- architecture diagram -->
+    <div class="rounded-xl border border-zinc-800 bg-zinc-900/40 p-8 mb-8">
+      <svg viewBox="0 0 800 360" class="w-full" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+            <polygon points="0 0, 10 3, 0 6" fill="#71717a"/>
+          </marker>
+        </defs>
+        <!-- postgres -->
+        <rect x="300" y="20" width="200" height="70" rx="8" fill="#1e3a8a" fill-opacity="0.15" stroke="#60a5fa" stroke-width="1.5"/>
+        <text x="400" y="50" text-anchor="middle" fill="#60a5fa" font-family="JetBrains Mono" font-weight="600" font-size="14">postgres + pgvector</text>
+        <text x="400" y="70" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">bindings · resolved view · HNSW index · weights</text>
+
+        <!-- hitch-api -->
+        <rect x="40" y="160" width="220" height="120" rx="8" fill="#86198f" fill-opacity="0.15" stroke="#c084fc" stroke-width="1.5"/>
+        <text x="150" y="190" text-anchor="middle" fill="#c084fc" font-family="JetBrains Mono" font-weight="600" font-size="14">hitch-api</text>
+        <text x="150" y="210" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">FastAPI + Ariadne</text>
+        <text x="150" y="230" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">GraphQL queries + mutations</text>
+        <text x="150" y="248" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono" font-size="10">per-request memoization</text>
+        <text x="150" y="262" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono" font-size="10">corrections via _user_corrections</text>
+
+        <!-- hitch-worker -->
+        <rect x="290" y="160" width="220" height="120" rx="8" fill="#9f1239" fill-opacity="0.15" stroke="#f472b6" stroke-width="1.5"/>
+        <text x="400" y="190" text-anchor="middle" fill="#f472b6" font-family="JetBrains Mono" font-weight="600" font-size="14">hitch-worker</text>
+        <text x="400" y="210" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">Temporal worker</text>
+        <text x="400" y="230" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">Ingest · Embed · ER · Validate</text>
+        <text x="400" y="248" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono" font-size="10">sentence-transformers MiniLM</text>
+        <text x="400" y="262" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono" font-size="10">embedding k-NN ER policy</text>
+
+        <!-- temporal -->
+        <rect x="540" y="160" width="220" height="120" rx="8" fill="#065f46" fill-opacity="0.15" stroke="#34d399" stroke-width="1.5"/>
+        <text x="650" y="190" text-anchor="middle" fill="#34d399" font-family="JetBrains Mono" font-weight="600" font-size="14">temporal</text>
+        <text x="650" y="210" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">auto-setup</text>
+        <text x="650" y="230" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="11">workflow history + UI</text>
+        <text x="650" y="248" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono" font-size="10">replay-safe activities</text>
+        <text x="650" y="262" text-anchor="middle" fill="#71717a" font-family="JetBrains Mono" font-size="10">idempotent SQL primitives</text>
+
+        <!-- arrows: api ↔ postgres -->
+        <line x1="150" y1="160" x2="350" y2="92" stroke="#71717a" stroke-width="1" marker-end="url(#arrow)"/>
+        <text x="200" y="135" fill="#71717a" font-family="JetBrains Mono" font-size="10">reads</text>
+        <!-- worker → postgres -->
+        <line x1="400" y1="160" x2="400" y2="92" stroke="#71717a" stroke-width="1" marker-end="url(#arrow)"/>
+        <text x="408" y="135" fill="#71717a" font-family="JetBrains Mono" font-size="10">writes</text>
+        <!-- temporal ↔ worker -->
+        <line x1="540" y1="220" x2="510" y2="220" stroke="#71717a" stroke-width="1" marker-end="url(#arrow)"/>
+
+        <!-- clients -->
+        <rect x="40" y="310" width="220" height="36" rx="8" fill="#27272a" fill-opacity="0.4" stroke="#52525b" stroke-width="1"/>
+        <text x="150" y="333" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="12">curl :8000/graphql/</text>
+
+        <rect x="540" y="310" width="220" height="36" rx="8" fill="#27272a" fill-opacity="0.4" stroke="#52525b" stroke-width="1"/>
+        <text x="650" y="333" text-anchor="middle" fill="#a1a1aa" font-family="JetBrains Mono" font-size="12">temporal UI :8088</text>
+
+        <line x1="150" y1="310" x2="150" y2="280" stroke="#71717a" stroke-width="1" marker-end="url(#arrow)"/>
+        <line x1="650" y1="310" x2="650" y2="280" stroke="#71717a" stroke-width="1" marker-end="url(#arrow)"/>
+      </svg>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-4 text-sm">
+      <div class="p-4 border border-zinc-800 rounded bg-zinc-900/30">
+        <div class="text-blue-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">every DB write</div>
+        <div class="text-zinc-300">goes through a knot SQL emitter. Never raw SQL.</div>
+      </div>
+      <div class="p-4 border border-zinc-800 rounded bg-zinc-900/30">
+        <div class="text-purple-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">workflow code</div>
+        <div class="text-zinc-300">never imports knot. Only activities do. Replay-safe by construction.</div>
+      </div>
+      <div class="p-4 border border-zinc-800 rounded bg-zinc-900/30">
+        <div class="text-pink-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">re-ingest safe</div>
+        <div class="text-zinc-300"><code>translate_fks_sql</code> recovers canonical FKs after every upsert.</div>
+      </div>
+      <div class="p-4 border border-zinc-800 rounded bg-zinc-900/30">
+        <div class="text-emerald-400 font-mono text-xs font-semibold uppercase tracking-wider mb-1">model drift auditable</div>
+        <div class="text-zinc-300">Every ER decision records <code>model_name + embedding_dim</code> in <code>er_metadata</code>.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- live demo -->
+  <section id="try" class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-3">Try it</h2>
+    <p class="text-zinc-400 mb-8 max-w-3xl">
+      One <code class="text-zinc-300">docker compose up</code> brings up the whole
+      stack — postgres, Temporal, the API, the worker, the GraphQL playground.
+    </p>
+
+    <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto mb-6">
+      <button class="copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">copy</button>
+<pre><code class="language-bash">cd hitch
+docker compose up --build              # postgres + temporal + api + worker
+docker compose exec hitch-worker python -m scripts.deploy    # DDL + seed weights
+docker compose exec hitch-worker python -m scripts.run_demo  # ingest → embed → ER → validate</code></pre>
+    </div>
+
+    <h3 class="font-semibold text-lg mt-10 mb-3">Read a movie with its director and studio</h3>
+    <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto mb-6">
+      <button class="copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">copy</button>
+<pre><code class="language-bash">curl -sL -X POST http://localhost:8000/graphql/ \
+  -H 'content-type: application/json' \
+  -d '{"query":"{ movieList { title year director { name movieDirectorCount } studio { name founded_year } } }"}'</code></pre>
+    </div>
+
+    <h3 class="font-semibold text-lg mt-10 mb-3">Correct a slot via mutation — read-after-write</h3>
+    <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto mb-6">
+      <button class="copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">copy</button>
+<pre><code class="language-bash">curl -sL -X POST http://localhost:8000/graphql/ \
+  -H 'content-type: application/json' \
+  -d '{"query":"mutation { correctMovie(canonical_id: \"m_…\", source_identifier: \"my-fix\", year: 1995) { title year } }"}'
+
+# Retract the correction — originals come back
+curl -sL -X POST http://localhost:8000/graphql/ \
+  -H 'content-type: application/json' \
+  -d '{"query":"mutation { retract(class_name: \"Movie\", canonical_id: \"m_…\", source_identifier: \"my-fix\") }"}'</code></pre>
+    </div>
+
+    <h3 class="font-semibold text-lg mt-10 mb-3">Inspect ER decisions per slot</h3>
+    <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto mb-6">
+      <button class="copy" onclick="navigator.clipboard.writeText(this.nextElementSibling.textContent)">copy</button>
+<pre><code class="language-sql">SELECT canonical_id, slot_name, source_name, slot_value, weight, is_winner, margin
+FROM ( /* movie.explain_winner_sql() output */ ) e
+ORDER BY canonical_id, slot_name, rn;</code></pre>
+    </div>
+
+    <div class="mt-10 grid sm:grid-cols-3 gap-4">
+      <a href="http://localhost:8000/graphql/" class="arrow block p-5 rounded border border-zinc-800 hover:border-blue-500 bg-zinc-900/40 hover:bg-blue-500/5 transition">
+        <div class="text-xs uppercase tracking-wider text-zinc-500 mb-1">live</div>
+        <div class="font-mono font-semibold text-blue-300">GraphQL playground</div>
+        <div class="text-xs text-zinc-500 mt-1">:8000/graphql/</div>
+      </a>
+      <a href="http://localhost:8000/sdl" class="arrow block p-5 rounded border border-zinc-800 hover:border-purple-500 bg-zinc-900/40 hover:bg-purple-500/5 transition">
+        <div class="text-xs uppercase tracking-wider text-zinc-500 mb-1">live</div>
+        <div class="font-mono font-semibold text-purple-300">Live SDL</div>
+        <div class="text-xs text-zinc-500 mt-1">:8000/sdl</div>
+      </a>
+      <a href="http://localhost:8088/" class="arrow block p-5 rounded border border-zinc-800 hover:border-emerald-500 bg-zinc-900/40 hover:bg-emerald-500/5 transition">
+        <div class="text-xs uppercase tracking-wider text-zinc-500 mb-1">live</div>
+        <div class="font-mono font-semibold text-emerald-300">Temporal UI</div>
+        <div class="text-xs text-zinc-500 mt-1">:8088</div>
+      </a>
+    </div>
+  </section>
+
+  <!-- by-the-numbers -->
+  <section class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-10">Where it lands today</h2>
+    <div class="grid md:grid-cols-4 gap-4">
+      <div class="p-6 rounded border border-zinc-800 bg-zinc-900/30">
+        <div class="text-4xl font-mono font-bold grad-text">446</div>
+        <div class="text-zinc-400 text-sm mt-1">unit + knot_graphql tests green</div>
+      </div>
+      <div class="p-6 rounded border border-zinc-800 bg-zinc-900/30">
+        <div class="text-4xl font-mono font-bold grad-text">26</div>
+        <div class="text-zinc-400 text-sm mt-1">constraints evaluated per validation sweep</div>
+      </div>
+      <div class="p-6 rounded border border-zinc-800 bg-zinc-900/30">
+        <div class="text-4xl font-mono font-bold grad-text">~30s</div>
+        <div class="text-zinc-400 text-sm mt-1">demo full lifecycle (ingest → embed → ER → query)</div>
+      </div>
+      <div class="p-6 rounded border border-zinc-800 bg-zinc-900/30">
+        <div class="text-4xl font-mono font-bold grad-text">5/5</div>
+        <div class="text-zinc-400 text-sm mt-1">persona reviewers: APPROVE_WITH_GAPS</div>
+      </div>
+    </div>
+
+    <div class="mt-10 grid md:grid-cols-2 gap-4">
+      <div class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <div class="text-sm uppercase tracking-wider text-zinc-500 mb-2">demo numbers</div>
+        <ul class="text-sm text-zinc-300 space-y-2">
+          <li class="flex justify-between"><span>4 concrete + 6 virtual classes</span><span class="font-mono text-zinc-500">Person/Studio/Movie/Credit + virtuals</span></li>
+          <li class="flex justify-between"><span>3 sources, varied identity strings</span><span class="font-mono text-zinc-500">imdb / tmdb / rt</span></li>
+          <li class="flex justify-between"><span>54 binding rows</span><span class="font-mono text-zinc-500">across 4 classes × 3 sources</span></li>
+          <li class="flex justify-between"><span>33 vectors computed</span><span class="font-mono text-zinc-500">MiniLM-L6-v2 (384-d, normalized)</span></li>
+          <li class="flex justify-between"><span>fused: PTA, Miramax, WB</span><span class="font-mono text-emerald-400">k-NN matched cross-source</span></li>
+        </ul>
+      </div>
+      <div class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <div class="text-sm uppercase tracking-wider text-zinc-500 mb-2">substrate posture (locked)</div>
+        <ul class="text-sm text-zinc-300 space-y-2">
+          <li>✓ no I/O in <code class="text-zinc-400">knot/</code> — pure SQL emitter</li>
+          <li>✓ no env-var indirection — kwargs only</li>
+          <li>✓ no spec → compile inversion — one-way deps</li>
+          <li>✓ <code class="text-zinc-400">knot.types</code> is the type surface</li>
+          <li>✓ one way to do everything — no deprecation cruft</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- honest -->
+  <section id="honest" class="max-w-6xl mx-auto px-6 py-16 border-t border-zinc-800">
+    <h2 class="text-3xl font-bold mb-3">Where it doesn't oversell</h2>
+    <p class="text-zinc-400 mb-8 max-w-3xl">
+      Five hard-nosed personas reviewed the pitch. All approved with gaps. These
+      are the gaps. Substrate-side ones are closed in the current commit; host-side
+      ones are explicitly out of scope for knot itself.
+    </p>
+    <div class="space-y-3">
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-emerald-500/30 text-emerald-300 bg-emerald-500/5">closed</span>
+          P0 — corrections weight silent-failure
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Operator forgets to seed <code>_user_corrections</code> at high weight → every GraphQL mutation appears to succeed but later reads return the pre-correction value. <strong>Fix landed:</strong> new <code class="text-zinc-400">emit_weight_seed</code> in knot always inserts the corrections row at <code class="text-zinc-400">CORRECTIONS_DEFAULT_WEIGHT (1e6)</code> regardless of caller-supplied defaults. INSERT-only so operator tuning survives re-deploy.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-emerald-500/30 text-emerald-300 bg-emerald-500/5">closed</span>
+          ER fan-out lock-ordering hazard
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Two ER workers stamping different sources whose fan-outs share referencing classes could acquire row locks in different orders → deadlock setup. <strong>Fix landed:</strong> <code class="text-zinc-400">cls.referrers</code> iteration now sorts by class name in <code class="text-zinc-400">emit_assign_canonical(s)_sql</code> — deterministic across spec construction orders.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-emerald-500/30 text-emerald-300 bg-emerald-500/5">closed</span>
+          <code>explain_winner_sql</code> tie-break divergence
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Used <code class="text-zinc-400">RANK() OVER (ORDER BY weight DESC)</code> while the resolver tie-broke on <code class="text-zinc-400">weight DESC, source_name</code>. Diagnostic labeled tied-weight rows both <code class="text-zinc-400">is_winner=true</code> while the view picked one. <strong>Fix landed:</strong> <code class="text-zinc-400">ROW_NUMBER()</code> with the same ordering tuple as the resolver. Margin now <code class="text-zinc-400">NULL</code> for single-source slots instead of misleading 0.0.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-emerald-500/30 text-emerald-300 bg-emerald-500/5">closed</span>
+          Embedding model drift unauditable
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          A future model upgrade produces different cosine distances → prior ER decisions stay stamped but new ones fuse differently. <strong>Fix landed:</strong> hitch's <code class="text-zinc-400">er_metadata</code> now records <code class="text-zinc-400">model_name + embedding_dim</code> on every stamped row. A backfill script can scan for stale models and re-decide.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-amber-500/30 text-amber-300 bg-amber-500/5">open</span>
+          GraphQL N+1 → proper DataLoader
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Per-request memoization halves roundtrips on the demo (Tarantino in N credits = 1 lookup, not N). True batched IN-list DataLoader for distinct targets per-request is the next step. Lives in <code class="text-zinc-400">knot_graphql.Resolvers</code>.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-amber-500/30 text-amber-300 bg-amber-500/5">open</span>
+          DLQ shape + cursor durability in hitch
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Ingest workflow currently discards validation-fail rows after counting them. Production needs a routed sink. <code class="text-zinc-400">fetch_seed_batch</code> reads from disk — production needs cursor durability and rate-limited source-API calls. Both are host concerns; knot's substrate doesn't change.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-amber-500/30 text-amber-300 bg-amber-500/5">open</span>
+          ER <code>needs_review</code> bucket
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Today's policy is binary: below threshold → match, above → mint fresh. A 0.30–0.45 distance band should route to human review instead of producing an irrecoverable fresh canonical. Host-side policy add.
+        </div>
+      </details>
+
+      <details class="p-5 rounded border border-zinc-800 bg-zinc-900/30">
+        <summary class="cursor-pointer font-semibold flex items-center gap-3">
+          <span class="pill border-amber-500/30 text-amber-300 bg-amber-500/5">open</span>
+          Resolved view scaling
+        </summary>
+        <div class="mt-3 text-sm text-zinc-300 leading-relaxed">
+          Per-slot correlated subqueries are charming at demo scale and ~25× more buffer hits than a window-function rewrite at 10M bindings. Plan to ship an opt-in <code class="text-zinc-400">emit_resolved_view_window</code> for production cardinality.
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <!-- footer -->
+  <footer class="border-t border-zinc-800 mt-10">
+    <div class="max-w-6xl mx-auto px-6 py-10 flex flex-col md:flex-row justify-between items-start gap-4">
+      <div>
+        <div class="font-mono font-bold text-lg mb-1">
+          <span class="grad-text">knot</span><span class="text-zinc-500"> + hitch</span>
+        </div>
+        <div class="text-zinc-500 text-sm">A typed SQL compiler + reference deployment for multi-source MDM.</div>
+      </div>
+      <div class="flex flex-col md:items-end gap-2 text-sm">
+        <a href="https://github.com/CircArgs/knot" class="text-zinc-400 hover:text-zinc-100 transition arrow">GitHub</a>
+        <a href="https://github.com/CircArgs/knot/blob/library/v0-substrate/docs/PITCH.md" class="text-zinc-400 hover:text-zinc-100 transition arrow">Full pitch doc</a>
+        <a href="https://github.com/CircArgs/knot/blob/library/v0-substrate/CLAUDE.md" class="text-zinc-400 hover:text-zinc-100 transition arrow">Substrate posture (CLAUDE.md)</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>hljs.highlightAll();</script>
+</body>
+</html>
