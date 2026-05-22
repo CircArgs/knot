@@ -77,8 +77,15 @@ def make_app() -> FastAPI:
         query.set_field(f"{_camel(cls.name)}List", _make_list(cls.name))
 
     # ----- Per-type FK walk + reverse-count resolvers ------------------
-    for cls in spec.concrete_classes():
-        ot = ObjectType(cls.name)
+    # FK walks: register against both concrete and virtual class types
+    # (virtuals share the concrete root's slots, so the same resolver
+    # logic works). Reverse-count fields are only emitted on concrete
+    # types by knot_graphql, so those resolvers stay concrete-only.
+    fk_targets = [(cls.name, cls) for cls in spec.concrete_classes()]
+    fk_targets += [(vc.name, vc.concrete_root()) for vc in spec.virtual_classes()]
+
+    for type_name, cls in fk_targets:
+        ot = ObjectType(type_name)
 
         for slot in cls.effective_slots():
             if isinstance(slot.type, ClassRef):
@@ -93,24 +100,26 @@ def make_app() -> FastAPI:
 
                 ot.set_field(slot_name, _walk)
 
-        for ref_cls, ref_slot in cls.referrers:
-            count_name = f"{_camel(ref_cls.name)}{_pascal(ref_slot.name)}Count"
-            primary_name = cls.name
-            ref_name = ref_cls.name
-            slot_name = ref_slot.name
+        # Reverse-count fields only exist on concrete types in the SDL.
+        if type_name == cls.name:  # cls.name == type_name only for concrete
+            for ref_cls, ref_slot in cls.referrers:
+                count_name = f"{_camel(ref_cls.name)}{_pascal(ref_slot.name)}Count"
+                primary_name = cls.name
+                ref_name = ref_cls.name
+                slot_name = ref_slot.name
 
-            def _rcount(
-                parent,
-                info,
-                _primary=primary_name,
-                _ref=ref_name,
-                _slot=slot_name,
-            ):
-                return knot_resolvers.resolve_reverse_count(
-                    parent, _primary, _slot, _ref
-                )
+                def _rcount(
+                    parent,
+                    info,
+                    _primary=primary_name,
+                    _ref=ref_name,
+                    _slot=slot_name,
+                ):
+                    return knot_resolvers.resolve_reverse_count(
+                        parent, _primary, _slot, _ref
+                    )
 
-            ot.set_field(count_name, _rcount)
+                ot.set_field(count_name, _rcount)
 
         type_objs.append(ot)
 

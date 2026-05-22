@@ -80,9 +80,13 @@ def enum_type_name(class_name: str, slot_name: str) -> str:
 def enum_sdl(class_name: str, slot_name: str, values: tuple[str, ...]) -> str:
     """Return the SDL block for one generated enum type.
 
-    Values are uppercased to follow GraphQL enum-name conventions.
-    The original lowercase strings are mapped in resolvers at runtime.
+    Values are emitted verbatim — the same strings the spec declared,
+    which are also what the database stores. GraphQL conventionally
+    uppercases enum values, but the spec is strict-validated and
+    upper-casing here forces every host into a name-mapping shim
+    (``{DIRECTOR: "director"}``) just to round-trip. Verbatim values
+    keep host = DB = SDL consistent.
     """
     name = enum_type_name(class_name, slot_name)
-    body = "\n  ".join(v.upper() for v in values)
+    body = "\n  ".join(values)
     return f"enum {name} {{\n  {body}\n}}"

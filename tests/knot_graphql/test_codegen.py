@@ -128,9 +128,12 @@ def test_reverse_fk_count_field_on_person(simple_spec):
 def test_enum_generates_graphql_enum(enum_spec):
     sdl = emit_sdl(enum_spec)
     assert "enum ArticleStatusEnum" in sdl
-    assert "DRAFT" in sdl
-    assert "PUBLISHED" in sdl
-    assert "ARCHIVED" in sdl
+    # Values emit verbatim — same casing the spec declared and the DB
+    # stores. Forced uppercasing would force every host into a
+    # name-mapping shim just to round-trip.
+    assert "draft" in sdl
+    assert "published" in sdl
+    assert "archived" in sdl
 
 
 # ---------------------------------------------------------------------------

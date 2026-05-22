@@ -28,7 +28,7 @@ from collections.abc import Callable
 from typing import Any
 
 from knot.ast.expr import Ref
-from knot.spec import OntologyClass, Spec
+from knot.spec import OntologyClass, Spec, VirtualClass
 
 # ---------------------------------------------------------------------------
 # Projection helper (public utility)
@@ -98,11 +98,13 @@ class Resolvers:
         """Return the resolved row for ``canonical_id``, or ``None``.
 
         Builds a knot ``Query`` via ``cls.resolved.where(…)`` and runs
-        it through the executor.
+        it through the executor. Accepts OntologyClass or VirtualClass;
+        both expose ``.resolved`` and the concrete root's ``.col``.
         """
-        cls = self._concrete(class_name)
+        cls = self._resolvable(class_name)
         id_slot = self._spec.identifier_slot_name
-        q = cls.resolved.where(cls.col[id_slot] == canonical_id).limit(1)
+        col = _col(cls)
+        q = cls.resolved.where(col[id_slot] == canonical_id).limit(1)
         rows = self._exec(q.sql())
         return rows[0] if rows else None
 
@@ -125,19 +127,20 @@ class Resolvers:
         a ``{slot_name: value}`` equality map applied as additional
         WHERE predicates.
         """
-        cls = self._concrete(class_name)
+        cls = self._resolvable(class_name)
         id_slot = self._spec.identifier_slot_name
+        col = _col(cls)
         q = cls.resolved
 
         if filters:
             for slot_name, value in filters.items():
-                q = q.where(cls.col[slot_name] == value)
+                q = q.where(col[slot_name] == value)
 
         if after is not None:
             # Keyset: rows whose canonical_id sorts after the cursor.
-            q = q.where(cls.col[id_slot] > after)
+            q = q.where(col[id_slot] > after)
 
-        q = q.order_by(cls.col[id_slot]).limit(first)
+        q = q.order_by(col[id_slot]).limit(first)
         return self._exec(q.sql())
 
     # ------------------------------------------------------------------
@@ -165,7 +168,14 @@ class Resolvers:
         if parent_class_name is None:
             return None
 
-        cls = self._concrete(parent_class_name)
+        # FK semantics route through the concrete root — virtual classes
+        # share their root's slots, so the slot lookup + target class are
+        # identical.
+        cls_or_virtual = self._spec.class_by_name(parent_class_name)
+        if isinstance(cls_or_virtual, VirtualClass):
+            cls = cls_or_virtual.concrete_root()
+        else:
+            cls = cls_or_virtual
         slot = cls.get_slot(fk_slot_name)
         from knot.ast.types import ClassRef
 
@@ -233,6 +243,21 @@ class Resolvers:
                 f"{class_name!r} is a VirtualClass; use its concrete root instead"
             )
         return cls
+
+    def _resolvable(self, class_name: str) -> OntologyClass | VirtualClass:
+        """Read-side dispatch: both OntologyClass and VirtualClass own a
+        ``.resolved`` Query, so the resolved-view reads (by-id, list)
+        accept either. FK semantics still require the concrete root."""
+        return self._spec.class_by_name(class_name)
+
+
+def _col(cls: OntologyClass | VirtualClass):
+    """``cls.col`` for OntologyClass; for VirtualClass, fall through to
+    the concrete root's ``col`` (the virtual view is the root's view
+    with extra predicates — same column shape)."""
+    if isinstance(cls, VirtualClass):
+        return cls.concrete_root().col
+    return cls.col
 
 
 def _class_name_from_row(row: dict[str, Any]) -> str | None:

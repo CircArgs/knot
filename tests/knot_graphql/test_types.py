@@ -116,5 +116,5 @@ def test_enum_type_name():
 def test_enum_sdl_block():
     sdl = enum_sdl("Movie", "status", ("draft", "published"))
     assert "enum MovieStatusEnum" in sdl
-    assert "DRAFT" in sdl
-    assert "PUBLISHED" in sdl
+    assert "draft" in sdl
+    assert "published" in sdl
