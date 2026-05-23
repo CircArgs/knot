@@ -580,6 +580,28 @@ movie.add_constraint(              # constraint body = same Expr AST
         <p class="text-xs text-zinc-500 mt-3">Domain layer above SQL: classes, slots, FK refs, virtuals, multi-source bindings, constraints with FK chains, vector slot types — none of these are postgres DDL concepts.</p>
       </div>
     </div>
+
+    <div class="mt-8 p-5 rounded border border-blue-500/30 bg-blue-500/5">
+      <div class="stack-label text-blue-300 mb-2">When you actually want an ORM (not knot)</div>
+      <p class="text-sm text-zinc-300 leading-relaxed">
+        SQLAlchemy ORM, Django ORM, Hibernate, ActiveRecord — they give you
+        an <strong>identity map</strong>, <strong>unit of work</strong>, and
+        <strong>auto-flushing dirty-tracked objects</strong>. You mutate Python
+        attributes; the ORM emits INSERTs/UPDATEs at commit time. That's the
+        right shape when your domain is <strong>OLTP CRUD against your own
+        single-source-of-truth schema</strong> — user signs up, edits profile,
+        flushes session. The ORM hides SQL because you mostly don't care about
+        the SQL.
+      </p>
+      <p class="text-sm text-zinc-300 leading-relaxed mt-3">
+        knot is the wrong tool for that. There's no session, no dirty tracking,
+        no auto-persist on attribute write — knot emits SQL strings the host
+        runs. If you'd be happy with <code>user.email = new_email; session.commit()</code>,
+        you don't have an MDM problem and you don't need knot. ORMs are great
+        at OLTP CRUD; knot is for the multi-source fusion + ER + validation
+        compile-target case that ORMs don't model.
+      </p>
+    </div>
   </section>
 
   <!-- ====================================================== -->
@@ -712,6 +734,27 @@ RETURN p.name</code></pre>
           <li><span class="text-amber-400 mr-2">↯</span><strong>Embeddings are bolt-on.</strong> Vendor extensions exist; not part of the schema language.</li>
         </ul>
       </div>
+    </div>
+
+    <div class="mt-8 p-5 rounded border border-blue-500/30 bg-blue-500/5">
+      <div class="stack-label text-blue-300 mb-2">When you actually want a graph DB (not knot)</div>
+      <p class="text-sm text-zinc-300 leading-relaxed mb-3">
+        knot's design <strong>depends on</strong> enumerating your relationships
+        up front as typed FK slots. That assumption is load-bearing — FK chains as
+        attribute access, constraint bodies spanning FKs, GraphQL SDL emitted
+        from the spec, the resolved-view argmax — all require knowing every edge
+        type at compile time. Use a graph DB when that breaks down:
+      </p>
+      <ul class="text-sm space-y-2 text-zinc-300">
+        <li><span class="text-blue-400 mr-2">→</span><strong>Arbitrary topology with hundreds-to-thousands of relation types you don't enumerate up front.</strong> Wikidata-shaped knowledge graphs (11,000+ properties), open-relation-extraction over documents, scientific KGs (biomedicine has hundreds of relation types like <code>inhibits</code>, <code>binds_to</code>, <code>metabolizes</code>), enterprise KGs accumulating relations organically across departments.</li>
+        <li><span class="text-blue-400 mr-2">→</span><strong>Variable-length traversal across unknown predicates.</strong> Cypher's <code>-[*1..5]-&gt;</code>, SPARQL property paths <code>?a :p1/:p2/:p3 ?b</code>, Gremlin's <code>.repeat(out()).times(5)</code>. You can't write these in knot because you'd have to spell the edge types.</li>
+        <li><span class="text-blue-400 mr-2">→</span><strong>Schema-flexible writes.</strong> RDF's "just insert another triple with a new predicate"; knot needs a spec edit + ALTER TABLE.</li>
+        <li><span class="text-blue-400 mr-2">→</span><strong>Reasoning over the graph structure itself.</strong> OWL inferencing, subclass chains, transitive closure across unknown predicates.</li>
+        <li><span class="text-blue-400 mr-2">→</span><strong>Federation across remote SPARQL endpoints.</strong> Different problem entirely; use a triple store.</li>
+      </ul>
+      <p class="text-sm text-zinc-400 mt-4">
+        The filter is roughly: <strong>known classes + small finite set of FK relations</strong> (Movie has a director, a studio, some credits — period) → knot. <strong>Open-ended graph topology, schema-flexible</strong> → Neo4j / RDF.
+      </p>
     </div>
   </section>
 
@@ -925,6 +968,29 @@ SELECT 1;</code></pre>
       </p>
     </div>
 
+    <div class="p-5 rounded border border-blue-500/30 bg-blue-500/5 mb-8">
+      <div class="stack-label text-blue-300 mb-2">When you actually want a hosted ER engine (not knot)</div>
+      <p class="text-sm text-zinc-300 leading-relaxed">
+        <strong>knot doesn't do ER.</strong> It exposes the SQL primitives a
+        host needs to APPLY ER decisions atomically — stamping, FK fanout,
+        cascade, idempotency. It does NOT score matches, run blocking
+        strategies, calibrate probabilistic models, or train active-learning
+        loops. That's policy; knot is the substrate underneath.
+      </p>
+      <p class="text-sm text-zinc-300 leading-relaxed mt-3">
+        Reach for a hosted ER engine when ER quality itself is the
+        differentiator and you'd rather buy than build the scoring logic:
+        <strong>Senzing</strong> (deterministic + probabilistic engine, free dev
+        tier, library-embeddable), <strong>Reltio / Tamr / Informatica</strong>
+        (full MDM platforms — they bring scoring, golden record management, UI,
+        steward workflows), <strong>Splink / Zingg / Dedupe</strong> (open-source
+        ER libraries that ship the scoring without the substrate). Any of these
+        can FEED knot — their match decisions become the <code>assignments</code>
+        payload to <code>binding.assign_canonicals_sql()</code>. They're
+        complementary, not competitive.
+      </p>
+    </div>
+
     <h3 class="text-xl font-semibold mt-12 mb-3">The re-ingest problem (solved)</h3>
     <p class="text-zinc-400 mb-4 max-w-3xl leading-relaxed">
       Re-ingesting via <code>write_sql</code>'s <code>ON CONFLICT DO UPDATE</code>
@@ -1020,6 +1086,28 @@ WHERE u.source_name = 'imdb'
           the same slot.
         </p>
       </div>
+    </div>
+
+    <div class="mt-8 p-5 rounded border border-blue-500/30 bg-blue-500/5">
+      <div class="stack-label text-blue-300 mb-2">When you actually want a vector DB (not knot's vector slots)</div>
+      <p class="text-sm text-zinc-300 leading-relaxed">
+        Pinecone, Weaviate, Qdrant, Milvus — purpose-built vector databases.
+        Use them when <strong>vector similarity IS the workload</strong>:
+        semantic search over millions-to-billions of documents, RAG retrieval
+        at request time, recommendation systems where the vector query is the
+        hot path. They specialize in vector ergonomics (filter + boost +
+        rerank), they scale vector compute on dedicated hardware, and they
+        ship operational tooling for the embedding lifecycle.
+      </p>
+      <p class="text-sm text-zinc-300 leading-relaxed mt-3">
+        knot's vector slots are for the opposite case: vectors as <strong>one
+        signal among many</strong> attached to entities you also model
+        relationally. The embedding is a slot on the bindings table, alongside
+        text and integer slots, with HNSW for the ER candidate-query path and
+        the occasional k-NN. If your problem is "give me the 50 nearest items
+        out of 10 million vectors at p99 &lt; 50ms," you want Pinecone — knot
+        will struggle past a few million rows on a single postgres.
+      </p>
     </div>
   </section>
 
