@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <title>knot + hitch — slides</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reset.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --r-background-color: #09090b;
+      --r-main-font: 'Inter', system-ui, sans-serif;
+      --r-main-color: #e4e4e7;
+      --r-heading-font: 'Inter', system-ui, sans-serif;
+      --r-heading-color: #fafafa;
+      --r-link-color: #60a5fa;
+      --r-selection-color: #fff;
+      --r-selection-background-color: #1e40af;
+      --r-code-font: 'JetBrains Mono', ui-monospace, monospace;
+    }
+    .reveal { font-size: 28px; }
+    .reveal h1, .reveal h2, .reveal h3, .reveal h4 { text-transform: none; letter-spacing: -0.02em; }
+    .reveal h1 { font-size: 2.6em; font-weight: 700; }
+    .reveal h2 { font-size: 1.8em; font-weight: 700; margin-bottom: 0.5em; }
+    .reveal h3 { font-size: 1.2em; font-weight: 600; color: #a1a1aa; margin-bottom: 0.6em; }
+    .reveal p { font-size: 0.95em; line-height: 1.5; }
+    .reveal code { font-family: var(--r-code-font); background: #18181b; padding: 0.1em 0.35em; border-radius: 0.2em; font-size: 0.85em; color: #e4e4e7; }
+    .reveal pre { box-shadow: none; font-size: 0.55em; line-height: 1.45; width: 100%; }
+    .reveal pre code { padding: 1em 1.2em; border-radius: 0.4em; background: #0a0a0a; max-height: 600px; }
+    .reveal section { text-align: left; }
+    .reveal section.center { text-align: center; }
+    .reveal ul, .reveal ol { display: block; margin-left: 1.2em; }
+    .reveal li { margin: 0.35em 0; line-height: 1.45; }
+    .reveal small { color: #71717a; font-size: 0.65em; }
+    .grad { background: linear-gradient(90deg, #60a5fa 0%, #c084fc 50%, #f472b6 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .pill { display: inline-block; padding: 0.18em 0.7em; border-radius: 9999px; border: 1px solid; font-size: 0.55em; font-weight: 500; letter-spacing: 0.07em; text-transform: uppercase; vertical-align: middle; margin: 0.15em 0.2em; }
+    .pill-blue { color: #93c5fd; border-color: #1e40af; background: rgba(30, 64, 175, 0.15); }
+    .pill-pink { color: #f9a8d4; border-color: #9d174d; background: rgba(157, 23, 77, 0.15); }
+    .pill-green { color: #6ee7b7; border-color: #065f46; background: rgba(6, 95, 70, 0.15); }
+    .pill-amber { color: #fcd34d; border-color: #92400e; background: rgba(146, 64, 14, 0.15); }
+    .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; }
+    .two-col-narrow { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8em; }
+    .three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1em; }
+    .card { padding: 0.9em 1.1em; border: 1px solid #27272a; border-radius: 0.4em; background: rgba(24,24,27,0.5); }
+    .card-blue { border-color: #1e40af; background: rgba(30, 64, 175, 0.08); }
+    .card-pink { border-color: #9d174d; background: rgba(157, 23, 77, 0.08); }
+    .card-green { border-color: #065f46; background: rgba(6, 95, 70, 0.08); }
+    .card-amber { border-color: #92400e; background: rgba(146, 64, 14, 0.08); }
+    .card-zinc { border-color: #3f3f46; background: rgba(63, 63, 70, 0.15); }
+    .card .label { font-size: 0.55em; letter-spacing: 0.1em; text-transform: uppercase; font-weight: 700; margin-bottom: 0.3em; color: #71717a; }
+    .card-blue .label { color: #60a5fa; }
+    .card-pink .label { color: #f472b6; }
+    .card-green .label { color: #34d399; }
+    .card-amber .label { color: #fbbf24; }
+    .data-table { font-family: var(--r-code-font); font-size: 0.5em; line-height: 1.4; width: 100%; border-collapse: collapse; }
+    .data-table th { background: #18181b; color: #71717a; padding: 0.4em 0.6em; text-align: left; border-bottom: 1px solid #27272a; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+    .data-table td { padding: 0.4em 0.6em; border-bottom: 1px solid #27272a; vertical-align: top; }
+    .winner { background: rgba(52, 211, 153, 0.12); color: #34d399; font-weight: 600; }
+    .skipped { color: #52525b; font-style: italic; }
+    .src-imdb { color: #93c5fd; }
+    .src-tmdb { color: #c4b5fd; }
+    .src-rt { color: #f9a8d4; }
+    .src-corr { color: #34d399; font-weight: 600; }
+    .footer-note { position: absolute; bottom: 1em; left: 1em; color: #52525b; font-size: 0.45em; letter-spacing: 0.05em; text-transform: uppercase; }
+    .reveal .progress { color: #60a5fa; }
+    .reveal .controls { color: #60a5fa; }
+    .reveal .slide-number { color: #52525b; background: transparent; }
+    .arrow-r { color: #60a5fa; }
+    .muted { color: #a1a1aa; }
+    .dimmed { color: #71717a; }
+    .center-block { text-align: center; }
+    .big-emoji { font-size: 1.5em; line-height: 1; }
+    .compare-row { display: grid; grid-template-columns: 200px 1fr; gap: 0.8em; padding: 0.5em 0; border-bottom: 1px solid #27272a; align-items: baseline; }
+    .compare-row .key { color: #71717a; font-size: 0.75em; text-transform: uppercase; letter-spacing: 0.05em; }
+  </style>
+</head>
+<body>
+
+<div class="reveal">
+  <div class="slides">
+
+  <!-- ============================================================== -->
+  <!-- 1. TITLE                                                         -->
+  <!-- ============================================================== -->
+  <section class="center" data-background-color="#09090b">
+    <h1><span class="grad">knot</span> <span class="muted">+ hitch</span></h1>
+    <h3 style="margin-top:1em;">three sources, one truth, zero opinion drift</h3>
+    <p style="margin-top:2em;">
+      <span class="pill pill-blue">schema-as-code</span>
+      <span class="pill pill-pink">multi-source MDM</span>
+      <span class="pill pill-green">postgres + pgvector</span>
+    </p>
+    <p style="margin-top:3em; font-size:0.6em;" class="dimmed">use ←/→ keys or swipe • press <code>F</code> for fullscreen • <code>S</code> for speaker view</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 2. THE PROBLEM (abstract)                                        -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>The problem</h2>
+    <p>You have a domain — let's say <em>movies</em>. <strong>Three sources</strong> publish data about it: <span class="src-imdb">imdb</span>, <span class="src-tmdb">tmdb</span>, <span class="src-rt">rottentomatoes</span>.</p>
+    <p>They all <strong>describe the same things</strong>. They all <strong>disagree</strong>:</p>
+    <div class="card card-zinc" style="margin-top:0.6em;">
+      <table class="data-table">
+        <thead><tr><th>source</th><th>title</th><th>year</th><th>runtime</th><th>director ref</th></tr></thead>
+        <tbody>
+          <tr><td class="src-imdb">imdb</td><td>Reservoir Dogs</td><td>1992</td><td>99</td><td>nm_qt</td></tr>
+          <tr><td class="src-tmdb">tmdb</td><td>Reservoir Dogs</td><td>1992</td><td>99</td><td>tmdb_138</td></tr>
+          <tr><td class="src-rt">rottentomatoes</td><td>Reservoir Dogs</td><td>1992</td><td>100</td><td>rt_qt</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:0.8em;">Different runtime values. Different director IDs (each source's own namespace). <strong>Same movie.</strong></p>
+    <p class="footer-note">slide 2 / abstract</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 3. WHAT WE NEED                                                  -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>What we need</h2>
+    <ol>
+      <li><strong>One schema</strong> that says "this is a Movie; here are its slots."</li>
+      <li><strong>Many sources</strong> publishing claims into that schema, each keeping their own row.</li>
+      <li><strong>One fused view</strong> per entity that picks per-slot winners by some weighting policy.</li>
+      <li><strong>Entity resolution</strong> that figures out which source-rows are the same real-world thing.</li>
+      <li><strong>Constraints</strong> that catch data-quality violations before they reach consumers.</li>
+      <li><strong>Some graph-ish querying</strong> — multi-hop FK walks, reverse references, correlated aggregates — but not a full graph DB.</li>
+      <li><strong>Embeddings as a signal</strong> for matching (and maybe search) — but not a primary vector DB.</li>
+    </ol>
+    <p class="footer-note">slide 3 / abstract</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 4. WHAT WE DON'T NEED                                            -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>What we're <em>not</em> building</h2>
+    <div class="two-col">
+      <div class="card card-amber">
+        <div class="label">not a graph DB</div>
+        <p>We have <strong>5 known FK relationships</strong>, not 11,000 Wikidata properties. No variable-length path traversal. No open-set predicates. No OWL reasoning.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">not a vector DB</div>
+        <p>Vectors are <strong>one signal</strong> attached to entities. Not millions-of-document RAG retrieval on the request path. pgvector inside postgres is enough.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">not an ORM</div>
+        <p>No identity map, no unit of work, no auto-flushing dirty tracking. <strong>This is MDM</strong>, not OLTP CRUD against a single-source schema.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">not an ER engine</div>
+        <p>We don't score matches or run blocking strategies. We <strong>apply</strong> ER decisions atomically. Splink / Senzing / Dedupe feed us, not compete with us.</p>
+      </div>
+    </div>
+    <p style="margin-top:1.2em;" class="muted">Knowing what's <em>out</em> of scope is what lets the in-scope substrate stay small.</p>
+    <p class="footer-note">slide 4 / abstract</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 5. SUBSTRATE vs RUNTIME                                          -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>The split: substrate vs runtime</h2>
+    <div class="two-col">
+      <div class="card card-blue">
+        <div class="label">knot — the substrate</div>
+        <p><strong>Typed Python compiler.</strong> Takes a multi-source MDM spec, emits postgres SQL.</p>
+        <ul>
+          <li>DDL — tables + views + indexes</li>
+          <li>Read SQL — typed queries over the resolved view</li>
+          <li>Write SQL — upsert + ER cascade + retract templates</li>
+          <li>Constraint SQL — one SELECT per rule</li>
+          <li>Vector SQL — k-NN candidate selection</li>
+        </ul>
+        <p>No connections. No scheduler. No HTTP. <strong>Pure library.</strong></p>
+      </div>
+      <div class="card card-pink">
+        <div class="label">hitch — the reference runtime</div>
+        <p><strong>What a real team would build around knot.</strong></p>
+        <ul>
+          <li><strong>Temporal</strong> — ingest / embed / ER / validate workflows</li>
+          <li><strong>FastAPI + Ariadne</strong> — GraphQL queries + mutations</li>
+          <li><strong>sentence-transformers</strong> — real embeddings, not mocked</li>
+          <li><strong>pgvector</strong> — HNSW indexes</li>
+        </ul>
+        <p>One <code>docker compose up</code>. 461 tests green.</p>
+      </div>
+    </div>
+    <p class="footer-note">slide 5 / abstract</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 6. AUTHORING — the spec                                          -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Authoring: the spec</h2>
+    <p>Schema-as-code, in typed Python. The spec IS the single source of truth.</p>
+<pre><code data-trim class="language-python">from knot import Spec, types, this
+
+spec = Spec(identifier_slot_name="canonical_id", schema="hitch")
+
+person = spec.add_class("Person")
+person.slot("name", types.TEXT, required=True)
+person.slot("birth_year", types.INTEGER)
+person.slot("name_embedding", types.VECTOR(384, metric="cosine"))
+
+movie = spec.add_class("Movie")
+movie.slot("title", types.TEXT, required=True)
+movie.slot("year", types.INTEGER)
+movie.slot("director", person)           # FK by passing the class
+movie.slot("title_embedding", types.VECTOR(384, metric="cosine"))
+
+for src in ("imdb", "tmdb", "rottentomatoes"):
+    spec.add_source(src).bind(movie)     # multi-source = first class</code></pre>
+    <p class="footer-note">slide 6 / authoring</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 7. CONSTRAINTS — first look                                      -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Constraints — same vocabulary as queries</h2>
+    <p>A constraint body is the same <code>Expr</code> AST you'd write in a query <code>.where()</code> clause. <strong>One vocabulary, three uses.</strong></p>
+<pre><code data-trim class="language-python">movie.add_constraint(
+    "year_sane",
+    body=movie.col.year >= 1888,           # cinema started here
+)
+
+movie.add_constraint(
+    "movie_director_alive_at_release",     # FK-chain predicate
+    body=movie.col.director.birth_year.is_null()
+       | movie.col.year.is_null()
+       | (movie.col.director.birth_year &lt; movie.col.year),
+)</code></pre>
+    <p style="margin-top:0.8em;">Same expression composes in:</p>
+    <ul>
+      <li><code>add_constraint(body=...)</code> — validators</li>
+      <li><code>add_virtual(where=...)</code> — virtual subclasses</li>
+      <li><code>cls.resolved.where(...)</code> — runtime queries</li>
+    </ul>
+    <p class="footer-note">slide 7 / constraints</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 8. VIRTUALS                                                      -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Virtual classes</h2>
+    <p>A predicate over the resolved view becomes a queryable subclass with its own GraphQL type:</p>
+<pre><code data-trim class="language-python">movie.add_virtual("RecentMovie",
+    where=movie.col.year >= 1995)
+
+movie.add_virtual("ClassicMovie",
+    where=movie.col.year.is_not_null() & (movie.col.year &lt;= 1985))
+
+movie.add_virtual("Blockbuster",
+    where=movie.col.box_office_usd.is_not_null()
+        & (movie.col.box_office_usd >= 100_000_000))
+
+# Correlated — "movies that have at least one director credit"
+movie.add_virtual("DirectedMovie",
+    where=((credit.col.movie == this.Movie)
+         & (credit.col.role == "director")).any())</code></pre>
+    <p style="margin-top:0.8em;">Each emits a <code>CREATE VIEW</code>; GraphQL exposes <code>recentMovieList</code>, <code>blockbusterList</code>, etc.</p>
+    <p class="footer-note">slide 8 / virtuals</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 9. WHAT SPEC.DDL() EMITS                                         -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>What <code>spec.ddl()</code> emits</h2>
+    <p>One canonical CREATE script per spec. Idempotent (CREATE IF NOT EXISTS / CREATE OR REPLACE).</p>
+    <div class="three-col">
+      <div class="card card-blue">
+        <div class="label">Per concrete class</div>
+        <ul style="font-size:0.85em;">
+          <li><code>&lt;cls&gt;_bindings</code> table</li>
+          <li><code>&lt;cls&gt;_resolved</code> view</li>
+          <li><code>&lt;cls&gt;_all_sources</code> view</li>
+          <li>btree on <code>canonical_id</code></li>
+          <li>HNSW per Vector slot</li>
+        </ul>
+      </div>
+      <div class="card card-blue">
+        <div class="label">Per virtual class</div>
+        <ul style="font-size:0.85em;">
+          <li><code>&lt;virtual&gt;</code> view filtering the concrete root's resolved view</li>
+        </ul>
+      </div>
+      <div class="card card-blue">
+        <div class="label">Global</div>
+        <ul style="font-size:0.85em;">
+          <li><code>source_weight</code> table</li>
+          <li><code>CREATE EXTENSION vector</code> (if any VECTOR slot)</li>
+          <li><code>CREATE SCHEMA</code></li>
+        </ul>
+      </div>
+    </div>
+    <p style="margin-top:1em;" class="muted">For the hitch demo (4 concrete + 6 virtual classes): ~20 KB of SQL, deploys in &lt;100ms.</p>
+    <p class="footer-note">slide 9 / ddl</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 10. THE FUSION MODEL — 3 RELATIONS                               -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Multi-source fusion — three relations</h2>
+    <p>This is the <strong>core</strong> of knot. Every concrete class compiles to:</p>
+    <div class="three-col" style="margin-top:1em;">
+      <div class="card card-blue">
+        <div class="label">1. bindings table</div>
+        <p>One row per <code>(source, source_id)</code>. Every source's raw claim plus the ER-stamped canonical_id.</p>
+        <small>PK on (source_name, source_identifier)</small>
+      </div>
+      <div class="card card-pink">
+        <div class="label">2. resolved view</div>
+        <p>One row per canonical_id. Each slot is the <strong>highest-weight non-NULL claim</strong> across sources.</p>
+        <small>The "current state" view</small>
+      </div>
+      <div class="card card-green">
+        <div class="label">3. all_sources view</div>
+        <p>One row per canonical_id. Each slot is a <code>jsonb_object_agg</code> mapping source → {value, weight}.</p>
+        <small>The provenance / audit surface</small>
+      </div>
+    </div>
+    <p style="margin-top:1.2em;">Plus a fourth global table — <code>source_weight</code> — that holds the per-(source, class, slot) weight policy. Runtime-mutable.</p>
+    <p class="footer-note">slide 10 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 11. BINDINGS — concrete data                                     -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>bindings — real demo data</h2>
+    <p>Three sources × four movies + one imdb-only = <strong>12 rows → 5 canonicals</strong>:</p>
+    <div class="card card-zinc">
+      <table class="data-table">
+        <thead><tr>
+          <th>source</th><th>source_id</th><th>canonical_id</th>
+          <th>title</th><th>year</th><th>runtime</th><th>director</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="src-imdb">imdb</td><td>tt_resdogs</td><td>m_bd6c…</td><td>Reservoir Dogs</td><td>1992</td><td>99</td><td>p_d00b…</td></tr>
+          <tr><td class="src-tmdb">tmdb</td><td>tmdb_500</td><td>m_bd6c…</td><td>Reservoir Dogs</td><td>1992</td><td>99</td><td>p_d00b…</td></tr>
+          <tr><td class="src-rt">rottentomatoes</td><td>rt_resdogs</td><td>m_bd6c…</td><td>Reservoir Dogs</td><td>1992</td><td>100</td><td>p_d00b…</td></tr>
+          <tr><td colspan="7" class="dimmed" style="text-align:center; padding-top:0.6em; padding-bottom:0.6em; font-style:italic;">─── 3 rows, same canonical (rt disagrees on runtime) ───</td></tr>
+          <tr><td class="src-imdb">imdb</td><td>tt_eyeswide</td><td>m_6873…</td><td>Eyes Wide Shut</td><td>1999</td><td>159</td><td>p_05c6…</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:0.8em;">The <code>canonical_id</code> column gets stamped by ER. Same canonical = "these source-rows are the same real-world entity."</p>
+    <p class="footer-note">slide 11 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 12. RESOLVED VIEW — argmax                                       -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>resolved view — per-slot argmax</h2>
+    <p>Each slot is a correlated subquery: highest weight wins, NULL skip, alphabetical tie-break.</p>
+<pre><code data-trim class="language-sql">CREATE VIEW hitch.movie_resolved AS
+SELECT
+  cb.canonical_id,
+  (SELECT b.runtime_minutes
+   FROM hitch.movie_bindings b
+   LEFT JOIN hitch.source_weight w
+     ON w.source_name = b.source_name
+    AND w.class_name = 'Movie'
+    AND w.slot_name  = 'runtime_minutes'
+   WHERE b.canonical_id = cb.canonical_id
+     AND b.runtime_minutes IS NOT NULL   -- ← NULL-skip
+   ORDER BY COALESCE(w.weight, 0) DESC,   -- ← argmax
+            b.source_name                 -- ← alphabetical tie-break
+   LIMIT 1) AS runtime_minutes,
+  -- … one correlated subquery per slot …
+FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
+      WHERE canonical_id IS NOT NULL) cb;</code></pre>
+    <p class="footer-note">slide 12 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 13. ARGMAX — worked example                                      -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Argmax — Reservoir Dogs.runtime_minutes</h2>
+    <div class="two-col">
+      <div>
+        <div class="card card-zinc">
+          <table class="data-table">
+            <thead><tr><th>source</th><th>value</th><th>weight</th><th>winner?</th></tr></thead>
+            <tbody>
+              <tr class="winner"><td class="src-imdb">imdb</td><td>99</td><td>0.85</td><td>✓</td></tr>
+              <tr><td class="src-tmdb">tmdb</td><td>99</td><td>0.70</td><td>—</td></tr>
+              <tr><td class="src-rt">rottentomatoes</td><td>100</td><td>0.50</td><td>—</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:0.8em;"><code>movie_resolved.runtime_minutes = 99</code></p>
+        <p class="muted" style="font-size:0.85em;">imdb wins by weight. tmdb has the same value but lower weight. rt has a different value AND lower weight.</p>
+      </div>
+      <div>
+        <div class="card card-green">
+          <div class="label">Bump rt's weight to 1.0 →</div>
+          <table class="data-table">
+            <thead><tr><th>source</th><th>value</th><th>weight</th><th>winner?</th></tr></thead>
+            <tbody>
+              <tr><td class="src-imdb">imdb</td><td>99</td><td>0.85</td><td>—</td></tr>
+              <tr><td class="src-tmdb">tmdb</td><td>99</td><td>0.70</td><td>—</td></tr>
+              <tr class="winner"><td class="src-rt">rottentomatoes</td><td>100</td><td>1.00</td><td>✓</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p style="margin-top:0.8em;"><strong>Resolved value flips to 100 on the next read.</strong></p>
+        <p class="muted" style="font-size:0.85em;">No view rebuild. No materialization. Weights live in <code>source_weight</code>; the resolved view reads them live.</p>
+      </div>
+    </div>
+    <p class="footer-note">slide 13 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 14. NULL-SKIP                                                    -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>NULL-skip is by design</h2>
+    <p>A high-weight source that has NULL <em>loses</em> to a lower-weight source that has a value:</p>
+    <div class="card card-zinc">
+      <table class="data-table">
+        <thead><tr><th colspan="4" style="text-align:center;">Stanley Kubrick — <code>height_cm</code></th></tr></thead>
+        <thead><tr><th>source</th><th>value</th><th>weight</th><th>argmax result</th></tr></thead>
+        <tbody>
+          <tr class="winner"><td class="src-imdb">imdb</td><td>170</td><td>0.85</td><td>✓ winner</td></tr>
+          <tr><td class="src-tmdb">tmdb</td><td>169</td><td>0.70</td><td>—</td></tr>
+          <tr class="skipped"><td class="src-rt">rottentomatoes</td><td>NULL</td><td>0.50</td><td>skipped (no claim)</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1em;">If rt had a value of 175, it would still lose (weight 0.50 &lt; 0.85). But because rt has <strong>no claim</strong>, argmax doesn't consider it at all. Resolved value: <code>170</code>.</p>
+    <p class="muted">NULL ≠ "the value is NULL." NULL = "no claim made."</p>
+    <p class="footer-note">slide 14 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 15. all_sources — provenance                                     -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>all_sources view — full provenance</h2>
+    <p>One row per canonical_id. Each slot is a jsonb mapping <code>source → {value, weight}</code>.</p>
+<pre><code data-trim class="language-json">{
+  "canonical_id": "m_bd6c1bef…",
+  "runtime_minutes": {
+    "imdb":           {"value": 99,  "weight": 0.85},
+    "tmdb":           {"value": 99,  "weight": 0.70},
+    "rottentomatoes": {"value": 100, "weight": 0.50}
+  },
+  "title": {
+    "imdb":           {"value": "Reservoir Dogs", "weight": 0.85},
+    "tmdb":           {"value": "Reservoir Dogs", "weight": 0.70},
+    "rottentomatoes": {"value": "Reservoir Dogs", "weight": 0.50}
+  }
+  // sources with NULL values are omitted from the jsonb entirely
+}</code></pre>
+    <p style="margin-top:0.8em;" class="muted">The audit surface — "why did the resolver pick X?" Every source's claim is here.</p>
+    <p class="footer-note">slide 15 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 16. source_weight                                                -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>source_weight — runtime policy</h2>
+    <p>One row per <code>(source_name, class_name, slot_name, weight)</code>. Auto-seeded by <code>emit_weight_seed()</code>; operator-tunable per (class, slot) at runtime.</p>
+    <div class="card card-zinc" style="margin-top:0.6em;">
+      <table class="data-table">
+        <thead><tr><th>source_name</th><th>class_name</th><th>slot_name</th><th>weight</th></tr></thead>
+        <tbody>
+          <tr><td class="src-imdb">imdb</td><td>Movie</td><td>runtime_minutes</td><td>0.85</td></tr>
+          <tr><td class="src-tmdb">tmdb</td><td>Movie</td><td>runtime_minutes</td><td>0.70</td></tr>
+          <tr><td class="src-rt">rottentomatoes</td><td>Movie</td><td>runtime_minutes</td><td>0.50</td></tr>
+          <tr><td class="src-corr">_user_corrections</td><td>Movie</td><td>runtime_minutes</td><td>1000000</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:1em;">The <code>_user_corrections</code> row is <strong>auto-seeded at 1e6</strong> regardless of caller defaults — closes the silent-failure window where forgetting to seed corrections would lose every mutation. Operators can still tune per (class, slot).</p>
+    <p class="footer-note">slide 16 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 17. _user_corrections                                            -->
+  <!-- ============================================================== -->
+  <section>
+    <h2><code>_user_corrections</code> — the designated override surface</h2>
+    <p>knot auto-creates a synthetic source on every spec, auto-bound to every concrete class. Its weight dominates the argmax. A correction is just a binding row.</p>
+<pre><code data-trim class="language-graphql">mutation {
+  correctMovie(
+    canonical_id: "m_bd6c1bef…",
+    source_identifier: "ops-fix-2026-05-23",
+    runtime_minutes: 100         # override the imdb winner
+  ) {
+    runtime_minutes              # returns 100 — corrections dominates
+  }
+}</code></pre>
+    <p style="margin-top:0.8em;">bindings table after the write:</p>
+    <div class="card card-zinc" style="font-family:JetBrains Mono,monospace; font-size:0.55em;">
+      imdb            99   weight 0.85<br>
+      tmdb            99   weight 0.70<br>
+      rt             100   weight 0.50<br>
+      <span class="src-corr">_user_corrections 100  weight 1e6   ← argmax winner</span>
+    </div>
+    <p style="margin-top:0.6em;" class="muted">Retract via <code>mutation { retract(...) }</code> → the corrections row deletes → original argmax restores.</p>
+    <p class="footer-note">slide 17 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 18. EXPLAIN_WINNER                                               -->
+  <!-- ============================================================== -->
+  <section>
+    <h2><code>explain_winner_sql</code> — per-slot diagnostic</h2>
+    <p>"Why did slot X resolve to value Y?" — one row per (canonical_id, source) with is_winner + margin.</p>
+    <div class="card card-zinc">
+      <table class="data-table">
+        <thead><tr><th>canonical</th><th>slot</th><th>source</th><th>value</th><th>weight</th><th>is_winner</th><th>margin</th></tr></thead>
+        <tbody>
+          <tr class="winner"><td>m_bd6c…</td><td>runtime_minutes</td><td class="src-imdb">imdb</td><td>99</td><td>0.85</td><td>true</td><td>0.15</td></tr>
+          <tr><td>m_bd6c…</td><td>runtime_minutes</td><td class="src-tmdb">tmdb</td><td>99</td><td>0.70</td><td>false</td><td>—</td></tr>
+          <tr><td>m_bd6c…</td><td>runtime_minutes</td><td class="src-rt">rottentomatoes</td><td>100</td><td>0.50</td><td>false</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:0.8em;"><strong>margin</strong> = winner.weight − runner_up.weight. <code>NULL</code> if no runner-up (more honest than <code>0</code>, which reads as "tied with second").</p>
+    <p>Uses <code>ROW_NUMBER() OVER (ORDER BY weight DESC, source_name)</code> — same tie-break as the resolver, so the diagnostic can't lie.</p>
+    <p class="footer-note">slide 18 / fusion</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 19. QUERIES — three shapes                                       -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Queries — three shapes, one builder</h2>
+    <p>Relational filters, FK chain walks, vector k-NN. They compose in the same Query AST.</p>
+<pre><code data-trim class="language-python"># 1. Relational filter on the resolved view
+movie.resolved.where(movie.col.year >= 1995).select(movie.col.title)
+
+# 2. Multi-hop FK chain — attribute access
+(movie.resolved
+  .where(movie.col.director.birth_year &lt; movie.col.year)
+  .select(movie.col.title, movie.col.director.name))
+
+# 3. k-NN over a vector slot
+(movie.from_source(imdb)
+  .order_by(movie.col.title_embedding.distance_to(target_vec))
+  .limit(10))</code></pre>
+    <p style="margin-top:0.8em;" class="muted">Each compiles to one SQL string. The host runs it.</p>
+    <p class="footer-note">slide 19 / queries</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 20. FK CHAIN COMPILES TO LEFT JOIN                               -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>FK chains → auto LEFT JOIN</h2>
+    <p>This Python:</p>
+<pre><code data-trim class="language-python">(movie.resolved
+  .where(movie.col.director.birth_year &lt; movie.col.year)
+  .select(movie.col.title, movie.col.director.name))</code></pre>
+    <p>compiles to:</p>
+<pre><code data-trim class="language-sql">SELECT m.title, movie_director.name
+FROM hitch.movie_resolved m
+LEFT JOIN hitch.person_resolved AS movie_director
+  ON movie_director.canonical_id = m.director
+WHERE movie_director.birth_year &lt; m.year;</code></pre>
+    <p style="margin-top:0.6em;">The JOIN alias (<code>movie_director</code>) is deterministic — two FKs to the same target get distinct aliases. The compiler walks the AST, collects FK chains, emits JOINs once.</p>
+    <p class="footer-note">slide 20 / queries</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 21. REVERSE NAVIGATION                                           -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Reverse navigation — <code>cls.via(other.col.fk)</code></h2>
+    <p>FKs are directional (the column lives on one side). knot exposes the inbound side as a typed FkRef navigator:</p>
+<pre><code data-trim class="language-python"># "directors with more than one director credit"
+(person.resolved
+  .where(person.via(credit.col.person)
+                .where(credit.col.role == "director")
+                .count() > 1)
+  .select(person.col.name))</code></pre>
+    <p>compiles to:</p>
+<pre><code data-trim class="language-sql">SELECT person_resolved.name
+FROM hitch.person_resolved
+WHERE (SELECT COUNT(*) FROM hitch.credit_resolved
+       WHERE credit_resolved.person = person_resolved.canonical_id
+         AND credit_resolved.role = 'director') > 1;</code></pre>
+    <p style="margin-top:0.6em;" class="muted">The typed FkRef arg means typos raise at <code>credit.col.persn</code> (one step earlier than the via call); mismatched FK targets raise at via() itself.</p>
+    <p class="footer-note">slide 21 / queries</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 22. GREMLIN/CYPHER ANALOGY                                       -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Reverse navigation in other engines</h2>
+    <table class="data-table" style="font-size:0.65em;">
+      <thead><tr><th>operation</th><th>knot</th><th>Cypher</th><th>Gremlin</th><th>SPARQL</th></tr></thead>
+      <tbody>
+        <tr>
+          <td>forward (Movie → Person)</td>
+          <td><code>movie.col.director.birth_year</code></td>
+          <td><code>(m)-[:DIRECTED_BY]→(p)</code></td>
+          <td><code>.out('directed_by')</code></td>
+          <td><code>?m :director ?p</code></td>
+        </tr>
+        <tr>
+          <td>reverse (Person ← Credit)</td>
+          <td><code>person.via(credit.col.person)</code></td>
+          <td><code>(p)←[:HAS_PERSON]-(c)</code></td>
+          <td><code>.in('person')</code></td>
+          <td><code>?c :person ?p</code></td>
+        </tr>
+        <tr>
+          <td>typo at slot name</td>
+          <td class="winner">raises at <code>.col</code> access</td>
+          <td>runtime error</td>
+          <td>runtime error</td>
+          <td>silent match-nothing</td>
+        </tr>
+        <tr>
+          <td>typo at target class</td>
+          <td class="winner">raises at via()</td>
+          <td>no static check</td>
+          <td>no static check</td>
+          <td>no static check</td>
+        </tr>
+      </tbody>
+    </table>
+    <p style="margin-top:1em;">Graph engines get bidirectional traversal for free (edges are first-class). SQL FKs are columnar — knot closes the everyday gap with the same correlated-subquery shape you'd write by hand.</p>
+    <p class="footer-note">slide 22 / queries</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 23. CORRELATED AGGREGATES                                        -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Three materializers — <code>.count() / .any() / .none()</code></h2>
+<pre><code data-trim class="language-python"># How many director credits does each person have?
+person.via(credit.col.person).where(credit.col.role == "director").count()
+
+# Does this person have ANY actor credit?
+person.via(credit.col.person).where(credit.col.role == "actor").any()
+
+# Has this person NEVER acted?
+person.via(credit.col.person).where(credit.col.role == "actor").none()</code></pre>
+    <p style="margin-top:0.8em;">All three compile to correlated subqueries:</p>
+<pre><code data-trim class="language-sql">-- .count()  →  (SELECT COUNT(*) FROM credit_resolved WHERE …)
+-- .any()    →  EXISTS    (SELECT 1     FROM credit_resolved WHERE …)
+-- .none()   →  NOT EXISTS(SELECT 1     FROM credit_resolved WHERE …)</code></pre>
+    <p class="footer-note">slide 23 / queries</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 24. ER — ONE STATEMENT                                           -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Entity resolution — one atomic statement</h2>
+    <p>Most MDM stacks orchestrate ER as multiple steps. knot ships it as <strong>one writable-CTE chain</strong>:</p>
+    <ol>
+      <li><strong>Stamp</strong> — assign canonical_id to unstamped binding rows of (source, class)</li>
+      <li><strong>Forward FK translation</strong> — rewrite this row's FK columns from source-id → canonical-id</li>
+      <li><strong>Backward fan-out</strong> — for each referencing class, rewrite ITS FK column where it held this row's source-id</li>
+      <li><strong>Register</strong> — implicit; canonical_id is now in the bindings table</li>
+    </ol>
+    <p style="margin-top:1em;"><strong>Strictly idempotent.</strong> Re-runs on already-stamped rows produce zero updates. Two ER workers stamping different sources acquire locks in deterministic order — no deadlock.</p>
+    <p class="footer-note">slide 24 / ER</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 25. ER — THE ACTUAL SQL                                          -->
+  <!-- ============================================================== -->
+  <section>
+    <h2><code>binding.assign_canonicals_sql()</code> — the chain</h2>
+<pre><code data-trim class="language-sql">WITH stamp AS (
+  UPDATE hitch.person_bindings AS b
+  SET canonical_id = a.canonical_id,
+      er_metadata  = COALESCE(a.er_metadata, b.er_metadata)
+  FROM jsonb_to_recordset(%(assignments)s::jsonb)
+       AS a(canonical_id text, source_identifier text, er_metadata jsonb)
+  WHERE b.source_name = 'imdb'
+    AND b.source_identifier = a.source_identifier
+    AND b.canonical_id IS NULL          -- idempotency guard
+  RETURNING b.canonical_id, b.source_identifier
+),
+fanout_credit AS (                       -- backward fan-out
+  UPDATE hitch.credit_bindings AS r
+  SET person = COALESCE(
+    (SELECT canonical_id FROM stamp WHERE source_identifier = r.person),
+    r.person)
+  WHERE r.source_name = 'imdb'
+    AND EXISTS (SELECT 1 FROM stamp WHERE source_identifier = r.person)
+),
+fanout_movie AS ( -- … same shape for every referencing class … )
+SELECT 1;</code></pre>
+    <p class="footer-note">slide 25 / ER</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 26. RE-INGEST CLOBBER                                            -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>The re-ingest problem — and the recovery primitive</h2>
+    <p>Re-ingesting via <code>write_sql</code>'s <code>ON CONFLICT DO UPDATE</code> preserves <code>canonical_id</code> and <code>er_metadata</code>, but <strong>overwrites every other slot</strong> — including FK columns. ER's stamp guard (<code>canonical_id IS NULL</code>) then refuses to re-fanout.</p>
+    <p>Resolved view silently loses FK joins. <strong>knot ships <code>binding.translate_fks_sql()</code></strong> as the recovery primitive — hitch's IngestWorkflow calls it after every upsert.</p>
+<pre><code data-trim class="language-sql">UPDATE hitch.movie_bindings AS b
+SET director = m.canonical_id
+FROM hitch.person_bindings AS m
+WHERE b.source_name = 'imdb' AND m.source_name = 'imdb'
+  AND m.canonical_id IS NOT NULL
+  AND b.director = m.source_identifier;</code></pre>
+    <p style="margin-top:0.6em;" class="muted">One standalone UPDATE per FK slot (CTE chains can get planner-pruned in this shape; standalone UPDATEs are reliable).</p>
+    <p class="footer-note">slide 26 / ER</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 27. EMBEDDINGS — A SLOT TYPE                                     -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Embeddings — first-class slot type</h2>
+    <p><code>types.VECTOR(384, metric="cosine")</code> is just another slot. DDL emits a <code>vector(384)</code> column AND an HNSW index with <code>vector_cosine_ops</code>.</p>
+<pre><code data-trim class="language-python">person.slot("name_embedding", types.VECTOR(384, metric="cosine"))
+movie.slot("title_embedding", types.VECTOR(384, metric="cosine"))
+
+# k-NN composes anywhere a value expression does
+q = (movie.from_source(imdb)
+     .order_by(movie.col.title_embedding.distance_to(target_vec))
+     .limit(10))
+
+# Distance picks the pgvector operator from the slot's metric:
+#   cosine → <=>     l2 → <->     ip → <#>
+# matching the HNSW index built for the same slot</code></pre>
+    <p class="footer-note">slide 27 / vectors</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 28. find_er_candidates                                           -->
+  <!-- ============================================================== -->
+  <section>
+    <h2><code>find_er_candidates_sql</code> — the ER substrate primitive</h2>
+    <p>Per unresolved binding in (source, class), the nearest stamped neighbor in OTHER sources within %(threshold)s:</p>
+<pre><code data-trim class="language-python">sql = binding.find_er_candidates_sql(
+    identity_slot="name",           # KeyError on typo
+    embedding_slot="name_embedding", # TypeError if not Vector
+)
+# host binds %(threshold)s; results: (source_identifier, identity_val,
+# match_canonical_id NULL if no neighbor within threshold)
+for c in execute(sql, {"threshold": 0.35}):
+    cid = c["match_canonical_id"] or mint_fresh(c["identity_val"])
+    decisions.append({"canonical_id": cid,
+                      "source_identifier": c["source_identifier"]})
+binding.assign_canonicals_sql() # ← apply atomically</code></pre>
+    <p style="margin-top:0.6em;" class="muted">Knot owns the mechanics (slot, op, source-scope). Host owns the policy (threshold, mint fallback, needs-review band).</p>
+    <p class="footer-note">slide 28 / vectors</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 29. GRAPHQL                                                      -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>GraphQL — emitted from the same spec</h2>
+    <p><code>knot_graphql.build_schema(spec, sql_executor)</code> returns one SDL string + a Resolvers class. Wire into any GraphQL framework.</p>
+<pre><code data-trim class="language-graphql">type Movie {
+  canonical_id: String!
+  title: String!
+  year: Int
+  director: Person                    # FK walk
+  studio: Studio
+  title_embedding: [Float!]!
+  creditMovieCount: Int!              # reverse-FK count
+}
+type Query {
+  movie(canonical_id: ID!): Movie
+  movieList(first: Int = 20, after: String): [Movie!]!
+  directedMovieList(...): [DirectedMovie!]!  # virtual class
+}
+type Mutation {
+  correctMovie(canonical_id, source_identifier, year, ...): Movie!
+  retract(class_name, canonical_id, source_identifier): Boolean!
+}</code></pre>
+    <p class="footer-note">slide 29 / graphql</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 30. HITCH ARCHITECTURE                                           -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>hitch — the reference deployment</h2>
+    <pre style="font-size:0.7em; text-align:center;"><code>
+                  ┌──────────────────────────┐
+                  │  postgres + pgvector     │
+                  │  bindings • resolved     │
+                  │  HNSW index • weights    │
+                  └──────────┬───────────────┘
+                             │
+            ┌────────────────┼────────────────┐
+            │                │                │
+     ┌──────┴──────┐  ┌──────┴───────┐  ┌────┴────────┐
+     │ hitch-api   │  │ hitch-worker │  │  temporal   │
+     │ FastAPI +   │  │ Temporal     │  │  auto-setup │
+     │ Ariadne     │  │ activities + │  │   + UI      │
+     │ GraphQL     │  │ workflows    │  │  :8088      │
+     │ :8000       │  │              │  │             │
+     └─────────────┘  └──────────────┘  └─────────────┘
+        reads only        writes only      orchestration
+</code></pre>
+    <p style="margin-top:0.6em;">Every DB write goes through a knot SQL emitter. Workflow code never imports knot directly — only activities do (per the replay-safety contract).</p>
+    <p class="footer-note">slide 30 / runtime</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 31. TEMPORAL WORKFLOWS                                           -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Temporal workflows in hitch</h2>
+    <div class="two-col-narrow">
+      <div class="card card-blue">
+        <div class="label">IngestWorkflow (per source, class)</div>
+        <p>fetch → validate → bucket → upsert → translate_fks</p>
+      </div>
+      <div class="card card-pink">
+        <div class="label">EmbedWorkflow (per source, class, vector slot)</div>
+        <p>fetch unembedded → sentence-transformers → write embedding</p>
+      </div>
+      <div class="card card-green">
+        <div class="label">ERWorkflow (per class)</div>
+        <p>per source: find_er_candidates → decide (k-NN match or sha1 mint) → assign_canonicals</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">ValidationSweepWorkflow</div>
+        <p>run every spec.emit_validation() SELECT; report per-rule counts</p>
+      </div>
+    </div>
+    <p style="margin-top:1em;"><strong>Replay safety</strong>: workflows never import knot's emitters. Compiling a SQL string is deterministic but leaks the spec module ref into the workflow history — a redeploy with a different spec replays into poisoned state. Activities own all SQL emission.</p>
+    <p class="footer-note">slide 31 / runtime</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 32. ONE EDIT PROPAGATES                                          -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>One spec edit. Zero drift.</h2>
+    <p>Change <code>movie.col.year &gt;= 1888</code> in the spec. It shows up in:</p>
+    <ul>
+      <li>the validation SELECT</li>
+      <li>every virtual class predicate that referenced it</li>
+      <li>every query's <code>.where()</code> that filtered on it</li>
+      <li>the GraphQL SDL emitted from the spec</li>
+      <li>the FK chain logic in the resolved view</li>
+    </ul>
+    <p style="margin-top:1.2em;"><strong>This is the single fact that justifies knot.</strong></p>
+    <p>No tool in the comparison landscape (SQLAlchemy / jOOQ / LinkML / dbt / Drizzle / Ecto / Diesel) gives you all five from one spec. They give you one or two; the other three drift.</p>
+    <p class="footer-note">slide 32 / thesis</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 33. THE COMPETITOR LANDSCAPE (concise)                           -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>Where knot sits</h2>
+    <div class="three-col">
+      <div class="card card-blue">
+        <div class="label">peers (same style)</div>
+        <p style="font-size:0.85em;">SQLAlchemy Core, Ecto, Drizzle, Diesel — typed combinator DSLs over relational data.</p>
+        <p style="font-size:0.85em;"><strong>knot adds:</strong> the MDM domain layer above tables.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">consumers</div>
+        <p style="font-size:0.85em;">Splink, Senzing, Dedupe, Zingg — ER engines. Their match decisions feed <code>binding.assign_canonicals_sql()</code>.</p>
+        <p style="font-size:0.85em;"><strong>Complementary, not competitive.</strong></p>
+      </div>
+      <div class="card card-pink">
+        <div class="label">alternatives (different shape)</div>
+        <p style="font-size:0.85em;">Reltio / Tamr / Informatica — buy-vs-build. Neo4j / RDF — graph DBs. Pinecone — vector DBs.</p>
+        <p style="font-size:0.85em;"><strong>Out of category.</strong></p>
+      </div>
+    </div>
+    <p style="margin-top:1.5em;">After looking hard: <strong>no direct competitor</strong> on the combined surface (typed spec + postgres compile + multi-source bindings + weighted resolved view + ER cascade primitive + embeddings).</p>
+    <p class="footer-note">slide 33 / thesis</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 34. WHAT WE'RE NOT BUILDING (REPRISE)                            -->
+  <!-- ============================================================== -->
+  <section>
+    <h2>What knot is NOT — recap</h2>
+    <div class="two-col-narrow">
+      <div class="card card-amber">
+        <div class="label">not a graph DB</div>
+        <p style="font-size:0.85em;">Closed-set FK relations. Use Neo4j/RDF for open topology + variable-length paths.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">not a vector DB</div>
+        <p style="font-size:0.85em;">Vectors as ONE signal. Use Pinecone/Weaviate when similarity IS the workload.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">not an ORM</div>
+        <p style="font-size:0.85em;">No identity map, no auto-flushing. Use SQLAlchemy ORM for OLTP CRUD.</p>
+      </div>
+      <div class="card card-amber">
+        <div class="label">not an ER engine</div>
+        <p style="font-size:0.85em;">We APPLY ER, we don't SCORE. Use Splink/Senzing for matching policy.</p>
+      </div>
+    </div>
+    <p style="margin-top:1.2em;"><strong>Honest scope-fences make the substrate convincing, not weak.</strong> Knowing what's out of scope is what keeps the in-scope substrate small enough to trust.</p>
+    <p class="footer-note">slide 34 / thesis</p>
+  </section>
+
+  <!-- ============================================================== -->
+  <!-- 35. TRY IT                                                       -->
+  <!-- ============================================================== -->
+  <section class="center">
+    <h2>Try it</h2>
+<pre><code data-trim class="language-bash">cd hitch
+docker compose up --build
+docker compose exec hitch-worker python -m scripts.deploy
+docker compose exec hitch-worker python -m scripts.run_demo
+
+curl -sL -X POST http://localhost:8000/graphql/ \
+  -H 'content-type: application/json' \
+  -d '{"query":"{ movieList { title director { name } studio { name } } }"}'</code></pre>
+    <p style="margin-top:1.5em;">
+      <span class="pill pill-blue">461 tests green</span>
+      <span class="pill pill-pink">5 personas APPROVE_WITH_GAPS</span>
+      <span class="pill pill-green">demo: ~30s end-to-end</span>
+    </p>
+    <p style="margin-top:1.5em;">
+      <a href="https://github.com/CircArgs/knot">github.com/CircArgs/knot</a> &nbsp;·&nbsp;
+      <a href="index.html">site →</a>
+    </p>
+  </section>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: 'c/t',
+    transition: 'fade',
+    backgroundTransition: 'fade',
+    plugins: [ RevealHighlight, RevealNotes ],
+    width: 1280,
+    height: 800,
+    margin: 0.06,
+    minScale: 0.3,
+    maxScale: 1.4,
+  });
+</script>
+</body>
+</html>
