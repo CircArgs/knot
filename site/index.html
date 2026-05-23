@@ -261,20 +261,28 @@ print(spec.emit_validation())    # one SELECT per constraint
       </div>
 
       <div>
-        <div class="text-sm text-zinc-400 mb-3 font-medium">Embedding-driven ER in hitch (real, not mocked):</div>
+        <div class="text-sm text-zinc-400 mb-3 font-medium">Embedding-driven ER — typed knot call, no raw SQL:</div>
         <div class="codeblock rounded-lg border border-zinc-800 bg-zinc-900/40 p-5 overflow-x-auto">
-<pre><code class="language-sql">-- For each unresolved binding in source X:
-SELECT
-  u.source_identifier,
-  (SELECT b.canonical_id
-   FROM &lt;class&gt;_bindings b
-   WHERE b.canonical_id IS NOT NULL
-     AND b.source_name &lt;&gt; X
-     AND b.name_embedding &lt;=&gt; u.name_embedding &lt; 0.35
-   ORDER BY b.name_embedding &lt;=&gt; u.name_embedding
-   LIMIT 1) AS match_canonical_id
-FROM &lt;class&gt;_bindings u
-WHERE u.source_name = X AND u.canonical_id IS NULL;</code></pre>
+<pre><code class="language-python"># hitch's ER activity — one primitive call, host owns policy
+sql = binding.find_er_candidates_sql(
+    identity_slot="name",            # KeyError on typo
+    embedding_slot="name_embedding", # TypeError if not Vector
+)
+# threshold is the ONE runtime knob — everything else inlines
+candidates = sql_executor(sql, {"threshold": 0.35})
+
+for c in candidates:
+    if c["match_canonical_id"]:           # within threshold
+        cid = c["match_canonical_id"]
+    else:                                 # above → mint deterministic
+        cid = "p_" + sha1(c["identity_val"]).hexdigest()[:20]
+    ...
+</code></pre>
+        </div>
+        <div class="mt-3 text-xs text-zinc-500">
+          The emitter picks the pgvector op from the slot's declared
+          metric (<code>&lt;=&gt;</code> cosine / <code>&lt;-&gt;</code> l2 / <code>&lt;#&gt;</code> ip)
+          — same op the HNSW index was built with, so it gets used.
         </div>
         <div class="mt-4 grid grid-cols-2 gap-3 text-xs">
           <div class="p-3 rounded bg-emerald-500/5 border border-emerald-500/20">

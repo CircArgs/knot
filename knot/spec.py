@@ -1075,6 +1075,39 @@ class SourceBinding:
             self, schema=spec.schema, bindings_suffix=bindings_suffix
         )
 
+    def find_er_candidates_sql(
+        self,
+        *,
+        identity_slot: str,
+        embedding_slot: str,
+        bindings_suffix: str = "_bindings",
+    ) -> str:
+        """ER candidate-finding — per unresolved binding in this (source,
+        class), return the nearest stamped neighbor in any OTHER source
+        whose embedding is within ``%(threshold)s`` distance.
+
+        One named placeholder ``%(threshold)s``. Result columns:
+        ``source_identifier``, ``identity_val``, ``match_canonical_id``
+        (NULL when no neighbor within threshold).
+
+        Argument validation: both slots are looked up on the class
+        (KeyError on typo). ``embedding_slot`` must be a Vector slot
+        (TypeError otherwise). The pgvector operator is picked from the
+        slot's declared metric so the HNSW index built by the same
+        spec gets used.
+
+        See ``knot.compile.write.emit_find_er_candidates_sql``."""
+        spec = self._require_spec()
+        from knot.compile.write import emit_find_er_candidates_sql
+
+        return emit_find_er_candidates_sql(
+            self,
+            identity_slot=identity_slot,
+            embedding_slot=embedding_slot,
+            schema=spec.schema,
+            bindings_suffix=bindings_suffix,
+        )
+
     def translate_fks_sql(self, *, bindings_suffix: str = "_bindings") -> str:
         """Return SQL that re-translates this (source, class) binding's
         FK columns from source-ids → canonical-ids. No parameters.

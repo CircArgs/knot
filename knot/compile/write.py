@@ -1002,3 +1002,85 @@ def emit_translate_fks_sql(
             f"  AND b.{slot.name} = m.source_identifier;"
         )
     return "\n".join(statements)
+
+
+# pgvector distance operators per knot Vector metric. Mirrors the dict
+# in knot.compile.expr — both files reference pgvector's typed ops
+# (`<=>` cosine, `<->` l2, `<#>` inner-product) keyed on the slot's
+# declared metric.
+_VECTOR_DISTANCE_OP: dict[str, str] = {
+    "cosine": "<=>",
+    "l2": "<->",
+    "ip": "<#>",
+}
+
+
+def emit_find_er_candidates_sql(
+    binding: SourceBinding,
+    *,
+    identity_slot: str,
+    embedding_slot: str,
+    schema: str = "knot_data",
+    bindings_suffix: str = "_bindings",
+) -> str:
+    """ER candidate-finding — one SQL that, per unresolved binding in
+    this (source, class), returns the nearest already-stamped binding
+    in ANY OTHER source whose embedding is within ``%(threshold)s``
+    distance (operator picked from the slot's declared metric — the
+    same pgvector op the HNSW index was built with).
+
+    This is the substrate primitive that used to live as raw f-string
+    SQL inside the host's ER activity. Mechanics (which slot, which
+    op, which table, source-filter scope) are knot's job; policy
+    (threshold, mint-fallback, needs-review band) is the host's.
+
+    Result columns:
+      - ``source_identifier`` — the unresolved binding's source-side id
+      - ``identity_val`` — the value of ``identity_slot`` (for the
+        mint-fallback path: ``sha1(identity_val)``)
+      - ``match_canonical_id`` — the nearest stamped neighbor's
+        canonical_id, or NULL when no neighbor was within threshold
+
+    One named placeholder — ``%(threshold)s``. Host binds the float.
+
+    Argument validation: both ``identity_slot`` and ``embedding_slot``
+    are looked up on the class — KeyError on typo at compile time,
+    not "column doesn't exist" at execute time. ``embedding_slot``
+    must be a Vector; raises TypeError otherwise.
+    """
+    _check_concrete(binding.class_)
+
+    cls = binding.class_
+    ident_col = cls.identifier_slot().name
+    id_slot = cls.get_slot(identity_slot)  # KeyError on typo
+    emb_slot = cls.get_slot(embedding_slot)
+    if not isinstance(emb_slot.type, Vector):
+        raise TypeError(
+            f"embedding_slot {embedding_slot!r} must be a Vector slot; "
+            f"got {type(emb_slot.type).__name__}"
+        )
+    op = _VECTOR_DISTANCE_OP[emb_slot.type.metric]
+
+    table = _bindings_id(cls, schema=schema, suffix=bindings_suffix)
+    source_literal = _sql_literal(binding.source.name)
+    return (
+        f"SELECT\n"
+        f"  u.source_identifier,\n"
+        f"  u.{id_slot.name} AS identity_val,\n"
+        f"  (\n"
+        f"    SELECT b.{ident_col}\n"
+        f"    FROM {table} b\n"
+        f"    WHERE b.{ident_col} IS NOT NULL\n"
+        f"      AND b.source_name <> {source_literal}\n"
+        f"      AND b.{emb_slot.name} IS NOT NULL\n"
+        f"      AND (b.{emb_slot.name} {op} u.{emb_slot.name}) < %(threshold)s\n"
+        f"    ORDER BY b.{emb_slot.name} {op} u.{emb_slot.name}\n"
+        f"    LIMIT 1\n"
+        f"  ) AS match_canonical_id\n"
+        f"FROM {table} u\n"
+        f"WHERE u.source_name = {source_literal}\n"
+        f"  AND u.{ident_col} IS NULL\n"
+        f"  AND u.{emb_slot.name} IS NOT NULL\n"
+        f"  AND u.{id_slot.name} IS NOT NULL\n"
+        f"  AND length(trim(u.{id_slot.name}::text)) > 0;"
+    )

@@ -355,34 +355,18 @@ def er_via_embeddings(
     if class_name not in _ER_EMBEDDING_FIELDS:
         return {"matched": 0, "minted": 0, "skipped": 0, "fell_through": True}
     id_field, emb_field, prefix = _ER_EMBEDDING_FIELDS[class_name]
-    table = f"{cfg.pg_schema}.{class_name.lower()}_bindings"
 
-    # One SQL: per unresolved row in this source, pick the nearest
-    # already-stamped binding in any OTHER source whose embedding is
-    # within `threshold` cosine distance.
-    knn_sql = f"""
-        SELECT
-            u.source_identifier,
-            u.{id_field} AS identity_val,
-            (
-                SELECT b.canonical_id
-                FROM {table} b
-                WHERE b.canonical_id IS NOT NULL
-                  AND b.source_name <> %(src)s
-                  AND b.{emb_field} IS NOT NULL
-                  AND (b.{emb_field} <=> u.{emb_field}) < %(threshold)s
-                ORDER BY b.{emb_field} <=> u.{emb_field}
-                LIMIT 1
-            ) AS match_canonical_id
-        FROM {table} u
-        WHERE u.source_name = %(src)s
-          AND u.canonical_id IS NULL
-          AND u.{emb_field} IS NOT NULL
-          AND u.{id_field} IS NOT NULL
-          AND length(trim(u.{id_field})) > 0
-    """
+    # Substrate primitive — knot owns the SQL (which slot, which
+    # pgvector operator from the slot's declared metric, which table,
+    # which source to exclude); we own the policy (threshold, the
+    # mint-fallback for above-threshold rows). Previously this
+    # activity hand-rolled the SQL as a raw f-string; that's now a
+    # KeyError-on-typo + Vector-typed knot.compile primitive.
+    knn_sql = binding.find_er_candidates_sql(
+        identity_slot=id_field, embedding_slot=emb_field
+    )
     with connect(cfg.pg_dsn, autocommit=True) as conn, conn.cursor() as cur:
-        cur.execute(knn_sql, {"src": source_name, "threshold": threshold})
+        cur.execute(knn_sql, {"threshold": threshold})
         candidates = list(cur.fetchall())
 
     assignments: list[dict[str, Any]] = []
