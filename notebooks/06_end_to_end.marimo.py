@@ -936,13 +936,13 @@ def _(credit, engine, er_done, pd, person, text):
     # when both counts are inside ONE subquery, which requires the
     # not-yet-shipped `Aggregate.filter(...)` projection on the
     # reverse-FK rather than separate `.where().count()` calls).
-    _total = person.back(credit, "person").count()
+    _total = person.via(credit.col.person).count()
     _directed = (
-        person.back(credit, "person")
+        person.via(credit.col.person)
             .where(credit.col.role == "director").count()
     )
     _acted = (
-        person.back(credit, "person")
+        person.via(credit.col.person)
             .where(credit.col.role == "actor").count()
     )
     _q = (

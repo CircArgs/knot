@@ -203,7 +203,7 @@ class Resolvers:
         """Return the count of rows in ``ref_class_name`` whose
         ``fk_slot_name`` points at the given ``parent`` row.
 
-        Uses ``cls.back(other_cls, fk_slot_name).count()`` materialized
+        Uses ``primary_cls.via(ref_cls.col[fk_slot]).count()`` materialized
         via a correlated sub-query through the knot Query AST.
         """
         primary_cls = self._concrete(primary_class_name)
@@ -216,7 +216,7 @@ class Resolvers:
         # Build: SELECT count FROM primary WHERE id = canonical_id,
         # using the CountRel aggregate via back().count().
 
-        count_expr = primary_cls.back(ref_cls, fk_slot_name).count()
+        count_expr = primary_cls.via(ref_cls.col[fk_slot_name]).count()
         q = (
             primary_cls.resolved.where(primary_cls.col[id_slot] == canonical_id)
             .select(count_expr)

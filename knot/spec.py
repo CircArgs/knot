@@ -191,15 +191,20 @@ class _BindingsColAccess:
 
 @dataclass(slots=True)
 class ReverseRef:
-    """Navigator for reverse FK traversal: rows on ``other_cls`` whose
-    ``fk_slot_name`` column points at ``primary_cls``.
+    """Navigator for FK-correlated aggregates: rows on ``other_cls``
+    whose ``fk_slot_name`` column points at ``primary_cls``.
 
-    Not directly usable as an ``Expr`` — materialize it into a correlated
+    Constructed via :meth:`OntologyClass.via`, which takes a typed
+    ``FkRef`` so the slot existence + target match are validated at
+    the call site (a typo in the slot name raises at the
+    ``cls.col.<slot>`` access one step earlier than the ``via`` call).
+
+    Not directly usable as an ``Expr`` — materialize into a correlated
     subquery with ``.count()``, ``.any()``, or ``.none()``, optionally
     filtered first with ``.where(predicate)``::
 
-        person.back(credit, "person").count() > 2
-        person.back(credit, "person").where(credit.col.role == "director").any()
+        person.via(credit.col.person).count() > 2
+        person.via(credit.col.person).where(credit.col.role == "director").any()
     """
 
     primary_cls: Any  # OntologyClass
@@ -528,32 +533,47 @@ class OntologyClass:
                     out.append((other, slot))
         return out
 
-    def back(self, other_cls: OntologyClass, fk_slot_name: str) -> ReverseRef:
-        """Return a :class:`ReverseRef` navigator for rows on ``other_cls``
-        whose ``fk_slot_name`` column points at this class.
+    def via(self, fk: FkRef) -> ReverseRef:
+        """Build an FK-correlated-aggregate navigator: rows on
+        ``fk``'s owning class whose ``fk`` column points at THIS class.
 
-        Validates at call time that ``(other_cls, fk_slot_name)`` is a
-        declared ``ClassRef`` pointing here — ``KeyError`` on typo.
+        ``fk`` is a typed ``FkRef`` (``cls.col.<slot>`` where the slot
+        is a ``ClassRef``). The slot's existence is validated by
+        ``.col`` access; ``via`` additionally checks the FK's target
+        class is ``self`` (TypeError otherwise).
 
-        Use with ``.count()``, ``.any()``, ``.none()`` (and optionally
-        ``.where(predicate)`` before materializing)::
+        Materialize with ``.count()`` / ``.any()`` / ``.none()``,
+        optionally filtered by ``.where(predicate)``::
 
-            person.back(credit, "person").count() > 2
-            person.back(credit, "person")
-                  .where(credit.col.role == "director")
-                  .any()
+            person.via(credit.col.person).count() > 2
+            (person.via(credit.col.person)
+                   .where(credit.col.role == "director")
+                   .any())
+
+        Compiles to a correlated subquery on the referrer's resolved
+        view::
+
+            (SELECT COUNT(*) FROM credit_resolved
+             WHERE credit_resolved.person = person_resolved.canonical_id
+               [AND <predicate>])
         """
-        referrer_pairs = [(cls, sl) for cls, sl in self.referrers]
-        for cls, sl in referrer_pairs:
-            if cls is other_cls and sl.name == fk_slot_name:
-                return ReverseRef(
-                    primary_cls=self,
-                    other_cls=other_cls,
-                    fk_slot_name=fk_slot_name,
-                )
-        raise KeyError(
-            f"no FK from {other_cls.name!r}.{fk_slot_name!r} → {self.name!r}; "
-            f"known referrers: " + str([(c.name, s.name) for c, s in self.referrers])
+        if not isinstance(fk, FkRef):
+            raise TypeError(
+                f"via() takes an FkRef (e.g. credit.col.person); "
+                f"got {type(fk).__name__}"
+            )
+        if fk.target_class_name != self.name:
+            raise TypeError(
+                f"FK {fk.class_name}.{fk.slot_name} points at "
+                f"{fk.target_class_name!r}, not {self.name!r} — "
+                f"via() requires the FK target to be this class"
+            )
+        spec = self._require_spec()
+        other_cls = spec.classes[fk.class_name]
+        return ReverseRef(
+            primary_cls=self,
+            other_cls=other_cls,
+            fk_slot_name=fk.slot_name,
         )
 
     # ------------------------------------------------------------------
