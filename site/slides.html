@@ -116,7 +116,6 @@
       </table>
     </div>
     <p style="margin-top:0.8em;">Different runtime values. Different director IDs (each source's own namespace). <strong>Same movie.</strong></p>
-    <p class="footer-note">slide 2 / abstract</p>
   </section>
 
   <!-- ============================================================== -->
@@ -133,7 +132,6 @@
       <li><strong>Some graph-ish querying</strong> — multi-hop FK walks, reverse references, correlated aggregates — but not a full graph DB.</li>
       <li><strong>Embeddings as a signal</strong> for matching (and maybe search) — but not a primary vector DB.</li>
     </ol>
-    <p class="footer-note">slide 3 / abstract</p>
   </section>
 
   <!-- ============================================================== -->
@@ -160,7 +158,6 @@
       </div>
     </div>
     <p style="margin-top:1.2em;" class="muted">Knowing what's <em>out</em> of scope is what lets the in-scope substrate stay small.</p>
-    <p class="footer-note">slide 4 / abstract</p>
   </section>
 
   <!-- ============================================================== -->
@@ -193,7 +190,6 @@
         <p>One <code>docker compose up</code>. 461 tests green.</p>
       </div>
     </div>
-    <p class="footer-note">slide 5 / abstract</p>
   </section>
 
   <!-- ============================================================== -->
@@ -219,7 +215,6 @@ movie.slot("title_embedding", types.VECTOR(384, metric="cosine"))
 
 for src in ("imdb", "tmdb", "rottentomatoes"):
     spec.add_source(src).bind(movie)     # multi-source = first class</code></pre>
-    <p class="footer-note">slide 6 / authoring</p>
   </section>
 
   <!-- ============================================================== -->
@@ -245,7 +240,6 @@ movie.add_constraint(
       <li><code>add_virtual(where=...)</code> — virtual subclasses</li>
       <li><code>cls.resolved.where(...)</code> — runtime queries</li>
     </ul>
-    <p class="footer-note">slide 7 / constraints</p>
   </section>
 
   <!-- ============================================================== -->
@@ -269,7 +263,6 @@ movie.add_virtual("DirectedMovie",
     where=((credit.col.movie == this.Movie)
          & (credit.col.role == "director")).any())</code></pre>
     <p style="margin-top:0.8em;">Each emits a <code>CREATE VIEW</code>; GraphQL exposes <code>recentMovieList</code>, <code>blockbusterList</code>, etc.</p>
-    <p class="footer-note">slide 8 / virtuals</p>
   </section>
 
   <!-- ============================================================== -->
@@ -305,7 +298,6 @@ movie.add_virtual("DirectedMovie",
       </div>
     </div>
     <p style="margin-top:1em;" class="muted">For the hitch demo (4 concrete + 6 virtual classes): ~20 KB of SQL, deploys in &lt;100ms.</p>
-    <p class="footer-note">slide 9 / ddl</p>
   </section>
 
   <!-- ============================================================== -->
@@ -332,7 +324,6 @@ movie.add_virtual("DirectedMovie",
       </div>
     </div>
     <p style="margin-top:1.2em;">Plus a fourth global table — <code>source_weight</code> — that holds the per-(source, class, slot) weight policy. Runtime-mutable.</p>
-    <p class="footer-note">slide 10 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -357,7 +348,6 @@ movie.add_virtual("DirectedMovie",
       </table>
     </div>
     <p style="margin-top:0.8em;">The <code>canonical_id</code> column gets stamped by ER. Same canonical = "these source-rows are the same real-world entity."</p>
-    <p class="footer-note">slide 11 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -383,7 +373,6 @@ SELECT
   -- … one correlated subquery per slot …
 FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
       WHERE canonical_id IS NOT NULL) cb;</code></pre>
-    <p class="footer-note">slide 12 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -422,7 +411,6 @@ FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
         <p class="muted" style="font-size:0.85em;">No view rebuild. No materialization. Weights live in <code>source_weight</code>; the resolved view reads them live.</p>
       </div>
     </div>
-    <p class="footer-note">slide 13 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -444,7 +432,6 @@ FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
     </div>
     <p style="margin-top:1em;">If rt had a value of 175, it would still lose (weight 0.50 &lt; 0.85). But because rt has <strong>no claim</strong>, argmax doesn't consider it at all. Resolved value: <code>170</code>.</p>
     <p class="muted">NULL ≠ "the value is NULL." NULL = "no claim made."</p>
-    <p class="footer-note">slide 14 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -468,7 +455,6 @@ FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
   // sources with NULL values are omitted from the jsonb entirely
 }</code></pre>
     <p style="margin-top:0.8em;" class="muted">The audit surface — "why did the resolver pick X?" Every source's claim is here.</p>
-    <p class="footer-note">slide 15 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -489,7 +475,6 @@ FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
       </table>
     </div>
     <p style="margin-top:1em;">The <code>_user_corrections</code> row is <strong>auto-seeded at 1e6</strong> regardless of caller defaults — closes the silent-failure window where forgetting to seed corrections would lose every mutation. Operators can still tune per (class, slot).</p>
-    <p class="footer-note">slide 16 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -515,7 +500,6 @@ FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
       <span class="src-corr">_user_corrections 100  weight 1e6   ← argmax winner</span>
     </div>
     <p style="margin-top:0.6em;" class="muted">Retract via <code>mutation { retract(...) }</code> → the corrections row deletes → original argmax restores.</p>
-    <p class="footer-note">slide 17 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -536,7 +520,6 @@ FROM (SELECT DISTINCT canonical_id FROM hitch.movie_bindings
     </div>
     <p style="margin-top:0.8em;"><strong>margin</strong> = winner.weight − runner_up.weight. <code>NULL</code> if no runner-up (more honest than <code>0</code>, which reads as "tied with second").</p>
     <p>Uses <code>ROW_NUMBER() OVER (ORDER BY weight DESC, source_name)</code> — same tie-break as the resolver, so the diagnostic can't lie.</p>
-    <p class="footer-note">slide 18 / fusion</p>
   </section>
 
   <!-- ============================================================== -->
@@ -558,7 +541,6 @@ movie.resolved.where(movie.col.year >= 1995).select(movie.col.title)
   .order_by(movie.col.title_embedding.distance_to(target_vec))
   .limit(10))</code></pre>
     <p style="margin-top:0.8em;" class="muted">Each compiles to one SQL string. The host runs it.</p>
-    <p class="footer-note">slide 19 / queries</p>
   </section>
 
   <!-- ============================================================== -->
@@ -577,7 +559,6 @@ LEFT JOIN hitch.person_resolved AS movie_director
   ON movie_director.canonical_id = m.director
 WHERE movie_director.birth_year &lt; m.year;</code></pre>
     <p style="margin-top:0.6em;">The JOIN alias (<code>movie_director</code>) is deterministic — two FKs to the same target get distinct aliases. The compiler walks the AST, collects FK chains, emits JOINs once.</p>
-    <p class="footer-note">slide 20 / queries</p>
   </section>
 
   <!-- ============================================================== -->
@@ -599,7 +580,6 @@ WHERE (SELECT COUNT(*) FROM hitch.credit_resolved
        WHERE credit_resolved.person = person_resolved.canonical_id
          AND credit_resolved.role = 'director') > 1;</code></pre>
     <p style="margin-top:0.6em;" class="muted">The typed FkRef arg means typos raise at <code>credit.col.persn</code> (one step earlier than the via call); mismatched FK targets raise at via() itself.</p>
-    <p class="footer-note">slide 21 / queries</p>
   </section>
 
   <!-- ============================================================== -->
@@ -641,7 +621,6 @@ WHERE (SELECT COUNT(*) FROM hitch.credit_resolved
       </tbody>
     </table>
     <p style="margin-top:1em;">Graph engines get bidirectional traversal for free (edges are first-class). SQL FKs are columnar — knot closes the everyday gap with the same correlated-subquery shape you'd write by hand.</p>
-    <p class="footer-note">slide 22 / queries</p>
   </section>
 
   <!-- ============================================================== -->
@@ -661,7 +640,6 @@ person.via(credit.col.person).where(credit.col.role == "actor").none()</code></p
 <pre><code data-trim class="language-sql">-- .count()  →  (SELECT COUNT(*) FROM credit_resolved WHERE …)
 -- .any()    →  EXISTS    (SELECT 1     FROM credit_resolved WHERE …)
 -- .none()   →  NOT EXISTS(SELECT 1     FROM credit_resolved WHERE …)</code></pre>
-    <p class="footer-note">slide 23 / queries</p>
   </section>
 
   <!-- ============================================================== -->
@@ -677,7 +655,6 @@ person.via(credit.col.person).where(credit.col.role == "actor").none()</code></p
       <li><strong>Register</strong> — implicit; canonical_id is now in the bindings table</li>
     </ol>
     <p style="margin-top:1em;"><strong>Strictly idempotent.</strong> Re-runs on already-stamped rows produce zero updates. Two ER workers stamping different sources acquire locks in deterministic order — no deadlock.</p>
-    <p class="footer-note">slide 24 / ER</p>
   </section>
 
   <!-- ============================================================== -->
@@ -706,7 +683,6 @@ fanout_credit AS (                       -- backward fan-out
 ),
 fanout_movie AS ( -- … same shape for every referencing class … )
 SELECT 1;</code></pre>
-    <p class="footer-note">slide 25 / ER</p>
   </section>
 
   <!-- ============================================================== -->
@@ -723,7 +699,6 @@ WHERE b.source_name = 'imdb' AND m.source_name = 'imdb'
   AND m.canonical_id IS NOT NULL
   AND b.director = m.source_identifier;</code></pre>
     <p style="margin-top:0.6em;" class="muted">One standalone UPDATE per FK slot (CTE chains can get planner-pruned in this shape; standalone UPDATEs are reliable).</p>
-    <p class="footer-note">slide 26 / ER</p>
   </section>
 
   <!-- ============================================================== -->
@@ -743,7 +718,6 @@ q = (movie.from_source(imdb)
 # Distance picks the pgvector operator from the slot's metric:
 #   cosine → <=>     l2 → <->     ip → <#>
 # matching the HNSW index built for the same slot</code></pre>
-    <p class="footer-note">slide 27 / vectors</p>
   </section>
 
   <!-- ============================================================== -->
@@ -764,7 +738,6 @@ for c in execute(sql, {"threshold": 0.35}):
                       "source_identifier": c["source_identifier"]})
 binding.assign_canonicals_sql() # ← apply atomically</code></pre>
     <p style="margin-top:0.6em;" class="muted">Knot owns the mechanics (slot, op, source-scope). Host owns the policy (threshold, mint fallback, needs-review band).</p>
-    <p class="footer-note">slide 28 / vectors</p>
   </section>
 
   <!-- ============================================================== -->
@@ -791,7 +764,6 @@ type Mutation {
   correctMovie(canonical_id, source_identifier, year, ...): Movie!
   retract(class_name, canonical_id, source_identifier): Boolean!
 }</code></pre>
-    <p class="footer-note">slide 29 / graphql</p>
   </section>
 
   <!-- ============================================================== -->
@@ -818,7 +790,6 @@ type Mutation {
         reads only        writes only      orchestration
 </code></pre>
     <p style="margin-top:0.6em;">Every DB write goes through a knot SQL emitter. Workflow code never imports knot directly — only activities do (per the replay-safety contract).</p>
-    <p class="footer-note">slide 30 / runtime</p>
   </section>
 
   <!-- ============================================================== -->
@@ -845,7 +816,6 @@ type Mutation {
       </div>
     </div>
     <p style="margin-top:1em;"><strong>Replay safety</strong>: workflows never import knot's emitters. Compiling a SQL string is deterministic but leaks the spec module ref into the workflow history — a redeploy with a different spec replays into poisoned state. Activities own all SQL emission.</p>
-    <p class="footer-note">slide 31 / runtime</p>
   </section>
 
   <!-- ============================================================== -->
@@ -863,7 +833,6 @@ type Mutation {
     </ul>
     <p style="margin-top:1.2em;"><strong>This is the single fact that justifies knot.</strong></p>
     <p>No tool in the comparison landscape (SQLAlchemy / jOOQ / LinkML / dbt / Drizzle / Ecto / Diesel) gives you all five from one spec. They give you one or two; the other three drift.</p>
-    <p class="footer-note">slide 32 / thesis</p>
   </section>
 
   <!-- ============================================================== -->
@@ -889,7 +858,6 @@ type Mutation {
       </div>
     </div>
     <p style="margin-top:1.5em;">After looking hard: <strong>no direct competitor</strong> on the combined surface (typed spec + postgres compile + multi-source bindings + weighted resolved view + ER cascade primitive + embeddings).</p>
-    <p class="footer-note">slide 33 / thesis</p>
   </section>
 
   <!-- ============================================================== -->
@@ -916,7 +884,6 @@ type Mutation {
       </div>
     </div>
     <p style="margin-top:1.2em;"><strong>Honest scope-fences make the substrate convincing, not weak.</strong> Knowing what's out of scope is what keeps the in-scope substrate small enough to trust.</p>
-    <p class="footer-note">slide 34 / thesis</p>
   </section>
 
   <!-- ============================================================== -->
