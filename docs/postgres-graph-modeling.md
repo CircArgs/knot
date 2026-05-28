@@ -225,3 +225,13 @@ erDiagram
 **B optimizes for schema flexibility and polymorphic traversal.** No DDL to add edge types, uniform edge metadata, graph-like access patterns. Best when relations are open-ended or the system needs to evolve relations without migrations.
 
 Production systems often start at **A** and add a **B-shape layer** (an `edges` view or materialized table) when polymorphic graph queries become common. Netflix's RDF-style approach is conceptually closer to B (triples are universal edges). Knot's current model is closer to A (FK columns on bindings).
+
+---
+
+## Verdict for a Shallow-Traversal Workload
+
+Assume the expected workload: most queries hit a **single node**, occasionally 1–2 hops, rarely 3, almost never 4. **Choose Design A.**
+
+- **Design A (FK on class tables)** — at 1–3 hop depth with selective queries, postgres's native FK columns plus typed indexes are unbeatable; the planner inlines the join, hits the right index, and returns in single-digit milliseconds.
+- The universal bridge table in B becomes the hottest table in the database and forces every traversal through one mega-join — fine for graph DBs built around that pattern, terrible when 99% of queries are 1-hop and you're paying graph-shape cost for relational-shape work.
+- B's only real win (no DDL to add edge types) doesn't matter if your relation set is stable and known up front — which it is for a content KG with a typed spec; trade away theoretical flexibility you won't use for query performance you will use on every request.
