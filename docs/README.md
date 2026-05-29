@@ -13,6 +13,7 @@ Design notes, position papers, and architectural docs for knot and the surroundi
 | Doc | Topic |
 |---|---|
 | [postgres-graph-modeling.md](./postgres-graph-modeling.md) | Two postgres data models for the graph: FK-on-class vs universal bridge. Mermaid diagrams, pros/cons, verdict for shallow-traversal workloads. |
+| [postgres-graph-modeling-extended.md](./postgres-graph-modeling-extended.md) | Deeper analysis: SQL/PGQ alignment, scenario-by-scenario comparison, augmentations (relation tracking, partitioning, materialized edges view), codegen, schema-first pitch. |
 | [api-dto-sync.md](./api-dto-sync.md) | Keeping API DTOs, JPA entities, and the DB model in sync. MapStruct for writes, JPA projections for reads. |
 
 ## Reference
