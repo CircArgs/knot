@@ -2,11 +2,13 @@
 
 The architecture for how the main service dispatches work to supporting services. The thesis: **use Temporal task queues as the dispatch mechanism, not REST/gRPC APIs.**
 
+The setup: **the main service is Java + Spring Boot. The Temporal workflows and workers are Python.** The Java side uses the Temporal Java SDK *only* as a client — it starts workflows, sends signals, queries status. All workflow definitions and activity implementations live in the Python side.
+
 ---
 
 ## Context
 
-The main service is the REST API. It receives writes (a source pushing bindings, a curator submitting corrections) and reads. When a write lands, it needs to trigger downstream work:
+The main service is the REST API (Java/Spring Boot). It receives writes (a source pushing bindings, a curator submitting corrections) and reads. When a write lands, it needs to trigger downstream work:
 
 - **Matching** (ER): decide whether the new binding refers to an existing canonical entity or a new one
 - **Embedding**: compute vector embeddings for text slots (titles, names, synopses)
@@ -57,23 +59,60 @@ The main service starts a Temporal workflow. The workflow orchestrates child wor
 
 ### 1. The main service stays thin
 
-In Model 1, the main service has to know about every downstream service: URLs, health checks, retry logic, timeout handling, partial-failure recovery, idempotency keys per call. Every new ML capability added means more orchestration code in the main service.
+In Model 1, the main service has to know about every downstream service: URLs, health checks, retry logic, timeout handling, partial-failure recovery, idempotency keys per call. Every new ML capability added means more orchestration code in the Java service.
 
-In Model 2, the main service knows about Temporal and nothing else. It starts a workflow:
+In Model 2, the Java main service knows about Temporal and nothing else. It uses the Temporal Java SDK as a *client only* — `WorkflowClient.newWorkflowStub(...).start(...)`. The workflow definition lives in Python; Java just dispatches it by name.
 
-```python
-@app.post("/bindings/{class_name}/{source}")
-async def write_binding(class_name: str, source: str, payload: dict):
-    db.write_binding(class_name, source, payload)
-    await temporal_client.start_workflow(
-        IngestPipeline.run, IngestInput(class_name=class_name, source=source, identifier=payload["id"]),
-        id=f"ingest-{class_name}-{source}-{payload['id']}",
-        task_queue="ingest-orchestrator",
-    )
-    return {"status": "queued"}
+```java
+@RestController
+@RequestMapping("/api/v1/bindings")
+public class BindingController {
+
+    private final BindingRepository repository;
+    private final WorkflowClient temporalClient;
+
+    public BindingController(BindingRepository repository, WorkflowClient temporalClient) {
+        this.repository = repository;
+        this.temporalClient = temporalClient;
+    }
+
+    @PostMapping("/{className}/{source}")
+    public ResponseEntity<DispatchResponse> writeBinding(
+            @PathVariable String className,
+            @PathVariable String source,
+            @Valid @RequestBody BindingRequest request) {
+
+        // 1. Synchronous write to the bindings table
+        repository.save(Binding.from(className, source, request));
+
+        // 2. Dispatch the Python workflow via task queue
+        IngestPipelineStub workflow = temporalClient.newWorkflowStub(
+            IngestPipelineStub.class,
+            WorkflowOptions.newBuilder()
+                .setTaskQueue("ingest-orchestrator")  // Python workers poll this queue
+                .setWorkflowId("ingest-" + className + "-" + source + "-" + request.identifier())
+                .build()
+        );
+        WorkflowClient.start(workflow::run,
+            new IngestInput(className, source, request.identifier()));
+
+        return ResponseEntity.accepted()
+            .body(new DispatchResponse(request.identifier(), "queued"));
+    }
+}
 ```
 
-That's the entire dispatch logic. New ML capability? Add an activity to the workflow. The main service doesn't change.
+Note the `IngestPipelineStub` interface: it's a Java interface that mirrors the Python workflow's signature. The Java client uses it to start the workflow by name — Temporal routes the task to a Python worker polling `ingest-orchestrator`, and the Python implementation runs. The Java side never sees the workflow code; the SDK just needs the interface to type the stub.
+
+```java
+@WorkflowInterface
+public interface IngestPipelineStub {
+    @WorkflowMethod
+    void run(IngestInput input);
+}
+```
+
+That's the entire dispatch logic. New ML capability? Add an activity to the Python workflow. The Java service doesn't change.
 
 ### 2. Durable execution replaces operational glue
 
@@ -129,7 +168,9 @@ In Model 2, Temporal's worker Build IDs handle this. You deploy a new embedding 
 
 ## The Architecture
 
-### Orchestrator workflow
+### Orchestrator workflow (Python)
+
+The workflow definition and all activities live in the Python codebase. The Java service never imports any of this — it only knows the workflow ID convention and the input shape.
 
 ```python
 @workflow.defn
@@ -180,34 +221,65 @@ Per earlier discussion (and the "matching workflow pattern" companion doc), matc
 
 Child workflows write proposed changes to a staging area (a workflow-scoped table or a shared staging schema with workflow_id keys). The orchestrator collects proposals, resolves cross-batch conflicts (two batches both proposing to mint the same canonical_id), then commits everything in one transaction. This prevents the "batch A mints X, batch B mints Y, but X and Y are actually the same entity" race.
 
-### Triggering from the service
+### Triggering from the Java service
 
-The main service has exactly one Temporal client call per ingest: `start_workflow(IngestPipeline.run, ...)`. The workflow ID is meaningful (`ingest-{class}-{source}-{identifier}`), which gives the workflow_id-based deduplication for free.
+The Java REST controller has exactly one Temporal client call per ingest: `WorkflowClient.start(workflow::run, input)`. The workflow ID is meaningful (`ingest-{class}-{source}-{identifier}`), which gives workflow-ID-based deduplication for free (set `WorkflowIdReusePolicy.REJECT_DUPLICATE` to short-circuit duplicate ingests).
 
-For batched ingest (a vendor dump that lands as a batch of bindings):
-```python
-await temporal_client.start_workflow(
-    BatchIngestPipeline.run,
-    BatchInput(class_name=class_name, source=source, batch_id=batch_id),
-    id=f"batch-{class_name}-{source}-{batch_id}",
-    task_queue="ingest-orchestrator",
-)
+For batched ingest (a curator-submitted batch of corrections, or a coordinated multi-binding write):
+
+```java
+@PostMapping("/batch/{className}/{source}")
+public ResponseEntity<DispatchResponse> writeBatch(
+        @PathVariable String className,
+        @PathVariable String source,
+        @Valid @RequestBody BatchRequest request) {
+
+    String batchId = request.batchId();
+    repository.saveAll(request.bindings().stream()
+        .map(b -> Binding.from(className, source, b)).toList());
+
+    BatchIngestPipelineStub workflow = temporalClient.newWorkflowStub(
+        BatchIngestPipelineStub.class,
+        WorkflowOptions.newBuilder()
+            .setTaskQueue("ingest-orchestrator")
+            .setWorkflowId("batch-" + className + "-" + source + "-" + batchId)
+            .build()
+    );
+    WorkflowClient.start(workflow::run,
+        new BatchInput(className, source, batchId));
+
+    return ResponseEntity.accepted()
+        .body(new DispatchResponse(batchId, "queued"));
+}
 ```
-The batch workflow fans out to per-entity ingest pipelines as child workflows, then merges results.
+
+The Python batch workflow fans out to per-entity ingest pipelines as child workflows, then merges results — same pattern as the single-entity case, just with one level of fan-out.
+
+### Cross-language workflow contracts
+
+The Java service and the Python workflows agree on:
+1. **Workflow names** (the class name, e.g. `IngestPipeline`)
+2. **Input/output types** (serialized as JSON by default)
+3. **Task queue names** (where Python workers poll)
+4. **Workflow ID conventions** (so the Java service can later signal or query the workflow)
+
+The Java side declares an interface (`@WorkflowInterface`) that mirrors the Python workflow's shape. The interface is the contract. The Python implementation lives entirely in the Python codebase. The Temporal server doesn't care which language implemented the workflow — it dispatches the task to whoever is polling the queue.
+
+The shared types (`IngestInput`, `BatchInput`) need to serialize compatibly between Java and Python. The simplest approach: Java records → Pydantic models with matching field names. Both serialize to the same JSON. For more complex cases, codegen both from a single source (Protobuf, JSON Schema, or the thin modeling layer described in the postgres modeling doc).
 
 ---
 
 ## What Stays as APIs
 
-The main service is still a REST API — that's its job. External clients hit it. What changes is what happens *behind* the API.
+The Java main service is still a REST API — that's its job. External clients hit it. What changes is what happens *behind* the API.
 
-- The REST API handles authentication, validation, and the initial write.
-- It dispatches to Temporal.
-- All supporting capabilities (matching, embedding, ML, scoring) are workers on Temporal task queues.
-- The main service queries Temporal for workflow status if a caller wants progress (`/ingest/{id}/status` → Temporal query).
-- The main service can signal a workflow if a caller submits new info mid-pipeline.
+- The Java REST API handles authentication, validation, and the initial DB write (via JPA).
+- It dispatches to Temporal using the Java SDK as a client.
+- All supporting capabilities (matching, embedding, ML, scoring) are Python workers on Temporal task queues.
+- The Java service queries Temporal for workflow status when a caller wants progress (`GET /ingest/{id}/status` → `workflow.getStatus()` query method on the Python workflow).
+- The Java service signals a Python workflow when a caller submits new info mid-pipeline.
 
-The result: the main service stays small, focused on the REST boundary. All the orchestration complexity lives in workflows, not in API glue code.
+The result: the Java service stays small, focused on the REST boundary, JPA persistence, and Temporal client calls. All the orchestration complexity lives in Python workflows, not in Java glue code. The Java codebase has no embedding logic, no matching logic, no ML model loading — those are all Python concerns.
 
 ---
 
@@ -240,12 +312,11 @@ This pattern is for **dispatching async work from the main service to supporting
 
 ## Recommendation
 
-The main service is a REST API. Everything it dispatches to is a Temporal worker on a task queue.
+- **Main service: Java + Spring Boot.** REST API, JPA persistence, Temporal Java SDK as a client only (no workflows or activities in the Java codebase).
+- **Workflows and workers: Python.** All orchestration, matching, embedding, and ML enrichments live in Python. Workers poll Temporal task queues; no HTTP servers downstream of the Java service.
+- **Cross-language contract: workflow interfaces.** Java declares `@WorkflowInterface` stubs that mirror the Python workflow signatures. Shared input/output types serialize compatibly (Java records ↔ Pydantic models with matching fields, or codegen both from one source).
+- **One orchestrator workflow per ingest event** (`IngestPipeline`), child workflows for distinct capabilities (matching, ML enrichments), activities for individual stages within a child workflow.
+- **Task queues route by resource type** (GPU embedding, CPU matching, DB writer).
+- **Staging area + atomic commit at the orchestrator** resolves cross-batch races (e.g., two batches both proposing to mint the same canonical_id).
 
-- One orchestrator workflow per ingest event (`IngestPipeline`).
-- Child workflows for distinct capabilities (matching, ML enrichments).
-- Activities for individual stages within a child workflow.
-- Task queues route by resource type (GPU, CPU, DB writer).
-- Staging area + atomic commit at the orchestrator resolves cross-batch races.
-
-The team doesn't build microservice APIs for matching, embedding, or genre prediction. They build workers. The orchestration logic lives in workflows the main service starts.
+The team doesn't build microservice APIs in Python for matching, embedding, or genre prediction. They build Python Temporal workers. The Java service starts the workflows; the Python workers execute them. The Java side stays focused on the REST boundary, the Python side stays focused on the orchestration and ML compute.
