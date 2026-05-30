@@ -195,8 +195,76 @@ A makes the codegen output idiomatic enough that the team can read it and immedi
 
 ---
 
-## 8. Recommendation
+## 8. The Thin Modeling Layer
 
-**Use Design A as the storage model. Add a materialized edges view (CDC-refreshed) on top for polymorphic queries when needed. Codegen everything from the spec at deploy time — DDL, JPA entities, Java records, Iceberg views.**
+The pitch we'd make to the team is **not** "adopt knot." It's narrower: **adopt a thin schema-first modeling layer whose only job is to define the data model once and codegen everything downstream.**
 
-This is the postgres-native answer (aligns with SQL/PGQ), the workload-correct answer (shallow-traversal CKG), the Spring-friendly answer (vanilla JPA mapping), and the easiest pitch to the team (schema-first codegen, no new mental model).
+### What it is
+- A typed spec — Python dataclasses, LinkML YAML, or equivalent — describing classes, slots, types, FK relations, constraints.
+- A code generator that emits, from the spec, at deploy time:
+  - DDL for bindings + canonical tables (Postgres)
+  - JPA entities (Java) with `@ManyToOne`/`@JoinColumn` for FK slots
+  - Java records for API request/response shapes
+  - Iceberg view definitions for the warehouse projection
+  - The materialized edges view SQL (UNION ALL across FK columns)
+- Nothing else. No query language, no expression AST, no runtime, no resolver.
+
+### What it is not
+- Not a query compiler. Teams write SQL or JPA queries as they always have.
+- Not a runtime layer. No process to deploy, no service to manage.
+- Not opinionated about ER, embeddings, or downstream pipelines. Those live in Temporal workflows and ML services that consume the generated artifacts.
+- Not a replacement for a full ORM or schema migration tool. Atlas/sqldef still does diff-and-apply against the generated DDL.
+
+### Why the narrow scope sells
+- It maps to a category every team already understands: **Protobuf, OpenAPI codegen, LinkML.** "Define once, generate everywhere" is a known pattern with mature precedent.
+- No new mental model to learn. Engineers read the generated JPA entity and immediately recognize it as the same Spring code they already write.
+- It earns its place by killing a real, painful problem: keeping DDL, entities, DTOs, and warehouse projections in sync by hand.
+- The earlier failed pitch for knot was the expression language — it required adopting a new query model. Stripping that out leaves a tool that does one well-defined job that maps to existing engineering practice.
+
+### What it produces for Design A
+The generated artifacts for `Movie { canonical_id, title, year, director: Person }`:
+
+- `movie_bindings` and `movie_canonical` table DDL with typed columns including `director_id TEXT`
+- JPA entity with `@Entity class Movie { @ManyToOne @JoinColumn(name="director_id") Person director; ... }`
+- Java record `MovieResponse(String id, String title, int year, String directorId, ...)`
+- Materialized view UNION row: `SELECT 'Movie' AS from_class, canonical_id AS from_id, 'directed_by' AS relation, 'Person' AS to_class, director_id AS to_id, ... FROM movie_canonical WHERE director_id IS NOT NULL`
+- Iceberg view: flattened Movie projection with director fields denormalized for warehouse consumers
+
+All four artifacts trace to one place in the spec. Add a slot — all four update on next deploy. Rename a slot — same. Type-check at codegen time, not at runtime.
+
+### What this asks of the team
+- Schema lives in the repo, as code, in a directory like `spec/`.
+- Adding a class, slot, or relation is a PR that triggers regeneration of the artifacts.
+- The generator runs in CI; generated code is committed (or generated at build time, depending on preference).
+- Migrations against postgres go through Atlas/sqldef as before, with the generated DDL as input.
+
+This is the pitch. Narrow, replaceable, no lock-in, immediate payoff in eliminated hand-sync work.
+
+---
+
+## 9. Why Live In-Service Ontology Changes Are an Antipattern
+
+A separate but related question: should the team build a UI for editing the ontology at runtime, with changes hot-applied to the live service?
+
+The argument against is laid out in detail in [ontology-as-code.md](./ontology-as-code.md). The short version:
+
+- **The friction of schema-as-code is load-bearing.** Git history gives you audit, PR review catches downstream consequences, `git revert` is your rollback, CI catches type errors before deploy, branching lets you develop new schemas safely. A UI-driven system reimplements all of these from scratch, badly.
+- **The friction you'd avoid is mostly imaginary.** Most ontology changes coincide with new sources or new domains — work that already requires code changes (ingest, transformations, ML pipelines, monitoring). The schema PR is a few lines in a much larger body of engineering work that already requires the review/deploy cycle. There's no friction saved.
+- **The schema and the code that uses it must deploy as one atomic unit.** A slot added in the UI without coordinated code changes creates a broken contract (NULLs where downstream expected values; API server crashes referencing removed slots). UI editing fundamentally breaks this guarantee.
+- **There's no rollback story.** "Show me the rollback story" is the one-sentence rebuttal when this comes up in design review. Git provides one for free; a UI must build one.
+
+The carve-out: runtime tuning parameters like trust weights, source priority overrides, saved query filters, and display labels are fine to expose in a UI. The line is **if a change requires regenerating code or running a migration, it's schema and it lives in git.**
+
+---
+
+## 10. Recommendation
+
+1. **Storage model: Design A.** Typed FK columns on bindings and canonical tables. SQL/PGQ aligned, workload-correct, Spring-friendly.
+
+2. **Polymorphic queries: materialized edges view.** CDC-refreshed, codegenned from the spec at deploy time. No tracking table. Gives you B's polymorphic ergonomics on top of A's typed storage.
+
+3. **The thin modeling layer.** Single source of truth in the repo. Codegens DDL, JPA entities, Java records, Iceberg views, and the materialized view SQL. No query language, no runtime, no new mental model. Pitches to the team as schema-first codegen in the same category as Protobuf or OpenAPI codegen.
+
+4. **Ontology lives in git.** No UI-driven schema editing. PRs are the change mechanism; CI and the codegen pipeline are the safety net. UI is reserved for runtime tuning (trust weights and similar).
+
+This is the postgres-native answer, the workload-correct answer, the Spring-friendly answer, and the easiest pitch to the team.
